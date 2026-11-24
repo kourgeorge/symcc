@@ -3,7 +3,7 @@
 // and how it turns a JSONL event stream (as Copilot CLI 1.0.114 writes it) into finished or failed, with the last
 // message and the tokens from the --usage-output-file.
 import { expect, test } from 'claude-code/testing'
-import { copilotRunner, copilotResult, copilotSession, copilotUsageTokens, copilotWriteRule, copilotAllowRules, COPILOT_FOLLOW_UP_TOOLS } from '../hooks/process/copilot-runner'
+import { copilotRunner, copilotResult, copilotSession, copilotUsageTokens, copilotWriteRule, copilotAllowRules, copilotArgv, copilotUsageFile, USAGE_MARK, COPILOT_FOLLOW_UP_TOOLS } from '../hooks/process/copilot-runner'
 import type { ProcessOutput } from '../hooks/process/agents'
 import type { HostAgentStart } from '../hooks/host'
 
@@ -49,16 +49,22 @@ const each = (argv: string[], f: string) => argv.flatMap((x, i) => (x === f ? [a
 
 test('a worker runs as copilot -p in its folder, with its model, tool limits and write rules for its files only', () => {
   const sys = fakeSys(new Map(), { SYMCC_COPILOT_MODELS: 'sonnet=claude-sonnet-5.5' })
-  const { argv, stdin } = copilotRunner(sys, { usageDir: '/tmp/u', random: () => 0.5 }).command(worker)
-  expect(stdin).toBe(undefined)
+  const cmd = copilotRunner(sys, { usageDir: '/tmp/u', random: () => 0.5 }).command(worker)
+  expect(cmd.stdin).toBe(undefined)
+  const argv = copilotArgv(cmd.argv)
   expect(argv.slice(0, 3)).toEqual(['copilot', '-p', 'do T-7'])
   expect(after(argv, '--output-format')).toEqual(['json'])
   expect(argv).toContain('--no-ask-user')
   expect(after(argv, '-C')).toEqual([WT])
   expect(after(argv, '--model')).toEqual(['claude-sonnet-5.5'])
-  const sid = after(argv, '--session-id')[0] ?? ''
-  expect(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(sid)).toBe(true)
-  expect(after(argv, '--usage-output-file')).toEqual([`/tmp/u/symcc-copilot-usage-${sid}.json`])
+  // the usage file is named by symcc's own id, and the wrapper names it first on stdout (sh -c ... exec copilot)
+  const file = `/tmp/u/symcc-copilot-usage-${'8'.repeat(32)}.json`
+  expect(after(argv, '--usage-output-file')).toEqual([file])
+  expect(cmd.argv.slice(0, 2)).toEqual(['sh', '-c'])
+  expect(cmd.argv[4]).toBe(file)
+  // the first run trusts the folder, so no session id is chosen for it (Copilot refuses --trust-folder beside one)
+  expect(argv).toContain('--trust-folder')
+  for (const f of ['--session-id', '--resume', '--continue']) expect(argv).not.toContain(f)
   const avail = after(argv, '--available-tools')
   for (const t of ['view', 'bash', 'apply_patch', 'edit']) expect(avail).toContain(t)
   for (const t of ['task', 'ask_user', 'web_fetch']) expect(avail).not.toContain(t)
@@ -70,23 +76,25 @@ test('a worker runs as copilot -p in its folder, with its model, tool limits and
   expect(each(argv, '--allow-tool')).toEqual(['shell', `write(${WT}/src/a.ts)`, `write(${WT}/src/a.ts/**)`, `write(${WT}/tests/**)`, `write(${WT}/.scratch/**)`])
   const deny = each(argv, '--deny-tool')
   for (const r of ['shell(git commit)', 'shell(git push)', 'shell(git reset)', 'shell(git checkout)']) expect(deny).toContain(r)
+  // wrapped forms, as claude-runner denies them: git with an option first (git -C <dir> commit), git behind env and co
+  for (const r of ['shell(git -C:*)', 'shell(git -c:*)', 'shell(git --git-dir=*)', 'shell(env git:*)', 'shell(xargs git:*)']) expect(deny).toContain(r)
 })
 
 test('--allow-all-tools comes only together with symcc guard, and the deny rules still come with it', () => {
   const sys = fakeSys()
-  const { argv } = copilotRunner(sys, { guarded: true }).command(worker)
+  const argv = copilotArgv(copilotRunner(sys, { guarded: true }).command(worker).argv)
   expect(argv).toContain('--allow-all-tools')
   expect(argv).toContain('--experimental')
   expect(argv).not.toContain('--allow-tool')
   expect(each(argv, '--deny-tool')).toContain('shell(git commit)')
   // the binary from SYMCC_COPILOT, no model when the agent names none
-  const plain = copilotRunner(fakeSys(new Map(), { SYMCC_COPILOT: '/opt/copilot' })).command({ ...worker, model: undefined }).argv
+  const plain = copilotArgv(copilotRunner(fakeSys(new Map(), { SYMCC_COPILOT: '/opt/copilot' })).command({ ...worker, model: undefined }).argv)
   expect(plain[0]).toBe('/opt/copilot')
   expect(plain).not.toContain('--model')
 })
 
 test('a scout gets no edit tools and no write rule; a checker writes only in .scratch/', () => {
-  const scout = copilotRunner(fakeSys()).command({ kind: 'scout', prompt: 'look', name: 'symcc scout bugs', description: 'bugs' }).argv
+  const scout = copilotArgv(copilotRunner(fakeSys()).command({ kind: 'scout', prompt: 'look', name: 'symcc scout bugs', description: 'bugs' }).argv)
   expect(after(scout, '--available-tools')).not.toContain('apply_patch')
   expect(after(scout, '--available-tools')).toContain('web_fetch')
   expect(scout).not.toContain('-C')
@@ -137,18 +145,46 @@ test('a failed run: a session error, a non-zero exit code, no result line, or a 
   expect(copilotResult(out(stream(ev('assistant.message', { content: 'half' })), 143, '', true))).toEqual({ answer: 'half', end: { reason: 'aborted' }, isAborted: true, tokens: undefined })
 })
 
-test('the runner reads the run usage file named by its session and removes it; a follow-up resumes that session read-only', () => {
-  const file = `/tmp/u/symcc-copilot-usage-${SID}.json`
+test('the runner reads the usage file its run named and removes it; the session comes from the events; a follow-up resumes it read-only', () => {
+  const id = 'ab'.repeat(16)
+  const file = `/tmp/u/symcc-copilot-usage-${id}.json`
   const sys = fakeSys(new Map([[file, USAGE]]))
   const r = copilotRunner(sys, { usageDir: '/tmp/u/' })
-  const s = stream(ev('session.start', { sessionId: SID }), ev('assistant.message', { content: 'done' }), resultLine(0))
+  const s = USAGE_MARK + file + '\n' + stream(ev('session.start', { sessionId: SID }), ev('assistant.message', { content: 'done' }), resultLine(0))
+  expect(copilotUsageFile(out(s))).toBe(file)
   expect(r.result(out(s)).tokens).toEqual({ input: 4000, output: 9, cache_read: 100 })
   expect(sys.files.has(file)).toBe(false)
   expect(r.session?.(out(s))).toBe(SID)
-  const f = r.followUp!(SID, 'any notes?', worker).argv
+  // only the session.start event names it (no result line): still read
+  expect(copilotSession(out(stream(ev('session.start', { sessionId: SID }))))).toBe(SID)
+  // a usage file outside the usage folder, or not named by symcc, is never read or removed
+  const sys2 = fakeSys(new Map([['/etc/x.json', USAGE]]))
+  expect(copilotRunner(sys2, { usageDir: '/tmp/u' }).result(out(`${USAGE_MARK}/etc/x.json\n` + stream(resultLine(0)))).tokens).toBe(undefined)
+  expect(copilotRunner(sys2, { usageDir: '/tmp/u' }).result(out(`${USAGE_MARK}/tmp/u/symcc-copilot-usage-../../etc/x.json\n` + stream(resultLine(0)))).tokens).toBe(undefined)
+  expect(sys2.ran).toEqual([])
+  const fu = r.followUp!(SID, 'any notes?', worker)
+  const f = copilotArgv(fu.argv)
   expect(f.slice(0, 5)).toEqual(['copilot', '-p', 'any notes?', '--resume', SID])
+  expect(fu.argv[4]).toBe(after(f, '--usage-output-file')[0])
+  expect(f).not.toContain('--trust-folder')
+  expect(f).not.toContain('--session-id')
   expect(after(f, '--available-tools')).toEqual(COPILOT_FOLLOW_UP_TOOLS)
   expect(after(f, '-C')).toEqual([WT])
   expect(f).not.toContain('--allow-all-tools')
   expect(f).not.toContain('--allow-tool')
+})
+
+test('no command line has --trust-folder together with --session-id, --resume or --continue', () => {
+  const r = copilotRunner(fakeSys())
+  const all = [
+    r.command(worker).argv,
+    r.command({ kind: 'scout', prompt: 'look', name: 's', description: 's' }).argv,
+    r.command({ kind: 'checker', prompt: 'check', name: 'c', description: 'c', cwd: WT }).argv,
+    copilotRunner(fakeSys(), { guarded: true }).command(worker).argv,
+    r.followUp!(SID, 'more?', worker).argv,
+  ]
+  for (const a of all) {
+    const has = (f: string) => a.includes(f)
+    expect(has('--trust-folder') && (has('--session-id') || has('--resume') || has('--continue'))).toBe(false)
+  }
 })

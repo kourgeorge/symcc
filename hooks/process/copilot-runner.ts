@@ -23,7 +23,7 @@ import { AGENT_BUILTIN_TOOLS, AGENT_EXCLUDED_TOOLS, WEB_TOOLS, copilotModel, par
 import type { SymccTokens } from '../../types'
 import type { AgentRunner, ProcessOutput, RunnerEnd } from './agents'
 import type { ProcessSystem } from './system'
-import { GIT_DENIED_SUBCOMMANDS, scratchInUse } from './claude-runner'
+import { GIT_DENIED_OPTIONS, GIT_DENIED_SUBCOMMANDS, GIT_WRAPPERS, scratchInUse } from './claude-runner'
 
 /** Copilot's built-in tools that change files (a scout gets none of them). */
 const EDIT_TOOLS = ['edit', 'create', 'str_replace_editor', 'str_replace', 'apply_patch']
@@ -40,8 +40,18 @@ export function copilotAvailableTools(a: Pick<HostAgentStart, 'kind' | 'tools'>)
 /** The tools left out (--excluded-tools): Copilot's own sub-agents, its question form, typing into a shell, and the web ones when not allowed. */
 export const copilotExcludedTools = (a: Pick<HostAgentStart, 'kind' | 'tools'>): string[] => [...AGENT_EXCLUDED_TOOLS, ...(webAllowed(a) ? [] : WEB_TOOLS)]
 
-/** The --deny-tool rules every agent gets: each git subcommand that writes (symcc commits and merges itself). */
-export const copilotDeniedRules = (): string[] => GIT_DENIED_SUBCOMMANDS.map(c => `shell(git ${c})`)
+/**
+ * The --deny-tool rules every agent gets: each git subcommand that writes (symcc commits and merges itself), and, as
+ * claude-runner's gitDeniedRules does, git called with an option first (`git -C <dir> commit`, `git --git-dir=x ...`)
+ * and git behind the usual wrappers (`env git ...`). Copilot's shell rules name a command and what follows it
+ * (`shell(git push)`; `:*` for "anything after"), so each of these forms is one rule.
+ */
+export const copilotDeniedRules = (): string[] => [
+  ...GIT_DENIED_SUBCOMMANDS.map(c => `shell(git ${c})`),
+  ...GIT_DENIED_OPTIONS.map(o => `shell(git ${o}:*)`),
+  ...['--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env'].map(o => `shell(git ${o}=*)`),
+  ...GIT_WRAPPERS.map(w => `shell(${w} git:*)`),
+]
 
 /**
  * The `write(<path>)` rule that lets the agent change `file` (relative to folder `cwd`; a folder ends with "/" or is
@@ -146,13 +156,29 @@ export function copilotResult(out: ProcessOutput, usage?: string | null): Runner
   return { answer: error || answer || (failed ? (out.stderr.trim().slice(-2000) || `copilot exited with code ${result.exitCode ?? out.exitCode}`) : ''), end: { reason: failed ? 'error' : 'answer' }, isAborted: false, tokens }
 }
 
-/** A new session id (a UUID, version 4), so the run's usage file can be named before it starts. */
-function newSessionId(rand: () => number): string {
-  const h = Array.from({ length: 32 }, () => Math.floor(rand() * 16).toString(16))
-  h[12] = '4'
-  h[16] = ((parseInt(h[16] ?? '0', 16) & 3) | 8).toString(16)
-  const s = h.join('')
-  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`
+/** A random id of symcc's own (32 hex digits), to name a run's usage file before it starts (Copilot picks the session id). */
+function newRunId(rand: () => number): string {
+  return Array.from({ length: 32 }, () => Math.floor(rand() * 16).toString(16)).join('')
+}
+
+/** The line the wrapper prints first on a run's stdout, naming its usage file (no JSON: the event reader skips it). */
+export const USAGE_MARK = 'symcc-copilot-usage-file '
+
+/**
+ * A run's command line, wrapped in `sh -c` so it first prints which usage file it writes (USAGE_MARK + path) and then
+ * becomes copilot itself (exec: same process, same group, so a stop still reaches it). result() only gets the output,
+ * so this is how it finds the file of this run and not another's.
+ */
+const SH_WRAP = `printf '%s\\n' "${USAGE_MARK}$1"; shift; exec "$@"`
+export const copilotWrap = (usageFile: string, argv: string[]): string[] => ['sh', '-c', SH_WRAP, 'sh', usageFile, ...argv]
+
+/** The copilot command line inside a wrapped one (copilotWrap), for tests and logs. */
+export const copilotArgv = (argv: string[]): string[] => (argv[0] === 'sh' && argv[2] === SH_WRAP ? argv.slice(5) : argv)
+
+/** The usage file a run's stdout names (its USAGE_MARK line), if any. */
+export function copilotUsageFile(out: Pick<ProcessOutput, 'stdout'>): string | undefined {
+  for (const l of out.stdout.split('\n')) if (l.startsWith(USAGE_MARK)) return l.slice(USAGE_MARK.length).trim() || undefined
+  return undefined
 }
 
 /** What a follow-up turn (the debrief, T-656) may use: reading only; no shell, no edits, no web. */
@@ -162,29 +188,30 @@ export const COPILOT_FOLLOW_UP_TOOLS = ['view', 'grep', 'rg', 'glob']
  * Options of copilotRunner: the copilot binary (default `copilot`, or SYMCC_COPILOT), a model for agents that name
  * none, symcc's model names to Copilot ids (on top of SYMCC_COPILOT_MODELS), whether symcc's guard runs in the agent's
  * process (`guarded`, see the top), the folder for the usage files (default TMPDIR or /tmp), and the random numbers
- * for the session ids (tests).
+ * for the usage files' ids (tests).
  */
 export type CopilotRunnerOptions = { bin?: string; model?: string; models?: Record<string, string>; guarded?: boolean; usageDir?: string; random?: () => number }
 
 /**
  * Agents as `copilot -p` processes: the prompt as -p's text, JSONL events out, --no-ask-user, the folder as -C, the
- * model, the tool limits, and the usage written to a file named by the session id (--session-id), read and removed
- * once the run ended. A finished agent can be given one more turn with --resume <session> (followUp), which may only read.
+ * model, the tool limits, and the usage written to a file named by a random id of symcc's own (the wrapper prints its
+ * name first, see copilotWrap), read and removed once the run ended; the session id comes from the events. A finished agent can be given one more turn with --resume <session> (followUp), which may only read.
  */
 export function copilotRunner(sys: Pick<ProcessSystem, 'run' | 'env'>, o: CopilotRunnerOptions = {}): AgentRunner {
   const bin = () => o.bin ?? sys.env('SYMCC_COPILOT') ?? 'copilot'
   const dir = () => (o.usageDir ?? sys.env('TMPDIR') ?? '/tmp').replace(/\/+$/, '') || '/tmp'
-  const usageFile = (session: string) => `${dir()}/symcc-copilot-usage-${session}.json`
+  const usageFile = (id: string) => `${dir()}/symcc-copilot-usage-${id}.json`
   const model = (a: HostAgentStart) => copilotModel(a.model ?? o.model, { ...parseModels(sys.env(MODELS_ENV)), ...o.models })
-  const common = (a: HostAgentStart, session: string) => {
+  const common = (a: HostAgentStart, file: string) => {
     const m = model(a)
-    return ['--output-format', 'json', '--no-ask-user', '--no-auto-update', '--trust-folder', ...(a.cwd ? ['-C', a.cwd] : []), ...(m ? ['--model', m] : []), '--usage-output-file', usageFile(session)]
+    return ['--output-format', 'json', '--no-ask-user', '--no-auto-update', ...(a.cwd ? ['-C', a.cwd] : []), ...(m ? ['--model', m] : []), '--usage-output-file', file]
   }
-  /** Reads the usage file of the run's session (and removes it); null when there is none. */
+  const newFile = () => usageFile(newRunId(o.random ?? Math.random))
+  /** Reads the usage file the run named (and removes it); null when there is none, or it is not one of ours. */
   const readUsage = (out: ProcessOutput): string | null => {
-    const s = copilotSession(out)
-    if (!s || !/^[\w-]+$/.test(s)) return null
-    const f = usageFile(s)
+    const f = copilotUsageFile(out)
+    const pre = `${dir()}/symcc-copilot-usage-`
+    if (!f || !f.startsWith(pre) || !/^[0-9a-f]+\.json$/.test(f.slice(pre.length))) return null
     const r = sys.run(['cat', f], undefined)
     sys.run(['rm', '-f', f], undefined)
     return r.status === 0 && r.stdout.trim() ? r.stdout : null
@@ -192,23 +219,27 @@ export function copilotRunner(sys: Pick<ProcessSystem, 'run' | 'env'>, o: Copilo
   return {
     name: 'copilot',
     command(a) {
-      const session = newSessionId(o.random ?? Math.random)
+      const file = newFile()
       const scratch = a.kind !== 'scout' && scratchInUse(sys, a.cwd)
       const allow = o.guarded ? ['--experimental', '--allow-all-tools'] : ['--no-experimental', ...copilotAllowRules(a, scratch).flatMap(r => ['--allow-tool', r])]
       const argv = [
-        bin(), '-p', a.prompt, '--session-id', session, ...common(a, session),
+        // --trust-folder only on this first run: Copilot refuses it beside --session-id, --resume or --continue, so
+        // the session id is not chosen here but read from the run's events (copilotSession)
+        bin(), '-p', a.prompt, '--trust-folder', ...common(a, file),
         '--available-tools', ...copilotAvailableTools(a),
         '--excluded-tools', ...copilotExcludedTools(a),
         ...allow,
         ...copilotDeniedRules().flatMap(r => ['--deny-tool', r]),
       ]
-      return { argv }
+      return { argv: copilotWrap(file, argv) }
     },
     result: out => copilotResult(out, readUsage(out)),
     session: copilotSession,
     followUp(session, text, a) {
-      const argv = [bin(), '-p', text, '--resume', session, ...common(a, session), '--available-tools', ...COPILOT_FOLLOW_UP_TOOLS, ...(o.guarded ? ['--experimental'] : ['--no-experimental'])]
-      return { argv }
+      // no --trust-folder: Copilot refuses it beside --resume
+      const file = newFile()
+      const argv = [bin(), '-p', text, '--resume', session, ...common(a, file), '--available-tools', ...COPILOT_FOLLOW_UP_TOOLS, ...(o.guarded ? ['--experimental'] : ['--no-experimental'])]
+      return { argv: copilotWrap(file, argv) }
     },
   }
 }
