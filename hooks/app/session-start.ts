@@ -6,7 +6,7 @@ import type { Host } from '../host'
 import { moveOldOrgMem } from './org-mem'
 import { migrateIfOld } from './migrate-data'
 import { gitReady, initGitIn, recheckGit } from './git'
-import { claimLead, publish, handOver, releaseLead, startOffHere, offHereBeat } from './lead'
+import { claimLead, carryDriver, publish, handOver, releaseLead, startOffHere, offHereBeat } from './lead'
 import { loadRoles } from './roles'
 import { loadKinds } from './kinds'
 import { scoutOriginsFixed, scheduleScouts, seedExampleScouts } from './scouts'
@@ -73,6 +73,9 @@ export async function sessionStart(host: Host) {
     await loadVersion(host)
     S.root = main || own
     S.home = (await host.env('HOME').catch(() => undefined)) ?? ''
+    // T-1016: a window that drove under the old id and now has a new one is still the same window
+    const oldMe = S.me
+    const wasDriving = S.driving && !S.fresh && !S.offHere && !!oldMe
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
     S.dam = await isDamSession(host)
     // T-795: a new project (no board.json) stays off, like plain Claude, until the owner runs /<name>-init (T-844: no .<name> in this folder or above): nothing is
@@ -94,6 +97,7 @@ export async function sessionStart(host: Host) {
       await moveOldOrgMem(host).catch(() => undefined)
     }
     // T-793: another live window with symcc on makes this one start off here (plain), before it can claim the lead
+    if (wasDriving && oldMe !== S.me) await carryDriver(host, oldMe).catch(() => undefined)
     await startOffHere(host).catch(() => undefined)
     // Become the driver if nobody drives the board. As the driver, old workers still running
     // from before a reload are stopped first and their tasks go back to "todo".

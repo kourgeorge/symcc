@@ -92,13 +92,16 @@ test('/symcc-drive is a command, listed for the host', () => {
 
 const ROOT = '/repo'
 
+/** Pretends this window is now the session `id` (the tests move one fake host between windows). */
+const asId = (w: { host: { session: unknown } }, id: string) => void ((w.host.session as { id: () => Promise<string> }).id = async () => id)
+
 function world(id = 'me') {
   const files = new Map<string, string>()
   const toasts: string[] = []
   const fs = memoryFs(files)
   const w = fakeHost({
     fs,
-    session: { id: async () => id },
+    session: { id: async () => (id === 'me' ? S.me : id) },
     run: async argv => {
       const [cmd, ...rest] = argv
       const args = rest.filter(a => !a.startsWith('-'))
@@ -205,10 +208,12 @@ test('a hand-over request follows its session after /clear: the new id gets the 
   expect(parseLead(w.files.get(w.lead)!)).toMatchObject({ session: 'a', handTo: 'b2', handAt: at })
   // a's heartbeat hands over to b2, and b2's heartbeat claims
   S.me = 'a'
+  asId(w, 'a')
   S.driving = true
   expect(await claimLead(w.host)).toBe(false)
   expect(parseLead(w.files.get(w.lead)!)).toMatchObject({ session: 'b2', handFrom: 'a' })
   S.me = 'b2'
+  asId(w, 'b2')
   S.driving = false
   expect(await claimLead(w.host)).toBe(true)
 })
@@ -237,6 +242,7 @@ test('when the session that asked for the board ends, its request is dropped and
   await releaseLead(w.host)
   expect(parseLead(w.files.get(w.lead)!)).toEqual({ session: 'a', heartbeat: parseLead(w.files.get(w.lead)!)!.heartbeat })
   S.me = 'a'
+  asId(w, 'a')
   S.driving = true
   expect(await claimLead(w.host)).toBe(true)
   expect(parseLead(w.files.get(w.lead)!)?.session).toBe('a')

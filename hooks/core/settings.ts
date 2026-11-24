@@ -244,7 +244,8 @@ export const offStatusParts = (name: string = DEFAULT_NAME, withName = true, her
 
 /** What every lead tool answers in a window turned off with /<name>-disable here (T-793). */
 export const offHereAnswer = (name: string = DEFAULT_NAME, here: OffHere = 'off', driver?: DriverFacts, nowMs: number = Date.now()) =>
-  here === 'other' ? `${name} is off in this window: ${noticeText(otherDrivesForms(name, driver, nowMs)[0]!)}.` : `${name} is off in this window. /${name}-enable turns it back on.`
+  here === 'other' ? `${name} is off in this window: ${noticeText(otherDrivesForms(name, driver, nowMs)[0]!)}.`
+  : here === 'gone' ? `${name} is off in this window: ${offStatusLine(name, false, 'gone')}.` : `${name} is off in this window. /${name}-enable turns it back on.`
 
 /** What every lead tool answers in a new project, a folder with no board in it or above it, where the owner has not run /<name>-init yet (T-795, T-844). */
 export const notSetUpAnswer = (name: string = DEFAULT_NAME) => `no ${name} board in this folder · /${name}-init to create one here`
