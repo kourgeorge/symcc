@@ -4,8 +4,8 @@
 import { expect } from 'claude-code/testing'
 import { gitNotice, gitInstallStep, emptyBoard, parseCommand, notSetUpAnswer, offStatusLine, offStatusParts, parseLead, type Board } from '../hooks/board'
 import { S, toolName } from '../hooks/app/state'
-import { COMMANDS, watchdogTick, leadBeat,leadGuideText, sessionStart, sessionEnd, toolCall, runCommand } from '../hooks/app/symcc'
-import { tellLead, takeBoardUpdate } from '../hooks/app/tell'
+import { COMMANDS, watchdogTick, leadBeat, leadGuideText, ownerTyped, sessionStart, sessionEnd, toolCall, runCommand } from '../hooks/app/symcc'
+import { tellLead, takeBoardUpdate, noteForLead } from '../hooks/app/tell'
 import { setupGit, gitReady } from '../hooks/app/git'
 import { MANUAL } from '../hooks/app/tools'
 import { openPane } from '../hooks/app/open'
@@ -487,4 +487,96 @@ test('T-861: the /symcc-init description and help say plain init makes the board
   expect(help.includes('asked about first')).toBe(false)
   expect(help.includes('asks first, then')).toBe(false)
   expect(help.includes('No git repo here')).toBe(true)
+})
+
+/** T-968: a new project with no git repo, the lead already told so, and one task ready to start. */
+async function noRepoWithTask() {
+  const machine: { uname?: string; repo?: { on: boolean } } = { uname: 'Darwin' }
+  const w = world('a', '/home/me/proj', '/home/me', machine)
+  w.files.set('/home/me/.git', '')
+  await sessionStart(w.host)
+  await runCommand(w.host, 'symcc-init', '')
+  expect(S.gitState).toBe('no-repo')
+  await change(w.host, b => addTask(b, { origin: { why: 'a test' }, title: 'Do it', details: 'Do it.\nDone when: done.', files: ['src/'] }, new Date().toISOString()))
+  const wait = async () => { for (let i = 0; i < 300; i++) await Promise.resolve() }
+  await wait()
+  // the lead heard "no git repo" (and asks the owner); nothing started
+  expect(w.toLead.join('\n') + (takeBoardUpdate() ?? '')).toContain('no git repo')
+  w.toLead.splice(0)
+  expect((await load(w.host)).tasks.map(t => t.status)).toEqual(['todo'])
+  return { w, machine, wait }
+}
+
+const GIT_READY_LINE = "Tasks can start now; don't ask the owner about git again."
+
+test('T-968: the owner sets up git from the board: the lead gets one board update at once saying so, and the ready task starts', async () => {
+  const { w, wait } = await noRepoWithTask()
+  await setupGit(w.host, 'you')
+  await wait()
+  const update = takeBoardUpdate() ?? ''
+  expect(update).toContain('The owner set up git here (branch main')
+  expect(update).toContain(GIT_READY_LINE)
+  expect(update.split(GIT_READY_LINE).length).toBe(2)
+  expect(update).not.toContain('Meanwhile the owner')
+  expect(takeBoardUpdate()).toBeUndefined()
+  expect((await load(w.host)).tasks.map(t => t.status)).toEqual(['doing'])
+})
+
+test("T-968: the lead's own setup_git sends no extra board update (its tool answer says it)", async () => {
+  const { w, wait } = await noRepoWithTask()
+  const said = await toolCall(w.host, toolName('setup_git'), undefined, {})
+  expect(JSON.stringify(said)).toContain('Git is set up')
+  await wait()
+  expect(takeBoardUpdate() ?? '').not.toContain('git')
+  expect((await load(w.host)).tasks.map(t => t.status)).toEqual(['doing'])
+})
+
+test('T-968: Check again finds git the owner set up by hand: the lead gets one board update at once saying so, and the ready task starts', async () => {
+  const { w, machine, wait } = await noRepoWithTask()
+  machine.repo = { on: true }
+  expect((await runCommand(w.host, 'symcc-settings', 'git check'))?.text).toContain('git is ready')
+  await wait()
+  const update = takeBoardUpdate() ?? ''
+  expect(update).toContain('Git is ready here now')
+  expect(update.split(GIT_READY_LINE).length).toBe(2)
+  // a later check tells nothing again
+  expect((await runCommand(w.host, 'symcc-settings', 'git check'))?.text).toContain('git is ready')
+  expect(takeBoardUpdate() ?? '').not.toContain('Git is ready')
+  expect((await load(w.host)).tasks.map(t => t.status)).toEqual(['doing'])
+})
+
+test("T-968: a Meanwhile line goes with the owner's next prompt (in the lead's guide) and is not repeated in a later board update", async () => {
+  const w = world('a')
+  w.files.set(w.board, JSON.stringify(emptyBoard()))
+  await sessionStart(w.host)
+  takeBoardUpdate()
+  noteForLead('The owner dropped T-6.')
+  // before the owner types, the guide has no such line
+  expect(await leadGuideText(w.host)).not.toContain('The owner dropped T-6.')
+  ownerTyped('create a task for the search')
+  const guide = (await leadGuideText(w.host)) ?? ''
+  expect(guide).toContain('Meanwhile the owner (nothing to answer):\n- The owner dropped T-6.')
+  // a board update sent later doesn't carry it again
+  tellLead(w.host, 'T-2 "x" merged.')
+  const update = takeBoardUpdate() ?? ''
+  expect(update).toContain('T-2 "x" merged.')
+  expect(update).not.toContain('The owner dropped T-6.')
+  // nor does the guide after that update, nor the owner's next prompt
+  expect(await leadGuideText(w.host)).not.toContain('The owner dropped T-6.')
+  ownerTyped('and another')
+  expect(await leadGuideText(w.host)).not.toContain('The owner dropped T-6.')
+  await sessionEnd(w.host)
+})
+
+test("T-968: with no board update between, the owner's following prompt drops the lines given with the earlier one", async () => {
+  const w = world('a')
+  w.files.set(w.board, JSON.stringify(emptyBoard()))
+  await sessionStart(w.host)
+  takeBoardUpdate()
+  noteForLead('The owner paused T-3.')
+  ownerTyped('first')
+  expect(await leadGuideText(w.host)).toContain('The owner paused T-3.')
+  ownerTyped('second')
+  expect(await leadGuideText(w.host)).not.toContain('The owner paused T-3.')
+  await sessionEnd(w.host)
 })

@@ -21,6 +21,7 @@
 // loaded again, still knows it; board updates sent before it was known go to it then.
 import { manifestVersion, type Host, type HostAgentKind } from '../host'
 import { sessionStarting, sessionStart, guardStart, sessionEnd, agentFinished, leadGuideText } from '../app/symcc'
+import { meanwhileToPrompt } from '../app/tell'
 import { useName, scoutRuns } from '../app/state'
 import { projectRoot, isWorkerFolder } from '../app/store'
 import { agentOnBoard } from '../app/workers'
@@ -180,7 +181,8 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
           const id = e.sessionID
           if (!id || agents?.has(id)) return
           // the lead may already be known from another main copy's hook (copies share it): still send what this copy kept
-          if (id === lead()) return void (await leadApi?.known())
+          // T-968: the owner's board actions waiting as "Meanwhile" lines go with this prompt (in the guide, context hook)
+          if (id === lead()) return (meanwhileToPrompt(), void (await leadApi?.known()))
           // a child session (one of symcc's agents from an earlier copy, or OpenCode's own subagent) is never the lead
           const info = await ctx.session.get({ sessionID: id }).catch(() => undefined)
           if (!info || info.parentID || info.metadata?.symcc) return
@@ -190,6 +192,7 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
             ownLead = id
             if (leadKey) leads().set(leadKey, id)
           }
+          meanwhileToPrompt()
           await leadApi?.known()
         }),
       )

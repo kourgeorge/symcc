@@ -2682,7 +2682,7 @@ async function askedForFiles(files: string[]) {
   return { w, saves: () => saves }
 }
 
-test('Allow on a file request widens the files and sends the task back to work in one change; the lead gets a Meanwhile line', async () => {
+test('Allow on a file request widens the files and sends the task back to work in one change; the lead is told at once (T-968)', async () => {
   const { w, saves } = await askedForFiles(['README.md', 'docs/a.md'])
   await allowAskedFiles(w.$, 'T-1')
   const t = find(await load(w.$), 'T-1')!
@@ -2692,8 +2692,8 @@ test('Allow on a file request widens the files and sends the task back to work i
   expect(t.history.at(-1)?.text).toBe('the owner allowed files: + README.md, + docs/a.md')
   expect(t.ask).toBeUndefined()
   expect(t).not.toHaveProperty('ask')
-  expect(leadQueue).toEqual([])
-  expect(meanwhile.join('\n')).toContain('The owner allowed README.md, docs/a.md for T-1')
+  expect(leadQueue).toEqual(['The owner allowed README.md, docs/a.md for T-1 on the board; it went back to work. Don\'t ask the owner about these files again.'])
+  expect(meanwhile).toEqual([])
 })
 
 test("Don't allow keeps the task waiting with a note and tells the lead at once", async () => {

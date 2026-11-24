@@ -197,6 +197,9 @@ export function needFilesQuestion(id: string, files: readonly string[]): string 
 /** 'the owner allowed files: + a, + b': the history line when the owner allows a file request. */
 export const filesAllowedLine = (files: readonly string[]) => `the owner allowed files: ${files.map(f => `+ ${f}`).join(', ')}`
 
+/** What the lead is told when the owner allows a waiting task's file request (T-968: at once, as it may be waiting on it). */
+export const filesAllowedText = (id: string, files: readonly string[]) => `The owner allowed ${files.join(', ')} for ${id} on the board; it went back to work. Don't ask the owner about these files again.`
+
 /** What the lead is told when the owner does not allow a waiting task's file request. */
 export const filesRefusedText = (id: string, files: readonly string[]) => `The owner didn't allow ${files.join(', ')} for ${id}: drop it or narrow the plan.`
 

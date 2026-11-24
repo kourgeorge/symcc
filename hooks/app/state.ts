@@ -340,6 +340,8 @@ export const timers: { cancel(): void }[] = []
 export const leadQueue: string[] = []
 /** the owner's own actions since the last board update: short lines put at the top of the next one (see noteForLead) */
 export const meanwhile: string[] = []
+/** T-968: the "Meanwhile" lines given to the lead with the owner's latest prompt (in its instructions, see meanwhileToPrompt) */
+export const meanwhileHeard: string[] = []
 /** task id → spawns in a row that failed only because the plugin wasn't ready yet (see notReadyYet in host.ts) */
 export const notReady = new Map<string, number>()
 /** task id → checker starts in a row, after a reload (see checkAgain in workers.ts), that failed only because the agent type wasn't loaded yet */

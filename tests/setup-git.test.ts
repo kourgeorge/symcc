@@ -97,6 +97,7 @@ function world(start: Start = {}) {
     if (s === 'symbolic-ref HEAD refs/heads/main') return (repo.head = 'main'), ok()
     if (s === 'symbolic-ref --short -q HEAD') return repo.head ? ok(`${repo.head}\n`) : fail()
     if (s === 'rev-parse --show-toplevel') return ok(`${top}\n`)
+    if (s === 'rev-parse --short HEAD') return repo.commits.length ? ok('abc1234\n') : fail()
     if (s === 'add -A') {
       const lines = ignoreLines()
       repo.index = new Set(work().filter(p => !ignored(lines, p)))
@@ -503,9 +504,19 @@ test('a failed commit: setup throws, the tasks keep their merge_into and setup c
   expect((await load(w.$)).tasks.find(t => t.id === 'T-1')!.merge_into).toBe('guess')
 })
 
-test('the owner setting it up (not the lead): the lead is told what was done', async () => {
+test('the owner setting it up (not the lead): the lead is told what was done at once, in a board update (T-968)', async () => {
   const w = world()
   await withProject(w)
   await setupGit(w.$, 'the owner')
-  expect(meanwhile.some(x => x.startsWith('The owner set up git:'))).toBe(true)
+  expect(meanwhile).toEqual([])
+  expect(leadQueue.length).toBe(1)
+  expect(leadQueue[0]).toContain('The owner set up git here (branch main, first commit abc1234): Git is set up:')
+  expect(leadQueue[0]).toContain("Tasks can start now; don't ask the owner about git again.")
+})
+
+test("the lead's own setup_git tells the lead nothing more (T-968)", async () => {
+  const w = world()
+  await withProject(w)
+  await setupGit(w.$, 'the lead')
+  expect(leadQueue.length + meanwhile.length).toBe(0)
 })

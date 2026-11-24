@@ -11,7 +11,7 @@ import { addTask, emptyBoard, boardText, shortHome, type Board } from '../hooks/
 import { S, heard, toolName } from '../hooks/app/state'
 import { TOOLS } from '../hooks/app/tools'
 import { COMMANDS, toolCall, leadGuideText, notLeadText } from '../hooks/app/symcc'
-import { tellLead } from '../hooks/app/tell'
+import { tellLead, noteForLead } from '../hooks/app/tell'
 import { load } from '../hooks/app/store'
 import { notReadyYet } from '../hooks/host'
 import { startCopilot } from '../hooks/copilot/extension'
@@ -162,6 +162,12 @@ test('each prompt gets the lead\'s guide as additionalContext; the owner\'s prom
   await w.run.host.lead.send('[symcc] Board update: T-1 merged')
   await hook({ prompt: '[symcc] Board update: T-1 merged', sessionId: 'cp-1', workingDirectory: ROOT }, { sessionId: 'cp-1' })
   expect(heard.owner?.text).toBe('please add a task')
+  // T-968: an owner's board action waiting as a "Meanwhile" line goes with their next prompt, once
+  noteForLead('The owner dropped T-6.')
+  const next = await hook({ prompt: 'what now?', sessionId: 'cp-1', workingDirectory: ROOT }, { sessionId: 'cp-1' })
+  expect((next as { additionalContext?: string }).additionalContext ?? '').toContain('Meanwhile the owner (nothing to answer):\n- The owner dropped T-6.')
+  const after = await hook({ prompt: 'and then?', sessionId: 'cp-1', workingDirectory: ROOT }, { sessionId: 'cp-1' })
+  expect((after as { additionalContext?: string }).additionalContext ?? '').not.toContain('The owner dropped T-6.')
   await w.run.end()
 })
 

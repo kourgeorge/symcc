@@ -27,7 +27,7 @@ import { checkerFinished } from './checker'
 import { fileToolHits, scheduleScouts, scoutFinished, scoutTurnEnded } from './scouts'
 import { S, toolName, heard, stopped, workers, scoutRuns, checkerRuns, isOwnAgent } from './state'
 import { load, isOn, now, findRoot, startingText } from './store'
-import { takeBoardUpdate } from './tell'
+import { takeBoardUpdate, meanwhileToPrompt, meanwhilePromptText } from './tell'
 import { TOOLS, leadGuide, runTool, type In } from './tools'
 import { debriefFinished } from './debrief'
 import { pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, type TurnEnd } from './workers'
@@ -53,7 +53,9 @@ export async function leadGuideText(host: Host): Promise<string | undefined> {
   // T-922: a window that doesn't drive gets no board updates and starts no work; the lead says so plainly
   const notDriving = S.driving ? '' : `\n\nThis window does not drive the board now. When the owner asks about board work here, tell them plainly: "${notDrivingText(S.N.name)}".`
   const dam = S.dam ? `\n\n${DAM_POST_LINE}` : ''
-  return `${leadGuide(host.features)}${notDriving}${dam}`
+  // T-968: the owner's board actions since the last update go with their prompt (see ownerTyped)
+  const owner = meanwhilePromptText()
+  return `${leadGuide(host.features)}${notDriving}${dam}${owner ? `\n\n${owner}` : ''}`
 }
 
 /**
@@ -71,6 +73,8 @@ export function leadUpdate(): string | undefined {
  */
 export function ownerTyped(text: string) {
   if (text.trim()) heard.owner = { text: text.trim().slice(0, 2000), at: now() }
+  // T-968: the "Meanwhile" lines waiting go to the lead with this prompt, not in a later board update
+  meanwhileToPrompt()
   // T-952: the owner's prompt counts as this window being active (lead.json's `active` while it drives)
   S.activeAt = Date.now()
 }
