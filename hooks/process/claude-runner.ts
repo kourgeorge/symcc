@@ -12,7 +12,7 @@ import type { ProcessSystem } from './system'
  * config, the stash or the worktree's files, or that makes or fetches a repository. symcc commits and merges itself.
  * Read-only use (status, diff, log, show, blame, grep, ls-files, rev-parse ...) stays allowed.
  */
-export const GIT_DENIED_SUBCOMMANDS = [
+const GIT_DENIED_SUBCOMMANDS = [
   'commit', 'merge', 'init', 'clone', 'push', 'pull', 'fetch', 'reset', 'checkout', 'switch', 'restore', 'branch',
   'tag', 'stash', 'rebase', 'cherry-pick', 'revert', 'am', 'apply', 'add', 'rm', 'mv', 'clean', 'update-ref',
   'symbolic-ref', 'update-index', 'read-tree', 'write-tree', 'commit-tree', 'hash-object', 'mktag', 'mktree',
@@ -26,8 +26,8 @@ export const GIT_DENIED_SUBCOMMANDS = [
  * call that starts with an option is refused (`git -*`; the named ones are listed too, for prefix-only matching),
  * as are the usual wrappers in front of git. With no scratch-git allowance, there are no git writes at all.
  */
-export const GIT_DENIED_OPTIONS = ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--bare', '--no-pager', '-P', '-p', '--paginate']
-export const GIT_WRAPPERS = ['env', 'command', 'exec', 'xargs', 'nohup', 'time']
+const GIT_DENIED_OPTIONS = ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--bare', '--no-pager', '-P', '-p', '--paginate']
+const GIT_WRAPPERS = ['env', 'command', 'exec', 'xargs', 'nohup', 'time']
 
 /** The deny rules for git writes, given to every `claude -p` agent (a deny rule beats any allow rule). */
 export function gitDeniedRules(): string[] {
@@ -76,7 +76,7 @@ export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'to
  * Whether the folder `cwd` uses its SCRATCH_DIR: the project keeps no file there in git (`git ls-files -- .scratch`
  * prints nothing). A git failure counts as kept, so nothing is let through on a guess (like scratchTracked in hooks/app/git).
  */
-export function scratchInUse(sys: Pick<ProcessSystem, 'run'>, cwd: string | undefined): boolean {
+function scratchInUse(sys: Pick<ProcessSystem, 'run'>, cwd: string | undefined): boolean {
   const r = sys.run(['git', 'ls-files', '--', SCRATCH_DIR], cwd)
   return r.status === 0 && r.stdout.trim() === ''
 }
