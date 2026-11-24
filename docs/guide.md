@@ -1093,7 +1093,13 @@ only; the Organizational memory page has the same header shape, see below):
    counted); then where it came from (`♟ from you`, `⌕ scout bugs`, `◆ lead`, `↳ from T-5`,
    `▸ from T-5` for a worker's report); then its note, dim, when it has one. There are no
    Status, Stage or Now rows in Details any more: Details starts with the **Steps** row (the
-   way to the merge) and the **Added** row (when it was added and last changed).
+   way to the merge) and the **Added** row (when it was added and last changed), then the
+   **Priority** row: the task's priority number (bold when it is not 0) and, in grey, for a
+   to do task its place in line: `next to start`, `2nd in line`, `3rd in line`… among the to do
+   tasks that are free to start, in the order they start (lowest priority first, then the lower
+   task number), or `waits on T-n first` (the first task it waits for that is not done yet).
+   Any other status shows only the number: `Priority  0 · next to start`, `Priority  -2 · 3rd
+   in line`, `Priority  0 · waits on T-958 first`, `Priority  3`.
 4. **The buttons**, in groups, with words only (their keys are in the key line at the bottom,
    never inside a button). Every button looks the same: `[Label]`, in the normal text color.
    The order of the groups and the gaps between them say what is what: first the one next
@@ -1460,7 +1466,7 @@ unchanged.
   answers as buttons and a box for your own answer (a file request has `Allow files` and
   `Don't allow`); **Why it failed** (red); **Waiting for your files** (yellow).
   Then the sections, each under a clear heading: **Details**, the same labelled rows as the
-  terminal and OpenCode task pages (Steps, Added, Role, Kind, From, Why, Files, Into,
+  terminal and OpenCode task pages (Steps, Added, Priority, Role, Kind, From, Why, Files, Into,
   After, …, Tries) as a label and value list that wraps, each task it waits for a link that
   opens it; the **Branch** (the task's branch against main, as on the terminal, in the
   monospaced font); the **Answer** of an investigation; **What to do** (the details, drawn as

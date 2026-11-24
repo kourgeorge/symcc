@@ -1,6 +1,6 @@
 // The task page: its labelled rows and wrapping them to the panel width.
 import type { SymccStatus, SymccTask } from '../../types'
-import { type BoardTask, inLineNote, intoOf, isInvestigation, modeOf, STATUS_WORD } from './board-file'
+import { type BoardTask, byRunOrder, inLineNote, intoOf, isInvestigation, modeOf, STATUS_WORD } from './board-file'
 import { crossBranchNotes } from './git-setup'
 import { shortSha, taskCommits } from './commits'
 import { originMark, originOf } from './origin'
@@ -12,6 +12,7 @@ import { checkStepNow } from './lead'
 import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_NOTE, STEP_WORD } from './panel'
 import { stageStep, taskPhase } from './phase'
 import { ranNowThisTry } from './history'
+import { depDone } from './archive'
 import { runNowShares, runNowShareText } from './run-now'
 
 /** A piece of text on the task page with its theme color name (see C() in claude/ui/parts.tsx). */
@@ -165,8 +166,32 @@ function originWordSegs(o: NonNullable<ReturnType<typeof originOf>>): Seg[] {
   return [{ text: 'lead', color: 'success', bold: true }]
 }
 
+/** "1st", "2nd", "3rd", "4th", "11th", "21st"... */
+export function ordinal(n: number): string {
+  const tens = n % 100
+  const end = tens >= 11 && tens <= 13 ? 'th' : n % 10 === 1 ? 'st' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : 'th'
+  return `${n}${end}`
+}
+
 /**
- * The labelled rows of the task page, in order: Steps (STEPS_LABEL; `board`: its mode and checker setting, see taskStage), Added, Role, From, Why, Request, Seen, Files, Into (the branch it
+ * The task page's Priority row (T-966): the task's priority (like Unix nice, lower runs first), and for a task to do
+ * its place in line: "next to start" / "2nd in line" among the ready tasks (the same sort as ready(): lower priority
+ * first, then the lower task number), or "waits on T-3 first" (the first unfinished task it waits for). Other
+ * statuses: only the number. A non-zero priority stands out a little (bold).
+ */
+export function prioritySegs(t: SymccTask, all: SymccTask[], archivedDone: string[] = []): Seg[] {
+  const p = t.priority ?? 0
+  const segs: Seg[] = [{ text: String(p), color: 'text', ...(p ? { bold: true } : {}) }]
+  if (t.status !== 'todo') return segs
+  const b = { tasks: all.some(x => x.id === t.id) ? all : [...all, t], archived_done: archivedDone }
+  const open = t.after.filter(id => !depDone(b, id))
+  if (open.length) return [...segs, { text: ` · waits on ${open[0]} first`, color: 'inactive' }]
+  const at = b.tasks.filter(x => x.status === 'todo' && x.after.every(a => depDone(b, a))).sort(byRunOrder).findIndex(x => x.id === t.id)
+  return [...segs, { text: ` · ${at <= 0 ? 'next to start' : `${ordinal(at + 1)} in line`}`, color: 'inactive' }]
+}
+
+/**
+ * The labelled rows of the task page, in order: Steps (STEPS_LABEL; `board`: its mode and checker setting, see taskStage), Added, Priority (prioritySegs), Role, From, Why, Request, Seen, Files, Into (the branch it
  * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries.
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for; `merging`, an approve this
  * page started (see statusBadge), so the Steps line shows the same step as the page header. The status and the note
@@ -179,6 +204,7 @@ export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'nam
   const stage = taskStage(t as BoardTask, o.nowMs, o.board, !!o.merging)
   if (stage) R.push({ label: STEPS_LABEL, segs: stageSegs(stage) })
   R.push({ label: 'Added', segs: [{ text: o.when(t.created_at), color: 'text' }, { text: ` · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
+  R.push({ label: 'Priority', segs: prioritySegs(t, o.all, o.archivedDone) })
   const name = roleOf(t)
   const r = findRole(o.roles, name)
   const more = [r?.description, r?.model ? `model ${r.model}` : ''].filter(Boolean).join(' · ')
