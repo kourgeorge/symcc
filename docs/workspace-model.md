@@ -33,8 +33,11 @@ may have moved.
    answer comes back. A note or document is saved in the workspace. Nothing is merged.
 4. **Mostly developer work.** symcc is not a to-do app for personal life.
 5. **Outside work comes in through scouts.** Email, GitHub issues or Slack each get a scout.
-   Each scout sets whether its tasks start on their own or go to the backlog. Outside text is
-   always data, never instructions. A scout can require review before its tasks merge.
+   Whether a scout's findings start on their own or go to the backlog is the scout's existing
+   findings setting (`auto` or `backlog`, see [reference](reference.md#settings)). Outside text
+   is always data, never instructions. For a task from outside intake, the lead can set
+   `needs_review` so the owner approves it before it merges. There is no per-scout review
+   setting.
 6. **Each repo is tested alone,** with its own test command. There is no cross-repo
    integration test. A change across repos is split into linked tasks with `after`. A break
    between repos is fixed by a normal follow-up task.
@@ -123,4 +126,4 @@ Each step depends on the one before. The probe has the files and tests for each.
    each repo uses its own test command.
 4. **Tasks with no project.** Research and notes that need no repo.
 5. **Intake.** Scouts for email, GitHub issues and Slack, each with its own start-or-backlog
-   choice and an optional review before merge.
+   choice (the existing findings setting). The lead can set `needs_review` on their tasks.
