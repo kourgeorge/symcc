@@ -514,3 +514,24 @@ test('T-984: a made-up id is swapped for the real one on the next beat, so the w
   expect(S.offHere).toBe(false)
   expect(w.toasts.filter(t => t.includes('closed') || t.includes('another'))).toEqual([])
 })
+
+test('T-984: a window driving under a made-up id keeps driving when the host gives the real id', async () => {
+  S.root = ROOT
+  const w = world('me')
+  await saveBoard(w.host, emptyBoard())
+  S.me = 'session-made1'
+  S.offHere = false
+  let up = false
+  w.host.session.id = async () => {
+    if (!up) throw new Error('not yet')
+    return 'real'
+  }
+  expect(await claimLead(w.host, true)).toBe(true)
+  up = true
+  w.toasts.length = 0
+  expect(await claimLead(w.host)).toBe(true)
+  expect(S.driving).toBe(true)
+  expect(S.me).toBe('real')
+  expect(w.files.get(w.lead)).toContain('real')
+  expect(w.toasts.filter(t => t.includes('another'))).toEqual([])
+})

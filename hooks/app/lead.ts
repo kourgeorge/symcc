@@ -36,7 +36,16 @@ export const readLead = async (host: Host) => parseLead(await readLeadText(host)
 async function refreshMe(host: Host) {
   if (!S.me.startsWith('session-')) return
   const id = await host.session.id().catch(() => '')
-  if (id && id !== S.me) S.me = id
+  if (!id || id === S.me) return
+  const old = S.me
+  S.me = id
+  if (!S.driving || S.fresh) return
+  // driving under the made-up id: lead.json and the doing tasks move to the real id (as handOver does after /clear)
+  await locked(host, async () => {
+    const l = await readLead(host)
+    if (!l || l.session === old) await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...(l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}) }))
+  })
+  if (await host.fs.exists(path(S.N.boardFile))) await change(host, b => relabelSession(b, old, S.me))
 }
 
 export async function claimLead(host: Host, fresh = false): Promise<boolean> {
