@@ -40,7 +40,7 @@ const task = (id: string, status: string, extra: Record<string, unknown> = {}) =
   status,
   note: '',
  
-  order: Number(id.slice(2)),
+  priority: 0,
   after: ['T-499', 'T-498'],
   attempts: 2,
   history: hist(...HISTORY),
@@ -66,8 +66,8 @@ export const RICH_TASKS = [
   task('T-509', 'dropped'),
   task('T-510', 'review', { kind: 'investigation', answer: 'Use the full width.', note: 'answered; waiting for you to read it' }),
   task('T-511', 'waiting', { asked_files: ['hooks/board.ts'], options: undefined }),
-  { id: 'T-499', title: 'The first VS Code board task', details: '', files: [], status: 'done', note: '', order: 499, after: [], attempts: 1, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) },
-  { id: 'T-498', title: 'Another task it waits for', details: '', files: [], status: 'todo', note: '', order: 498, after: [], attempts: 0, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) },
+  { id: 'T-499', title: 'The first VS Code board task', details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) },
+  { id: 'T-498', title: 'Another task it waits for', details: '', files: [], status: 'todo', note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) },
 ]
 
 /** The ids of the rich tasks the tests open. */

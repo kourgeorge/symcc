@@ -14,7 +14,7 @@ const h = (min: number, kind: string, text: string): SymccHistoryEntry => ({ at:
 const stage = (min: number, n: number, words: string) => h(min, 'stage', `try ${n}: ${words}`)
 
 function task(id: string, over: Partial<SymccTask>): SymccTask {
-  return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', order: 0, after: [], attempts: 1, history: [], branch: null, created_at: at(600), updated_at: at(0), ...over }
+  return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: at(600), updated_at: at(0), ...over }
 }
 
 /** Made 600m ago; works 590..560; prep 2m, check 8m, queue 5m, tests 5m, merge 2m; merged 538m ago (lifetime 62m). */

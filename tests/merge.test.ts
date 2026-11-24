@@ -2748,27 +2748,53 @@ test('change on a running task adds a restart line naming the fields that change
   expect(t.history.map(h => h.text)).toContain('files widened: + docs/a.md, + tests/')
 })
 
-test('changing only order or after on a running task keeps its worker and saves the change; details still restarts it', async () => {
+test('changing only priority or after on a running task keeps its worker and saves the change; details still restarts it', async () => {
   const w = world()
   const [b0] = boardWith('review')
   const [b] = addTask(b0, { origin: { why: 'a test' }, title: 'Other', files: ['docs/'] }, ISO)
   await saveBoard(w.$, b)
   expect(find(b, 'T-1')!.status).toBe('doing')
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  const said = await runTool(w.$, 'change', { task: 'T-1', order: 7, after: ['T-2'] })
+  const said = await runTool(w.$, 'change', { task: 'T-1', priority: 7, after: ['T-2'] })
   const t = find(await load(w.$), 'T-1')!
   expect(String(said)).toContain('its worker keeps running')
   expect(t.status).toBe('doing')
-  expect(t.order).toBe(7)
+  expect(t.priority).toBe(7)
   expect(t.after).toEqual(['T-2'])
   expect(t.history.some(h => h.text.includes('restarted'))).toBe(false)
   expect(t.history.map(h => h.text)).toContain('waits on changed: nothing → T-2')
   expect(workers.has('ag1')).toBe(true)
+  // The old order field is refused, and the running task is not restarted.
+  await expect(runTool(w.$, 'change', { task: 'T-1', order: 1 })).rejects.toThrow('Nothing changed: order is gone; use priority (-20 to 19, lower runs first)')
+  expect(workers.has('ag1')).toBe(true)
+  expect(find(await load(w.$), 'T-1')!.history.some(h => h.text.includes('restarted'))).toBe(false)
   await runTool(w.$, 'change', { task: 'T-1', details: 'new plan' })
   const r = find(await load(w.$), 'T-1')!
   expect(r.history.map(h => h.text)).toContain('try 1: restarted: the task was changed (details)')
   expect(workers.has('ag1')).toBe(false)
   workers.delete('ag1')
+})
+
+test('T-967: add and change set a priority (a whole number from -20 to 19) and refuse 20, -21, 1.5 and text', async () => {
+  const w = world()
+  const [b] = boardWith('review')
+  await saveBoard(w.$, b)
+  const add = (x: Record<string, unknown>) => runTool(w.$, 'add', { title: 'New', details: 'd', why: 'a test', origin_by: 'lead', ...x })
+  expect(String(await add({}))).toContain('added T-2')
+  expect(find(await load(w.$), 'T-2')!.priority).toBe(0)
+  expect(String(await add({ priority: -2 }))).toContain('added T-3')
+  expect(find(await load(w.$), 'T-3')!.priority).toBe(-2)
+  for (const bad of [20, -21, 1.5, 'soon']) {
+    await expect(add({ priority: bad })).rejects.toThrow('whole number from -20 to 19')
+    await expect(runTool(w.$, 'change', { task: 'T-3', priority: bad })).rejects.toThrow('whole number from -20 to 19')
+  }
+  expect((await load(w.$)).tasks.length).toBe(3)
+  expect(find(await load(w.$), 'T-3')!.priority).toBe(-2)
+  await runTool(w.$, 'change', { task: 'T-3', priority: 19 })
+  expect(find(await load(w.$), 'T-3')!.priority).toBe(19)
+  await runTool(w.$, 'change', { task: 'T-3', priority: -20 })
+  expect(find(await load(w.$), 'T-3')!.priority).toBe(-20)
+  expect(TOOLS().find(t => t.name === 'add')!.inputSchema.properties).not.toHaveProperty('order')
 })
 
 test("the owner's answer to a waiting task goes into its details and its history", async () => {
@@ -2787,12 +2813,12 @@ test('an answer to a task that is doing again (answered on the board first) chan
   const [b] = boardWith('review', [], { history: hist('the owner answered: “blue”') })
   await saveBoard(w.$, b)
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
-  const said = await runTool(w.$, 'change', { task: 'T-1', answer: 'red', order: 3 })
+  const said = await runTool(w.$, 'change', { task: 'T-1', answer: 'red', priority: 3 })
   const t = find(await load(w.$), 'T-1')!
-  expect(said).toBe('T-1 was already answered (it is doing now, the owner answered: “blue”); nothing changed. To add something, use add_details. The other changes (order) were not made either; send them again without answer.')
+  expect(said).toBe('T-1 was already answered (it is doing now, the owner answered: “blue”); nothing changed. To add something, use add_details. The other changes (priority) were not made either; send them again without answer.')
   expect(t.status).toBe('doing')
   expect(t.details).toBe(find(b, 'T-1')!.details)
-  expect(t.order).toBe(find(b, 'T-1')!.order)
+  expect(t.priority).toBe(find(b, 'T-1')!.priority)
   expect(t.history).toEqual(find(b, 'T-1')!.history)
   expect(workers.has('ag1')).toBe(true)
   workers.delete('ag1')
@@ -2898,7 +2924,7 @@ test('change on a paused task keeps it paused with the change saved, and resume 
   await saveBoard(w.$, b)
   const changes: Record<string, unknown>[] = [
     { title: 'New title' }, { details: 'new plan' }, { add_details: 'also the README' },
-    { files: ['src/', 'tests/'] }, { after: ['T-2'] }, { order: 7 },
+    { files: ['src/', 'tests/'] }, { after: ['T-2'] }, { priority: 7 },
   ]
   for (const c of changes) {
     const said = await runTool(w.$, 'change', { task: 'T-1', ...c })
@@ -2910,7 +2936,7 @@ test('change on a paused task keeps it paused with the change saved, and resume 
   expect(t.details).toMatch(/^new plan\n\nNote \(lead, \d{4}-\d\d-\d\d\): also the README$/)
   expect(t.files).toEqual(['src/', 'tests/'])
   expect(t.after).toEqual(['T-2'])
-  expect(t.order).toBe(7)
+  expect(t.priority).toBe(7)
   expect(t.note).toBe('paused')
   await runTool(w.$, 'resume', { task: 'T-1' })
   expect(find(await load(w.$), 'T-1')!.status).toBe('todo')
@@ -7196,7 +7222,7 @@ test("T-511: a real test failure after a worker's try keeps today's behaviour: a
 })
 
 test('T-547: a board with test_rerun set is converted once: a task waiting for its rerun goes back to todo with a note, the fields go', () => {
-  const base = { title: 't', details: '', files: [], order: 1, after: [], attempts: 1, history: [], branch: null, merge_into: 'main', origin: { by: 'lead', why: 'x', at: ISO }, created_at: ISO, updated_at: ISO }
+  const base = { title: 't', details: '', files: [], priority: 1, after: [], attempts: 1, history: [], branch: null, merge_into: 'main', origin: { by: 'lead', why: 'x', at: ISO }, created_at: ISO, updated_at: ISO }
   const raw = {
     tasks: [
       { ...base, id: 'T-1', status: 'waiting', note: 'tests ran out of time (10 min); running them again once, no new try', test_rerun: 1 },

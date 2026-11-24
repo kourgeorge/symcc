@@ -19,7 +19,7 @@ const PANE = {
 
 const R1 = '.symcc/reports/T-1-try-1.md'
 const answered = {
-  id: 'T-1', title: 'Why is the cache slow', details: 'Find out why.', files: [], status: 'review', note: 'answered; waiting for you to read it', order: 1, after: [], attempts: 1,
+  id: 'T-1', title: 'Why is the cache slow', details: 'Find out why.', files: [], status: 'review', note: 'answered; waiting for you to read it', priority: 1, after: [], attempts: 1,
   history: hist('try 1: answered: The cache is never cleared.'), branch: 'symcc/T-1', merge_into: 'main', origin: { by: 'owner', why: 'x', at: '' }, created_at: '', updated_at: '',
   kind: 'investigation', role: 'researcher', answer: 'The cache is never cleared.', runs: [{ started: '2026-11-22T10:00:00.000Z', ended: '2026-11-22T10:10:00.000Z', report: R1 }],
 }

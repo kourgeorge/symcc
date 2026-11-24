@@ -57,7 +57,7 @@ function bigBoard(): Board {
     const open = status !== 'done' && status !== 'dropped'
     b.tasks.push({
       id: `T-${i}`, title: `Task ${i}: ${words(8, 't')}`, details: words(220, 'd'), files: ['hooks/app/', 'tests/'], status, note: open ? '' : 'merged into main (aaaaaaa); tests passed',
-      order: i, after: i > 1 ? [`T-${i - 1}`] : [], attempts: open ? 0 : 3, history: open ? [] : history, ...(open ? {} : { runs, merged: 'b'.repeat(40) }), branch: open ? null : `symcc/T-${i}`, merge_into: 'main',
+      priority: 0, after: i > 1 ? [`T-${i - 1}`] : [], attempts: open ? 0 : 3, history: open ? [] : history, ...(open ? {} : { runs, merged: 'b'.repeat(40) }), branch: open ? null : `symcc/T-${i}`, merge_into: 'main',
       origin: { by: 'owner', why: words(12, 'w'), request: words(60, 'r'), evidence: `last owner prompt: ${words(110, 'e')}`, at }, kind: 'bug', role: 'general', created_at: at, updated_at: at,
     } as BoardTask)
   }
@@ -85,7 +85,7 @@ test('T-675: a board like today\'s (700 tasks, most done with long histories) sa
   for (const f of parts) expect(w.files.get(f)!.length).toBeLessThan(SIZE_WARN_BYTES / 4)
   // a done task's stub says where the rest is; an open task stays whole
   const raw = JSON.parse(w.files.get(BOARD)!) as { tasks: Record<string, unknown>[] }
-  expect(raw.tasks[611]).toEqual({ id: 'T-612', title: b.tasks[611]!.title, status: 'done', order: 612, after: ['T-611'], kind: 'bug', role: 'general', attempts: 3, branch: 'symcc/T-612', merge_into: 'main', merged: 'b'.repeat(40), created_at: b.tasks[611]!.created_at, updated_at: b.tasks[611]!.updated_at, parts: 'tasks/T-600.json' })
+  expect(raw.tasks[611]).toEqual({ id: 'T-612', title: b.tasks[611]!.title, status: 'done', priority: 0, after: ['T-611'], kind: 'bug', role: 'general', attempts: 3, branch: 'symcc/T-612', merge_into: 'main', merged: 'b'.repeat(40), created_at: b.tasks[611]!.created_at, updated_at: b.tasks[611]!.updated_at, parts: 'tasks/T-600.json' })
   expect(raw.tasks[690]!.details).toBe(b.tasks[690]!.details)
   // loading gives back every task whole: history, tries, details and origin
   const back = await loaded(w)
@@ -277,7 +277,7 @@ test('T-681: a parts file that is there but lacks one task\'s entry gets it back
   const b = emptyBoard()
   for (const id of ['T-1', 'T-2', 'T-3']) {
     const at = iso(NOW)
-    b.tasks.push({ id, title: id, details: 'd', files: [], status: id === 'T-3' ? 'todo' : 'done', note: '', order: 1, after: [], attempts: 1, history: [{ at, kind: 'stage', text: 'x' }], branch: null, merge_into: 'main', kind: 'bug', role: 'general', created_at: at, updated_at: at } as BoardTask)
+    b.tasks.push({ id, title: id, details: 'd', files: [], status: id === 'T-3' ? 'todo' : 'done', note: '', priority: 1, after: [], attempts: 1, history: [{ at, kind: 'stage', text: 'x' }], branch: null, merge_into: 'main', kind: 'bug', role: 'general', created_at: at, updated_at: at } as BoardTask)
   }
   b.next_id = 4
   await saveBoard(w.host, b)

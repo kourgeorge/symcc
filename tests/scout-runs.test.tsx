@@ -184,7 +184,7 @@ test("the scout's page lists its runs, newest first, and opening one shows its f
     { started: null, ended: '2026-11-12T00:00:00.000Z', outcome: 'found', findings: 2, report: '.symcc/reports/scouts/bugs-old.md' },
     { started: null, ended: LAST_RUN, outcome: 'nothing', findings: 0, report: '.symcc/reports/scouts/bugs-new.md' },
   ]
-  const task = { id: 'T-7', title: 'Fix the crash', details: '', files: [], status: 'todo', note: '', order: 7, after: [], attempts: 0, history: [], branch: null, created_at: '2026-11-12T01:00:00.000Z', updated_at: '', origin: { by: 'scout', scout: 'bugs', why: 'it crashes', at: '' } }
+  const task = { id: 'T-7', title: 'Fix the crash', details: '', files: [], status: 'todo', note: '', priority: 7, after: [], attempts: 0, history: [], branch: null, created_at: '2026-11-12T01:00:00.000Z', updated_at: '', origin: { by: 'scout', scout: 'bugs', why: 'it crashes', at: '' } }
   page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText(runs), '/.symcc/reports/scouts/bugs-old.md': '1. The parser crashes.\n2. The whole old report.\n', '/.symcc/reports/scouts/bugs-new.md': 'NOTHING\n' }, [task])
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^▍Runs$/ })).toBeDefined()
@@ -324,7 +324,7 @@ test('the migration renames scout agent names in old origins (board and parts fi
     { started: null, ended: ago(20), outcome: 'error', findings: 0 },
   ]
   const origin = (scout: string, at: string) => ({ by: 'scout', scout, why: 'w', at })
-  const task = (id: string, status: string, scout: string, at: string) => ({ id, title: id, details: '', status, order: 1, after: [], files: [], attempts: 0, history: [], created_at: at, updated_at: at, merge_into: 'main', origin: origin(scout, at) })
+  const task = (id: string, status: string, scout: string, at: string) => ({ id, title: id, details: '', status, priority: 1, after: [], files: [], attempts: 0, history: [], created_at: at, updated_at: at, merge_into: 'main', origin: origin(scout, at) })
   const board = { ...emptyBoard(), mode: 'auto', tasks: [task('T-1', 'done', 'symcc-scout-test-gaps', ago(40)), task('T-2', 'todo', 'symcc-scout-test-gaps', ago(10)), task('T-3', 'todo', 'bugs', ago(10))] }
   const w = world({ [GAPS_RUNS]: scoutRunsText(runs), [BOARD]: JSON.stringify(board) })
   expect((await migrateScoutOrigins(w.$)).sort()).toEqual(['T-1', 'T-2'])
@@ -342,7 +342,7 @@ test('the migration renames scout agent names in old origins (board and parts fi
 test('the migration also renames scout agent names in archive.json, so the Results line counts them under the scout', async () => {
   const runs: ScoutRunRecord[] = [{ started: null, ended: ago(50), outcome: 'found', findings: 1, tasks: [] }]
   const at = ago(40)
-  const t = { id: 'T-1', title: 't', details: '', status: 'done', order: 1, after: [], files: [], attempts: 0, history: [], created_at: at, updated_at: at, merge_into: 'main', origin: { by: 'scout', scout: 'symcc-scout-test-gaps', why: 'w', at } }
+  const t = { id: 'T-1', title: 't', details: '', status: 'done', priority: 1, after: [], files: [], attempts: 0, history: [], created_at: at, updated_at: at, merge_into: 'main', origin: { by: 'scout', scout: 'symcc-scout-test-gaps', why: 'w', at } }
   const ARCHIVE = `${ROOT}/.symcc/archive.json`
   const w = world({ [GAPS_RUNS]: scoutRunsText(runs), [ARCHIVE]: JSON.stringify({ version: 1, tasks: [t] }) })
   expect(await migrateScoutOrigins(w.$)).toEqual(['T-1'])
@@ -382,7 +382,7 @@ test('an add with the agent name of scout "deps.v2" or of a long-named scout sto
 test('the migration maps an old agent name "symcc-scout-deps-v2" back to scout "deps.v2" and links its run', async () => {
   const runs: ScoutRunRecord[] = [{ started: null, ended: ago(2), outcome: 'found', findings: 1, tasks: [] }]
   const at = ago(1)
-  const t = { id: 'T-1', title: 't', details: '', status: 'todo', order: 1, after: [], files: [], attempts: 0, history: [], created_at: at, updated_at: at, merge_into: 'main', origin: { by: 'scout', scout: 'symcc-scout-deps-v2', why: 'w', at } }
+  const t = { id: 'T-1', title: 't', details: '', status: 'todo', priority: 1, after: [], files: [], attempts: 0, history: [], created_at: at, updated_at: at, merge_into: 'main', origin: { by: 'scout', scout: 'symcc-scout-deps-v2', why: 'w', at } }
   const w = listable(world({ [odd('deps.v2')]: scoutRunsText(runs), [BOARD]: JSON.stringify({ ...emptyBoard(), mode: 'auto', tasks: [t] }) }))
   scoutState.clear()
   expect(await migrateScoutOrigins(w.$)).toEqual(['T-1'])
@@ -464,7 +464,7 @@ function resultsPage(on: On) {
   // dates relative to now, so the run and the merged task stay inside "last 7 days"
   const ago = (h: number) => new Date(Date.now() - h * 3600_000).toISOString()
   const run = ago(24)
-  const t = (id: string, status: string, runs: unknown[] = []) => ({ id, title: id, details: '', files: [], status, note: '', order: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: ago(23), updated_at: ago(22), runs, origin: { by: 'scout', scout: 'bugs', why: '', at: '' } })
+  const t = (id: string, status: string, runs: unknown[] = []) => ({ id, title: id, details: '', files: [], status, note: '', priority: 1, after: [], attempts: runs.length, history: [], branch: null, created_at: ago(23), updated_at: ago(22), runs, origin: { by: 'scout', scout: 'bugs', why: '', at: '' } })
   const tasks = [t('T-7', 'done', [{ started: ago(23), ended: ago(22.5), agents: [{ kind: 'worker' as const, started: ago(23), ended: ago(22.5), tokens: { input: 3000 } }] }]), t('T-8', 'todo')]
   const memory = addScoutRun(null, 'bugs', { endMs: Date.parse(run), ms: 60_000, tokens: { input: 2000 } })
   page(on, { '/.symcc/scouts/bugs.runs.json': scoutRunsText([{ started: null, ended: run, outcome: 'found', findings: 2, tasks: ['T-7', 'T-8'] }]), '/.symcc/scouts.json': memory }, tasks)

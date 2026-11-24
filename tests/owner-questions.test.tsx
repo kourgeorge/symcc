@@ -185,7 +185,7 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 8, bodyColumns: 100, scroll: { offset: 0, bodyRows: 8 }, view: {} },
 } as const
 
-const task = (id: string, status: string, title: string) => ({ id, title, origin: { by: 'owner', why: 'x', at: '' }, merge_into: 'main', details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '' })
+const task = (id: string, status: string, title: string) => ({ id, title, origin: { by: 'owner', why: 'x', at: '' }, merge_into: 'main', details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '' })
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it. */
 function stateOf(on: On, seed: Record<string, unknown>) {
