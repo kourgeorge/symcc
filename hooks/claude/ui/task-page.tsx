@@ -309,7 +309,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
     if (i === choices.length - 1) return () => ((S.answering = t.id), $.ui.invalidate('ui.render'))
     if (asks?.files.length)
       return act(async () => {
-        const said = i === 0 ? await allowAskedFiles(claudeHost($), t.id) : await refuseAskedFiles(claudeHost($), t.id)
+        const said = i === 0 ? await allowAskedFiles(claudeHost($), t.id, true) : await refuseAskedFiles(claudeHost($), t.id)
         boardAnswered(t.id, choices[i]!)
         $.ui.toast(S.N.toast(said))
       })

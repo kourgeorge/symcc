@@ -5,7 +5,7 @@ import { expect } from 'claude-code/testing'
 import { gitNotice, gitInstallStep, emptyBoard, parseCommand, notSetUpAnswer, offStatusLine, offStatusParts, parseLead, type Board } from '../hooks/board'
 import { S, toolName } from '../hooks/app/state'
 import { COMMANDS, watchdogTick, leadBeat, leadGuideText, ownerTyped, sessionStart, sessionEnd, toolCall, runCommand } from '../hooks/app/symcc'
-import { tellLead, takeBoardUpdate, noteForLead } from '../hooks/app/tell'
+import { tellLead, takeBoardUpdate, noteForLead, meanwhileForPrompt } from '../hooks/app/tell'
 import { setupGit, gitReady } from '../hooks/app/git'
 import { MANUAL } from '../hooks/app/tools'
 import { openPane } from '../hooks/app/open'
@@ -545,38 +545,35 @@ test('T-968: Check again finds git the owner set up by hand: the lead gets one b
   expect((await load(w.host)).tasks.map(t => t.status)).toEqual(['doing'])
 })
 
-test("T-968: a Meanwhile line goes with the owner's next prompt (in the lead's guide) and is not repeated in a later board update", async () => {
+test("T-968: a Meanwhile line goes with the owner's next prompt (not the lead's guide) once, and is not repeated in a later board update", async () => {
   const w = world('a')
   w.files.set(w.board, JSON.stringify(emptyBoard()))
   await sessionStart(w.host)
   takeBoardUpdate()
   noteForLead('The owner dropped T-6.')
-  // before the owner types, the guide has no such line
-  expect(await leadGuideText(w.host)).not.toContain('The owner dropped T-6.')
   ownerTyped('create a task for the search')
-  const guide = (await leadGuideText(w.host)) ?? ''
-  expect(guide).toContain('Meanwhile the owner (nothing to answer):\n- The owner dropped T-6.')
+  const block = meanwhileForPrompt()
+  expect(block).toContain('Meanwhile the owner (nothing to answer):\n- The owner dropped T-6.')
+  // the guide (the system prompt) never carries it, so it stays the same
+  expect(await leadGuideText(w.host)).not.toContain('The owner dropped T-6.')
+  // the owner's next prompt gets nothing again
+  expect(meanwhileForPrompt()).toBe('')
   // a board update sent later doesn't carry it again
   tellLead(w.host, 'T-2 "x" merged.')
   const update = takeBoardUpdate() ?? ''
   expect(update).toContain('T-2 "x" merged.')
   expect(update).not.toContain('The owner dropped T-6.')
-  // nor does the guide after that update, nor the owner's next prompt
-  expect(await leadGuideText(w.host)).not.toContain('The owner dropped T-6.')
-  ownerTyped('and another')
-  expect(await leadGuideText(w.host)).not.toContain('The owner dropped T-6.')
   await sessionEnd(w.host)
 })
 
-test("T-968: with no board update between, the owner's following prompt drops the lines given with the earlier one", async () => {
+test('T-968: Meanwhile lines not yet given with a prompt still go at the top of the next board update', async () => {
   const w = world('a')
   w.files.set(w.board, JSON.stringify(emptyBoard()))
   await sessionStart(w.host)
   takeBoardUpdate()
   noteForLead('The owner paused T-3.')
-  ownerTyped('first')
-  expect(await leadGuideText(w.host)).toContain('The owner paused T-3.')
-  ownerTyped('second')
-  expect(await leadGuideText(w.host)).not.toContain('The owner paused T-3.')
+  tellLead(w.host, 'T-2 "x" merged.')
+  expect(takeBoardUpdate() ?? '').toContain('- The owner paused T-3.')
+  expect(meanwhileForPrompt()).toBe('')
   await sessionEnd(w.host)
 })

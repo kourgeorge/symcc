@@ -2684,7 +2684,7 @@ async function askedForFiles(files: string[]) {
 
 test('Allow on a file request widens the files and sends the task back to work in one change; the lead is told at once (T-968)', async () => {
   const { w, saves } = await askedForFiles(['README.md', 'docs/a.md'])
-  await allowAskedFiles(w.$, 'T-1')
+  await allowAskedFiles(w.$, 'T-1', true)
   const t = find(await load(w.$), 'T-1')!
   expect(saves()).toBe(1)
   expect(t.status).toBe('todo')
@@ -2710,7 +2710,7 @@ test('Allow or Don\'t allow on a task that does not wait for files is refused', 
   const w = world()
   const [b] = boardWith('auto')
   await saveBoard(w.$, patchTask(b, 'T-1', { status: 'waiting', ask: { by: 'lead', text: 'Which colour?', asked_at: '' } }, ISO))
-  await expect(allowAskedFiles(w.$, 'T-1')).rejects.toThrow('not waiting for files')
+  await expect(allowAskedFiles(w.$, 'T-1', true)).rejects.toThrow('not waiting for files')
   await expect(refuseAskedFiles(w.$, 'T-1')).rejects.toThrow('not waiting for files')
 })
 

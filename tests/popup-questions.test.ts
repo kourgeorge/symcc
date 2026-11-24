@@ -5,7 +5,7 @@ import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 import { pause } from './fakes'
 import { type Board, readBoard, openQuestions } from '../hooks/board'
-import { S } from '../hooks/app/state'
+import { S, leadQueue, meanwhile } from '../hooks/app/state'
 import { runTool, allowAskedFiles } from '../hooks/app/tools'
 import { answerOnBoard, boardAnswered, popupCall } from '../hooks/app/questions'
 import { change } from '../hooks/app/store'
@@ -177,7 +177,7 @@ test("a question about a task waiting for the owner is tied to that task's board
   expect(t.history.map(h => h.text).join('\n')).toContain('Red')
 })
 
-test("a file request answered Allow in the pop-up allows the files", async () => {
+test("a file request answered Allow in the pop-up allows the files; the lead hears it only in the pop-up's result, with no board update (T-968)", async () => {
   const w = world()
   await waitingTask(w.host as never, { asked_files: ['b.ts'], note: 'asks to change b.ts' })
   const d = dialog()
@@ -186,6 +186,8 @@ test("a file request answered Allow in the pop-up allows the files", async () =>
   d.answer({ 'T-1 wants to change b.ts. Allow?': 'Allow' })
   expect(((await r) as { context: string[] }).context[0]).toContain('files allowed (b.ts)')
   expect(w.board().tasks[0]!.files).toContain('b.ts')
+  expect(leadQueue).toEqual([])
+  expect(meanwhile).toEqual([])
 })
 
 test("a worker's call and a question with no options are passed on untouched", async () => {
@@ -509,7 +511,7 @@ test("a tied pop-up for a file request puts the lead's wording on the task: it s
   // the Allow button's action still works, and the lead's text goes with the question
   d.answer({})
   void r
-  await allowAskedFiles(w.host, 'T-1')
+  await allowAskedFiles(w.host, 'T-1', true)
   const after = w.board().tasks[0]!
   expect(after.files).toContain('b.ts')
   expect(after.ask).toBeUndefined()

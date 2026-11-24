@@ -1,6 +1,6 @@
 import { cutLine } from '../core/reports'
 import { DAM_POST_LINE, damGuideCore } from '../core/dam'
-import { S, leadQueue, meanwhile, meanwhileHeard } from './state'
+import { S, leadQueue, meanwhile } from './state'
 import type { Host } from '../host'
 
 // ---------------- telling the lead ----------------
@@ -9,7 +9,7 @@ import type { Host } from '../host'
 // wake the lead, kept until the host takes it on its next hook: takeBoardUpdate).
 // The owner's own actions (approve, drop, settings, ...) don't wake the lead: they wait
 // as short "Meanwhile the owner:" lines at the top of the next update sent for a real reason, or go with the owner's
-// next prompt if that comes first (meanwhileToPrompt). Actions the lead may be waiting on (git set up, files allowed or
+// next prompt if that comes first (meanwhileForPrompt). Actions the lead may be waiting on (git set up, files allowed or
 // not) are told at once with tellLead.
 
 /** The end of a start line (see wakeLine in starts.ts); an update of only such lines asks for no reply. */
@@ -82,8 +82,6 @@ export function takeBoardUpdate(): string | undefined {
   S.leadUrgent = false
   const body = leadQueue.splice(0).join('\n\n')
   if (!body || !S.enabledNow) return undefined
-  // the lines given with the owner's last prompt were read then: no later prompt or update carries them again
-  meanwhileHeard.splice(0)
   const before = meanwhileText(meanwhile.splice(0))
   const startOnly = !before && body.split('\n\n').every(l => l.startsWith('Starting ') && l.endsWith(START_LINE_END))
   const ending = startOnly
@@ -108,16 +106,12 @@ export function noteForLead(text: string) {
 }
 
 /**
- * T-968: the owner sent the lead a prompt (or, on OpenCode, the lead's session takes one): the "Meanwhile" lines
- * waiting go with it, in the lead's instructions (meanwhilePromptText, added by leadGuideText), and leave the queue,
- * so no later board update repeats them. The lines given with an earlier prompt are dropped.
+ * T-968: the owner sent the lead a prompt: the "Meanwhile" lines waiting, as one block for the host to attach to that
+ * prompt (Claude Code's prompt context, a message beside it on OpenCode, Copilot's added context), so they stay in the
+ * chat once. They leave the queue, so no later board update repeats them. '' when none wait or symcc is off.
  */
-export function meanwhileToPrompt() {
-  meanwhileHeard.splice(0, meanwhileHeard.length, ...meanwhile.splice(0))
-}
-
-/** The "Meanwhile" block given with the owner's latest prompt, for the lead's instructions ('' when there is none). */
-export function meanwhilePromptText(): string {
-  if (!meanwhileHeard.length || !S.enabledNow) return ''
-  return `${meanwhileText(meanwhileHeard)}\n(Done on the board just before the owner's latest message; take it into account. It won't come again in a board update.)`
+export function meanwhileForPrompt(): string {
+  const lines = meanwhile.splice(0)
+  if (!lines.length || !S.enabledNow) return ''
+  return `[${S.N.name}] ${meanwhileText(lines)}\n(Done on the board before this message from the owner; take it into account.)`
 }

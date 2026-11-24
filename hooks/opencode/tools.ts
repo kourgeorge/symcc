@@ -184,7 +184,7 @@ export async function answerCommand(host: Host, _command: string, args: string):
   const t = (await load(host)).tasks.find(x => x.id === id)
   if (!t) return say(`there is no ${id} on the board`)
   const [allow, refuse] = answerChoices(t.ask?.files, undefined)
-  if (t.status === 'waiting' && t.ask?.files?.length && (text === allow || text === refuse)) return say(await (text === allow ? allowAskedFiles : refuseAskedFiles)(host, id).catch((err: Error) => err.message))
+  if (t.status === 'waiting' && t.ask?.files?.length && (text === allow || text === refuse)) return say(await (text === allow ? allowAskedFiles(host, id, true) : refuseAskedFiles(host, id)).catch((err: Error) => err.message))
   const r = await toolCall(host, toolName('change'), undefined, { task: id, answer: text })
   if (!r || 'deny' in r) return say(r ? r.deny : `couldn't answer ${id}`)
   // the lead hears of it only when the call really answered something: the task was waiting (or had a "more time?"

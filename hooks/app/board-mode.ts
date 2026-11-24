@@ -4,7 +4,7 @@ import type { SymccMode } from '../../types'
 import { settingShown, type Board, modeOf, symccOn, patchTask, find, workerName, setMode, modeText, setEnabled, openOnStart, stoppedEntry, withHistory, endedBy } from '../board'
 import { haltCheckers } from './checker'
 import { publish } from './lead'
-import { S, workers, queuedWorkers, type Worker, halt, scoutRuns, scoutState, leadQueue, meanwhile, meanwhileHeard, sayQueue } from './state'
+import { S, workers, queuedWorkers, type Worker, halt, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue } from './state'
 import type { Host } from '../host'
 import { openPane } from './open'
 import { cancelStarts } from './starts'
@@ -86,7 +86,6 @@ export async function setBoardMode(host: Host, m: SymccMode, who: string): Promi
 export function dropLeadUpdates() {
   leadQueue.splice(0)
   meanwhile.splice(0)
-  meanwhileHeard.splice(0)
   S.leadTimer?.cancel()
   S.leadTimer = null
   S.leadUrgent = false

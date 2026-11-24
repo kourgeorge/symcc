@@ -5,7 +5,7 @@
 import { test as plainTest, type TestBody, type TestOptions, type TestRest } from 'claude-code/testing'
 import { emptyHeard, useAssistantWord } from '../hooks/board'
 import { SYMCC_WORDS } from '../hooks/host'
-import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRuns, checkerRuns, stopped, movedAgents, movedRefused, haltedAnywhere, boardAgents, reminded, healthTold, scoutState, leadQueue, meanwhile, meanwhileHeard, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, scratchUse, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/app/state'
+import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRuns, checkerRuns, stopped, movedAgents, movedRefused, haltedAnywhere, boardAgents, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, scratchUse, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/app/state'
 import { resetScoutRuns } from '../hooks/app/scouts'
 import { resetStarts } from '../hooks/app/starts'
 import { resetStore } from '../hooks/app/store'
@@ -55,7 +55,7 @@ export function resetPlugin() {
   for (const s of [starting, finishing, stopped, movedAgents, boardAgents, healthTold, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou, guardLogged]) s.clear()
   movedRefused().clear()
   haltedAnywhere().clear()
-  for (const q of [leadQueue, meanwhile, meanwhileHeard, sayQueue]) q.length = 0
+  for (const q of [leadQueue, meanwhile, sayQueue]) q.length = 0
   for (const k of Object.keys(heard)) delete (heard as Record<string, unknown>)[k]
   Object.assign(heard, emptyHeard())
 }

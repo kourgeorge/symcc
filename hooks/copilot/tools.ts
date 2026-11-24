@@ -11,7 +11,7 @@
 // /symcc-disable counts from the next message, as Claude Code's prompt.compose does.
 import type { Host } from '../host'
 import { TOOLS } from '../app/tools'
-import { COMMANDS, runCommand, toolCall, toolCallFailed, leadGuideText, ownerTyped, type CommandAnswer } from '../app/symcc'
+import { COMMANDS, runCommand, toolCall, toolCallFailed, leadGuideText, ownerTyped, meanwhileForPrompt, type CommandAnswer } from '../app/symcc'
 import { S, useName, toolName } from '../app/state'
 import type { CpCommand, CpHooks, CpSession, CpTool } from './sdk'
 import { SYMCC_SOURCE } from './lead'
@@ -87,9 +87,13 @@ export function copilotHooks(host: Host, ours: (prompt: string) => boolean, ende
   return {
     async onUserPromptSubmitted(input) {
       useName(host)
-      if (!ours(input.prompt)) ownerTyped(input.prompt)
+      const owners = !ours(input.prompt)
+      if (owners) ownerTyped(input.prompt)
       const guide = await leadGuideText(host).catch(() => undefined)
-      return guide ? { additionalContext: guide } : {}
+      // T-968: the owner's board actions waiting as "Meanwhile" lines go with their prompt, once
+      const meanwhile = owners && guide ? meanwhileForPrompt() : ''
+      const context = [guide, meanwhile].filter(Boolean).join('\n\n')
+      return context ? { additionalContext: context } : {}
     },
     async onSessionEnd() {
       await ended()
