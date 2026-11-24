@@ -63,8 +63,15 @@ test('add, drop, then the same add again makes a new task', async () => {
   const wish = { title: 'Retry me', details: 'd', why: 'asked', origin_by: 'owner', request: 'do it' }
   expect(await runTool(w.host, 'add', wish)).toContain('added T-1')
   expect(await runTool(w.host, 'drop', { task: 'T-1' })).toContain('T-1 dropped')
-  expect(await runTool(w.host, 'add', { ...wish, files: ['src/'] })).toContain('added T-2')
+  expect(await runTool(w.host, 'add', wish)).toContain('added T-2')
   expect((JSON.parse(files.get('/repo/.symcc/board.json')!) as { tasks: unknown[] }).tasks.length).toBe(2)
+})
+
+test('an add with the same title and details but another origin makes a new task', async () => {
+  const { w } = await world()
+  const wish = { title: 'Same', details: 'd', why: 'asked', origin_by: 'owner', request: 'do it' }
+  expect(await runTool(w.host, 'add', wish)).toContain('added T-1')
+  expect(await runTool(w.host, 'add', { ...wish, why: 'my own idea', origin_by: 'lead', request: undefined })).toContain('added T-2')
 })
 
 test('an add with the same title and details but other files makes a new task', async () => {

@@ -1,8 +1,6 @@
 import type { SymccTask } from '../../types'
 import { isFinished, priorityError, makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, filesAllowedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, PROSE_ROLE_TEXT, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
 import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
-import { clean } from '../core/text'
-import { DETAILS_MAX } from '../core/task'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
@@ -676,14 +674,15 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         const first = b.tasks.find(x => x.status !== 'dropped' && x.status !== 'done' && Date.parse(now()) - Date.parse(x.created_at) < ADD_AGAIN_MS
           && x.title === added.title && x.details === added.details && sameJson(x.files, added.files) && sameJson(x.after, added.after)
           && x.priority === added.priority && (x.status === 'backlog') === (added.status === 'backlog') && (x.needs_review ?? false) === (added.needs_review ?? false)
-          && (x.role ?? '') === (added.role ?? '') && (x.kind ?? '') === (added.kind ?? '') && x.merge_into === added.merge_into)
+          && (x.role ?? '') === (added.role ?? '') && (x.kind ?? '') === (added.kind ?? '') && x.merge_into === added.merge_into
+          && sameJson({ ...x.origin, evidence: undefined, at: undefined }, { ...added.origin, evidence: undefined, at: undefined }))
         if (first) {
           again = true
           return [b, [first, b.tasks]] as [Board, [SymccTask, SymccTask[]]]
         }
         return [y, [added, y.tasks]] as [Board, [SymccTask, SymccTask[]]]
       })
-      if (again) return `${t.id} ${t.title} was added just before (same title and details), so nothing was added again`
+      if (again) return `${t.id} ${t.title} was added just before by the same add, so nothing was added again`
       // a scout's finding: saved in that scout's latest run that reported, so the run lists it even once archived
       const og = originOf(t)
       if (og?.by === 'scout' && og.scout) await linkTaskToScoutRun($, og.scout, t.id, all)
