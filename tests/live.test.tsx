@@ -326,7 +326,7 @@ test('T-867, T-931: a lane\'s second line has no bar: ⏱, ⌀, ×median, <worke
   const short = segText(laneLines({ ...lane, workerTokens: 0, checkerTokens: 0, sentBack: 0 }, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1])
   expect(short).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) +change$/)
   expect(textWidth(short)).toBe(firstW)
-  expect(laneLines({ ...lane, workerTokens: 0, checkerTokens: 0, sentBack: 0 }, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1].at(-1)).toEqual({ text: 'change', tone: 'dim' })
+  expect(laneLines({ ...lane, workerTokens: 0, checkerTokens: 0, sentBack: 0 }, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1].at(-1)?.text.trim()).toBe('change')
   // narrower: the parts go in order (the kind returns at the right when the shorter text leaves room)
   expect(bare(wFull - 1)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) · ⌕ × 2$/)
   const noSplit = textWidth(bare(wFull - 1))

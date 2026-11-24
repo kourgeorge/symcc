@@ -805,7 +805,8 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   const withKind = (xs: LiveSeg[]): LiveSeg[] => {
     // ends under the first line's right end; a longer meta text pushes it right (two spaces after the text); `fits` drops it if too wide
     const gap = Math.max(2, textWidth(segText(first)) - textWidth(segText(xs)) - textWidth(lane.kind))
-    return [...xs, { text: ' '.repeat(gap), tone: 'text' as const }, { text: lane.kind, tone: 'dim' as const }]
+    // the padding is part of the kind's text, so no part is only spaces (VS Code draws no blank Text)
+    return [...xs, { text: ' '.repeat(gap) + lane.kind, tone: 'dim' as const }]
   }
   // each level with the kind, then without it, before a part of the meta text goes
   const tries: LiveSeg[][] = [4, 3, 2, 1, 0].flatMap(n => [withKind(line(n)), line(n)])
