@@ -5,7 +5,7 @@ import { expect } from 'claude-code/testing'
 import { addTask, emptyBoard, patchTask, blockedEditText, bashOutsideText } from '../hooks/board'
 import { runBy } from './agent-fixture'
 import { S, workers } from '../hooks/app/state'
-import { copilotTouches, patchFiles, preToolUse } from '../hooks/copilot/guard'
+import { copilotTouches, patchFiles, preToolUse, pathField, forgetTypedShells, typedEditKeyText, typedTooLongText, TYPED_MAX } from '../hooks/copilot/guard'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -79,6 +79,30 @@ test('bash: a write outside the folder is denied, one inside passes; text typed 
   workers.clear()
 })
 
+test('text typed into a running shell is judged with what was typed there before, so a split command is still denied', async () => {
+  const host = world()
+  forgetTypedShells()
+  const write = (shellId: string, input: string) => preToolUse(host, WT, 'ag1', { toolName: 'write_bash', toolArgs: { shellId, input } })
+  expect(await write('1', 'echo x > /re')).toBe(undefined)
+  expect((await write('1', 'po/README.md\n'))?.permissionDecisionReason).toBe(bashOutsideText('README.md', WT))
+  // the same with Copilot's {enter} key name for the line end
+  expect(await write('2', 'echo x > /re')).toBe(undefined)
+  expect((await write('2', 'po/README.md{enter}'))?.permissionDecision).toBe('deny')
+  // another shell starts empty; stopping a shell forgets its text
+  expect(await write('3', 'po/README.md\n')).toBe(undefined)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'stop_bash', toolArgs: { shellId: '1' } })).toBe(undefined)
+  expect(await write('1', 'po/README.md\n')).toBe(undefined)
+  // keys that edit a line already typed are refused: backspace, escape (arrows), {left}-style key names
+  expect((await write('4', 'echo x > /repoX\x7f/README.md\n'))?.permissionDecisionReason).toBe(typedEditKeyText)
+  expect((await write('4', '\x1b[A\n'))?.permissionDecisionReason).toBe(typedEditKeyText)
+  expect((await write('4', '{backspace}'))?.permissionDecisionReason).toBe(typedEditKeyText)
+  // Ctrl-C is fine, and so is too much text never: past the limit a new shell is needed
+  expect(await write('5', '\x03')).toBe(undefined)
+  expect((await write('6', 'x'.repeat(TYPED_MAX + 1)))?.permissionDecisionReason).toBe(typedTooLongText)
+  forgetTypedShells()
+  workers.clear()
+})
+
 test('read-only tools pass, even for paths outside the folder', async () => {
   const host = world()
   for (const [toolName, toolArgs] of [['view', { path: '/repo/README.md' }], ['rg', { pattern: 'x', paths: ['/repo'] }], ['glob', { pattern: '**/*' }], ['read_bash', { shellId: '1' }], ['web_fetch', { url: 'https://example.com' }]] as const) {
@@ -92,6 +116,14 @@ test("a tool symcc doesn't know has its path and command fields checked; odd inp
   expect(copilotTouches(WT, 'mcp_write', { file_path: 'src/a.ts', paths: ['/repo/x', 3], cmd: 'ls' })).toEqual([{ path: `${WT}/src/a.ts` }, { path: '/repo/x' }, { command: 'ls' }])
   expect((await preToolUse(host, WT, 'ag1', { toolName: 'some_mcp_write', toolArgs: { filePath: `${ROOT}/README.md`, content: 'x' } }))?.permissionDecision).toBe('deny')
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'some_mcp_tool', toolArgs: { query: 'hello' } })).toBe(undefined)
+  // both ends of a move are checked, whatever the fields are called, nested ones too
+  for (const toolArgs of [{ source: '/repo/README.md', destination: '/tmp/y' }, { old_path: '/repo/README.md', new_path: '/tmp/y' }, { src: '/repo/README.md', to: 'src/a.ts' }, { from: '/repo/README.md' }, { oldName: '/repo/README.md' }, { edits: [{ targetFile: '/repo/README.md' }] }]) {
+    expect((await preToolUse(host, WT, 'ag1', { toolName: 'some_mcp', toolArgs }))?.permissionDecision).toBe('deny')
+  }
+  expect(copilotTouches(WT, 'move_file', { source: 'src/a.ts', destination: 'src/b.ts' })).toEqual([{ path: `${WT}/src/a.ts` }, { path: `${WT}/src/b.ts` }])
+  // a file's text, an edit's strings and other words are not paths
+  for (const k of ['content', 'file_text', 'new_str', 'old_str', 'profile', 'direction', 'query', 'description']) expect(pathField(k)).toBe(false)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'some_mcp_write', toolArgs: { path: 'src/a.ts', content: 'x', new_str: 'y', file_text: 'z' } })).toBe(undefined)
   // no name, odd argument shapes: nothing to check, no error
   expect(await preToolUse(host, WT, 'ag1', { toolName: 42, toolArgs: null })).toBe(undefined)
   expect(await preToolUse(host, WT, 'ag1', undefined)).toBe(undefined)
