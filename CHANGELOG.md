@@ -2,6 +2,24 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.38 (2026-11-24)
+
+### Added
+- GitHub Copilot CLI host: symcc installs as a Copilot plugin from this repo (`.github/plugin/`), with the lead's tools and `/symcc` commands, the text board, board updates that wake the lead, workers, checkers and scouts as Copilot sessions each with its own guard, your own models (BYOK, `SYMCC_COPILOT_MODELS`), a `copilot -p` backup runner and a status line script. Needs `copilot --experimental`. See the guide's Copilot part.
+- Run now: a task page button (key `e`) and `/symcc-task T-5 run` start a task at once, even over the agent limit or on a paused board; it asks first when the task waits on unfinished tasks, and starts nothing in plan mode.
+- Task priority like Unix nice: a whole number from -20 to 19, 0 for every new task, lower starts first, ties go to the older task. It replaces the growing `order` number (converted once, with a backup). The task page shows "Priority  0 · 2nd in line".
+- Design notes: `docs/workspace-model.md` (one board over several repos) and the research notes behind it.
+
+### Changed
+- VS Code board: a real tab bar with count badges, a short header with one notice row, and the Live tab in foldable sections (Status, Tasks, Branches, Today, Organizational memory); one badge style and a primary button for each page's main action.
+- Windows that don't drive name the driver ("started …, active 3 min ago"), and `/symcc-drive` there turns symcc on and drives.
+- Your board actions reach the lead with your next message; setting up git, or allowing a task's files, tells it at once. Deleting an organizational memory note tells the lead; settings that don't change the work (sound, archive) no longer do.
+- Live rows: the checker send-back count reads "⌕ × 1"; no divider between the keys line and the legend.
+- Workers: write and cd targets built from a shell variable are refused.
+
+### Fixed
+- A window that finds its own session in the board's driver record drives again, instead of saying "the symcc window closed" about itself.
+
 ## 0.5.37 (2026-11-24)
 
 ### Added

@@ -3,7 +3,7 @@
 // gets no lead prompt, no board updates, its tools refuse, it never drives, and it tells the owner once when the
 // symcc window is gone.
 import { expect } from 'claude-code/testing'
-import { emptyBoard, leadText, parseLead, parseCommand, offStatusLine, offHereAnswer, LEAD_STALE_MS, type Board } from '../hooks/board'
+import { emptyBoard, leadText, parseLead, parseCommand, offStatusLine, offHereAnswer, LEAD_STALE_MS, addTask, patchTask, find, type Board } from '../hooks/board'
 import { claimLead, disableHere, enableHere, offHereBeat, handOver, GONE_REMIND_MS, GONE_GRACE_MS, startOffHere, driveHere } from '../hooks/app/lead'
 import { S, sayQueue, toolName } from '../hooks/app/state'
 import { leadBeat, leadGuideText, sessionStart, toolCall, runCommand, COMMANDS } from '../hooks/app/symcc'
@@ -534,4 +534,48 @@ test('T-984: a window driving under a made-up id keeps driving when the host giv
   expect(S.me).toBe('real')
   expect(w.files.get(w.lead)).toContain('real')
   expect(w.toasts.filter(t => t.includes('another'))).toEqual([])
+})
+
+/** T-991: a board with T-1 doing for the made-up id 'session-made1', this window driving under that id after claimLead(fresh). */
+async function drivingUnderMadeUpId() {
+  S.root = ROOT
+  const w = world('me')
+  await saveBoard(w.host, emptyBoard())
+  S.me = 'session-made1'
+  S.offHere = false
+  let up = false
+  w.host.session.id = async () => {
+    if (!up) throw new Error('not yet')
+    return 'real'
+  }
+  expect(await claimLead(w.host, true)).toBe(true)
+  // the worker starts after the claim (a fresh claim sends doing tasks with no live worker back to todo)
+  const T = '2026-11-09T00:00:00.000Z'
+  let b = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'running' }, T)[0]
+  b = patchTask(b, 'T-1', { status: 'doing', live: { session: 'session-made1' } }, T)
+  await saveBoard(w.host, b)
+  expect(find(boardOf(w), 'T-1')?.live?.session).toBe('session-made1')
+  return { w, up: () => void (up = true) }
+}
+
+test('T-991: the id swap moves a running task to the real id, so no second worker starts for it', async () => {
+  const { w, up } = await drivingUnderMadeUpId()
+  up()
+  expect(await claimLead(w.host)).toBe(true)
+  const t1 = find(boardOf(w), 'T-1')
+  expect(t1?.status).toBe('doing')
+  expect(t1?.live?.session).toBe('real')
+  expect(parseLead(w.files.get(w.lead) ?? null)?.session).toBe('real')
+})
+
+test("T-991: the id swap leaves lead.json alone when another window drives now, and this window stops driving", async () => {
+  const { w, up } = await drivingUnderMadeUpId()
+  w.files.set(w.lead, leadText('other', Date.now()))
+  up()
+  w.toasts.length = 0
+  expect(await claimLead(w.host)).toBe(false)
+  expect(S.me).toBe('real')
+  expect(S.driving).toBe(false)
+  expect(parseLead(w.files.get(w.lead) ?? null)?.session).toBe('other')
+  expect(w.toasts.filter(t => t.includes('drives it now'))).toEqual([])
 })

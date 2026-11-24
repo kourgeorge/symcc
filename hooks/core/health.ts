@@ -146,7 +146,7 @@ function starving(b: Board, nowMs: number): HealthFinding[] {
     if (t.after.some(a => !find(b, a) && !(b.archived_done ?? []).includes(a))) continue // that is "stuck"
     if (!blockers.every(d => num(d.id) > num(t.id))) continue // it waits on an older task: fair
     const changes = afterChanges(t)
-    const newer = b.tasks.filter(x => num(x.id) > num(t.id) && started(x)).length
+    const newer = b.tasks.filter(x => num(x.id) > num(t.id) && started(x) && (x.priority ?? 0) >= (t.priority ?? 0)).length
     // could start: its wait counts from when it became ready; just ready, or about to start, is fine
     const since = blockers.length ? Date.parse(t.created_at || '') : readyAt(b, t)
     if (!blockers.length && (nowMs - since < CHECK_MS || next.has(t.id))) continue
