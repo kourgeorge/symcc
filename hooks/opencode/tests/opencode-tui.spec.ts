@@ -710,7 +710,7 @@ test('T-954: Run now (e) on a task that waits on an unfinished task asks "Start 
     await board.press('e', 's')
     expect([pick, sent]).toEqual([pick, want])
   }
-  expect(asked.at(-1)).toEqual({ title: 'T-2 waits on T-1 (running). Start anyway?', options: ['Start anyway', 'Cancel'] })
+  expect(asked.at(-1)).toEqual({ title: 'T-2 waits on T-1 (running). Start anyway?', options: ['Cancel', 'Start anyway'] })
   board.stop()
 })
 
