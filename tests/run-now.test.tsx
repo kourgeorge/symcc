@@ -9,7 +9,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard, patchTask, boardHealth, parseCommand, taskActions, taskKeys, detailRows, type BoardTask } from '../hooks/board'
 import { QUEUED_NOTE } from '../hooks/app/starts'
-import { canRunNow, runNowQuestion, runNowShareText, runNowWaits, RUN_NOW_FROM } from '../hooks/core/run-now'
+import { canRunNow, runNowPlanText, runNowQuestion, runNowShareText, runNowWaits, RUN_NOW_FROM } from '../hooks/core/run-now'
 import { TASK_ACTION_COMMANDS, actionCommand } from '../hooks/opencode/board-view'
 import { taskDoTool } from '../hooks/app/symcc'
 import { ran } from './fakes'
@@ -19,7 +19,7 @@ const ISO = new Date(T0 - 60_000).toISOString()
 const BOARD = '/.symcc/board.json'
 
 /** In-memory files (keyed from "/.symcc/" on), a git that says yes to everything, no agents running. */
-function world(on: On, o: { failWorktree?: boolean } = {}) {
+function world(on: On, o: { failWorktree?: boolean; noRepo?: boolean } = {}) {
   const files = new Map<string, string>()
   const key = (p: string) => (p.includes('/.symcc/') ? p.slice(p.indexOf('/.symcc/')) : p)
   on('fs.exists', (_, e) => ({ value: files.has(key(e.path)) }))
@@ -33,6 +33,7 @@ function world(on: On, o: { failWorktree?: boolean } = {}) {
   on('process.run', (_, e) => {
     const [cmd, ...rest] = (e as unknown as { argv: string[] }).argv
     if (cmd === 'git' && o.failWorktree && rest.includes('worktree') && rest.includes('add')) return { value: ran({ exitCode: 1, stderr: 'boom worktree' }) }
+    if (cmd === 'git' && o.noRepo && rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree') return { value: ran({ exitCode: 128, stderr: 'not a git repository' }) }
     if (cmd === 'git') return { value: rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree' ? ran({ stdout: 'true\n' }) : ran({}) }
     if (cmd === 'ln') {
       if (files.has(key(rest[1]!))) return { value: ran({ exitCode: 1, stderr: 'File exists' }) }
@@ -243,4 +244,84 @@ test('T-954: the question names each unfinished task with its state; a run now t
   expect(runNowShareText(['T-1'])).toBe('started now while T-1 runs; they share files, so their changes may clash at the merge')
   // T-1 was started the usual way: no warning on its page
   expect(rows('T-1').some(x => x.includes('started now'))).toBe(false)
+})
+
+// T-964: in plan mode nothing starts, Run now included: the task is left as it is and the reply says why
+test('T-964: run now in plan mode starts nothing: a todo task stays to do, a backlog task stays in the backlog', async ($, on) => {
+  const w = world(on)
+  on('classic.UserPromptSubmit', () => ({}) as never)
+  let b = todo(2, 1, 'paused')
+  b = patchTask(b, 'T-2', { status: 'backlog', note: 'in the backlog' }, ISO)
+  w.files.set(BOARD, JSON.stringify(b))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  // the main session enters plan mode (Claude Code's permission mode on its hooks)
+  await $.classic.UserPromptSubmit({ prompt: 'plan it', permission_mode: 'plan' } as never)
+  await w.clock.advance(10)
+  const before = [JSON.stringify(w.task('T-1')), JSON.stringify(w.task('T-2'))]
+  expect(await runTool($, 'T-1')).toBe(runNowPlanText('T-1'))
+  expect(await runTool($, 'T-2')).toBe(runNowPlanText('T-2'))
+  expect(runNowPlanText('T-1')).toBe("T-1 didn't start: plan mode: nothing starts; run it when plan mode ends")
+  await w.clock.settle()
+  expect([w.task('T-1').status, w.task('T-2').status]).toEqual(['todo', 'backlog'])
+  expect([JSON.stringify(w.task('T-1')), JSON.stringify(w.task('T-2'))]).toEqual(before)
+})
+
+test('T-964: run now on a task that failed on a clash starts it as a retry that merges main in first', async ($, on) => {
+  const w = world(on)
+  let b = todo(1, 1, 'paused')
+  b = patchTask(b, 'T-1', { status: 'failed', failed_on: 'clash', test_tries: 2, note: 'conflicts with the latest main' }, ISO)
+  w.files.set(BOARD, JSON.stringify(b))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  const said = await runTool($, 'T-1')
+  expect(said.startsWith('T-1 started now')).toBe(true)
+  const t = w.task('T-1')
+  expect(t.status).toBe('doing')
+  expect(t.test_tries).toBe(0)
+  expect(t.merge_main).toBe(true)
+  expect(runNowLines(t).length).toBe(1)
+})
+
+test('T-964: run now on a dropped task (no clash) starts it as a retry, without merging main in', async ($, on) => {
+  const w = world(on)
+  let b = todo(1, 1, 'paused')
+  b = patchTask(b, 'T-1', { status: 'dropped', test_tries: 1, note: 'dropped' }, ISO)
+  w.files.set(BOARD, JSON.stringify(b))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  const said = await runTool($, 'T-1')
+  expect(said.startsWith('T-1 started now')).toBe(true)
+  const t = w.task('T-1')
+  expect(t.status).toBe('doing')
+  expect(t.test_tries).toBe(0)
+  expect(t.merge_main ?? false).toBe(false)
+})
+
+test('T-964: run now is refused, the task unchanged, when another window drives the board', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(todo(1, 1, 'paused')))
+  // another session drives, with a fresh heartbeat
+  w.files.set('/.symcc/lead.json', JSON.stringify({ session: 'other', heartbeat: Date.now() }) + '\n')
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.advance(10)
+  // this window starts off here; /symcc-enable makes it follow the driving window
+  await $.command.run({ command: 'symcc-enable', args: '', origin: { kind: 'composer' }, presentation: 'text' } as never)
+  await w.clock.advance(10)
+  const before = JSON.stringify(w.task('T-1'))
+  expect(await runTool($, 'T-1')).toBe("T-1 didn't start: another window drives this board, so run it now from there")
+  expect(JSON.stringify(w.task('T-1'))).toBe(before)
+})
+
+test('T-964: run now is refused, the task unchanged, when git is not set up', async ($, on) => {
+  const w = world(on, { noRepo: true })
+  let b = todo(1, 1, 'paused')
+  b = patchTask(b, 'T-1', { status: 'backlog', note: 'in the backlog' }, ISO)
+  w.files.set(BOARD, JSON.stringify(b))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  const before = JSON.stringify(w.task('T-1'))
+  expect(await runTool($, 'T-1')).toBe("T-1 didn't start: git isn't set up here yet")
+  await w.clock.settle()
+  expect(JSON.stringify(w.task('T-1'))).toBe(before)
 })

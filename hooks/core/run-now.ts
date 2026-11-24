@@ -65,3 +65,6 @@ export function runNowLine(o: { waits?: readonly RunNowWait[]; over?: { busy: nu
 /** Why a task can't be run now (its status isn't one of RUN_NOW_FROM): "T-5 is in review; Run now is for ...". */
 export const runNowRefusal = (t: Pick<SymccTask, 'id' | 'status'>): string =>
   t.status === 'doing' ? `${t.id} is already running` : `${t.id} is ${STATUS_WORD[t.status]}; Run now is for a task that is to do, paused, failed, dropped or in the backlog`
+
+/** The reply when Run now is asked for in plan mode (nothing starts then, and nothing changes): "T-5 didn't start: plan mode: ...". */
+export const runNowPlanText = (id: string): string => `${id} didn't start: plan mode: nothing starts; run it when plan mode ends`
