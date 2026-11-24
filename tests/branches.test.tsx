@@ -191,10 +191,8 @@ test('T-727: the VS Code Live tab draws the Branches section with real lines, an
   const keys = (await ui.findAll({})).map(n => String(n.key))
   expect(keys.indexOf('live-legend')).toBeGreaterThan(keys.indexOf('live-br-head'))
   expect(keys.indexOf('live-legend')).toBeGreaterThan(keys.indexOf('live-hint-footer'))
-  // T-836: the short divider sits right above the key line
-  expect(keys.slice(keys.indexOf('live-divider'), keys.indexOf('live-legend')).filter(k => k.startsWith('live-') && k !== 'live-divider')).toEqual([])
-  expect(keys.indexOf('live-divider')).toBeGreaterThan(0)
-  expect((await ui.find({ key: 'live-divider' }))?.text).toBe('─'.repeat(12))
+  // T-962: no divider between the footer's keys line and the legend
+  expect(keys.indexOf('live-divider')).toBe(-1)
   expect((await ui.find({ key: 'live-br-main-text' }))?.text).toBe('main  c1c1c1c · 2 min ago')
   const svgs = await ui.findAll({ type: 'Svg' })
   const main = svgs.find(x => x.props.alt === BRANCH_LINES_100[1]!.trim())

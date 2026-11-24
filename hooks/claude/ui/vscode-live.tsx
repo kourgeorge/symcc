@@ -15,7 +15,7 @@
 // T-727: under the lanes, the Branches section (core's liveBranches) drawn with real lines: see branchesVs.
 // T-747: each section has a bold heading with the terminal's names (core's LIVE_SECTIONS): Tasks, Today, Branches,
 // Organizational memory (that one a link to all notes).
-import { LIVE_DIVIDER, type BranchRow, type LiveBranches, liveBranches, liveIdle, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveHeadParts, liveOrgMemHeadParts, liveRuleDash, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
+import { type BranchRow, type LiveBranches, liveBranches, liveIdle, LIVE_AGENT_MARK, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, liveHeadParts, liveOrgMemHeadParts, liveRuleDash, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, segText, trainRows } from '../../core/live'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { LIVE_TICK_MS, ORG_MEM_ALL_KEY, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
@@ -288,7 +288,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       {/* T-930, T-933: the footer's Box takes the room left on a short page and puts the footer at its bottom; the legend
           is the very last lines of the page, below the footer's key line */}
       <Box key="live-foot" flexDirection="column" flexGrow={1} justifyContent="flex-end">{vsFooter(vs, 'live-hint')}</Box>
-      {lanes.length ? <Box key="live-key" flexDirection="column">{line('live-divider', LIVE_DIVIDER, 'inactive')}{line('live-legend', liveLegend(Infinity).join(' '), 'inactive')}</Box> : null}
+      {lanes.length ? <Box key="live-key" flexDirection="column">{line('live-legend', liveLegend(Infinity).join(' '), 'inactive')}</Box> : null}
     </Box>
   )
 }

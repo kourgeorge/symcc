@@ -221,7 +221,7 @@
     L.push('')
     L.push(sp('↑↓ move · Enter open task · w watch worker · Esc close', 'dim'))
     // T-933: the legend is the very last lines, below the footer's key line
-    if (s.lanes.length) L.push(' ' + sp('─'.repeat(12), 'dim'), ' ' + sp('✧ = an agent works here (needs an agent slot) · ⌀ = tokens', 'dim'))
+    if (s.lanes.length) L.push(' ' + sp('✧ = an agent works here (needs an agent slot) · ⌀ = tokens', 'dim'))
     return L.join('\n')
   }
 

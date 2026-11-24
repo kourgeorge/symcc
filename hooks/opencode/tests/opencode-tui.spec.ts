@@ -4081,8 +4081,8 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
     // T-933: the key line is the very last lines, below the footer's key hints (none in the body)
     const keyAt = lines.findIndex(l => l.trimStart().startsWith('✧ = an agent works here'))
     expect([keyAt > lines.length - d.footer, lines.slice(keyAt)]).toEqual([true, liveLegend(liveInner(w)).map(x => LIVE_INDENT + x)])
-    // T-836: a short dim divider right above the key line
-    expect(lines[keyAt - 1]).toBe(' ' + '─'.repeat(12))
+    // T-962: no divider: the legend comes right under the keys line
+    expect(lines[keyAt - 1]!.includes('Esc close')).toBe(true)
     expect([heads.length, heads[3]!.startsWith(w === 100 ? '─── ❯ ORGANIZATIONAL MEMORY   ' : '─── ❯ ORG')]).toEqual([4, true])
     // no section rules in the body (the footer's rule is under it)
     expect(lines.slice(mode, lines.length - d.footer).some(l => l.includes('✧ ='))).toBe(false)
@@ -4105,7 +4105,7 @@ test('T-738, T-747: the OpenCode Live tab has a ▍heading for each section, one
 test('T-930, T-933: the OpenCode Live tab draws the legend as the very last lines, below the footer key line; blank rows go above the footer', () => {
   const f = branchesViewFile()
   const w = 80
-  const legend = [LIVE_INDENT + '─'.repeat(12), ...liveLegend(liveInner(w)).map(x => LIVE_INDENT + x)]
+  const legend = liveLegend(liveInner(w)).map(x => LIVE_INDENT + x)
   const hintAt = (ls: string[]) => ls.findIndex(l => l.includes('Esc close'))
   // a short page: the blank rows go between the content and the footer; the legend under the key line, last
   const short = panelLines(f, { tab: 'live', opened: '', cursor: 0, rows: 200 }, NOW, w)

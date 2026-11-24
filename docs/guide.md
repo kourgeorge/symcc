@@ -1231,7 +1231,7 @@ words as bold headings with the same spacing):
   ones ahead `──○`, and the current one blinks between `◉` and `◎` (Claude Code doesn't tell
   plugins about reduced motion, so it always blinks; the tab redraws itself every second while
   it is shown). The `✧` after work and check (in the headings' color) means an agent works there, so
-  those stations need an agent slot (a worker or a checker); the legend, the very last lines of the tab, below the footer's key line (after a short dim divider line), says
+  those stations need an agent slot (a worker or a checker); the legend, the very last lines of the tab, below the footer's key line (right under it, no divider line), says
   `✧ = an agent works here (needs an agent slot) · ⌀ = tokens`; queue and tests use none, so there can be more lanes than
   `max_parallel`. It never sits under the task rows. When the page is shorter than the screen (the panel in VS Code), the
   empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
