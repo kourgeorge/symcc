@@ -203,8 +203,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
         : { action: 'edit', name: cmd.name, [cmd.field]: cmd.value }
       const r = await (cmd.def === 'role' ? changeRole : changeKind)(host, input)
       if (r.ok) {
-        const what = cmd.kind === 'def' ? cmd.action : cmd.kind === 'def-add' ? 'add' : cmd.kind === 'def-save' ? `edit ${Object.keys(cmd.fields).join(', ')}` : `edit ${cmd.field}`
-        noteForLead(`The owner changed ${cmd.def} ${cmd.name} (${what}): ${brief(r.text)}`)
+        // T-970: no Meanwhile line: the lead's instructions show the new roles and kinds every turn
         // the board's view carries the roles and kinds for a panel that draws from it (OpenCode's view.json)
         await publish(host, await load(host))
       }
