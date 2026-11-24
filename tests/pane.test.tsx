@@ -46,7 +46,7 @@ function keyLines(texts: string[], hints: KeyHint[], width: number): string[] {
   return want
 }
 
-const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', origin: { by: 'owner', why: 'x', at: '' }, merge_into: 'main', ...askShape(extra) })
+const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', origin: { by: 'owner', why: 'x', at: '' }, merge_into: 'main', ...askShape(extra) })
 
 test('the panel shows the board, newest task first, with their question', async ($, on) => {
   on('state.get', () => ({
@@ -524,13 +524,13 @@ test('the list goes: NEEDS YOU, then doing and to do as one untitled list, then 
         tasks: [
           task('T-1', 'done', 'Parser', { updated_at: now }),
           task('T-2', 'backlog', 'Dark mode'),
-          task('T-3', 'todo', 'Write it up', { order: 9 }),
+          task('T-3', 'todo', 'Write it up', { priority: 9 }),
           task('T-4', 'doing', 'Search command'),
           task('T-5', 'waiting', 'Search mode', { question: 'Case-sensitive?' }),
           task('T-6', 'review', 'Blue button'),
           task('T-7', 'dropped', 'Old idea', { updated_at: now }),
-          task('T-8', 'paused', 'Later work', { order: 1 }),
-          task('T-9', 'todo', 'First up', { order: 2 }),
+          task('T-8', 'paused', 'Later work', { priority: 1 }),
+          task('T-9', 'todo', 'First up', { priority: 2 }),
           task('T-10', 'failed', 'Broken', { note: 'tests failed' }),
         ],
         working: [],

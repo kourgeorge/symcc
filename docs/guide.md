@@ -201,8 +201,16 @@ reasons for one queue are in [Why it is built this way](#why-it-is-built-this-wa
 **Task dependencies.** The lead sets them. A task's `after` lists the tasks that must be
 finished first: it starts only when every one of them is `done` (merged). Any other status
 keeps it waiting, also `dropped` or `failed`; then the lead changes or clears its `after`.
-Among the `todo` tasks that are free to start, the lowest `order` goes first (on a tie, the
-lower task number).
+
+**Priority.** Every task has a `priority`, a whole number from -20 to 19 that works like
+Unix's nice value: lower runs first. Every new task starts at 0. The lead gives urgent work
+-1, -2…, and work that can wait 1, 2… Among the `todo` tasks that are free to start, the
+lowest priority goes first (on a tie, the older task: the lower task number). So a -2 task
+starts before a -1, a -1 before a 0, and a 0 before a 3. In the lead's board text a
+not-finished task with a priority other than 0 shows it in its tag (`[bug · p-1]`, `[p+2]`);
+0 shows nothing. (Boards from before kept a
+growing `order` number instead; symcc turns it into a priority once, with a backup first:
+a task the lead had moved up, order 10 or less, gets -1, every other task 0.)
 
 **Work merged by hand.** Sometimes a task's branch gets merged outside the board. For
 example, you or the lead (on your word) merged it after its only failure was the merge tests
@@ -239,6 +247,8 @@ OpenCode). In the chat: `/symcc-task T-5 run`, or tell the lead "run T-5 now" (i
   naming that task (their changes may clash at the merge).
 - **The board is paused**: only this task starts; everything else stays paused.
 - **From the backlog**: it moves to `todo` and starts. A failed or dropped one starts as a retry.
+- **In plan mode** (Claude Code): nothing starts, so Run now doesn't either. The task stays as
+  it is (a backlog task stays in the backlog); run it when plan mode ends.
 
 Its history says `try 1: started now by the owner` (with what it skipped), so the health check
 does not report older tasks as "pushed back" because of it. Everything after the start is as
@@ -913,7 +923,7 @@ are about changes; under "How tasks ended" a read investigation shows as
     task that was archived counts as done here, not missing.
   These mix too: `waits-on:T-3 status:todo`, `stuck kind:bug`; `waits-on:T-3,T-4` takes either.
   A word like `foo:bar` that is not one of these is looked for as a plain word. The lead's
-  board tool also takes `limit` and `sort` (`newest` or `order`), the same as `last:` and
+  board tool also takes `limit` and `sort` (`newest` or `order`: what runs next first, by priority), the same as `last:` and
   `top:`, and says how many matched in all (`10 of 37 matching shown`).
 - The panel has four views, Live, Tasks, Scouts and Settings, shown as tabs under the banner:
   `[l]: Live │ [t]: Tasks (12) │ [s]: Scouts (3) │ [c]: Settings`, the open one bold, blue and
@@ -1366,7 +1376,7 @@ words as bold headings with the same spacing):
     that waits on several open tasks names the first and counts the rest: `waits for T-2 +3`)
   - no open task at all: `All done · last merged T-891, 12m ago`, then `Tell the lead what's next, or move one of 23 backlog items to todo.`
     (no backlog part when the backlog is empty, no "last merged" part when nothing merged yet).
-    Under it, the next 3 backlog items (lowest order first, then oldest), one line each, then how
+    Under it, the next 3 backlog items (lowest priority first, then oldest), one line each, then how
     many more there are:
 
     ```
@@ -2147,8 +2157,8 @@ You can also turn one window off yourself with `/symcc-disable here` (see
 ### How the lead keeps the board in order
 
 The lead sorts the board by a few plain rules: older tasks go first unless you say a task is
-urgent; bugs and safety fixes go before features; `order` sets the priority (lower runs
-first). Tasks wait on each other (`after`) only when they really change the same files, and a
+urgent; bugs and safety fixes go before features; `priority` sets the urgency (like Unix
+nice: everyone starts at 0, lower runs first; urgent work gets -1, -2…, later work 1, 2…). Tasks wait on each other (`after`) only when they really change the same files, and a
 new task that shares files with an older waiting one goes behind it. No task is left waiting
 forever.
 
@@ -2195,7 +2205,7 @@ So `board.json` stays small, done and dropped tasks that have not changed for
 Claude Code reads and writes a file whole and refuses one over 4 MB, so symcc keeps its files
 well under that, without you lowering `archive_days`:
 
-- **Done and dropped tasks keep a short stub in `board.json`** (id, title, status, order,
+- **Done and dropped tasks keep a short stub in `board.json`** (id, title, status, priority,
   branch, times). Their history, tries, details, origin and notes are in
   `.symcc/tasks/T-<n>.json`, one file for every 50 task numbers (`tasks/T-600.json` holds
   T-600 to T-649). symcc joins them back whenever it reads the board, so the board, the task

@@ -20,7 +20,7 @@ const D = `${ROOT}/.symcc`
 const T = '2026-11-01T08:00:00.000Z'
 const E = '2026-11-01T09:00:00.000Z'
 
-const base = { details: '', files: [], order: 1, after: [], branch: null, created_at: T, updated_at: E }
+const base = { details: '', files: [], priority: 1, after: [], branch: null, created_at: T, updated_at: E }
 
 function world() {
   forgetMigrationFailure()
@@ -611,4 +611,33 @@ test('T-886: a task already in the queue step with a leftover "queue (n)" note m
   const t9 = (await load(w.host)).tasks.find(t => t.id === 'T-9')!
   expect(t9.note).toBe('')
   expect(t9.live?.checking).toEqual({ step: 'queue', place: 2, at: E })
+})
+
+test('T-967: the old order number becomes a priority once (order 10 or less: -1, any other 0), with a backup; order is gone', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  const origin = { by: 'lead', why: 'w', at: T }
+  const { priority: _p, ...noPriority } = base
+  const mk = (id: string, order: number, x: Record<string, unknown> = {}) => ({ ...noPriority, id, title: id, status: 'todo', note: '', attempts: 0, origin, merge_into: 'main', history: [], runs: [], order, ...x })
+  const board = { ...emptyBoard(), next_id: 7, tasks: [mk('T-1', 3), mk('T-2', 10), mk('T-3', 11), mk('T-4', 966), mk('T-5', 0, { status: 'backlog' })] }
+  const archived = mk('T-6', 2, { status: 'done' })
+  w.files.set(`${D}/board.json`, JSON.stringify(board, null, 2))
+  w.files.set(`${D}/archive.json`, JSON.stringify({ version: 1, tasks: [archived] }))
+  w.files.set(`${D}/scouts.json`, JSON.stringify({ scouts: {}, usage: {} }))
+  w.files.delete(`${D}/field-guide.md`)
+  const rows = oldDataRows({ board, archive: [archived], scouts: null, withRuns: new Set(), fieldGuide: false, orgMem: false })
+  expect(rows.find(r => r.text.includes('old `order` number'))?.n).toBe(6)
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(backups(w).size).toBe(1)
+  const after = JSON.parse(w.files.get(`${D}/board.json`)!)
+  expect(after.tasks.map((t: Record<string, unknown>) => [t.id, t.priority])).toEqual([['T-1', -1], ['T-2', -1], ['T-3', 0], ['T-4', 0], ['T-5', -1]])
+  expect(after.tasks.some((t: Record<string, unknown>) => 'order' in t)).toBe(false)
+  const arch = JSON.parse(w.files.get(`${D}/archive.json`)!)
+  expect(arch.tasks[0].priority).toBe(-1)
+  expect('order' in arch.tasks[0]).toBe(false)
+  // a second load finds nothing old: no new backup, the priorities stay
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(backups(w).size).toBe(1)
+  expect((await load(w.host)).tasks.map(t => t.priority)).toEqual([-1, -1, 0, 0, -1])
 })

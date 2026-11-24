@@ -18,7 +18,7 @@ import { emptyBoard } from '../hooks/core/board-file'
 import { fakeHost } from './fake-host'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
-const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
+const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
 
 /** Four tasks in doing, one at each place: a worker running (T-687), a checker (T-686), the tests (T-685), the merge queue (T-684). */
 const TASKS = [
@@ -29,9 +29,9 @@ const TASKS = [
   task('T-688', 'Handed back, in prep', { runs: [{ started: iso(15), ended: iso(1), agents: [{ kind: 'worker' as const, started: iso(15), ended: iso(1), tokens: { input: 200_000 } }] }], live: { checking: { step: 'prep', at: iso(0) } }, }),
   task('T-600', 'A merged one', { status: 'done', runs: [{ started: iso(300), ended: iso(200), agents: [{ kind: 'worker' as const, started: iso(300), ended: iso(200), tokens: { input: 800_000 } }] }], history: [{ kind: 'merged', at: iso(30), text: 'try 1 → merged into main' }] }),
   task('T-601', 'A failed one', { status: 'failed', updated_at: iso(20) }),
-  task('T-690', 'Live tab part 1', { status: 'todo', order: 5 }),
-  task('T-691', 'Live tab in VS Code', { status: 'todo', after: ['T-690'], order: 1 }),
-  task('T-692', 'Live tab in OpenCode', { status: 'todo', after: ['T-600'], order: 9 }),
+  task('T-690', 'Live tab part 1', { status: 'todo', priority: 5 }),
+  task('T-691', 'Live tab in VS Code', { status: 'todo', after: ['T-690'], priority: 1 }),
+  task('T-692', 'Live tab in OpenCode', { status: 'todo', after: ['T-600'], priority: 9 }),
   task('T-693', 'A backlog idea', { status: 'backlog' }),
 ]
 const view = (checker: boolean) => ({ tasks: TASKS as never[], checker, mode: 'auto' as const, max_parallel: 3 })
@@ -108,7 +108,7 @@ const TRAINS = [
   task('T-716', 'Live deps drawn as trains', { status: 'todo', after: ['T-712', 'T-690'] }),
   task('T-717', 'Waits for a todo and a lane', { status: 'todo', after: ['T-690', 'T-713'] }),
   task('T-718', 'Waits for the failed one', { status: 'todo', after: ['T-701'] }),
-  task('T-715', 'Free to start', { status: 'todo', order: 1 }),
+  task('T-715', 'Free to start', { status: 'todo', priority: -1 }),
   task('T-719', 'Waits for the free one', { status: 'todo', after: ['T-715'] }),
 ]
 const trainView = { tasks: TRAINS as never[], checker: true, mode: 'auto' as const, max_parallel: 3 }

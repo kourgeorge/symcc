@@ -25,7 +25,7 @@ const gapRun = (over: Record<string, unknown> = {}) => ({
 })
 
 const task = (id: string, x: Record<string, unknown> = {}): SymccTask =>
-  ({ id, title: `task ${id}`, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: at(32 * 60), updated_at: at(1), ...x }) as SymccTask
+  ({ id, title: `task ${id}`, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: at(32 * 60), updated_at: at(1), ...x }) as SymccTask
 
 test('T-863: a try with a 30-hour gap between a reopen stop and its restart counts only its active minutes', () => {
   const r = gapRun()

@@ -1,6 +1,6 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { asBlockers, type BoardTask, type CheckStep, type TurnStep, emptyBoard, OPEN, intoOf, isFinished, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
+import { asBlockers, byRunOrder, type BoardTask, type CheckStep, type TurnStep, emptyBoard, OPEN, intoOf, isFinished, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
 import { approveRunning, checkStepNow, finishingNow, shownStatus } from './lead'
@@ -578,11 +578,9 @@ export function taskMatches(t: SymccTask, query: string | SearchQuery, nowMs: nu
   })
 }
 
-/** Run order: lower `order` first, then the lower number (each task after the ones it waits for, see waitOrder). */
-const byRunOrder = (x: SymccTask, y: SymccTask) => x.order - y.order || num(x.id) - num(y.id)
 
 /** The tasks of `tasks` that match the search `query` (see taskMatches). With last:N, the N changed most recently,
- *  newest first; with top:N, the first N in run order (what runs next: without a status: word only the tasks waiting
+ *  newest first; with top:N, the first N in run order (lowest priority first, then oldest; what runs next: without a status: word only the tasks waiting
  *  to run, todo, are taken). Without either, the matches in the order given. The dependency words need the whole
  *  list, so only searchTasks (not taskMatches) applies them: waits-on:T-n (tasks whose after list leads to T-n,
  *  directly or through a chain), blocks:T-n (the not-done tasks T-n still waits for, a dropped one too) and stuck
@@ -870,7 +868,7 @@ export type PanelSections<T extends SymccTask = SymccTask> = {
 /** Sorts tasks into the board panel's sections (see PanelSections), seen at `nowMs` in time zone `offsetMin`. */
 export function panelSections<T extends SymccTask>(tasks: T[], nowMs: number, offsetMin: number): PanelSections<T> {
   const s = boardSections(tasks, nowMs, offsetMin)
-  const runOrder = (x: T, y: T) => x.order - y.order || num(x.id) - num(y.id)
+  const runOrder = byRunOrder
   const today = dayOf(nowMs, offsetMin)
   const done = tasks.filter(t => t.status === 'done').sort(finishedFirst)
   const isOld = (t: T) => {

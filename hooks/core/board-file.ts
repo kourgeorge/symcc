@@ -180,6 +180,18 @@ export const CHECKED_STATUSES: readonly SymccStatus[] = ['doing', 'review', 'wai
 /** The statuses of a finished task: done or dropped. */
 export const FINISHED: readonly SymccStatus[] = ['done', 'dropped']
 /** Whether task `t` is finished (done or dropped). */
+/** A task's priority (T-967, like Unix nice): a whole number from PRIORITY_MIN to PRIORITY_MAX; every task starts at 0, lower runs first. */
+export const PRIORITY_MIN = -20
+export const PRIORITY_MAX = 19
+/** Whether `v` is a priority a task may have. */
+export const isPriority = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= PRIORITY_MIN && (v as number) <= PRIORITY_MAX
+/** The reason priority `v` is refused, or '' when it is fine. */
+export const priorityError = (v: unknown): string => (isPriority(v) ? '' : `priority must be a whole number from ${PRIORITY_MIN} to ${PRIORITY_MAX} (0 is normal; lower runs first), not ${JSON.stringify(v) ?? String(v)}`)
+/** A priority as the board shows it: '' for 0, else "p-1", "p+2". */
+export const priorityMark = (p: number | undefined): string => (!p ? '' : `p${p > 0 ? '+' : ''}${p}`)
+/** Run order: the lower priority first, then the older task (the lower number). */
+export const byRunOrder = (x: Pick<SymccTask, 'id' | 'priority'>, y: Pick<SymccTask, 'id' | 'priority'>): number => (x.priority ?? 0) - (y.priority ?? 0) || idNumber(x.id) - idNumber(y.id)
+const idNumber = (id: string) => Number(/^T-(\d+)$/.exec(id)?.[1] ?? Number.MAX_SAFE_INTEGER)
 export const isFinished = (t: { status?: unknown } | null | undefined): boolean => FINISHED.includes(t?.status as SymccStatus)
 
 /** `c` when it is a proper checking step, else undefined. */
@@ -423,7 +435,7 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
       }
     }
   }
-  if (!isNum(x.order)) x.order = 0
+  if (!isPriority(x.priority)) x.priority = 0
   if (!isNum(x.attempts)) x.attempts = 0
   if (x.branch !== null && typeof x.branch !== 'string') x.branch = null
   if ('ask' in x) {

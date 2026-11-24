@@ -304,7 +304,7 @@ for (const [id, want] of Object.entries(CARDS))
 
 // T-448: a task or question with an empty title shows its ID link and a dim "(no title)", never "****" (empty bold marks)
 test('in VS Code a row with an empty title or question text shows a dim "(no title)", never "****"', async ($, on) => {
-  const blank = { ...RICH_TASKS[0]!, id: 'T-601', order: 601, title: '' }
+  const blank = { ...RICH_TASKS[0]!, id: 'T-601', priority: 0, title: '' }
   const question = { id: 'Q-9', text: '  ', options: ['Yes', 'No'], asked_at: new Date(T0 - 60_000).toISOString() }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [blank], questions: [question] } } })
   on('ui.toast', () => ({ value: undefined }))

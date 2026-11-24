@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, type Board, type BoardTask, cleanFiles, cleanLive, type Live, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, isFinished, normId, STATUS_WORD, waitsForFiles } from './board-file'
+import { BACKLOG_FROM, byRunOrder, isPriority, type Board, type BoardTask, cleanFiles, cleanLive, type Live, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, isFinished, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { historyEntry, withHistory } from './history'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
@@ -26,7 +26,7 @@ export const kindFor = (kind: unknown, role: unknown): TaskKind => (isKind(kind)
  * A new task on board `b`. `merge_into` is the branch it merges into (and its worker's copy starts
  * from): the branch checked out in the project now; "main" when not given.
  */
-export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; order?: number; needs_review?: boolean; backlog?: boolean; role?: string; kind?: unknown; origin?: OriginInput; merge_into?: string }, now: string, dir: string = DATA_DIR): [Board, BoardTask] {
+export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; priority?: number; needs_review?: boolean; backlog?: boolean; role?: string; kind?: unknown; origin?: OriginInput; merge_into?: string }, now: string, dir: string = DATA_DIR): [Board, BoardTask] {
   const title = clean(f.title, 200)
   if (!title) throw new Error('a task needs a title')
   const origin = makeOrigin(f.origin, now, b)
@@ -38,7 +38,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     files: cleanFiles(f.files, dir),
     status: f.backlog === true ? 'backlog' : 'todo',
     note: '',
-    order: typeof f.order === 'number' ? f.order : Math.max(0, ...b.tasks.map(x => x.order)) + 1,
+    priority: isPriority(f.priority) ? f.priority : 0,
     after,
     attempts: 0,
     history: [historyEntry('created', createdLine(origin), now)],
@@ -127,7 +127,7 @@ export const putTask = (b: Board, t: BoardTask): Board => ({ ...b, tasks: b.task
 export function ready(b: Board): SymccTask[] {
   return b.tasks
     .filter(t => t.status === 'todo' && t.after.every(a => depDone(b, a)))
-    .sort((x, y) => x.order - y.order || num(x.id) - num(y.id))
+    .sort(byRunOrder)
 }
 
 // ---------------- the backlog ----------------
