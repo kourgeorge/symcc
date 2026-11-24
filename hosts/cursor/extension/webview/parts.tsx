@@ -64,7 +64,7 @@ export function dayWord(atMs: number, now: number): string {
 export const tokensWord = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
 
 /** The word under each station's note. */
-export const STATION_WORD: Record<PanelStation, string> = { work: 'work', check: 'checker', queue: 'queue', tests: 'tests', you: 'you', merged: 'merge', answer: 'answer' }
+export const STATION_WORD: Record<PanelStation, string> = { work: 'work', check: 'checker', queue: 'queue', tests: 'tests', you: 'you', done: 'done' }
 
 /**
  * The staff: a task's stations as notes on one line, the ones passed filled, the current one coral. The current note

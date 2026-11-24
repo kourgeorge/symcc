@@ -13,7 +13,7 @@ if (state === 'off') (window as unknown as { __off: boolean }).__off = true
 // ?agents=copilot: the lead and the workers on GitHub Copilot's agents
 const copilot = new URLSearchParams(location.search).get('agents') === 'copilot'
 
-const stations4 = ['work', 'check', 'queue', 'tests', 'merged'] as const
+const stations4 = ['work', 'check', 'queue', 'tests', 'done'] as const
 const lane = (id: string, title: string, at: number, sinceMin: number, more: Partial<PanelLane> = {}): PanelLane => ({ id, title, kind: '', stations: [...stations4], at, skipped: [], sinceMs: m(sinceMin), tryNo: 1, tries: 3, agent: at === 0 || at === 1, ...more })
 
 const task = (id: string, title: string, status: PanelTask['status'], word: string, more: Partial<PanelTask> = {}): PanelTask => ({ id, title, status, word, kind: '', role: 'general', attempts: status === 'todo' || status === 'backlog' ? 0 : 1, needsYou: false, actions: [], sessions: [], ...more })

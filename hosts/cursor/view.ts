@@ -6,6 +6,7 @@ import type { PaneView } from '../../hooks/app/state'
 import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isFinished, needsYou, newestFirst, taskAsks, taskActions, whyFailed, liveLanes, liveFinishedLanes, onDemand, everyText, shownStatus, roleOf, HISTORY_KINDS, isHistoryKind, MODE_NAME, MODE_MEANING } from '../../hooks/board'
 import { isOpenQuestion } from '../../hooks/core/questions'
 import { viewMarks } from '../../hooks/core/board-parts'
+import { byRunOrder } from '../../hooks/core/board-file'
 import type { PanelAction, PanelActionId, PanelLane, PanelNeed, PanelNews, PanelScout, PanelSession, PanelTask, PanelView } from './protocol'
 
 const ms = (iso: unknown): number | undefined => {
@@ -14,7 +15,7 @@ const ms = (iso: unknown): number | undefined => {
 }
 
 /** The task actions the panel has a button for (taskActions' others need the terminal: copy, role, watch). */
-const PANEL_ACTIONS: ReadonlySet<string> = new Set<PanelActionId>(['approve', 'reject', 'done', 'keep-note', 'ask-more', 'retry', 'drop', 'pause', 'resume', 'show-changes', 'to-todo', 'merge-now'])
+const PANEL_ACTIONS: ReadonlySet<string> = new Set<PanelActionId>(['approve', 'reject', 'done', 'keep-note', 'ask-more', 'retry', 'run-now', 'drop', 'pause', 'resume', 'show-changes', 'to-todo', 'merge-now'])
 
 /** The box hint of an action that needs the owner's words first. */
 const ASKS: Partial<Record<PanelActionId, string>> = { reject: 'What is wrong, for the next worker', 'ask-more': 'Your follow-up question', drop: 'Why (optional)' }
@@ -165,7 +166,7 @@ export function panelView(v: PaneView, o: { project: string; dir: string; nowMs:
   const byId = new Map(tasks.map(t => [t.id, t]))
   const lanes = [...liveLanes(view, nowMs), ...liveFinishedLanes(view, nowMs)].map(l => panelLane(l, byId.get(l.id)))
   const open = tasks.filter(t => !isFinished(t) || (ms(t.updated_at) ?? 0) >= startOfDay(nowMs))
-  const next = tasks.filter(t => t.status === 'todo').sort((a, b) => a.order - b.order)
+  const next = tasks.filter(t => t.status === 'todo').sort(byRunOrder)
   const scouts = (v.scouts ?? []).map(
     (s): PanelScout => ({
       name: s.name,

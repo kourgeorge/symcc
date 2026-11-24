@@ -482,4 +482,48 @@ test('panel actions are sent as the owner’s own commands', () => {
   expect(actionCommand('symcc', 'T-5', 'merge-now')).toEqual({ command: 'symcc-task', args: 'T-5 retry' })
   expect(actionCommand('symcc', 'T-5', 'drop', 'not needed')).toEqual({ command: 'symcc-task', args: 'T-5 drop not needed' })
   expect(actionCommand('symcc', 'T-5', 'keep-note')).toEqual({ command: 'symcc-task', args: 'T-5 note' })
+  expect(actionCommand('symcc', 'T-5', 'run-now')).toEqual({ command: 'symcc-task', args: 'T-5 run' })
+  expect(actionCommand('symcc', 'T-5', 'run-now', 'anyway')).toEqual({ command: 'symcc-task', args: 'T-5 run anyway' })
 })
+
+test("Run now from the panel: a task that waits asks first and starts once told anyway; the owner's board actions go with their next message to the lead", async () => {
+  const repo = await scratchRepo()
+  const sdk = fakeSdk(async t => {
+    if (isWorker(t)) return await t.onCancel.then(() => ({ status: 'cancelled' }))
+    return { status: 'finished', result: 'ok' }
+  })
+  const s = await openCursorSession({ root: repo, sdk, pluginRoot: PLUGIN_ROOT, sessionId: 'cursor-run-now' })
+  const leadTurns = () => sdk.agents.flatMap(a => a.turns).filter(isLead)
+  const status = async (id: string) => (await board(repo)).tasks.find(t => t.id === id)?.status
+  const add = (title: string, more: Record<string, unknown> = {}) => s.tool('add', { title, details: title, files: [`${title}.txt`], why: 'a test', origin_by: 'owner', request: title, ...more })
+  try {
+    await s.command('symcc-init')
+    await s.mode('paused')
+    await add('first')
+    await add('second', { after: ['T-1'] })
+    await add('third')
+
+    await s.act('T-3', 'drop', 'not needed')
+    await s.lead.idle()
+    await s.message('anything new?')
+    await until(() => leadTurns().some(t => t.text.endsWith('anything new?')), 20_000, "the owner's message")
+    const turn = leadTurns().find(t => t.text.endsWith('anything new?'))!
+    expect(turn.text).toContain('Meanwhile the owner (nothing to answer):')
+    expect(turn.text).toContain('T-3')
+    await s.lead.idle()
+    await s.message('and now?')
+    await until(() => leadTurns().some(t => t.text.endsWith('and now?')), 20_000, 'the next message')
+    expect(leadTurns().find(t => t.text.endsWith('and now?'))!.text).not.toContain('Meanwhile')
+
+    await until(() => !!s.view().tasks.find(t => t.id === 'T-2')?.actions.some(a => a.id === 'run-now'), 10_000, 'Run now on T-2')
+    expect(await s.act('T-2', 'run-now')).toMatch(/T-2 waits on T-1 \([^)]+\)\. Start anyway\?/)
+    expect(await status('T-2')).toBe('todo')
+    await s.act('T-2', 'run-now', 'anyway')
+    await until(async () => (await status('T-2')) === 'doing', 60_000, 'T-2 running')
+    await until(() => sdk.agents.some(a => 'ask_owner' in a.tools), 60_000, 'the worker')
+    expect(await status('T-1')).toBe('todo')
+  } finally {
+    await s.close()
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 120_000)

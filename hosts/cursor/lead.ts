@@ -27,6 +27,9 @@ export type LeadChatOptions = {
   tools: () => Record<string, SdkTool>
   /** the lead guide, put in front of the first message sent while there is one (none while symcc is off) */
   guide: () => Promise<string | undefined>
+  /** the owner's board actions waiting as "Meanwhile" lines (app/tell.ts meanwhileForPrompt), put in front of a turn
+   *  with the owner's message; `back` queues them again when that turn never starts */
+  meanwhile?: () => { text: string; back: () => void }
   onEvent: (e: LeadEvent) => void
   /** each step of the lead's turns as it happens */
   onStep?: (s: SdkStep) => void
@@ -75,10 +78,12 @@ export function leadChat(o: LeadChatOptions): LeadChat {
     running = true
     o.onEvent({ type: 'busy', busy: true })
     o.onEvent({ type: 'message', from, text })
+    const meanwhile = from === 'owner' ? o.meanwhile?.() : undefined
     try {
       const guide = guided ? undefined : await o.guide()
       if (guide) guided = true
-      const message = guide ? `${guide}\n\n---\n\n${text}` : text
+      const body = meanwhile?.text ? `${meanwhile.text}\n\n${text}` : text
+      const message = guide ? `${guide}\n\n---\n\n${body}` : body
       const how = { ...(o.onStep ? { onStep: o.onStep } : {}), ...(choice.model ? { model: choice.model } : {}), ...(choice.mode === 'plan' ? { mode: 'plan' as const } : {}), ...(images?.length ? { images } : {}) }
       run = await (await getAgent()).send(message, Object.keys(how).length ? how : undefined)
       const r = await run.wait()
@@ -86,6 +91,7 @@ export function leadChat(o: LeadChatOptions): LeadChat {
       else if (r.status === 'cancelled') o.onEvent({ type: 'stopped' })
       else o.onEvent({ type: 'error', text: `the lead's turn ended with status ${r.status}${r.error ? `: ${JSON.stringify(r.error).slice(0, 300)}` : ''}` })
     } catch (err) {
+      if (!run) meanwhile?.back()
       o.onEvent({ type: 'error', text: `the lead could not run: ${(err as Error).message}` })
     }
     run = undefined

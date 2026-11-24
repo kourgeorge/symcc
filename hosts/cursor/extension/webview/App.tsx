@@ -639,7 +639,7 @@ function Board({ view, steps, focus, onSay, onTask }: { view: PanelView; steps: 
         <label className="filter">
           <Icon name="search" />
           <span className="sr">Filter tasks</span>
-          <input type="search" placeholder="Filter by id, title, kind or role" value={filter} onChange={e => setFilter(e.target.value)} />
+          <input type="search" placeholder="Filter by id, title, task type or role" value={filter} onChange={e => setFilter(e.target.value)} />
         </label>
       </div>
       {!tasks.length && <p className="quiet">{f ? `No task matches “${filter}”.` : ALL_CLEAR.join(' ')}</p>}

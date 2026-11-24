@@ -10,9 +10,9 @@ export type ModelInfo = SdkModelInfo
 export type PanelMode = 'paused' | 'review' | 'auto'
 
 /** A task's stations, as the Live tab draws them (hooks/core/live.ts LiveStation). */
-export type PanelStation = 'work' | 'check' | 'queue' | 'tests' | 'you' | 'merged' | 'answer'
+export type PanelStation = 'work' | 'check' | 'queue' | 'tests' | 'you' | 'done'
 
-export type PanelActionId = 'approve' | 'reject' | 'done' | 'keep-note' | 'ask-more' | 'retry' | 'drop' | 'pause' | 'resume' | 'show-changes' | 'to-todo' | 'merge-now'
+export type PanelActionId = 'approve' | 'reject' | 'done' | 'keep-note' | 'ask-more' | 'retry' | 'run-now' | 'drop' | 'pause' | 'resume' | 'show-changes' | 'to-todo' | 'merge-now'
 
 /** A button on a card or a task row; `ask` set: it needs the owner's words first (that text is its box's hint). */
 export type PanelAction = { id: PanelActionId; label: string; primary?: boolean; ask?: string }

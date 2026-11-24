@@ -55,7 +55,7 @@ export function sdkFor(agents: string | undefined): Sdk {
 
 type Request = { id?: unknown; op?: unknown; name?: unknown; input?: unknown; args?: unknown; text?: unknown; task?: unknown; action?: unknown; need?: unknown; mode?: unknown; model?: unknown; images?: unknown; path?: unknown; file?: unknown }
 
-const PANEL_ACTIONS: readonly PanelActionId[] = ['approve', 'reject', 'done', 'keep-note', 'ask-more', 'retry', 'drop', 'pause', 'resume', 'show-changes', 'to-todo', 'merge-now']
+const PANEL_ACTIONS: readonly PanelActionId[] = ['approve', 'reject', 'done', 'keep-note', 'ask-more', 'retry', 'run-now', 'drop', 'pause', 'resume', 'show-changes', 'to-todo', 'merge-now']
 const MODES: readonly PanelMode[] = ['paused', 'review', 'auto']
 const word = (v: unknown, what: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw new Error(`${what} is missing`)

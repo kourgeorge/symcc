@@ -258,11 +258,18 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (m.type === 'command') return reply(true, await engine.text({ op: 'command', name: m.name, args: m.args ?? '' }))
       if (m.type === 'worktree') return reply(true, await worktreeAction(m.path, m.action, m.file))
       if (m.type === 'act') {
-        const text = await engine.text({ op: 'act', task: m.task, action: m.action, ...(m.text ? { text: m.text } : {}) })
+        const act = (words?: string) => engine.text({ op: 'act', task: m.task, action: m.action, ...(words ? { text: words } : {}) })
+        const text = await act(m.text)
         if (m.action === 'show-changes') {
           const doc = await vscode.workspace.openTextDocument({ language: 'diff', content: text })
           await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true })
           return reply(true, '')
+        }
+        // Run now on a task that waits on unfinished tasks starts nothing and asks first: "T-5 waits on T-3 (running). Start anyway?"
+        const waits = m.action === 'run-now' ? /[^\n]*?Start anyway\?/.exec(text)?.[0] : undefined
+        if (waits) {
+          const yes = await vscode.window.showWarningMessage(waits, { modal: true }, 'Start anyway')
+          return reply(true, yes ? await act('anyway') : `Nothing started; ${m.task} waits its turn.`)
         }
         return reply(true, text)
       }

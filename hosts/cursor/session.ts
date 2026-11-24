@@ -6,7 +6,7 @@
 import type { SymccView } from '../../types'
 import type { Host, HostFeatures, PanelValues } from '../../hooks/host'
 import { noUi } from '../../hooks/host'
-import { sessionStarting, sessionStart, sessionEnd, toolCall, runCommand, agentFinished, ownerTyped, leadGuideText, COMMANDS } from '../../hooks/app/symcc'
+import { sessionStarting, sessionStart, sessionEnd, toolCall, runCommand, agentFinished, ownerTyped, leadGuideText, meanwhileForPrompt, COMMANDS } from '../../hooks/app/symcc'
 import { S, useName, toolName, workers, starting, finishing, approving, queuedWorkers, scoutRuns, checkerRuns, type PaneView } from '../../hooks/app/state'
 import { stopForQuit } from '../../hooks/app/board-mode'
 import { TOOLS } from '../../hooks/app/tools'
@@ -43,14 +43,17 @@ const ACTION_COMMANDS: Record<PanelActionId, { word: 'approve' | 'reject' | 'dif
   resume: { word: 'task', verb: 'resume' },
   retry: { word: 'task', verb: 'retry' },
   'merge-now': { word: 'task', verb: 'retry' },
+  'run-now': { word: 'task', verb: 'run' },
   'to-todo': { word: 'task', verb: 'todo' },
   drop: { word: 'task', verb: 'drop' },
 }
 
-/** The command name and words that send panel action `action` on task `task` (`text`: the reason or question). */
+/** The command name and words that send panel action `action` on task `task` (`text`: the reason or question; for
+ *  run-now, "anyway" starts it without waiting for the tasks it waits on). */
 export function actionCommand(name: string, task: string, action: PanelActionId, text = ''): { command: string; args: string } {
   const c = ACTION_COMMANDS[action]
-  const words = c.word === 'task' ? [task, c.verb!, ...(action === 'drop' && text.trim() ? [text.trim()] : [])] : [task, ...(c.word === 'reject' ? [text.trim()] : [])]
+  const extra = (action === 'drop' && text.trim()) || (action === 'run-now' && text.trim() === 'anyway' ? 'anyway' : '')
+  const words = c.word === 'task' ? [task, c.verb!, ...(extra ? [extra] : [])] : [task, ...(c.word === 'reject' ? [text.trim()] : [])]
   return { command: `${name}-${c.word}`, args: words.join(' ') }
 }
 
@@ -197,6 +200,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     model: o.leadModel ?? o.sdk.defaultModel,
     tools: leadTools,
     guide: () => leadGuideText(ref.host!),
+    meanwhile: meanwhileForPrompt,
     onEvent: e => o.onLead?.(e),
     onStep: s => onStep(LEAD_AGENT, s),
     settings: ['project', 'plugins'],
