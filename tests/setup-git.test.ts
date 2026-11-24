@@ -6,7 +6,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { type Board, addTask, emptyBoard, patchTask, BIG_FILE_BYTES } from '../hooks/board'
-import { setupGit } from '../hooks/app/git'
+import { gitReady, setupGit } from '../hooks/app/git'
 import { S, leadQueue, meanwhile } from '../hooks/app/state'
 import { load, saveBoard } from '../hooks/app/store'
 import { fakeHost, memoryFs } from './fake-host'
@@ -36,6 +36,8 @@ type Start = {
   commitFails?: boolean
   /** where the project folder is (default ROOT) */
   root?: string
+  /** runs right after the commit is made (a gitReady from the pump or the watchdog in the middle of setup) */
+  onCommit?: () => void
 }
 
 type Commit = { files: string[]; args: string[] }
@@ -120,6 +122,7 @@ function world(start: Start = {}) {
     if (a[0] === 'commit') {
       if (start.commitFails) return fail('fatal: unable to write commit')
       repo.commits.push({ files: [...repo.index].sort(), args })
+      start.onCommit?.()
       return ok()
     }
     // homeBranch (for publish): no origin, the local branches
@@ -520,3 +523,16 @@ test("the lead's own setup_git tells the lead nothing more (T-968)", async () =>
   await setupGit(w.$, 'the lead')
   expect(leadQueue.length + meanwhile.length).toBe(0)
 })
+
+for (const who of ['the lead', 'the owner'])
+  test(`a gitReady in the middle of ${who}'s setup (after the commit) sends no extra "Git is ready" update (T-968)`, async () => {
+    let mid: Promise<boolean> | null = null
+    const w = world({ onCommit: () => void (mid = gitReady(w.$)) })
+    await withProject(w)
+    S.driving = true
+    await setupGit(w.$, who)
+    expect(mid === null).toBe(false)
+    await mid
+    expect(leadQueue.filter(x => x.startsWith('Git is ready here now'))).toEqual([])
+    expect(leadQueue.length).toBe(who === 'the lead' ? 0 : 1)
+  })

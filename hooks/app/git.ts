@@ -125,8 +125,9 @@ export async function gitReady($: Host, b?: Board): Promise<boolean> {
   }
   if (s === 'ok') {
     // T-968: the lead was told git is not ready (and may be asking the owner about it): a check that finds it ready
-    // now (Check again, the owner set it up by hand) tells the lead at once, so it doesn't ask again
-    if (S.toldGit !== 'ok' && S.driving) tellLead($, gitFoundText())
+    // now (Check again, the owner set it up by hand) tells the lead at once, so it doesn't ask again. Not while
+    // setupGit runs: it does its own telling (or none, for the lead's own setup_git).
+    if (S.toldGit !== 'ok' && S.driving && !S.settingUp) tellLead($, gitFoundText())
     S.toldGit = 'ok'
   } else if (S.driving && S.toldGit !== s) {
     S.toldGit = s
