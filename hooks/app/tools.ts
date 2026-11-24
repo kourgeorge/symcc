@@ -920,7 +920,12 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
     return patchTask(y, t.id, { status: 'todo', note: 'started now by the owner', ...(again ? { test_tries: 0 } : {}), merge_main: clashed || undefined }, now())
   })
   const line = runNowLine({ waits: anyway ? waits : [], ...(over ? { over } : {}), paused, from })
-  const started = (await startNow($, t.id, line)) || find(await load($), t.id)?.status === 'doing'
+  const claimed = await startNow($, t.id, line)
+  const after = claimed ? undefined : find(await load($), t.id)
+  // its start failed outright (startNow failed the task): say so, not "it starts when there is room"
+  if (after?.status === 'failed') return `${t.id} failed: ${after.note ?? "couldn't start"}`
+  // another start (e.g. a second Run now at the same moment) has it: it is starting or running
+  const started = claimed || after?.status === 'doing' || starting.has(t.id) || [...workers.values()].some(w => w.task === t.id)
   if (!started) return `${t.id} is to do now but couldn't start at once${paused ? ' (the board is paused)' : ''}; ${paused ? `${S.N.name} run ${t.id} again tries once more` : 'it starts when there is room'}`
   const shares = runNowShares((await load($)).tasks, t)
   return [

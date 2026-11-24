@@ -19,7 +19,7 @@ const ISO = new Date(T0 - 60_000).toISOString()
 const BOARD = '/.symcc/board.json'
 
 /** In-memory files (keyed from "/.symcc/" on), a git that says yes to everything, no agents running. */
-function world(on: On) {
+function world(on: On, o: { failWorktree?: boolean } = {}) {
   const files = new Map<string, string>()
   const key = (p: string) => (p.includes('/.symcc/') ? p.slice(p.indexOf('/.symcc/')) : p)
   on('fs.exists', (_, e) => ({ value: files.has(key(e.path)) }))
@@ -32,6 +32,7 @@ function world(on: On) {
   on('agent.spawn', () => ({ model: 'sonnet' }) as never)
   on('process.run', (_, e) => {
     const [cmd, ...rest] = (e as unknown as { argv: string[] }).argv
+    if (cmd === 'git' && o.failWorktree && rest.includes('worktree') && rest.includes('add')) return { value: ran({ exitCode: 1, stderr: 'boom worktree' }) }
     if (cmd === 'git') return { value: rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree' ? ran({ stdout: 'true\n' }) : ran({}) }
     if (cmd === 'ln') {
       if (files.has(key(rest[1]!))) return { value: ran({ exitCode: 1, stderr: 'File exists' }) }
@@ -119,6 +120,28 @@ test('T-954: the health check does not count run now starts as newer tasks that 
   // the owner started them with Run now: nothing is flagged
   const now = started('T-3', 'run-now')(started('T-2', 'run-now')(b))
   expect(boardHealth(now, T0).filter(f => f.reason === 'starving')).toEqual([])
+})
+
+test('T-954: a run now start that fails says the task failed, not that it starts when there is room',async ($, on) => {
+  const w = world(on, { failWorktree: true })
+  w.files.set(BOARD, JSON.stringify(todo(3, 1, 'paused')))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  const said = await runTool($, 'T-3')
+  expect(w.task('T-3').status).toBe('failed')
+  expect(said).toContain('T-3 failed: couldn\'t start')
+  expect(said).not.toContain('when there is room')
+})
+
+test('T-954: two run nows on one task at once: both say it started, and it has one history line', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(todo(3, 1, 'paused')))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  const said = await Promise.all([runTool($, 'T-3'), runTool($, 'T-3')])
+  expect(said.map(s => s.includes('T-3 started now'))).toEqual([true, true])
+  expect(w.task('T-3').status).toBe('doing')
+  expect(runNowLines(w.task('T-3')).length).toBe(1)
 })
 
 test('T-954: a task that waits on an unfinished task asks "Start anyway?" first: without anyway nothing starts; with it, it starts and keeps its after list', async ($, on) => {
