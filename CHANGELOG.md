@@ -2,6 +2,20 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.39 (2026-11-24)
+
+### Changed
+- VS Code board redesign: one shared style (plain headings, links instead of pills); the Live tab shows one line per lane, and Branches one line each, with no graph.
+- "Kinds" are now called "task types" everywhere you see them.
+- Live trains: the task type sits at the right end of the meta line, and change tasks and investigations share one "done" end stop.
+- Health check: a task the lead put later (a higher priority number) no longer counts as "starving".
+- Copilot status line: today's merges and cost come from done tasks.
+- `/symcc-help` lists "e run now" among the task page keys; the README lists the writer role, and says the researcher and writer can use the web.
+- Lead guide: a window that doesn't drive can still add and change tasks.
+
+### Fixed
+- The driving window no longer loses itself when its session id changes.
+
 ## 0.5.38 (2026-11-24)
 
 ### Added

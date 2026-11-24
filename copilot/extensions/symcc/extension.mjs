@@ -899,11 +899,11 @@ var PROMPT_SECTIONS = [
     name: "title",
     kinds: ALL,
     heading: null,
-    about: "who the agent is, then the task's id, kind and role, its title and what its kind is for",
+    about: "who the agent is, then the task's id, task type and role, its title and what its task type is for",
     template: (k) => `${TEXTS[k].intro}
 
 # Task {{task_id}}: {{title}}
-Kind: {{kind_name}} · Role: {{role_name}}${k === "checker" ? "" : `
+Task type: {{kind_name}} · Role: {{role_name}}${k === "checker" ? "" : `
 
 {{kind}}`}`,
     text: (c) => {
@@ -911,7 +911,7 @@ Kind: {{kind_name}} · Role: {{role_name}}${k === "checker" ? "" : `
       const kindName = v.kind_name || (c.kind === "checker" ? "change" : c.kind);
       const roleName = v.role_name || (c.kind === "checker" ? "checker" : "general");
       return [fixed(c, "intro"), `# Task ${v.task_id ?? ""}: ${v.title ?? ""}
-Kind: ${kindName} · Role: ${roleName}`, c.kind === "checker" ? "" : (v.kind ?? "").trim()].filter(Boolean).join(`
+Task type: ${kindName} · Role: ${roleName}`, c.kind === "checker" ? "" : (v.kind ?? "").trim()].filter(Boolean).join(`
 
 `);
     }
@@ -1118,8 +1118,8 @@ var SHARED_PLACEHOLDERS = {
   branch: "the worker's branch, e.g. symcc/T-12",
   folder: "the worker's own folder (its copy of the project)",
   role: "the role's checklist, skills and web rule (empty for general)",
-  kind: `the task's kind and what it is for, e.g. "Kind of task: bug (something that works wrongly)."`,
-  kind_name: "the task's kind, e.g. bug",
+  kind: `the task's type and what it is for, e.g. "The task type is bug (something that works wrongly)."`,
+  kind_name: "the task's type, e.g. bug",
   role_name: "the task's role, e.g. tester",
   org_mem: 'only when organizational memory (.symcc/org-mem.md) has lines: "Organizational memory (org-mem): notes earlier agents left about this project", then its lines',
   learned: `how to end the report with an optional "Learned:" section for organizational memory (org-mem); only on a host that can't send the debrief after the hand-back (T-656), else empty`
@@ -5271,7 +5271,7 @@ var offStatusParts = (name = DEFAULT_NAME, withName = true, here = false, driver
   { text: `/${name}-enable`, command: true },
   { text: " to turn it back on" }
 ];
-var offHereAnswer = (name = DEFAULT_NAME, here = "off", driver, nowMs = Date.now()) => here === "other" ? `${name} is off in this window: ${noticeText(otherDrivesForms(name, driver, nowMs)[0])}.` : `${name} is off in this window. /${name}-enable turns it back on.`;
+var offHereAnswer = (name = DEFAULT_NAME, here = "off", driver, nowMs = Date.now()) => here === "other" ? `${name} is off in this window: ${noticeText(otherDrivesForms(name, driver, nowMs)[0])}.` : here === "gone" ? `${name} is off in this window: ${offStatusLine(name, false, "gone")}.` : `${name} is off in this window. /${name}-enable turns it back on.`;
 var notSetUpAnswer = (name = DEFAULT_NAME) => `no ${name} board in this folder · /${name}-init to create one here`;
 var offStatusLine = (name = DEFAULT_NAME, withName = true, here = false, driver, nowMs = Date.now(), width = Infinity) => offStatusParts(name, withName, here, driver, nowMs, width).map((p) => p.text).join("");
 function spokenDone(ids) {
@@ -5503,7 +5503,7 @@ function settingsText(b, name = DEFAULT_NAME, root = "") {
   return [
     ...SETTING_GROUPS.flatMap((g) => {
       const rows = groupSettings(g);
-      const pages = g.items.some(isSettingPage) ? ["  roles and kinds: open them from the Settings view, or tell the lead", `  org-mem (organizational memory): its notes are in .${name}/org-mem.md; the Organizational memory section at the bottom of the board's Live tab shows the newest notes and topics and opens the page that lists and deletes them (/${name}-settings orgmem delete N)`] : [];
+      const pages = g.items.some(isSettingPage) ? ["  roles and task types: open them from the Settings view, or tell the lead", `  org-mem (organizational memory): its notes are in .${name}/org-mem.md; the Organizational memory section at the bottom of the board's Live tab shows the newest notes and topics and opens the page that lists and deletes them (/${name}-settings orgmem delete N)`] : [];
       return [`${g.title}:`, ...rows.map((s) => `  ${s.name.padEnd(w)}  ${settingShown(s.name, settingValue(b, s.name, root))}  (default ${s.default} · ${s.range}) ${s.meaning}`), ...pages];
     }),
     `Change one: /${name}-settings NAME VALUE, e.g. /${name}-settings max_parallel 5`
@@ -5521,7 +5521,7 @@ function leadSettingsText(b, can, root = "") {
         const stored = s.name === "mode" ? { default: "auto", range: "paused / review / auto", meaning: s.meaning + ' (the owner reads review as "approve merge" and auto as "auto merge")' } : s;
         return `${s.name}: ${value} (default ${stored.default}, can be ${stored.range}) ${stored.meaning}${extra}`;
       }),
-      ...g.items.some(isSettingPage) ? ["roles and kinds: use the roles and kinds tools (the owner sees them as pages in the Settings view)", "org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board's Live tab, and may delete them there)"] : []
+      ...g.items.some(isSettingPage) ? ["roles and task types: use the roles and kinds tools (the owner sees roles and task types as pages in the Settings view)", "org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board's Live tab, and may delete them there)"] : []
     ])
   ].join(`
 `);
@@ -5538,7 +5538,7 @@ var ROLE_EDIT_FIELDS = ["description", "model", "skills", "tools", "code", "chec
 var KIND_EDIT_FIELDS = ["description", "body"];
 var CLEARED_BY_NONE = ["model", "skills", "tools"];
 var defEditFields = (def) => def === "role" ? ROLE_EDIT_FIELDS : KIND_EDIT_FIELDS;
-var defUsage = (def, name = DEFAULT_NAME) => `/${name}-settings ${def} <name> on, off, reset or remove; /${name}-settings ${def} <name> add (a new one); /${name}-settings ${def} <name> edit ${defEditFields(def).join("|")} <value>; or /${name}-settings ${def} <name> save {"<field>":"<value>",...}`;
+var defUsage = (def, name = DEFAULT_NAME, word = def === "kind" ? "type" : "role") => `/${name}-settings ${word} <name> on, off, reset or remove; /${name}-settings ${word} <name> add (a new one); /${name}-settings ${word} <name> edit ${defEditFields(def).join("|")} <value>; or /${name}-settings ${word} <name> save {"<field>":"<value>",...}`;
 function defSaveFields(def, text) {
   let raw;
   try {
@@ -5645,8 +5645,9 @@ function parseCommand(command, args, current = "auto", name = DEFAULT_NAME) {
     case "mode":
       return parseModeCommand(s, current, name);
     case "settings": {
-      const def = (id ?? "").toLowerCase();
-      if (def === "role" || def === "kind") {
+      const defWord = (id ?? "").toLowerCase();
+      if (defWord === "role" || defWord === "type") {
+        const def = defWord === "type" ? "kind" : "role";
         const action = (words[2] ?? "").toLowerCase();
         if (words.length === 3 && DEF_ACTIONS.includes(action))
           return { kind: "def", def, name: words[1], action };
@@ -5660,14 +5661,14 @@ function parseCommand(command, args, current = "auto", name = DEFAULT_NAME) {
         if (words.length >= 4 && action === "edit" && defEditFields(def).includes(field)) {
           const value = s.replace(/^\S+\s+\S+\s+\S+\s+\S+\s*/, "").trim();
           if (field === "description" && !value)
-            return use(`/${name}-settings ${def} ${words[1]} edit description <a few words>`);
+            return use(`/${name}-settings ${defWord} ${words[1]} edit description <a few words>`);
           return { kind: "def-edit", def, name: words[1], field, value: CLEARED_BY_NONE.includes(field) && value.toLowerCase() === "none" ? "" : value };
         }
         return use(defUsage(def, name));
       }
-      if (def === "git")
+      if (defWord === "git")
         return words.length === 2 && words[1].toLowerCase() === "check" ? { kind: "check-git" } : words.length === 2 && words[1].toLowerCase() === "setup" ? { kind: "setup-git" } : use(`/${name}-settings git setup (git init on main if there is no repo, a .gitignore and a first commit; never pushes), or /${name}-settings git check (look at git again)`);
-      if (def === "orgmem") {
+      if (defWord === "orgmem") {
         const n = Number(words[2]);
         const key = words[3];
         const ok = (words.length === 3 || words.length === 4 && /^[0-9a-f]{6}$/i.test(key ?? "")) && (words[1] ?? "").toLowerCase() === "delete" && Number.isInteger(n) && n > 0;
@@ -5769,7 +5770,7 @@ function boardSections(tasks, nowMs, offsetMin) {
 }
 // kinds/change.ts
 var change_default2 = `---
-description: a general change when no other kind fits (the default)
+description: a general change when no other task type fits (the default)
 ---
 The worker changes files, which are committed, tested and merged.
 `;
@@ -5875,8 +5876,8 @@ function checkKind(kinds, name) {
   if (names.includes(n))
     return n;
   if (findKind(kinds, n)?.off)
-    throw new Error(`Nothing changed: kind "${n}" is turned off (the owner can turn it on again: kinds action "on"); the kinds are: ${names.join(", ")}`);
-  throw new Error(`Nothing changed: unknown kind "${String(name)}"; the kinds are: ${names.join(", ")}`);
+    throw new Error(`Nothing changed: task type "${n}" is turned off (the owner can turn it on again: kinds action "on"); the task types are: ${names.join(", ")}`);
+  throw new Error(`Nothing changed: unknown task type "${String(name)}"; the task types are: ${names.join(", ")}`);
 }
 var kindMark = (t) => {
   const k = kindOf(t);
@@ -5885,7 +5886,7 @@ var kindMark = (t) => {
 function kindSection(name, kinds) {
   const k = findKind(kinds, name);
   return `
-Kind of task: ${name}${k ? ` (${k.description})` : ""}.
+The task type is ${name}${k ? ` (${k.description})` : ""}.
 `;
 }
 function kindsLeadText(kinds, name = DEFAULT_NAME) {
@@ -5893,9 +5894,9 @@ function kindsLeadText(kinds, name = DEFAULT_NAME) {
     const k = findKind(kinds, n);
     return k ? `${n} (${k.description})` : n;
   });
-  return `- Task kinds (kind in ${name} add / change): ${list.join("; ")}. Pick the kind that fits each task; ${DEFAULT_KIND} when unsure. Every kind is worked, tested and merged like a change, except ${INVESTIGATION} (see below).`;
+  return `- Task types (the kind parameter of ${name} add / change): ${list.join("; ")}. Pick the task type that fits each task; ${DEFAULT_KIND} when unsure. Every task type is worked, tested and merged like a change, except ${INVESTIGATION} (see below).`;
 }
-var kindNameError = (name) => defNameError("kind", name);
+var kindNameError = (name) => defNameError("task type", name);
 function kindFileText(k) {
   const lines = [`description: ${k.description.replace(/\s+/g, " ").trim()}`];
   if (k.off)
@@ -5908,11 +5909,11 @@ ${k.body.trim() ? `${k.body.trim()}
 ` : ""}`;
 }
 var leadKindLine = (k, source) => `- ${k.name} (${sourceLabel(source, k.off)}): ${k.description}`;
-var leadBrokenKindLine = (b, builtIn) => leadBrokenDefLine("kind", b, builtIn);
+var leadBrokenKindLine = (b, builtIn) => leadBrokenDefLine("task type", b, builtIn);
 function leadKindsText(builtIn, project, dir, broken = []) {
   const all = mergeKinds([...builtIn], [...project]);
   if (!all.length && !broken.length)
-    return "no kinds found";
+    return "no task types found";
   const lines = all.map((k) => {
     const b = brokenNamed(broken, k.name);
     return b ? leadBrokenKindLine(b, builtIn) : leadKindLine(k, defSource(k.name, builtIn, project));
@@ -5920,7 +5921,7 @@ function leadKindsText(builtIn, project, dir, broken = []) {
   for (const b of broken)
     if (!findKind(all, b.name))
       lines.push(leadBrokenKindLine(b, builtIn));
-  return `Kinds (built-in = from the plugin, replaced = your ${dir}/<name>.md over a built-in, added = your own, off = never picked):
+  return `Task types (built-in = from the plugin, replaced = your ${dir}/<name>.md over a built-in, added = your own, off = never picked):
 ${lines.join(`
 `)}`;
 }
@@ -5930,8 +5931,8 @@ file: ${file}
 ${kindFileText(k).trim()}`;
 }
 var NEW_KIND_TEMPLATE = {
-  description: "what this kind of task is, in a few words (the lead reads it to choose)",
-  body: "What the worker does for this kind of task."
+  description: "what this task type is, in a few words (the lead reads it to choose)",
+  body: "What the worker does for this task type."
 };
 
 // hooks/core/plan.ts
@@ -7258,7 +7259,7 @@ function starving(b, nowMs) {
     if (!blockers.every((d) => num(d.id) > num(t.id)))
       continue;
     const changes = afterChanges(t);
-    const newer = b.tasks.filter((x) => num(x.id) > num(t.id) && started(x)).length;
+    const newer = b.tasks.filter((x) => num(x.id) > num(t.id) && started(x) && (x.priority ?? 0) >= (t.priority ?? 0)).length;
     const since = blockers.length ? Date.parse(t.created_at || "") : readyAt(b, t);
     if (!blockers.length && (nowMs - since < CHECK_MS || next.has(t.id)))
       continue;
@@ -7460,7 +7461,7 @@ function parseSearch(query, nowMs = Date.now(), offsetMin = localOffset(nowMs), 
       q.stuck = true;
       continue;
     }
-    const m = /^(last|top|since|status|kind|role|waits-on|blocks):(.+)$/.exec(w);
+    const m = /^(last|top|since|status|type|role|waits-on|blocks):(.+)$/.exec(w);
     if (!m) {
       q.words.push(w);
       continue;
@@ -7485,10 +7486,10 @@ function parseSearch(query, nowMs = Date.now(), offsetMin = localOffset(nowMs), 
         q.words.push(w);
       } else
         q.status = [...new Set([...q.status ?? [], ...list.flatMap((s) => s === "open" ? OPEN : [s])])];
-    } else if (key === "kind") {
+    } else if (key === "type") {
       const bad = kinds ? list.filter((k) => !kinds.includes(k)) : [];
       if (bad.length) {
-        q.errors.push(`unknown kind "${bad[0]}"; the kinds are: ${kinds.join(", ")}`);
+        q.errors.push(`unknown task type "${bad[0]}"; the task types are: ${kinds.join(", ")}`);
         q.words.push(w);
       } else
         q.kinds = [...q.kinds ?? [], ...list];
@@ -8618,7 +8619,7 @@ function sentBackOf(t, isToday) {
   const other = marks.filter((h) => (h.reason === "tests" || h.reason === "clash") && isToday(h.at)).length;
   return { all: checker + other, checker };
 }
-var LIVE_STATIONS = ["work", "check", "queue", "tests", "you", "merged", "answer"];
+var LIVE_STATIONS = ["work", "check", "queue", "tests", "you", "done"];
 var LIVE_AGENT_MARK = "✧";
 var LIVE_LEGEND = `${LIVE_AGENT_MARK} = an agent works here (needs an agent slot) · ${TOKEN_SIGN} = tokens`;
 var TOKENS_NOTE = `${TOKEN_SIGN} = tokens`;
@@ -8695,11 +8696,11 @@ function idleDone(tasks) {
   const last = tasks.filter((t) => t.status === "done").map((t) => ({ t, at: finishedAt(t)?.atMs })).filter((x) => x.at !== undefined).sort((a, b) => b.at - a.at || num(b.t.id) - num(a.t.id))[0];
   return { ...last ? { last } : {}, items: tasks.filter((t) => t.status === "backlog").sort(byRunOrder) };
 }
-var liveStations = (checker) => LIVE_STATIONS.filter((s) => s !== "you" && s !== "answer" && (s !== "check" || checker));
+var liveStations = (checker) => LIVE_STATIONS.filter((s) => s !== "you" && (s !== "check" || checker));
 function laneStations(t, checker, review) {
   if (isInvestigation(t))
-    return ["work", "answer"];
-  return LIVE_STATIONS.filter((s) => s !== "answer" && (s !== "check" || checker) && (s !== "you" || review));
+    return ["work", "done"];
+  return LIVE_STATIONS.filter((s) => (s !== "check" || checker) && (s !== "you" || review));
 }
 function liveColumns(lanes, checker) {
   if (!lanes.length)
@@ -8721,7 +8722,7 @@ function stationOf(stage, checker) {
     case "test":
       return "tests";
     case "merge":
-      return "merged";
+      return "done";
   }
 }
 function usageOf(t, nowMs) {
@@ -8775,8 +8776,8 @@ function liveLanes(view, nowMs) {
     let stage = taskPhase(t, nowMs).stage ?? "worker";
     if (stage === "worker" && handedBack(t))
       stage = "prep";
-    const investigation = stations.includes("answer");
-    let station = waiting ? "you" : investigation ? stage === "worker" ? "work" : "answer" : t.status !== "doing" && stations.includes("you") ? "merged" : stationOf(stage, checker);
+    const investigation = isInvestigation(t);
+    let station = waiting ? "you" : investigation ? stage === "worker" ? "work" : "done" : t.status !== "doing" && stations.includes("you") ? "done" : stationOf(stage, checker);
     const skipped = checker && !investigation && checkSkipped(t, stage, waiting);
     if (skipped && station === "check")
       station = "queue";
@@ -8976,10 +8977,10 @@ var liveHeading = (name, width) => {
   return [...p.lead ? [{ text: p.lead, tone: "heading" }] : [], { text: p.name, tone: "heading" }, ...p.rule ? [{ text: ` ${p.rule}`, tone: "heading" }] : []];
 };
 var LABELS = [
-  { work: "work✧", check: "check✧", queue: "queue", tests: "tests", you: "you", merged: "merged", answer: "answer" },
-  { work: "wrk✧", check: "chk✧", queue: "que", tests: "tst", you: "you", merged: "mrg", answer: "ans" },
-  { work: "w✧", check: "c✧", queue: "q", tests: "t", you: "y", merged: "m", answer: "a" },
-  { work: "w", check: "c", queue: "q", tests: "t", you: "y", merged: "m", answer: "a" }
+  { work: "work✧", check: "check✧", queue: "queue", tests: "tests", you: "you", done: "done" },
+  { work: "wrk✧", check: "chk✧", queue: "que", tests: "tst", you: "you", done: "done" },
+  { work: "w✧", check: "c✧", queue: "q", tests: "t", you: "y", done: "d" },
+  { work: "w", check: "c", queue: "q", tests: "t", you: "y", done: "d" }
 ];
 var MAX_GAP = 8;
 var MIN_GAP = 2;
@@ -9074,18 +9075,22 @@ function laneLines(lane, l, o) {
   const fits = (xs) => textWidth(segText(xs)) <= l.width;
   const times = lane.tokens !== undefined && lane.usual ? lane.tokens / lane.usual : undefined;
   const shown = times !== undefined && laneTimes(times);
-  const median2 = shown && { text: ` (${shown.text}× median)`, tone: shown.warn ? "warning" : "dim" };
+  const median2 = shown && { text: ` (${shown.text}×median)`, tone: shown.warn ? "warning" : "dim" };
   const tokens = (withMedian) => lane.tokens === undefined ? done ? [] : [{ text: `${TOKEN_SIGN} at hand-back`, tone: "dim" }] : segs({ text: fmtTok(lane.tokens), tone: "text" }, lane.more && { text: " + …", tone: "dim" }, withMedian && median2);
   const time = lane.activeMs ? [{ text: `⏱ ${rowDuration(lane.activeMs)}`, tone: "dim" }] : [];
   const agents = [lane.workerTokens && `worker ${fmtTokens(lane.workerTokens)}`, lane.checkerTokens && `checker ${fmtTokens(lane.checkerTokens)}`].filter((x) => !!x);
-  const split = agents.length ? [{ text: `<${agents.join(" · ")}>`, tone: "dim" }] : [];
-  const line = (level, withKind) => {
-    const lead = { text: `  ${withKind ? `${lane.kind} ` : ""}try ${lane.tryNo}/${lane.tries}`, tone: "dim" };
+  const split = agents.length ? [{ text: agents.join(" · "), tone: "dim" }] : [];
+  const line = (level) => {
+    const lead = { text: `  try ${lane.tryNo}/${lane.tries}`, tone: "dim" };
     const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], back ? [back] : []].filter((x) => x.length);
     return segs(lead, ...parts.flatMap((x, i) => [{ text: " · ", tone: "dim" }, ...x]));
   };
-  const tries = [4, 3, 2].map((n) => line(n, true));
-  tries.push(line(2, false), line(1, false), line(0, false), segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: "dim" }));
+  const withKind = (xs) => {
+    const gap = Math.max(2, textWidth(segText(first)) - textWidth(segText(xs)) - textWidth(lane.kind));
+    return [...xs, { text: " ".repeat(gap) + lane.kind, tone: "dim" }];
+  };
+  const tries = [4, 3, 2, 1, 0].flatMap((n) => [withKind(line(n)), line(n)]);
+  tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: "dim" }));
   const second = tries.find(fits) ?? tries[tries.length - 1];
   return [first, done ? second.map((x) => x.tone === "text" && !x.text.trim() ? x : { ...x, tone: "dim" }) : second];
 }
@@ -10272,7 +10277,7 @@ var damGuideCore = (name = DEFAULT_NAME) => [
   `- A question: the question in one sentence, then the choices numbered, then "(or answer on the board)".`
 ].join(`
 `);
-var notDrivingText = (name = DEFAULT_NAME) => `this window doesn't drive the board; /${name}-drive makes it drive`;
+var notDrivingText = (name = DEFAULT_NAME) => `This window does not drive the board, but you still add, change, drop, approve and answer tasks here as usual; the window that drives runs the workers, scouts and merges. Mention /${name}-drive only when the owner wants this window to run the work itself.`;
 
 // hooks/app/tell.ts
 var START_LINE_END = " Nothing to do for it.";
@@ -13059,7 +13064,7 @@ async function manageText(host, k, a) {
       return action === "list" || asked ? bad : `say which ${noun} to ${action} (name)`;
   }
   if (action !== "list" && !S.root)
-    return `no project folder yet, so ${k.plural} can not be changed`;
+    return `no project folder yet, so ${noun}s can not be changed`;
   const { builtIn, project, broken, dir } = await defLists(host, k);
   const have = () => `have: ${k.get().map((d) => d.name).join(", ") || "none"}`;
   if (action === "list" && !asked)
@@ -14239,14 +14244,14 @@ async function haltCheckersOf($, why, which) {
 
 // hooks/app/kinds.ts
 var KINDS = {
-  noun: "kind",
+  noun: "task type",
   plural: "kinds",
   skipped: skippedKinds,
   parse: parseKind,
   skipReason: kindSkipReason,
   nameError: kindNameError,
   fileText: kindFileText,
-  fixHint: "(front matter with a description; a name of letters, digits, - and _); if a built-in kind has that name, it is used meanwhile.",
+  fixHint: "(front matter with a description; a name of letters, digits, - and _); if a built-in task type has that name, it is used meanwhile.",
   builtIn: builtInKinds,
   merge: mergeKinds,
   get: () => S.kinds,
@@ -14257,7 +14262,7 @@ var KINDS = {
   brokenLine: leadBrokenKindLine,
   oneText: leadKindText,
   counts: "for the next task on",
-  noDescription: "description is missing: say in a few words what this kind of task is (the lead reads it to choose)",
+  noDescription: "description is missing: say in a few words what this task type is (the lead reads it to choose)",
   added: (a, description) => ({ description, body: typeof a.body === "string" ? a.body : "" }),
   edited: (cur, a, description) => ({ description, body: typeof a.body === "string" ? a.body : cur.body, ...cur.off ? { off: true } : {} }),
   turned: (cur, off) => ({ description: cur.description, body: cur.body, off }),
@@ -15529,10 +15534,10 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
                        (a typed line is one whole shell command; several go in a list like ["npm test", "npm run lint"];
                        "none" clears them)
                        a value over its limit is cut to it, and the answer says so
-  /${S.N.name}-settings role|kind NAME on|off|reset|remove|add
-                       turn a role or kind on or off, put a built-in one back, remove or add one
-  /${S.N.name}-settings role|kind NAME edit FIELD VALUE  change one field of it
-  /${S.N.name}-settings role|kind NAME save {json}  set several fields at once from JSON
+  /${S.N.name}-settings role|type NAME on|off|reset|remove|add
+                       turn a role or task type on or off, put a built-in one back, remove or add one
+  /${S.N.name}-settings role|type NAME edit FIELD VALUE  change one field of it
+  /${S.N.name}-settings role|type NAME save {json}  set several fields at once from JSON
   /${S.N.name}-settings git setup  git init on main if there is no repo, a .gitignore and a first
                        commit (never pushes)
   /${S.N.name}-settings orgmem delete N [KEY]  delete org-mem note number N
@@ -15569,12 +15574,12 @@ In the settings view: Enter on a row changes it: on/off flips, mode, notify, sco
   · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.
 In the panel nothing needs Esc: Enter on an empty text box cancels it (on the search it clears the
   search), and pick lists and pages have a Cancel or Back button. On the board list x clears a search.
-In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
+In an open task: b back · p pause · u resume · r retry · x drop · e run now (when it isn't running) · w watch the worker · n needs review on/off
   · y copy the task's content · z stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).
   · h already merged: marks a failed, waiting, paused or dropped task done whose work was merged by hand (checked with git first; nothing is merged or tested).
 In a backlog task: o move to todo · x drop · l role.
-On the board list a task's kind shows at the right end of its row ("[bug]", "[docs]"); a plain change shows nothing, and the role is never there (the task page shows it). The list rows show no try number; the band above the prompt (in every client) shows a later try as "↺3" right after the step's time ("T-5 ⊛ 3m ↺3"; nothing on try 1), and the task page shows "try 3/4". On the Live tab's rows, "⌕ × 2" means the checker sent the task back twice. A task to do that waits on others shows "waits for T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
+On the board list a task's type shows at the right end of its row ("[bug]", "[docs]"); a plain change shows nothing, and the role is never there (the task page shows it). The list rows show no try number; the band above the prompt (in every client) shows a later try as "↺3" right after the step's time ("T-5 ⊛ 3m ↺3"; nothing on try 1), and the task page shows "try 3/4". On the Live tab's rows, "⌕ × 2" means the checker sent the task back twice. A task to do that waits on others shows "waits for T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
 The board list goes top to bottom: NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
@@ -15611,7 +15616,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   ${TOOLS().map((t) => t.name).filter((n) => n !== "approve" && n !== "reject").join(" · ")}
   approve · reject (only for a task ready for review)
   scouts lists, adds, changes, removes or runs scouts; roles lists, adds, edits, resets,
-  removes or turns off / on worker roles; kinds does the same for the task kinds (roles are how you shape what a worker
+  removes or turns off / on worker roles; kinds does the same for the task types (roles are how you shape what a worker
   does: a role fills the {{role}} slot of the fixed, built-in worker prompt); stats shows time and token use;
   orgmem lists and changes the org-mem notes (agents only suggest notes; the lead decides what goes in);
   setup_git sets up git in a folder without it (only after you say yes).
@@ -15760,7 +15765,7 @@ ${S.W.askPopup ? `- Ask every question for the owner that isn't about one task (
 - In mode "review", ask the owner before every ${S.N.name} add, whatever the task comes from (the owner's words, a scout finding, a worker's report, your own idea): say in one or two lines what the task would be, and add it only after a yes. In mode "auto" you add tasks as usual. Plain answers, notes (add_details) and board actions (approve, pause, settings) need no asking.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - Work merged by hand: when a task's branch was merged outside the board (by the owner, or by you on the owner's word, e.g. its only failure was the merge tests timing out), don't drop it and don't let a new worker redo it: ${S.N.name} merged T-5 marks it done. ${S.N.name} checks with git that all its commits are in the branch it merges into and refuses with the reason if not; nothing is merged or tested, its folder and branch are cleaned up, and tasks waiting on it start. It works for a task that is to do, running, failed, waiting, paused, in review or dropped. Use it only after the owner's word or a rule the owner set.
-- Investigation or change (kind in ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself.
+- Investigation or change (the kind parameter of ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself.
 - An answered investigation ("T-5 is answered") waits in review for the owner to read its answer; it has nothing to merge. Tell the owner the answer in the chat, short and plain (read it with ${S.N.name} board task T-5), and offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "or answer on the board". On the owner's word: ${S.N.name} approve T-5 is Done (it ends done; its folder is removed, and its branch too unless it has commits from earlier tries, which are kept; the reply says so), ${S.N.name} approve T-5 with keep_note: true is Keep as a note (Done, plus a new docs task that writes docs/research/<topic>.md from the answer and merges as usual), and ${S.N.name} reject T-5 with their follow-up question is Ask more (a fresh try gets the question and the earlier answer).
 - A worker that tries to edit a file outside its task's files is refused (${S.N.name} records the path as a request) and stops; the task then waits for the owner, asking to allow those files. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you are told at once) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files another way (e.g. a shell command) fails its try at the merge's scope check.
 - A worker that needs the owner to decide something calls its own question tool, ${toolName("ask_owner")} (maybe with options, which the board shows as buttons), and stops; that tool is for workers only: you never call it (to make a task wait with your own question, use ${S.N.name} ask). The task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "symcc: T-5 needs you" (the project's name first) (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as numbered plain chat text, plus "or answer on the board". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
@@ -15782,8 +15787,8 @@ ${rolesLeadText(S.roles, S.N.name)}
 ${kindsLeadText(S.kinds, S.N.name)}
 - Manage worker roles with ${S.N.name} roles, never by writing ${S.N.dir}/roles/ files by hand: action list (the default) shows each role and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional model, skills, tools, checklist); edit changes what you give (a built-in role is copied to ${S.N.dir}/roles/ first); reset brings a built-in back; remove deletes an added role (ask the owner first); off / on turns a role off or on (${DEFAULT_ROLE} can't be turned off; checker can't be turned on or off and is never a task's role: the checker setting runs it). An off role is never picked for a new task.
 - Organizational memory (org-mem, ${S.N.dir}/org-mem.md) is short notes every new worker, checker and scout reads in its prompt. Agents only suggest notes; you decide what goes in, with ${toolName("orgmem")} (action list, add, replace, remove, topic). Every note has one topic you give when adding: ${TOPIC_RULES} The owner sees the notes on the Organizational memory page (a section at the bottom of the board's Live tab, not in Settings: newest notes and topics; Enter opens a topic, the [all] button next to "newest" opens all notes) and may delete them there. When a board update lists "Suggested for org-mem" for a task, decide briefly, on your own (don't ask the owner about each): add only what is useful to agents on other tasks in this project, true beyond that task, short (one plain sentence, at most about 100 characters, without a task id) and not already there (not even in other words); org-mem goes into every prompt, so prefer replacing an old note with a better one over adding, and replace it with the better one when a note there says nearly the same; most suggestions are skipped. Mention in one line what you added (or nothing). At ${ORG_MEM_MAX_LINES} lines add is refused: remove or replace an old note first.
-- Manage task kinds with ${S.N.name} kinds, never by writing ${S.N.dir}/kinds/ files by hand: action list (the default) shows each kind and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional body); edit changes what you give (a built-in kind is copied to ${S.N.dir}/kinds/ first); reset brings a built-in back; remove deletes an added kind (ask the owner first); off / on turns a kind off or on (change and investigation can't be turned off). An off kind is never picked for a new task, and ${S.N.name} add refuses it. Only change kinds when the owner asks.
-- Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board: with nothing it lists the open tasks and the backlog, and done / dropped only as counts; status (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or open) and search (words, matched like the panel's search, plus filter words last:N, top:N, since:2d, status:, kind:, role:, waits-on:T-n, blocks:T-n, stuck) narrow it, e.g. status: ["done"], search: "notify", or search: "last:5 status:done" for the 5 latest done tasks (not the whole list); with task it shows that task in full with its latest worker report (no need to read ${S.N.dir}/reports by hand).
+- Manage task types with ${S.N.name} kinds, never by writing ${S.N.dir}/kinds/ files by hand: action list (the default) shows each task type and where it comes from (built-in, replaced, added, off), list with name shows one in full; add (name, description, optional body); edit changes what you give (a built-in task type is copied to ${S.N.dir}/kinds/ first); reset brings a built-in back; remove deletes an added task type (ask the owner first); off / on turns a task type off or on (change and investigation can't be turned off). An off task type is never picked for a new task, and ${S.N.name} add refuses it. Only change task types when the owner asks.
+- Don't do the tasks' work yourself in the main conversation; let the workers do it. Talk about tasks by ID (T-3). Use ${S.N.name} board to see the board: with nothing it lists the open tasks and the backlog, and done / dropped only as counts; status (todo, doing, review, waiting, failed, paused, done, dropped, backlog, or open) and search (words, matched like the panel's search, plus filter words last:N, top:N, since:2d, status:, type: (the task type), role:, waits-on:T-n, blocks:T-n, stuck) narrow it, e.g. status: ["done"], search: "notify", or search: "last:5 status:done" for the 5 latest done tasks (not the whole list); with task it shows that task in full with its latest worker report (no need to read ${S.N.dir}/reports by hand).
 
 ### How to write replies
 Talk like a team lead about the board. News first: the first line says what happened, no lead-in ("T-743 merged", not "Good news: …").
@@ -15797,12 +15802,12 @@ Talk like a team lead about the board. News first: the first line says what happ
 - Question for the owner (in chat text): the question in one sentence, then the choices numbered, then "(or answer on the board)".
 - A worker's or checker's report: at most 3 short bullets of what matters to the owner (what changed for them, any limit or risk), not its file list.
 - Longer explanations (the owner asks how, why, WDYT): plain English, short sentences, a table or a sketch when it helps.`;
-var KIND_PARAM = () => ({ type: "string", description: `The kind of task: ${[...new Set([...BUILT_IN_KINDS.filter((n) => !S.kinds.some((k) => k.name === n && k.off)), ...kindNames(S.kinds)])].join(", ")}, or the owner's own (see your instructions for what each is for); change when unsure. Every kind but investigation runs like change (the default): the worker changes files, which are committed, tested and merged. investigation: the worker finds an answer and hands it back; nothing is committed, tested or merged, and it always waits for the owner to read it (even in mode auto). A researcher task is an investigation unless you give kind; use change (or docs) for a researcher when the owner wants a lasting document that later tasks will read.` });
+var KIND_PARAM = () => ({ type: "string", description: `The task type: ${[...new Set([...BUILT_IN_KINDS.filter((n) => !S.kinds.some((k) => k.name === n && k.off)), ...kindNames(S.kinds)])].join(", ")}, or the owner's own (see your instructions for what each is for); change when unsure. Every task type but investigation runs like change (the default): the worker changes files, which are committed, tested and merged. investigation: the worker finds an answer and hands it back; nothing is committed, tested or merged, and it always waits for the owner to read it (even in mode auto). A researcher task is an investigation unless you give kind; use change (or docs) for a researcher when the owner wants a lasting document that later tasks will read.` });
 var TOOLS = () => [
   {
     name: "board",
-    description: `Show the ${S.N.name} task board. With nothing: the open tasks and the backlog in full, done and dropped ones only as counts. With status and/or search: only the tasks that match (search takes filter words like last:5, top:3, since:2d, kind:bug, waits-on:T-3, blocks:T-3, stuck); limit / sort keep the newest or next-to-run ones. With task: that one task in full (also an archived one), with its latest worker report and the files of older tries' reports.`,
-    inputSchema: { type: "object", properties: { task: { type: "string", description: "A task id, e.g. T-12, to see in full with its latest report." }, status: { type: "array", items: { type: "string", enum: [...BOARD_STATUSES, "open"] }, description: 'Only tasks with one of these statuses; "open" = everything not done, dropped or backlog. E.g. ["done"] to see the done tasks.' }, search: { type: "string", description: `Words; only tasks matching every word (id, title, details, role, status, origin), the same way as the board panel's search. Filter words too: last:N (the N changed most recently, newest first), top:N (the next N to run), since:30m / 2h / 2d / 2026-11-18 (changed since), status:done (or open), kind:bug, role:tester, waits-on:T-3 (tasks waiting on T-3, directly or through a chain), blocks:T-3 (the not-done tasks T-3 still waits for), stuck (todo tasks that can't start: something they wait for is failed, paused, waiting, dropped or missing). E.g. "last:5 status:done" or "waits-on:T-3 status:todo".` }, limit: { type: "number", description: 'Show at most this many (the same as last:N, or top:N with sort "order").' }, sort: { type: "string", enum: ["newest", "order"], description: "newest: most recently changed first (as last:); order: what runs next first (as top:)." } } }
+    description: `Show the ${S.N.name} task board. With nothing: the open tasks and the backlog in full, done and dropped ones only as counts. With status and/or search: only the tasks that match (search takes filter words like last:5, top:3, since:2d, type:bug, waits-on:T-3, blocks:T-3, stuck); limit / sort keep the newest or next-to-run ones. With task: that one task in full (also an archived one), with its latest worker report and the files of older tries' reports.`,
+    inputSchema: { type: "object", properties: { task: { type: "string", description: "A task id, e.g. T-12, to see in full with its latest report." }, status: { type: "array", items: { type: "string", enum: [...BOARD_STATUSES, "open"] }, description: 'Only tasks with one of these statuses; "open" = everything not done, dropped or backlog. E.g. ["done"] to see the done tasks.' }, search: { type: "string", description: `Words; only tasks matching every word (id, title, details, role, status, origin), the same way as the board panel's search. Filter words too: last:N (the N changed most recently, newest first), top:N (the next N to run), since:30m / 2h / 2d / 2026-11-18 (changed since), status:done (or open), type:bug, role:tester, waits-on:T-3 (tasks waiting on T-3, directly or through a chain), blocks:T-3 (the not-done tasks T-3 still waits for), stuck (todo tasks that can't start: something they wait for is failed, paused, waiting, dropped or missing). E.g. "last:5 status:done" or "waits-on:T-3 status:todo".` }, limit: { type: "number", description: 'Show at most this many (the same as last:N, or top:N with sort "order").' }, sort: { type: "string", enum: ["newest", "order"], description: "newest: most recently changed first (as last:); order: what runs next first (as top:)." } } }
   },
   {
     name: "add",
@@ -15840,8 +15845,8 @@ var TOOLS = () => [
   },
   {
     name: "kinds",
-    description: `List, add, edit, reset, remove, turn off or turn on the task kinds (built-in ones in the plugin's kinds/ folder, the owner's own in ${S.N.dir}/kinds/<name>.md). action "list" (the default): every kind with its description and where it comes from (built-in, replaced = the owner's file over a built-in, added = the owner's own, off); with name, that kind in full (front matter and body). "add": writes ${S.N.dir}/kinds/<name>.md (name: letters, digits, - and _; description needed; optional body); refused when the name exists (use edit). "edit": changes what you give and keeps the rest; a built-in kind is first copied to ${S.N.dir}/kinds/<name>.md. "reset": removes the owner's file for a built-in name, so the built-in comes back. "remove": deletes an added kind's file (confirm with the owner first). "off": the kind is never picked for a new task and add refuses it (change and investigation can't be turned off; tasks that already have it keep it); "on" turns it back on. Only change kinds when the owner asks.`,
-    inputSchema: { type: "object", properties: { action: { type: "string", enum: ["list", "add", "edit", "reset", "remove", "off", "on"], description: "What to do; list when left out." }, name: { type: "string", description: "The kind, e.g. chore (letters, digits, - and _)." }, description: { type: "string", description: "For add / edit: what this kind of task is, in a few words (the lead reads it to choose)." }, body: { type: "string", description: "For add / edit: free text about the kind (the file's body)." } } }
+    description: `List, add, edit, reset, remove, turn off or turn on the task types (built-in ones in the plugin's kinds/ folder, the owner's own in ${S.N.dir}/kinds/<name>.md). action "list" (the default): every task type with its description and where it comes from (built-in, replaced = the owner's file over a built-in, added = the owner's own, off); with name, that task type in full (front matter and body). "add": writes ${S.N.dir}/kinds/<name>.md (name: letters, digits, - and _; description needed; optional body); refused when the name exists (use edit). "edit": changes what you give and keeps the rest; a built-in task type is first copied to ${S.N.dir}/kinds/<name>.md. "reset": removes the owner's file for a built-in name, so the built-in comes back. "remove": deletes an added task type's file (confirm with the owner first). "off": the task type is never picked for a new task and add refuses it (change and investigation can't be turned off; tasks that already have it keep it); "on" turns it back on. Only change task types when the owner asks.`,
+    inputSchema: { type: "object", properties: { action: { type: "string", enum: ["list", "add", "edit", "reset", "remove", "off", "on"], description: "What to do; list when left out." }, name: { type: "string", description: "The task type name, e.g. chore (letters, digits, - and _)." }, description: { type: "string", description: "For add / edit: what this task type is, in a few words (the lead reads it to choose)." }, body: { type: "string", description: "For add / edit: free text about the task type (the file's body)." } } }
   },
   {
     name: "orgmem",
@@ -15861,7 +15866,7 @@ var TOOLS = () => [
   },
   {
     name: "doctor",
-    description: `Check the project's ${S.N.dir}/ folder and git (like the owner's /${S.N.name}-doctor): old migration backups (the newest is kept), task branches of done or dropped tasks already in their branch, folders of finished tasks with no changes, stale git worktree entries, data files near the 4 MB read limit, stray files, and running tasks with no worker or a lead.json of a gone session. Without fix it only lists them, with sizes; each one that can be cleaned up has a short id made from what it is (b-T-5 a branch, w-T-5 a task folder, m-1101-1000 a backup by its date and time, p-worktrees the stale worktree entries). fix cleans up: "all", or the ids from the list (e.g. "b-T-5 m-1101-1000"); an id the list no longer offers is skipped and named, never matched to another item. Only give fix after the owner said yes in the chat (once for all, or for the items they picked). Branches with unmerged work, folders with uncommitted changes, reports, org-mem, scouts, roles and kinds are never deleted. While a merge runs it still lists (the merging task's folder and branch are marked "being merged"), but fix changes nothing until the merge is done.`,
+    description: `Check the project's ${S.N.dir}/ folder and git (like the owner's /${S.N.name}-doctor): old migration backups (the newest is kept), task branches of done or dropped tasks already in their branch, folders of finished tasks with no changes, stale git worktree entries, data files near the 4 MB read limit, stray files, and running tasks with no worker or a lead.json of a gone session. Without fix it only lists them, with sizes; each one that can be cleaned up has a short id made from what it is (b-T-5 a branch, w-T-5 a task folder, m-1101-1000 a backup by its date and time, p-worktrees the stale worktree entries). fix cleans up: "all", or the ids from the list (e.g. "b-T-5 m-1101-1000"); an id the list no longer offers is skipped and named, never matched to another item. Only give fix after the owner said yes in the chat (once for all, or for the items they picked). Branches with unmerged work, folders with uncommitted changes, reports, org-mem, scouts, roles and task types are never deleted. While a merge runs it still lists (the merging task's folder and branch are marked "being merged"), but fix changes nothing until the merge is done.`,
     inputSchema: { type: "object", properties: { fix: { type: "string", description: 'Only after the owner confirmed: "all", or the item ids from the list, e.g. "b-T-5 m-1101-1000".' } } }
   }
 ];
@@ -18723,10 +18728,10 @@ async function writeLead(host, text) {
 var readLeadText = (host) => host.fs.read(path(S.N.leadFile)).catch(() => null);
 var readLead = async (host) => parseLead(await readLeadText(host));
 async function refreshMe(host) {
-  if (!S.me.startsWith("session-"))
-    return;
   const id = await host.session.id().catch(() => "");
   if (!id || id === S.me)
+    return;
+  if (!S.me.startsWith("session-") && !(S.driving && !S.fresh && (await readLead(host))?.session === S.me))
     return;
   const old = S.me;
   S.me = id;
@@ -18739,6 +18744,23 @@ async function refreshMe(host) {
   });
   if (await host.fs.exists(path(S.N.boardFile)))
     await change(host, (b) => relabelSession(b, old, S.me));
+}
+async function carryDriver(host, old) {
+  if (!old || old === S.me)
+    return false;
+  let moved = false;
+  await locked(host, async () => {
+    const l = await readLead(host);
+    if (l && l.session === old) {
+      await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...l.handTo ? { handTo: l.handTo, ...l.handAt !== undefined ? { handAt: l.handAt } : {} } : {} }));
+      moved = true;
+    }
+  });
+  if (moved && await host.fs.exists(path(S.N.boardFile)))
+    await change(host, (b) => relabelSession(b, old, S.me)).catch(() => {
+      return;
+    });
+  return moved;
 }
 async function claimLead(host, fresh = false) {
   await refreshMe(host);
@@ -19563,6 +19585,8 @@ async function sessionStart(host) {
     S.home = await host.env("HOME").catch(() => {
       return;
     }) ?? "";
+    const oldMe = S.me;
+    const wasDriving = S.driving && !S.fresh && !S.offHere && !!oldMe;
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`);
     S.dam = await isDamSession(host);
     S.fresh = !await host.fs.exists(path(S.N.boardFile)).catch(() => false);
@@ -19584,6 +19608,10 @@ async function sessionStart(host) {
         return;
       });
     }
+    if (wasDriving && oldMe !== S.me)
+      await carryDriver(host, oldMe).catch(() => {
+        return;
+      });
     await startOffHere(host).catch(() => {
       return;
     });
@@ -19880,7 +19908,7 @@ function COMMANDS(features = ALL_FEATURES) {
     { name: `${S.N.name}-diff`, description: `Show what a ${S.N.name} task in review changed, or one file's diff: /${S.N.name}-diff T-5 [file]`, argumentHint: "<T-id> [file]" },
     { name: `${S.N.name}-scout`, description: `With no name, open the ${S.N.name} board panel on the scouts view and reload the scout files; run a scout now (/${S.N.name}-scout <name>), pause or resume it (/${S.N.name}-scout <name> pause|resume), or change it (/${S.N.name}-scout <name> every 30, model <model|none>, findings auto|backlog|default, prompt <instructions>); a new one: /${S.N.name}-scout <name> new <instructions>`, argumentHint: "[<name> [pause|resume|every N|model M|findings auto|backlog|default|prompt TEXT|new TEXT]]" },
     { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: paused (nothing runs), review = approve merge (finished work waits for you) or auto = auto merge (it merges on its own); no word switches review and auto`, argumentHint: "[paused|review|auto]" },
-    { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or kind, with on, off, reset or remove) changes a role or kind, role <name> add makes one, role <name> edit <field> <value> changes one part of it (save {"field":"value",...} several at once); /${S.N.name}-settings git setup sets up git (as the lead's setup_git)`, argumentHint: "[name value | role|kind <name> on|off|reset|remove | role|kind <name> add | role|kind <name> edit <field> <value> | role|kind <name> save {json} | git setup]" },
+    { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or type, with on, off, reset or remove) changes a role or task type, role <name> add makes one, role <name> edit <field> <value> changes one part of it (save {"field":"value",...} several at once); /${S.N.name}-settings git setup sets up git (as the lead's setup_git)`, argumentHint: "[name value | role|type <name> on|off|reset|remove | role|type <name> add | role|type <name> edit <field> <value> | role|type <name> save {json} | git setup]" },
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, time per stage, outcomes, by role, origin and day, with bar charts; inside (with a day range) counts only the work inside it; html writes them as a web page with charts and opens it: /${S.N.name}-stats [full|html] [7d [inside]|T-100..T-130]`, argumentHint: "[full|html] [7d [inside]|T-1..T-9]" },
     { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix b-T-5 m-1101-1000 (the items with those ids)`, argumentHint: "[fix [all|id ...]]" },
     { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept; "here" turns it off in this window only`, argumentHint: "[here]" },
@@ -20146,7 +20174,7 @@ async function leadGuideText(host) {
     return;
   const notDriving = S.driving ? "" : `
 
-This window does not drive the board now. When the owner asks about board work here, tell them plainly: "${notDrivingText(S.N.name)}".`;
+${notDrivingText(S.N.name)}`;
   const dam = S.dam ? `
 
 ${DAM_POST_LINE}` : "";
