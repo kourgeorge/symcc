@@ -1491,9 +1491,9 @@ unchanged.
   Dropped are folded headings (`▸ Backlog  3 `), closed until you click them. With nothing
   open the list says "All clear" and has one main button, `Tell the lead what to do next`,
   which puts "Next task: " in the prompt box (only when the box is empty).
-- **Footer**: a `Switch to approve merge` (or `Switch to auto merge`) button and a search box that
-  filters as you type, with `Clear search` while a search is on. No key hints and no hint
-  line on any page; buttons drop the key marks (`Back`, not `Back (b)`).
+- **Footer**: on the VS Code Tasks tab the search box (at the top, filters as you type, with
+  `Clear search` while a search is on) and no mode switch (it is on Live). No key hints and no
+  hint line on any page; buttons drop the key marks (`Back`, not `Back (b)`).
 - **A task's page** reads like a card. It uses the whole panel width and wraps every line,
   never cutting it with "…". From the top: the page header (see [the task page and the scout
   page](#the-task-page-and-the-scout-page)): `‹` and a `Tasks` button back to the list, the
