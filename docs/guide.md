@@ -1163,9 +1163,9 @@ came of it; line 4 Run now (not while it runs), Edit and Pause or Resume, with `
 at the end while it is paused.
 
 VS Code draws the same 4 lines with its own controls: `‹` and a `Tasks` back button, a
-`‹ 2 of 6 ›` pager, the title as a heading, the state as small chips (the status one filled in
-its color), the buttons (in one style, no red; the one main action, the first of line 4's
-first group, is VS Code's primary button; needs review is a button too), no divider in VS Code.
+`‹ 2 of 6 ›` pager, the title as a heading, the state as words (the status as a colored mark, then dim words,
+no pill), the buttons (in one style, no red; the one main action, the first of line 4's
+first group, is VS Code's primary button; needs review is a button too), no rule or divider in VS Code.
 
 #### The Branch section
 
@@ -1499,17 +1499,19 @@ unchanged.
 - **A task's page** reads like a card. It uses the whole panel width and wraps every line,
   never cutting it with "…". From the top: the page header (see [the task page and the scout
   page](#the-task-page-and-the-scout-page)): `‹` and a `Tasks` button back to the list, the
-  `‹ 2 of 6 ›` pager, the task ID and title as a heading, the state as small chips (`◆ answered:
-  read it`, in green, for an answered investigation), the action buttons in their groups (one
+  `‹ 2 of 6 ›` pager, the task ID and title as a heading, the state as words (the mark in its
+  color, then dim words: `◆` in green, then `answered: read it`, for an answered investigation), the action buttons in their groups (one
   style, no red; the one main action, such as `Approve`, `Retry` or `Pause`, is the primary
   button; needs review a button too), no divider. A scout's page does the same: `Run now`
   is its primary button.
-  What needs you comes next, in a box in its color: the **Question for you** (yellow) with its
-  answers as buttons and a box for your own answer (a file request has `Allow files` and
-  `Don't allow`); **Why it failed** (red); **Waiting for your files** (yellow).
-  Then the sections, each under a clear heading: **Details**, the same labelled rows as the
+  What needs you comes next, each under a bold heading with its mark in its color (no box, no
+  border): the **Question for you** (yellow `?`) with its answers as numbered links and a
+  box for your own answer (a file request has `Allow files` and `Don't allow`); **Why it
+  failed** (red `✗`); **Waiting for your files** (yellow). The Run now question and the role
+  list have no box either. Only a text box you type in keeps its own frame.
+  Then the sections, each under a plain bold heading: **Details**, the same labelled rows as the
   terminal and OpenCode task pages (Steps, Added, Priority, Role, Type, From, Why, Files, Into,
-  After, …, Tries) as a label and value list that wraps, each task it waits for a link that
+  After, …, Tries) as a label and value list that wraps (its labels share the 11 character column), each task it waits for a link that
   opens it; the **Branch** (the task's branch against main, as on the terminal, in the
   monospaced font); the **Answer** of an investigation; **What to do** (the details, drawn as
   Markdown); the **Changes** of a task in review; **History**, a timeline with the newest
