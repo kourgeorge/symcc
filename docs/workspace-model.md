@@ -1,7 +1,7 @@
 # The symcc workspace model
 
 The plan for symcc as a developer's workspace: one board over several repos, tasks that need
-no repo, tasks the owner does, and work that comes in from outside. The multi-repo work and
+no repo, and work that comes in from outside. The multi-repo work and
 the later build tasks follow this page.
 
 Written 2026-11-24 (task T-978). It rests on the owner's decisions of that day and on the
@@ -31,19 +31,19 @@ may have moved.
    can't be guessed.
 3. **A task need not belong to a project.** Research runs in a plain scratch folder and its
    answer comes back. A note or document is saved in the workspace. Nothing is merged.
-4. **Usually an agent does a task, sometimes the owner.** An owner task starts no worker. It
-   shows in a "Yours" group, and the owner presses Done. Agent tasks can wait on it with
-   `after`. It may have a due date, with one reminder.
-5. **Mostly developer work.** symcc is not a to-do app for personal life.
-6. **Outside work comes in through scouts.** Email, GitHub issues or Slack each get a scout.
-   Each scout sets whether its tasks start on their own or go to the backlog. Outside text is
-   always data, never instructions. A scout can require review before its tasks merge.
-7. **Each repo is tested alone,** with its own test command. There is no cross-repo
+4. **Mostly developer work.** symcc is not a to-do app for personal life.
+5. **Outside work comes in through scouts.** Email, GitHub issues or Slack each get a scout.
+   Whether a scout's findings start on their own or go to the backlog is the scout's existing
+   findings setting (`auto` or `backlog`, see [reference](reference.md#settings)). Outside text
+   is always data, never instructions. For a task from outside intake, the lead can set
+   `needs_review` so the owner approves it before it merges. There is no per-scout review
+   setting.
+6. **Each repo is tested alone,** with its own test command. There is no cross-repo
    integration test. A change across repos is split into linked tasks with `after`. A break
    between repos is fixed by a normal follow-up task.
-8. **Keep symcc's strength at the center:** safe, checked agent work on code (copy, guard,
+7. **Keep symcc's strength at the center:** safe, checked agent work on code (copy, guard,
    checker, tests, merge). Other kinds of work stay light.
-9. **Guards have one root: the workspace folder.** A worker may touch only its own copy. The
+8. **Guards have one root: the workspace folder.** A worker may touch only its own copy. The
    T-974 probe showed that the file guard, the shell check and the git guard already work this
    way when their root is the board folder. Worker copies are recognised by where they sit:
    `<workspace>/.symcc/worktrees/T-n`.
@@ -54,8 +54,8 @@ may have moved.
 |---|---|---|
 | Workspace | One folder, one board, one lead | The board, org-mem, scouts, roles and kinds stay board-wide, as today. |
 | Projects | The git repos below the workspace | Found by folder name. Only optional settings are stored. |
-| Work items, and who does them | Tasks for an agent or for the owner | Agent code task (copy, checks, merge), agent research or note (no merge), owner task (no worker). |
-| Inputs | Where tasks come from | The owner and the lead, plus scouts for outside sources (decision 6). |
+| Work items | Tasks, each done by an agent | Code task (copy, checks, merge), research or note (no merge). |
+| Inputs | Where tasks come from | The owner and the lead, plus scouts for outside sources (decision 5). |
 | Knowledge | What is remembered | Org-mem: short notes for agents, curated by the lead (`.symcc/org-mem.md`). Owner notes: answers kept as documents, for people (today "Keep as a note" writes `docs/research/<topic>.md`). |
 | Runners and hosts | What runs the agents and shows the board | Claude Code, OpenCode, the Node command line, and the Copilot host (started, not usable yet). See [Engine and clients](engine-and-clients.md). |
 
@@ -66,8 +66,8 @@ These exist today. In the workspace model they stay the same, except where said.
 | Rule | What it does | In a workspace |
 |---|---|---|
 | `priority` | -20 to 19, lower starts first ([reference](reference.md#how-it-works-step-by-step)) | Same, across all projects. |
-| `after` | A task starts only when every task it lists is merged | Works across projects, and on owner tasks (they count once Done). |
-| Mode | `auto`, `review`, `paused` ([reference](reference.md#modes)) | Board-wide. New: a scout may require review of its own tasks (decision 6). |
+| `after` | A task starts only when every task it lists is merged | Works across projects. |
+| Mode | `auto`, `review`, `paused` ([reference](reference.md#modes)) | Board-wide. The lead can set `needs_review` on tasks that come from outside intake; no new setting. |
 | Guard | A worker may change only its own copy and its listed files | Root is the workspace folder. Task files are relative to the project's repo (`README.md`, not `rubrica/README.md`), as the probe found. |
 | Checker | An agent that tries to break each change before tests | Same. Runs in the task's copy. |
 | Review | The owner approves or rejects before merge | Same. Also used for outside intake. |
@@ -87,10 +87,8 @@ not part of this build.
 
 | Change | Where | Meaning |
 |---|---|---|
-| `project` | each task | The folder name below the workspace, for example `rubrica`. Missing: the task needs no repo (research, a note, an owner task). |
+| `project` | each task | The folder name below the workspace, for example `rubrica`. Missing: the task needs no repo (research or a note). |
 | Per-project settings | board | Only what can't be guessed, for example `test_commands` and `docs_test_commands` for one repo. |
-| `for: owner` | each task | The owner does it. No worker starts. Shows in "Yours". |
-| `due` | each task | Optional due date for an owner task, with one reminder. |
 
 The exact shape (a `projects` list or a settings map by folder name) is left to the data task.
 Decision 2 says symcc keeps no repo list, so only projects with settings would be stored.
@@ -98,13 +96,18 @@ Decision 2 says symcc keeps no repo list, so only projects with settings would b
 ## Still open
 
 - **Where a worker copy lives.** Under the workspace (`<workspace>/.symcc/worktrees/T-n`, as
-  decision 9 and the probe assume) or inside the repo (`<repo>/.symcc/worktrees/T-n`, as
+  decision 8 and the probe assume) or inside the repo (`<repo>/.symcc/worktrees/T-n`, as
   today). Under the workspace keeps one guard root and one place to find copies.
 - **How a test command is found per repo.** Guessed from the repo's files, asked once and
   stored, or both. How the guess works is not decided.
 - **Whether a session opened inside a repo finds the workspace board above it.** Today symcc
   never looks above the session folder (T-860). A repo may also have its own board, so this
   needs a rule.
+
+## Left out for now
+
+- Tasks the owner does themselves (not now; every task is done by an agent).
+- Due dates, reminders and other scheduling, for tasks, notes or intake (not now).
 
 ## Build order
 
@@ -121,7 +124,6 @@ Each step depends on the one before. The probe has the files and tests for each.
 3. **Per-project git and tests.** Every git call runs in the task's repo (the probe counts
    about 110), git readiness is checked per project, the merge runs in the task's repo, and
    each repo uses its own test command.
-4. **Owner tasks and notes.** `for: owner`, the "Yours" group, Done by the owner, due date
-   and reminder; research and notes with no project.
+4. **Tasks with no project.** Research and notes that need no repo.
 5. **Intake.** Scouts for email, GitHub issues and Slack, each with its own start-or-backlog
-   choice and an optional review before merge.
+   choice (the existing findings setting). The lead can set `needs_review` on their tasks.
