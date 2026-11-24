@@ -2779,7 +2779,8 @@ test('T-967: add and change set a priority (a whole number from -20 to 19) and r
   const w = world()
   const [b] = boardWith('review')
   await saveBoard(w.$, b)
-  const add = (x: Record<string, unknown>) => runTool(w.$, 'add', { title: 'New', details: 'd', why: 'a test', origin_by: 'lead', ...x })
+  let n = 0
+  const add = (x: Record<string, unknown>) => runTool(w.$, 'add', { title: `New ${++n}`, details: 'd', why: 'a test', origin_by: 'lead', ...x })
   expect(String(await add({}))).toContain('added T-2')
   expect(find(await load(w.$), 'T-2')!.priority).toBe(0)
   expect(String(await add({ priority: -2 }))).toContain('added T-3')

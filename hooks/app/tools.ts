@@ -28,6 +28,10 @@ const TOPIC_RULES = 'reuse an existing topic when it fits (a new one only when n
 
 // ---------------- the lead's tools ----------------
 
+/** T-1024: an add with the title and details of a task added within this long answers that task instead of adding another. */
+const sameJson = (x: unknown, y: unknown): boolean => JSON.stringify(x) === JSON.stringify(y)
+const ADD_AGAIN_MS = 5 * 60_000
+
 /** The latest saved report of task `t` (see taskReports): its file and text; text null when the file can't be read. Null when there is none. */
 export async function latestReport($: Host, t: SymccTask): Promise<{ file: string; try: number; text: string | null } | null> {
   const r = taskReports(t).at(-1)
@@ -657,6 +661,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       let forced = false
       const own = scout && a.origin_by === 'scout' ? await scoutFindingsFor($, scout) : undefined
       let reviewMode = false
+      let again = false
       const [t, all] = await change($, b => {
         reviewMode = modeOf(b) === 'review'
         // check what the lead said first, then add the plugin's own evidence next to it
@@ -664,8 +669,20 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         // scout_findings backlog: a scout's finding goes to the backlog, whatever the lead asked
         forced = findingToBacklog(b, a.origin_by, own) && a.backlog !== true
         const [y, added] = addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, priority: priorityIn(a), needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true || forced, S.plan), role, kind, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into }, now(), S.N.dir)
+        // T-1024: a retried add (the first one timed out after it went through) must not make a second task: the same
+        // whole input within a few minutes, on a task that is not dropped or done, answers the task already there
+        const first = b.tasks.find(x => x.status !== 'dropped' && x.status !== 'done' && Date.parse(now()) - Date.parse(x.created_at) < ADD_AGAIN_MS
+          && x.title === added.title && x.details === added.details && sameJson(x.files, added.files) && sameJson(x.after, added.after)
+          && x.priority === added.priority && (x.status === 'backlog') === (added.status === 'backlog') && (x.needs_review ?? false) === (added.needs_review ?? false)
+          && (x.role ?? '') === (added.role ?? '') && (x.kind ?? '') === (added.kind ?? '') && x.merge_into === added.merge_into
+          && sameJson({ ...x.origin, evidence: undefined, at: undefined }, { ...added.origin, evidence: undefined, at: undefined }))
+        if (first) {
+          again = true
+          return [b, [first, b.tasks]] as [Board, [SymccTask, SymccTask[]]]
+        }
         return [y, [added, y.tasks]] as [Board, [SymccTask, SymccTask[]]]
       })
+      if (again) return `${t.id} ${t.title} was added just before by the same add, so nothing was added again`
       // a scout's finding: saved in that scout's latest run that reported, so the run lists it even once archived
       const og = originOf(t)
       if (og?.by === 'scout' && og.scout) await linkTaskToScoutRun($, og.scout, t.id, all)
