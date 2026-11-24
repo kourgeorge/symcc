@@ -579,3 +579,28 @@ test("T-991: the id swap leaves lead.json alone when another window drives now, 
   expect(parseLead(w.files.get(w.lead) ?? null)?.session).toBe('other')
   expect(w.toasts.filter(t => t.includes('drives it now'))).toEqual([])
 })
+
+test('T-1016: the tools and the status line give the same notice for "another window drives" and for "the window closed"', async () => {
+  const now = Date.now()
+  const driver = { session: 'a', since: now - 5 * 60000, beat: now - 3 * 60000 } as never
+  expect(offHereAnswer('symcc', 'other', driver, now)).toBe(`symcc is off in this window: ${offStatusLine('symcc', false, 'other', driver, now)}.`)
+  expect(offHereAnswer('symcc', 'gone')).toBe(`symcc is off in this window: ${offStatusLine('symcc', false, 'gone')}.`)
+})
+
+test('T-1016: the driving window gets a new session id: it keeps driving, lead.json gets the new id, tools still work', async () => {
+  S.root = ROOT
+  S.me = 'a'
+  let id = 'a'
+  const w = world('a')
+  ;(w.host.session as { id: () => Promise<string> }).id = async () => id
+  await saveBoard(w.host, emptyBoard())
+  expect(await claimLead(w.host)).toBe(true)
+  expect(parseLead(w.files.get(w.lead)!)?.session).toBe('a')
+  id = 'b'
+  expect(await claimLead(w.host)).toBe(true)
+  expect(S.me).toBe('b')
+  expect(S.driving).toBe(true)
+  expect(parseLead(w.files.get(w.lead)!)?.session).toBe('b')
+  const r = await toolCall(w.host, toolName('board'), undefined, {})
+  expect(String((r as { result?: unknown })?.result ?? '')).not.toContain('off in this window')
+})

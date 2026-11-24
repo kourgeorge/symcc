@@ -34,9 +34,11 @@ export const readLead = async (host: Host) => parseLead(await readLeadText(host)
  */
 /** T-984: while this window still holds a made-up session id (the host could not answer at start), ask again; swap in the real one. */
 async function refreshMe(host: Host) {
-  if (!S.me.startsWith('session-')) return
+  // T-1016: also when the same window got a new id (e.g. after a summary): it keeps driving under the new id
   const id = await host.session.id().catch(() => '')
   if (!id || id === S.me) return
+  // a real id that changed: only the window that holds lead.json is the same window (others just have another id)
+  if (!S.me.startsWith('session-') && !(S.driving && !S.fresh && (await readLead(host))?.session === S.me)) return
   const old = S.me
   S.me = id
   if (!S.driving || S.fresh) return

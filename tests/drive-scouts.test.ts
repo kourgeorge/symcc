@@ -26,6 +26,7 @@ function world(o: { agents?: HostAgent[] } = {}) {
   const toasts: string[] = []
   const later: (() => void)[] = []
   const w = fakeHost({
+    session: { id: async () => S.me },
     fs: {
       exists: async (p: string) => files.has(p) || [...files.keys()].some(k => k.startsWith(`${p}/`)),
       read: async (p: string) => {
