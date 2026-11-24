@@ -2781,6 +2781,29 @@ The marketplace file is `.github/plugin/marketplace.json`, and the plugin's mani
 - **Updates:** `copilot plugin marketplace update symcc`, then `copilot plugin update symcc@symcc`. Remove it with `copilot plugin uninstall symcc@symcc`.
 - **Keep the board local,** as in Claude Code: `echo ".symcc/" >> .gitignore`.
 
+### Show symcc's status line in Copilot's terminal
+
+Copilot CLI can draw a status line under its prompt from a command you name. symcc ships one, `hooks/copilot/band.ts`, that prints the same one line Claude Code shows (for example `symcc: ⏵ auto merge · ...`). It needs [bun](https://bun.sh); plain Node can't run it.
+
+Add this to `~/.copilot/settings.json`, with `<plugin folder>` being the folder symcc is in (your clone, or where Copilot installed it):
+
+```json
+"statusLine": { "type": "command", "command": "bun <plugin folder>/hooks/copilot/band.ts" }
+```
+
+The command looks for `.symcc/board.json` in the folder Copilot runs it from, then in each folder above. Outside a symcc project it prints nothing. Two optional environment variables change what it shows:
+
+- `SYMCC_ROOT=<project folder>`: use this project when Copilot runs the command from some other folder.
+- `SYMCC_SESSION=<session id>`: this window's session id. With it, a window that doesn't drive the lead shows who does. Without it, the line always says this window drives.
+
+For example: `"command": "SYMCC_ROOT=/path/to/project bun <plugin folder>/hooks/copilot/band.ts"`.
+
+Limits:
+
+- It never shows when the next scout starts ("next scout X in Nm"): those times live only inside the running symcc, not in files on disk.
+- The branch comes only from a plain `.git` folder (its `.git/HEAD` file). Where `.git` is a file, as in a git worktree, no branch is shown.
+- It shows in Copilot's terminal only, not in the Copilot desktop app.
+
 ### Your own model provider (BYOK)
 
 - The `COPILOT_PROVIDER_*` and `COPILOT_MODEL` variables you start Copilot with reach symcc's workers, scouts and checkers too (each runs in a copilot process of its own, started with the extension's environment).
@@ -2790,7 +2813,7 @@ The marketplace file is `.github/plugin/marketplace.json`, and the plugin's mani
 ### What works and what doesn't yet
 
 - **Works:** the lead's tools (`symcc_board`, `symcc_add` and the rest), board updates that wake the lead (a normal one when it is idle or at the end of its turn, an urgent one at its next tool call), workers, scouts and checkers as Copilot sessions of their own, each in its task's worktree with symcc's guard on its edits and shell commands.
-- **No board panel and no band:** `/symcc` prints the board as text in the chat, `/symcc-tasks` the short list and `/symcc-status` the Live tab.
+- **No board panel:** the status line is opt-in (see [Show symcc's status line in Copilot's terminal](#show-symccs-status-line-in-copilots-terminal)). `/symcc` prints the board as text in the chat, `/symcc-tasks` the short list and `/symcc-status` the Live tab.
 - **`copilot -p` needs `--allow-all`:** in `-p` mode there is nobody to approve an extension, so Copilot loads no extension at all, symcc included: no `symcc_*` tools and no `/symcc` commands. It prints "Denied, no one to approve extension permission (plugin:symcc:symcc)". Add `--allow-all` (or `--allow-all-tools`), for example `copilot --experimental --allow-all -p "Call the symcc_board tool"`; then the tools work. Even then, a `/symcc ...` prompt in `-p` goes to the model as plain text, so ask the lead in words ("show the board"). The interactive CLI needs neither.
 - **After `/clear`** Copilot restarts the extension; the board and the lead's lock are on disk, so symcc picks up where it was.
 - **Check that a worker's shell runs in its worktree:** symcc rewrites each of an agent's shell commands to run from the agent's own folder. A worker told to run `cd / ; pwd` should still print its worktree's path (`.symcc/worktrees/T-n`), not `/`.

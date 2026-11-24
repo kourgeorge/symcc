@@ -32,7 +32,24 @@ export const readLead = async (host: Host) => parseLead(await readLeadText(host)
  * steps down if another session drives. `fresh` = this copy of the plugin just loaded,
  * so any worker it had is gone. Returns whether this session drives now.
  */
+/** T-984: while this window still holds a made-up session id (the host could not answer at start), ask again; swap in the real one. */
+async function refreshMe(host: Host) {
+  if (!S.me.startsWith('session-')) return
+  const id = await host.session.id().catch(() => '')
+  if (!id || id === S.me) return
+  const old = S.me
+  S.me = id
+  if (!S.driving || S.fresh) return
+  // driving under the made-up id: lead.json and the doing tasks move to the real id (as handOver does after /clear)
+  await locked(host, async () => {
+    const l = await readLead(host)
+    if (!l || l.session === old) await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...(l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}) }))
+  })
+  if (await host.fs.exists(path(S.N.boardFile))) await change(host, b => relabelSession(b, old, S.me))
+}
+
 export async function claimLead(host: Host, fresh = false): Promise<boolean> {
+  await refreshMe(host)
   // T-793: a window turned off here never drives (nor takes driving back)
   if (S.offHere || S.fresh) {
     S.driving = false
@@ -221,11 +238,15 @@ export async function startOffHere(host: Host) {
   S.sawOther = false
   S.takeoverTold = false
   S.missingSince = null
+  // T-984: the session id as the host says it now; a window that started with a made-up id (the host could not answer
+  // yet) must still know itself in lead.json, or it would take its own fresh heartbeat for another window's
+  const id = await host.session.id().catch(() => '')
+  if (id) S.me = id
   const b = await load(host).catch(() => null)
   if (!b || b.enabled === false) return
   const text = await readLeadText(host)
   const live = liveDriver(text, Date.now())
-  if (!live || live === S.me) return
+  if (!live || live === S.me || parseLead(text)?.session === S.me) return
   S.offHere = true
   S.offWhy = 'other'
   S.enabledNow = false
@@ -335,11 +356,20 @@ export const GONE_GRACE_MS = 90_000
 
 /** The heartbeat of a window off here: it drives nothing; it looks whether the window with symcc on is gone and tells the owner once. */
 export async function offHereBeat(host: Host, nowMs = Date.now()) {
+  await refreshMe(host)
   // a hand-over that landed on this window (it asked with /drive before turning off): give the board straight back
   await locked(host, async () => {
     const l = await readLead(host)
     if (l && l.session === S.me && l.handFrom) await host.run(['rm', '-f', path(S.N.leadFile)])
   }).catch(() => undefined)
+  // T-984: lead.json names this very window (stale or not) and it was not turned off on purpose: it drives again
+  if (S.offWhy !== 'off' && parseLead(await readLeadText(host))?.session === S.me) {
+    const b = await load(host).catch(() => null)
+    if (b && b.enabled !== false) {
+      await enableHere(host, () => undefined).catch(() => undefined)
+      return
+    }
+  }
   const text = await readLeadText(host)
   const live = liveDriver(text, nowMs)
   seeDriver(text)
