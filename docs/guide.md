@@ -1253,9 +1253,10 @@ words as bold headings with the same spacing):
   `max_parallel`. It never sits under the task rows. When the page is shorter than the screen (the panel in VS Code), the
   empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
-- In VS Code (T-1003) a running lane is two lines: the mark, the id (a link) and the full title (cut with `…` only when
+- In VS Code (T-1003, T-1017) a running lane is three lines: the mark, the id (a link) and the full title (cut with `…` only when
   the panel is too narrow), then, indented under the title, the train and the time at the right (`try 2 · 12m`; "try"
-  only from the second try). One header row above all the lanes names the stations in full words (`work check queue tests
+  only from the second try), then a dim numbers line (the same text as the terminal's second row below, with the task
+  type at the right end; the `⏱` time is left out when line 2 shows it, and the type goes when the row is too narrow). One header row above all the lanes names the stations in full words (`work check queue tests
   done`, with `you` when a task waits for you), so every train lines up under it. VS Code has no legend line and no
   folding sections: the headings are plain bold words. Status is split into Mode (with a `change` link), Scouts, Branch
   and Tests rows; Organizational memory is one line with an `All notes` link. When nothing runs: `All done`, `Up next

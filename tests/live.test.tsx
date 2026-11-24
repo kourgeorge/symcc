@@ -742,6 +742,27 @@ for (const bodyColumns of [40, 64, 100])
     await ui.unmount()
   })
 
+// T-1017: a running VS Code lane has a third dim line, core's numbers line with the task type at the right end
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1017: VS Code lanes have a third line with the tokens and the task type, never wider than the panel (${bodyColumns} columns)`, async ($, on) => {
+    seedBoard(on, { view: liveView(TRAINS) })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.press({ key: 'tab-live' })
+    const inner = liveInner(bodyColumns)
+    const row = await ui.find({ key: 'live-numbers:T-712' })
+    const text = String(row?.text ?? '')
+    expect(text).toContain('⌀')
+    if (bodyColumns >= 64) expect(text).toContain('try 1/')
+    expect(textWidth(text) + 2).toBeLessThanOrEqual(inner)
+    // the type at the right end (when the row has room), and no Text of only spaces
+    if (bodyColumns >= 64) expect(text.trimEnd()).toMatch(/\S+$/)
+    const pieces = (await ui.findAll({ type: 'Text' })).filter(t => String(t.text ?? '').length > 0 && !String(t.text).trim())
+    expect(pieces).toEqual([])
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  })
+
 // T-767: a running lane starts "▶ ", its mark, id and title bold in the accent color; a waiting train's row is all dim.
 for (const surface of ['terminal', 'desktop', 'mobile'] as const)
   test(`T-767: on the ${surface} Live tab a running lane is "▶ " with its id and title bold in the accent color, and a waiting train is dim`, async ($, on) => {
