@@ -179,7 +179,7 @@ In an open task: b back · p pause · u resume · r retry · x drop · w watch t
   · l pick the worker role (a task to do, paused, failed or in the backlog).
   · h already merged: marks a failed, waiting, paused or dropped task done whose work was merged by hand (checked with git first; nothing is merged or tested).
 In a backlog task: o move to todo · x drop · l role.
-On the board list a task's kind shows at the right end of its row ("[bug]", "[docs]"); a plain change shows nothing, and the role is never there (the task page shows it). The list rows show no try number; the band above the prompt (in every client) shows a later try as "↺3" right after the step's time ("T-5 ⊛ 3m ↺3"; nothing on try 1), and the task page shows "try 3/4". On the Live tab's rows, "⌕×2" means the checker sent the task back twice. A task to do that waits on others shows "waits for T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
+On the board list a task's kind shows at the right end of its row ("[bug]", "[docs]"); a plain change shows nothing, and the role is never there (the task page shows it). The list rows show no try number; the band above the prompt (in every client) shows a later try as "↺3" right after the step's time ("T-5 ⊛ 3m ↺3"; nothing on try 1), and the task page shows "try 3/4". On the Live tab's rows, "⌕ × 2" means the checker sent the task back twice. A task to do that waits on others shows "waits for T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
 The board list goes top to bottom: NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
@@ -998,6 +998,9 @@ export async function saveSettings($: Host, a: SettingsInput, who: string): Prom
   return { changes, mode }
 }
 
+/** T-970: the settings whose change the lead is told of (ownerSettings): the ones that change the work. */
+const WORK_SETTINGS = new Set(['mode', 'max_parallel', 'test_commands', 'docs_test_commands', 'test_minutes', 'checker', 'scout_findings', 'max_minutes', 'auto_retries', 'tests_with_changes'])
+
 /** The owner changes settings (/<name>-settings or the Settings view): the answer to show, e.g. "max_parallel set to 5"; the lead is told too. */
 export async function ownerSettings($: Host, a: SettingsInput, where: string): Promise<string> {
   // the on/off switch is the owner's alone and works like /<name>-disable and /<name>-enable
@@ -1013,9 +1016,11 @@ export async function ownerSettings($: Host, a: SettingsInput, where: string): P
   const n = r.changes.some(c => c.name === 'notify') ? readNotify(a.notify) : null
   const set = n ? notifySet(n) : null
   if (set) void playSample($, set)
-  const parts = r.changes.map(settingSetText)
-  if (r.mode) parts.push(`mode set to ${settingShown('mode', String(a.mode))}: ${r.mode}`)
+  const modeLine = r.mode ? [`mode set to ${settingShown('mode', String(a.mode))}: ${r.mode}`] : []
+  const parts = [...r.changes.map(settingSetText), ...modeLine]
   const text = parts.join('; ') || 'nothing changed'
-  if (parts.length) noteForLead(`The owner changed the settings: ${brief(text)}`)
+  // T-970: the lead hears only of settings that change the work (not notify, open_on_start, archive_days)
+  const told = [...r.changes.filter(c => WORK_SETTINGS.has(c.name)).map(settingSetText), ...modeLine]
+  if (told.length) noteForLead(`The owner changed the settings: ${brief(told.join('; '))}`)
   return text
 }
