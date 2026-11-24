@@ -2,11 +2,161 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## Unreleased
+
+### Added
+- Stale tasks: a worker on an old or backlog task first checks that it still makes sense, with a "what changed since" part in its prompt. On hosts without symcc tools it writes its question in the report instead.
+- Two example scouts ship with symcc: org-mem-review and backlog-review.
+- OpenCode Tasks list: the backlog's "… N more" row can be reached, and Enter or a click shows the whole backlog. Open Done shows today's tasks, then one folded row per older day ("▸ Yesterday · 6 done").
+
+### Changed
+- Live tab: the mode line ("⏵ auto merge · agents 1/3 busy · ⌕ scouts · next: …") is now the first row of ▍Today, as "Now: …".
+- Band task rows show the try as "↺3" instead of "(try 3)". On Live rows the checker send-back count is "⌕×N", so ↺ means only tries.
+- Live train rows: the clock comes first on the second line, and the tokens per agent sit in ‹ ›.
+- The Today sparkline has no spaces between the hour labels and the graph ("00▕▁▂▄▃▁···▏24").
+- The "✧ = an agent works here · ⌀ = tokens" legend is off the task lists and is the very last line of the page, below the key line.
+- Live tab: no empty line under TASKS while task rows run.
+- Commands: `/symcc-scouts` is gone (`/symcc-scout` with no name does the same), and `/symcc-enable` no longer takes a "here" word (it always turns symcc on in this window). `/symcc-disable here` stays.
+- Claude Code: checkers get their own agent type without the scouts tool, like on OpenCode.
+- Guide: `/symcc-answer` is OpenCode only; it says how to answer a waiting task in Claude Code.
+- Code tidy-ups with no change in behavior.
+
+## 0.5.36 (2026-11-23)
+
+### Added
+- Live tab "All done": the next 3 backlog items are listed, and the lead suggests some more.
+- A follow-up of an investigation gets the parent's answer in the worker's folder.
+
+### Changed
+- Live tab: the "✧ = an agent works here · ⌀ = tokens" legend sits at the bottom of the screen.
+- DAM (Claude Code from a Slack thread): the Slack line is on only in a DAM Slack session, not in DAM terminal windows.
+
+### Fixed
+- OpenCode: a failed worker's real error (for example "Free usage limit reached") is kept in the try's note, history and the lead's message.
+- Claude Code: DAM sessions and scratch git under /var/folders work (PLATFORM_HARNESS and TMPDIR are passed through).
+
+## 0.5.35 (2026-11-23)
+
+### Added
+- Under DAM, the lead posts board updates and "needs you" to Slack. A short checklist lets you try DAM's Slack side once.
+
+## 0.5.34 (2026-11-23)
+
+### Added
+- Scouts: each scout's findings choice (auto, backlog or board default) is shown and can be switched with a key, in every client.
+- Live Branches rows show the task's state (paused, failed, waiting, in review, running).
+
+### Changed
+- Live section headings look like "─── ❯ BRANCHES ───…".
+- Task page header: the task id is always orange, whatever the status.
+- The Roles page (and the Kinds page) is a clean table, one line per role.
+- Answer box on a waiting task's page: long text and a long question stay readable while you type.
+
+### Fixed
+- Scouts were cut off mid-run with "no record of this agent".
+
+## 0.5.33 (2026-11-23)
+
+### Added
+- `/symcc-tasks` prints a clear task list in the chat, in every client; `/symcc-board` opens the board.
+- New `/symcc-status`: the Live tab's picture as text in the chat, in every client.
+- Roles can be marked `code: false` for prose-only work, and there is a built-in writer role. Such roles still run the docs checks (the `docs_test_commands` setting) instead of skipping every test.
+- OpenCode Tasks search finds done and dropped tasks by their details and request, like Claude Code.
+
+### Changed
+- An empty TASKS section says why nothing runs and what to do next (Live, band, `/symcc-status`).
+- Tasks list rows: one space between parts and the try as "(try 3)", like the band.
+- The paused idle line names a way out that works where it is shown, not a bare "m".
+- OpenCode pages: the "waiting for your files" box on the task page, and the question page's title and "asked by" line.
+- `.md` files in `prompts/` or `instructions/` folders count as agent instructions, not prose.
+
+### Fixed
+- Board: you could not type into "Ask more", and an answered investigation ended as Done.
+
+## 0.5.32 (2026-11-23)
+
+### Added
+- Scouts can list the other scouts (a read-only scouts tool).
+
+### Changed
+- A smaller board view: finished tasks are always slimmed.
+
+## 0.5.31 (2026-11-23)
+
+### Added
+- `/symcc-init` without git creates and shows the board, flags "no git here", offers to set git up and helps install it.
+- Scouts: findings go to auto or to the backlog per scout, with the board setting as the default.
+- Live TODAY: a short dim "yesterday" line and a "last 7 days" line.
+
+### Changed
+- symcc runs only where `.symcc` is in the start folder; it no longer looks in parent folders, and gives a quiet hint otherwise.
+- A folder with no board stays untouched: OpenCode's `view.json`, `/symcc-stats` and `/symcc-doctor` write nothing there.
+- `/symcc-enable` and the Settings "enabled" switch turn symcc on in this window too, no "here" needed.
+- Board times count only real work: no hours while Claude Code was closed, and steps show their own time. A queued worker start never waits for hours, and the wait is not try time.
+- Live lanes: no token bar; they show ⌀ used, × median, who spent it and the task's ⏱ time. The task page header has a ⏱ before the step's time.
+- Live org-mem section: no key hint and no m key; an [all] button next to "newest".
+- Band rows: one space between parts, and the try as "(try 2)".
+- The Roles page has the same header as task and scout pages, and a clear "what changed from built-in" part.
+- The over-time check uses the try's active time, as the guide says.
+- Command help and reference list `/symcc-scout <name> findings`.
+
+### Fixed
+- A slow `git --version` on a busy machine was taken as "git is not installed" and stopped all work.
+- Missing git on a Mac: git is no longer re-run every 2 minutes (it opened Apple's install pop-up again and again).
+- OpenCode web: `/symcc-…` commands were listed but did nothing.
+- A worker that symcc itself stopped (reload, takeover, restart) no longer fails its try as an API error.
+- A reopen keeps the time-limit state ("Stop it" and an open "more time?").
+- Old data written by an older symcc copy: at most one backup an hour, and a warning instead of migrating again.
+
+## 0.5.30 (2026-11-22)
+
+### Added
+- `/symcc-init`, like `git init`: symcc runs only where a `.symcc` folder is found. The board panel opens by itself when a new project is set up. In a second window it says this window is off here.
+- `/symcc-stats`: time and token spread per task.
+- Live mode line: shows running scouts and the next scout due.
+
+### Changed
+- Agents start through a hidden starter agent, without the "OK" or "Prompt dropped by a hook" lines reaching the lead; the drop line is just "▸ agent started".
+- Live lanes show each task's real path (investigations, docs-only, needs review), and a ✓ before the id of a just-merged task.
+- Live tab: ⌀ is the token sign, "avg" marks averages, and the hour sparkline has a "⌀/h" label. The who-spent bar goes lead, workers, checkers, scouts. A short dim line sits above the key line.
+- Band: no "checker" or "work" word where the icon already says it.
+- Worker prompts have clear sections, a tries table and the owner's words.
+- Saved data cleanup (parts 3 to 5): simpler history, try and question records.
+
+### Fixed
+- Urgent: the question-record migration ran again on every board change, with a new 5 MB backup each time.
+
+## 0.5.29 (2026-11-22)
+
+### Changed
+- The board key line sits right under the task lanes on every board.
+- Board updates that only start tasks no longer ask the lead to act or reply.
+
+### Fixed
+- Claude and VS Code task pages show a slimmed task's full text.
+
+## 0.5.28 (2026-11-22)
+
+### Changed
+- Saved data cleanup (part 2): a try's agent list is the only store of its agents and tokens.
+
+### Fixed
+- The board panel view stays under Claude Code's 4 MB limit.
+
+## 0.5.27 (2026-11-22)
+
+### Changed
+- Mode names are "auto merge" and "approve merge" everywhere; the band summary reads "agents busy · tasks waiting · completed today".
+- Live tab ▍Today: one token total for everyone, "busiest hour" and "$ this session". The hour sparkline always spans the whole day, 00 to 24, and goes at the end of the time line. TODAY comes after BRANCHES.
+- Live tab: a thin dim rule after each section title, no bar on the org-mem count, waiting tasks' ids also orange, and org-mem topic labels in their own color.
+- A task's board question shows the lead's wording when the lead asks it in the chat.
+- `/symcc-doctor` moves your old data to the new shape once (with a backup); the migrations on every load are gone.
+
 ## 0.5.26 (2026-11-22)
 
 ### Added
-- One lead per project: a window opened while another live window has symcc on starts without symcc (plain Claude). `/symcc-disable here` and `/symcc-enable here` turn symcc off or on in one window only, kept in that window's session, not in `board.json`. When the symcc window closes, the off-here windows say so once and wait for `/symcc-enable here`; if nobody does within 15 minutes, one of them plays the "needs you" notice once.
-- A new project (a folder with no `.symcc/board.json`) starts with symcc off, like plain Claude, and writes nothing, until you run `/symcc-enable`, which creates the board there. The band and status line say `symcc is not set up here · /symcc-enable to start it`. Projects that already have a board start on as before.
+- One lead per project: a window opened while another live window has symcc on starts without symcc (plain Claude). `/symcc-disable here` turns symcc off in one window only, kept in that window's session, not in `board.json`; `/symcc-enable` turns it back on there. When the symcc window closes, the off-here windows say so once and wait for `/symcc-enable`; if nobody does within 15 minutes, one of them plays the "needs you" notice once.
+- A new project (a folder with no `.symcc/board.json`) starts with symcc off, like plain Claude, and writes nothing, until you set it up there with `/symcc-init` (see 0.5.30). `/symcc-enable` never creates a board. Projects that already have a board start on as before.
 - Live tab: a NEEDS YOU section at the top while something waits for you.
 
 ### Changed
