@@ -11,7 +11,6 @@ import { SCOUTS, SCOUTS_VIEW, seedScouts, seedRolesKinds } from './scouts-settin
 import { ran, readText } from './fakes'
 import type { On } from 'claude-code'
 import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
-import { CLICK_HINT } from '../hooks/claude/ui/surface'
 import { reportStart, scoutRowEnd } from '../hooks/claude/ui/vscode-scouts'
 import { vsRowRoom } from '../hooks/claude/ui/vscode-list'
 import { scoutListRows } from '../hooks/board'
@@ -134,7 +133,7 @@ test('T-697 the Scouts list in VS Code at width 50: one line per scout, the term
   seedScouts(on, 'scouts')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const tree = await ui.drawn()
-  expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Click a button, or Tab to it and press Enter.' })).toBeUndefined()
   for (const re of KEY_HINTS) expect(texts(tree).filter(s => re.test(s)), `scouts list ${re}`).toEqual([])
   const room = vsRowRoom(50)
   const rows = scoutListRows(SCOUTS as never, T0, room, 2, 'backlog')
@@ -221,7 +220,7 @@ for (const s of SCOUTS) {
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
     const tree = await ui.drawn()
     readable(tree, s.name)
-    expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'Click a button, or Tab to it and press Enter.' })).toBeUndefined()
     // T-751: the page header: ‹ Scouts and its place in the list, the name, the facts as chips, the buttons in groups
     expect((await ui.find({ key: 'scout-back' }))?.props.label).toBe('Scouts')
     const facts = texts(await ui.find({ key: 'vs-state' })).join(' ')

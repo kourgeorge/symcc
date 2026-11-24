@@ -212,7 +212,7 @@ test('T-751: in VS Code the same header: Back and a pager, the title, state chip
   seedRich(on, 'T-501')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const h = await header(ui, true)
-  expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions', 'vs-header-rule'])
+  expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions'])
   expect((await ui.find({ key: 'back' }))?.props.label).toBe('Tasks')
   expect(textOf(await ui.find({ key: 'vs-back' }))).toMatch(/^‹/)
   const place = placeIn(LIST, 'T-501')!
@@ -270,7 +270,7 @@ for (const surface of ['terminal', 'desktop', 'mobile', 'vscode'] as const)
       await ui.press({ key: 'next-key' })
       await ui.redraw()
     } else {
-      expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions', 'vs-header-rule'])
+      expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions'])
       expect((await ui.find({ key: 'scout-back' }))?.props.label).toBe('Scouts')
       for (const b of kids(await ui.find({ key: 'vs-actions' })).filter(n => n.type === 'Button')) expect(b.props?.variant, keyOf(b)).toBe(keyOf(b) === 'scout-run' ? 'primary' : 'secondary')
       await ui.press({ key: 'next' })

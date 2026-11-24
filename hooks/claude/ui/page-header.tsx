@@ -116,10 +116,8 @@ export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
   const chip = (key: string, g: Seg[], first: boolean) =>
     <Box key={key} flexDirection="row">
       {first ? (
-        // T-973: the status pill in the one badge look of the VS Code board (vsBadge in vscode.tsx): a rounded Box
-        <Box key={`${key}-pill`} flexDirection="row" flexShrink={0} paddingX={1} borderStyle="round" borderColor={C(chipTone(g))} backgroundColor={C(chipTone(g))}>
-          <Text bold size="caption" color={C('inverseText')}>{g.map(x => x.text).join('').trim()}</Text>
-        </Box>
+        // T-1002: the status as plain bold words in its color (no pill)
+        <Text key={`${key}-status`} bold size="caption" color={C(chipTone(g))}>{g.map(x => x.text).join('').trim()}</Text>
       ) : (
         <Text size="caption" wrap="wrap">
           {g.map((x, i) => (
@@ -163,9 +161,6 @@ export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
       </Box>
       <Box key="vs-actions" flexDirection="row" flexWrap="wrap" columnGap={ITEM_GAP} rowGap={1}>
         {inGroups(hd.buttons).flatMap((g, i) => [...(i ? [<Text key={`vs-gap-${i}`}>{'   '}</Text>] : []), ...g.map(button)])}
-      </Box>
-      <Box key="vs-header-rule" flexDirection="column">
-        <Text wrap="truncate" color={C('ide')}>{headerRule(pane.width)}</Text>
       </Box>
     </Box>
   )
@@ -262,9 +257,6 @@ export function vsSimplePageHeader(pane: PaneParts, hd: SimpleHeader): RenderChi
           {hd.buttons.map(b => <Button key={b.id} label={b.label} variant="secondary" onPress={b.onPress} />)}
         </Box>
       ) : null}
-      <Box key="vs-header-rule" flexDirection="column">
-        <Text wrap="truncate" color={C('ide')}>{headerRule(pane.width)}</Text>
-      </Box>
     </Box>
   )
 }

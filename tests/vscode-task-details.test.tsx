@@ -175,9 +175,9 @@ for (const id of ['T-504', 'T-502', 'T-508'])
       const tree = await ui.drawn()
       const all = elements(tree)
       const at = `${id} ${bodyColumns}`
-      // no "…" and no Text that cuts (only the rules, drawn to the width: the page header's heavy one, T-751, and the footer's)
+      // no "…" and no Text that cuts (T-1002: no rules are left)
       expect(all.filter(n => n.type === 'Text' && /…/.test(textOf(n))).length, at).toBe(0)
-      expect(all.filter(n => n.type === 'Text' && n.props?.wrap === 'truncate').map(n => textOf(n).replace(/(.)\1*/, '$1')), at).toEqual(['─', '─'])
+      expect(all.filter(n => n.type === 'Text' && n.props?.wrap === 'truncate').map(n => textOf(n).replace(/(.)\1*/, '$1')), at).toEqual([])
       // the title whole; every Details value Text wraps
       expect(textOf(tree), at).toContain(RICH_TASKS.find(t => t.id === id)!.title)
       const grid = (await ui.find({ key: 'vs-details-grid' })) as Node

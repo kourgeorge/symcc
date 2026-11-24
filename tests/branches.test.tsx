@@ -290,7 +290,7 @@ test('T-973: the VS Code Live tab has the Status, Tasks, Branches, Today and Org
   }
   expect(await count('live-tasks-head')).toEqual(backlog ? ['Box', `${backlog} backlog`, 'round', 'inactive'] : undefined)
   const om = await count('live-om-head')
-  expect([om?.[0], /^\d+ \/ 60$/.test(String(om?.[1])), om?.[2], om?.[3]]).toEqual(['Box', true, 'round', 'inactive'])
+  expect([om?.[0], /^\d+ \/ 60$/.test(String(om?.[1])), om?.[2], om?.[3]]).toEqual(['Box', true, undefined, undefined])
   expect(await count('live-today-head')).toBeUndefined()
   // Status: Mode, Branch, Tests as label/value rows
   const status = async (k: string) => [(await ui.find({ key: `live-status-rows-${k}-label` }))?.text, (await ui.find({ key: `live-status-rows-${k}-value` }))?.text]
@@ -340,8 +340,7 @@ test('T-773: a freshly opened VS Code board (no tab saved) shows the Live tab an
   seedBoard(on, { view: liveView(), tab: undefined })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
   const tabs = await tabBar(ui)
-  expect(tabs.map(t => t.which)).toEqual(['live', 'tasks', 'scouts', 'settings'])
-  expect(tabs.filter(t => t.marked).map(t => t.which)).toEqual(['live'])
+  expect(tabs.text?.startsWith('**Live**')).toBe(true)
   expect((await ui.find({ key: 'live-br-head' }))?.props.label).toBe('▾ BRANCHES')
   await ui.unmount()
 })

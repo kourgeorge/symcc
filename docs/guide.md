@@ -1165,7 +1165,7 @@ at the end while it is paused.
 VS Code draws the same 4 lines with its own controls: `‹` and a `Tasks` back button, a
 `‹ 2 of 6 ›` pager, the title as a heading, the state as small chips (the status one filled in
 its color), the buttons (in one style, no red; the one main action, the first of line 4's
-first group, is VS Code's primary button; needs review is a button too), then a divider.
+first group, is VS Code's primary button; needs review is a button too), no divider in VS Code.
 
 #### The Branch section
 
@@ -1432,16 +1432,20 @@ In the Claude Code extension's side panel, letter keys and ↑↓ do nothing: yo
 unchanged.
 
 - **Header**: the symcc logo (the clef, in the accent color) with one line beside it: the
-  name, version and folder, then the board mode as a small colored pill (`⏵ auto merge`).
-  When another window drives the board, one notice row with a yellow border says so
+  name, version and folder, then the board mode as plain bold words (`⏵ auto merge`).
+  When another window drives the board, one notice row (no border) says so
   ("⚠ this window follows; /symcc-drive to drive from here"); click `/symcc-drive` to drive
   from this window. Under it the counts (`● 2 doing · ● 6 to do · ● 1 waiting for you`), each
   dot in its status color. Every line wraps, never cut. The setup facts (what the mode
   means, the branch, the tests and limits) are in the Live tab's **Status** section.
-- **Tabs**: a tab bar like VS Code's own panel tabs: `Live`, `Tasks [20]`, `Scouts [1]`,
-  `Settings`, the counts as small rounded badges. The tab shown is in the normal text color
-  with a short accent bar under it; the others are dim and brighten under the pointer. Click
-  a tab to switch.
+- **Tabs**: one line of text: `Live`, `Tasks 20`, `Scouts 1`, `Settings`. The tab shown is
+  bold; the others are links, with their counts as plain words. No bar, no pill, no rule
+  under them. Click a link to switch.
+- **Style**: only real actions are buttons (Approve, Retry, Save, Send, ...), with at most
+  one main (primary) button on a page. Going somewhere is a link. Headings are plain bold
+  words that do not fold, counts are plain dim words, and there are no pills, rules or
+  hint lines. The labels of a label and value list share one column, 11 characters wide.
+  A link in a row sits in a cell of a set width, so it never drops onto a line of its own.
 - **Live tab**: in sections like VS Code's side bar. Each section has a small bold UPPERCASE
   heading with a chevron (`▾` open, `▸` folded); click it to fold or open the section (the
   board remembers it while the session lasts). A count badge sits on the right where the
@@ -1464,8 +1468,8 @@ unchanged.
     its heading. Open, it lists the newest notes one row each (the date, the text cut short,
     the topic dim; click a note to open all notes on it), then the topics with their counts.
 - **Tasks**: grouped under headings (Questions for you, Waiting for you, Review, Failed, Doing,
-  To do), each with its colored mark and its count in a small rounded badge in that color (`▶ Doing [2]`; every badge and the task page's
-  status pill on the VS Code board has this one look), a blank line
+  To do), each with its colored mark and its count as plain dim words (`▶ Doing 2`; the task page's
+  status is plain bold words in its color too), a blank line
   between them. Each task is one button: the ID dim and the title (up to two lines; a longer
   one ends with "(more)", and its page has it whole), then a dim line with the status in its
   color and its time (`▶ 2m`, `? waiting for 5m`, `✗ failed 3m ago`), the task type or role, the
@@ -1475,16 +1479,15 @@ unchanged.
   open the list says "All clear" and has one main button, `Tell the lead what to do next`,
   which puts "Next task: " in the prompt box (only when the box is empty).
 - **Footer**: a `Switch to approve merge` (or `Switch to auto merge`) button and a search box that
-  filters as you type, with `Clear search` while a search is on. No key hints; other pages
-  say "Click a button, or Tab to it and press Enter." and their buttons drop the key marks
-  (`Back`, not `Back (b)`).
+  filters as you type, with `Clear search` while a search is on. No key hints and no hint
+  line on any page; buttons drop the key marks (`Back`, not `Back (b)`).
 - **A task's page** reads like a card. It uses the whole panel width and wraps every line,
   never cutting it with "…". From the top: the page header (see [the task page and the scout
   page](#the-task-page-and-the-scout-page)): `‹` and a `Tasks` button back to the list, the
   `‹ 2 of 6 ›` pager, the task ID and title as a heading, the state as small chips (`◆ answered:
   read it`, in green, for an answered investigation), the action buttons in their groups (one
   style, no red; the one main action, such as `Approve`, `Retry` or `Pause`, is the primary
-  button; needs review a button too), then a divider. A scout's page does the same: `Run now`
+  button; needs review a button too), no divider. A scout's page does the same: `Run now`
   is its primary button.
   What needs you comes next, in a box in its color: the **Question for you** (yellow) with its
   answers as buttons and a box for your own answer (a file request has `Allow files` and

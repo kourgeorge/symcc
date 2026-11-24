@@ -6,7 +6,6 @@ import { PANE, T0, BOARD_VIEW, drawnData, changedTree, seedBoard } from './board
 import { TASK_BEFORE } from './task-page-snapshot'
 import { TASK_BEFORE_MOBILE } from './task-page-mobile-snapshot'
 import { LONG_TITLE, RICH_IDS, RICH_TASKS, seedRich } from './task-page-fixture'
-import { CLICK_HINT } from '../hooks/claude/ui/surface'
 import { vsHref, mdLink, NO_TITLE } from '../hooks/claude/ui/vscode'
 import { ran } from './fakes'
 import { reportPart } from '../hooks/claude/ui/vscode-task'
@@ -93,7 +92,7 @@ for (const id of RICH_IDS) {
     expect(await ui.find({ type: 'Text', text: id }), id).toBeDefined()
     expect((await ui.find({ key: 'vs-state-status' }))?.text, id).toMatch(/^\S+ .+\S$/)
     for (const gone of ['vs-row-status', 'vs-row-now', 'vs-row-stage', 'vs-badge']) expect(await ui.find({ key: gone }), `${id} ${gone}`).toBeUndefined()
-    expect((await ui.find({ key: 'vs-header-rule' }))?.text, id).toMatch(/^─+$/)
+    expect(await ui.find({ key: 'vs-header-rule' }), id).toBeUndefined()
     // T-774: the folded Time and cost row sums the task's own tries on one line (no tries: its count, 0)
     const want = ['Details', 'What to do', 'runs' in t && t.runs.length ? `▸ Time and cost ${t.runs.length} tries · ${t.id === 'T-504' ? '25m · 4.6k tokens (0.4×' : '40m · 11.6k tokens (1×'} the usual task)` : '▸ Time and cost 0']
     if (t.history.length) want.push('History (2, newest first)')
@@ -123,7 +122,7 @@ for (const id of RICH_IDS) {
     expect((await ui.find({ key: 'vs-row-after-1' }))?.text).toContain('T-498')
     expect((await ui.find({ key: 'back' }))?.props.label).toBe('Tasks')
     for (const re of KEY_HINTS) expect(hints(all, re), `${id} ${re}`).toEqual([])
-    expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'Click a button, or Tab to it and press Enter.' })).toBeUndefined()
     await ui.unmount()
   })
 }
@@ -263,12 +262,13 @@ for (const [id, want] of Object.entries(CARDS))
       expect(await ui.find({ key: 'vs-badge' }), at).toBeUndefined()
       expect(await ui.find({ key: 'vs-tags-row' }), at).toBeUndefined()
       expect(await ui.find({ key: 'vs-row-status' }), at).toBeUndefined()
-      // T-973: the status pill is a rounded Box in the status's color (the one badge look of the VS Code board)
-      const pill = elements((await ui.find({ key: 'vs-state-status' }))!.children).find(n => n.type === 'Box')!
-      expect(pill.props, at).toMatchObject({ borderStyle: 'round', backgroundColor: want.tone, borderColor: want.tone })
-      const badge = elements(pill.children).find(n => n.type === 'Text')!
+      // T-1002: the status is plain bold words in the status's color: no pill, no border, no background
+      const chip = (await ui.find({ key: 'vs-state-status' }))!
+      expect(chip.props.borderStyle, at).toBeUndefined()
+      const badge = elements(chip.children).find(n => n.type === 'Text')!
       expect(badge.children, at).toEqual([want.badge])
-      expect(badge.props, at).toMatchObject({ bold: true, color: 'inverseText' })
+      expect(badge.props, at).toMatchObject({ bold: true, color: want.tone })
+      expect(elements(chip.children).some(n => n.type === 'Box' || n.props?.backgroundColor), at).toBe(false)
       expect((await ui.find({ key: 'vs-row-role' }))?.text, at).toMatch(/^Roleworker/)
       expect((await ui.find({ key: 'vs-row-tries' }))?.text, at).toMatch(/^Tries2/)
       // the sections, with their headings

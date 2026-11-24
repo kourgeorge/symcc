@@ -15,9 +15,6 @@ export const plainLabel = (label: string): string =>
     .replace(/\s+\([a-z]\)$/, "")
     .trim() || label
 
-/** The line VS Code shows where the terminal shows its key hints. */
-export const CLICK_HINT = 'Click a button, or Tab to it and press Enter.'
-
 /** A Button for VS Code: the same Button with the key mark taken off its label (its key stays the old label, so
  *  presses and tests find it by the same name). */
 export function vscodeButton(Button: ElementConstructor<ButtonProps>): ElementConstructor<ButtonProps> {

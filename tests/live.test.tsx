@@ -884,7 +884,7 @@ for (const [runs, w, want, more] of [
     expect(link ? [link.type, link.props.plain, link.props.dimColor] : undefined).toEqual(wide.includes('⌕') ? ['Button', true, true] : undefined)
     if (wide.includes('⌕')) {
       await ui.press({ key: 'live-scouts' })
-      expect((await tabBar(ui)).find(x => !x.dim)?.which).toBe('scouts')
+      expect((await tabBar(ui)).text).toContain('**Scouts')
     }
     await ui.press({ key: 'tab-tasks' })
     await ui.unmount()

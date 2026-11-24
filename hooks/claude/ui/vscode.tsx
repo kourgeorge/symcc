@@ -7,11 +7,10 @@
 // actions on a page are Buttons, the one main action `primary`, the rest `secondary`.
 import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, SvgProps, TextProps } from 'claude-code'
-import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_NAME, nextMode, offStatusParts, footerRule, testsShort, driveNoticeParts } from '../../board'
+import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_NAME, nextMode, offStatusParts, testsShort, driveNoticeParts } from '../../board'
 import { ICON, namesFor } from '../../name'
 import { type PaneView, S } from '../../app/state'
 import type { PaneTab } from '../../app/open'
-import { CLICK_HINT } from './surface'
 
 /** What the VS Code pieces draw with: the surface's elements, the color cast and the panel's width. */
 export type VsKit = {
@@ -42,10 +41,6 @@ export const switchLabel = (m: SymccMode) => `Switch to ${MODE_NAME[nextMode(m)]
 
 /** The color of a status's dot in the counts badges (the same as the list's marks). */
 const COUNT_COLOR: Record<string, string> = { backlog: 'inactive', review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
-
-/** The mode pill's color: the same hue as the mode's word elsewhere, but auto in the success color (a pill in the plain
- *  text color would read as a black or white block). */
-export const pillColor = (m: SymccMode) => (m === 'auto' ? 'success' : modeColor(m))
 
 /** How a board panel of `width` columns tells the logo's width (see noteLogoWidth): 0 in VS Code, where the logo is the
  *  single still 𝄞 glyph (its font breaks the multi-row clef apart), so no move plays there; elsewhere the panel's own
@@ -110,8 +105,8 @@ export function testsValue(v: Pick<PaneView, 'test_commands' | 'max_minutes' | '
 /**
  * The header in VS Code, each line wrapped to the panel (never cut) (T-973: the setup facts moved to the Live tab's Status):
  *  - on the left the logo (the single 𝄞 glyph, large and bold in the accent color: VS Code's font breaks the terminal's
- *    multi-row clef apart, so it is one still glyph here), and beside it the name, version and folder, then the mode as a
- *    pill (a Box with a background; its meaning is in the Live tab's Status section);
+ *    multi-row clef apart, so it is one still glyph here), and beside it the name, version and folder, then the mode as
+ *    plain bold words ( its meaning is in the Live tab's Status section);
  *  - a notice row when another window drives the board (vsNotice: "⚠ this window follows; /symcc-drive to drive from
  *    here", the command a quiet Button that drives from here, `onDrive`);
  *  - the counts ("● 2 doing · 6 to do · 1 waiting for you"), and the "no git" row (`gitRow`).
@@ -138,7 +133,9 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
             {S.version ? <Text color={C('inactive')}>{versionMark(S.version)}</Text> : null}
             {folder ? <Text color={C('inactive')}>{` · ${folder}`}</Text> : null}
           </Text>
-          {vsPill(k, 'vs-mode', modeLabel(mode), pillColor(mode))}
+          <Box key="vs-mode" flexDirection="row" flexShrink={0}>
+            <Text bold color={C(modeColor(mode))}>{modeLabel(mode)}</Text>
+          </Box>
         </Box>
         {off.length ? (
           <Text key="vs-off" wrap="wrap" color={C('warning')}>
@@ -172,64 +169,56 @@ export type VsTab = { which: PaneTab; label: string; count?: number; active: boo
 /** A tab's text as one string: "Tasks 20", "Settings". */
 export const tabLabel = (t: Pick<VsTab, 'label' | 'count'>) => (t.count === undefined ? t.label : `${t.label} ${t.count}`)
 
-/** T-973: the mark under the shown tab: a short bar in the accent color, as wide as the tab's label and badge. */
-export const TAB_MARK = '━'
 /** T-973: a row's background while the pointer is over it: a grey that is faint on light and dark themes alike. */
 export const ROW_HOVER = '#80808024'
+/** T-1002: what sits between two tabs: two em spaces (a Markdown block keeps them, it folds plain spaces). */
+const TAB_GAP = '\u2003\u2003'
 
 /**
- * T-973: the tab bar in VS Code, like VS Code's own panel tabs: each tab a plain Button with its label (`tab-<which>`),
- * the one shown in the normal text color, bold, with the accent bar under it, the others dim (`dimColor`: full strength
- * under the pointer); a tab's count a small badge after its label (vsCount). No links, no "·".
+ * T-1002: the tab bar in VS Code, one Markdown line (`tabs-row`): the shown tab bold, the others links ("Tasks 20" with its
+ * count as plain words). No bar, no pill, no rule. Hidden Buttons `tab-<which>` (in a Box drawn `display="none"`, no
+ * hotkey) answer a press on a tab by its key, as a link press does.
  */
 export function vsTabs(k: VsKit, tabs: VsTab[]): RenderChildren {
-  const { Box, Text, Button, C } = k
+  const { Box, Button } = k
+  const text = tabs.map(t => (t.active ? `**${mdText(tabLabel(t))}**` : mdLink(tabLabel(t), vsHref('tab', t.which)))).join(TAB_GAP)
   return (
-    <Box key="tabs-row" flexDirection="row" flexWrap="wrap" columnGap={2} rowGap={1} marginTop={1}>
-      {tabs.map(t => (
-        <Box key={`tab-box-${t.which}`} flexDirection="column">
-          <Box key={`tab-top-${t.which}`} flexDirection="row" columnGap={1} alignItems="center">
-            <Button key={`tab-${t.which}`} plain label={t.label} dimColor={t.active ? undefined : true} hover={{ dimColor: false }} onPress={t.onPress}>
-              <Text bold={t.active || undefined} color={C('text')}>{t.label}</Text>
-            </Button>
-            {t.count === undefined ? null : vsCount(k, `tab-count-${t.which}`, t.count)}
-          </Box>
-          {t.active ? (
-            <Box key={`tab-mark-${t.which}`} flexDirection="row" height={1} overflow="hidden">
-              <Text wrap="truncate" size="caption" color={C('ide')}>
-                {TAB_MARK.repeat(t.label.length + (t.count === undefined ? 0 : String(t.count).length + 3))}
-              </Text>
-            </Box>
-          ) : null}
+    <Box key="vs-tabs" flexDirection="column">
+      {vsLink(k, 'tabs-row', text, tabs.map(t => [vsHref('tab', t.which), t.onPress]))}
+      <Box key="tab-keys" display="none">
+        {tabs.map(t => (
+          <Button key={`tab-${t.which}`} label={t.label} onPress={t.onPress} />
+        ))}
+      </Box>
+    </Box>
+  )
+}
+
+/** T-1002: a row of cells in VS Code. Every cell is a Box with a set width (`width`, kept at that size) or, with none,
+ *  `flexGrow` and `flexShrink`; a link inside a cell stays on the row's one line instead of dropping onto its own. */
+export type VsCell = { key: string; node: RenderChildren; width?: number }
+export function vsRow(k: VsKit, key: string, cells: readonly VsCell[]): RenderChildren {
+  const { Box } = k
+  return (
+    <Box key={key} flexDirection="row" columnGap={1}>
+      {cells.map(c => (
+        <Box key={`${key}-${c.key}`} flexDirection="row" {...(c.width === undefined ? { flexGrow: 1, flexShrink: 1 } : { width: c.width, flexShrink: 0 })}>
+          {c.node as never}
         </Box>
       ))}
     </Box>
   )
 }
 
-/** T-973: a count badge in VS Code ("93", "2 / 60", "17 backlog"): a small Box with a rounded border and a grey
- *  background, the number bold, small and tabular in the inverse text color. */
-export function vsCount(k: VsKit, key: string, n: number | string, tone = 'inactive'): RenderChildren {
-  const { Box, Text, C } = k
-  return (
-    <Box key={key} flexDirection="row" flexShrink={0} paddingX={1} borderStyle="round" borderColor={C(badgeTone(tone))} backgroundColor={C(badgeTone(tone))}>
-      <Text bold size="caption" tabular color={C('inverseText')}>{String(n)}</Text>
-    </Box>
-  )
-}
-
-/** T-973: a pill in VS Code (the board mode in the header): vsCount's look in a state's color. */
-export const vsPill = (k: VsKit, key: string, text: string, tone: string): RenderChildren => vsCount(k, key, text, tone)
-
 /**
- * T-973: a notice row in VS Code ("⚠ this window follows; /symcc-drive to drive from here"): a Box with a warning-colored
- * border and some padding (VS Code can't draw a left edge alone), the words in the text color, a slash command a quiet
+ * T-973: a notice row in VS Code ("⚠ this window follows; /symcc-drive to drive from here"): a Box with no
+ * border (T-1002), the words in the text color, a slash command a quiet
  * plain Button (`<key>-cmd`) that does what the command does (`onCommand`).
  */
 export function vsNotice(k: VsKit, key: string, parts: readonly { text: string; command?: boolean }[], onCommand: () => void): RenderChildren {
   const { Box, Text, Button, C } = k
   return (
-    <Box key={key} flexDirection="row" flexWrap="wrap" alignItems="center" borderStyle="single" borderColor={C('warning')} paddingX={1}>
+    <Box key={key} flexDirection="row" flexWrap="wrap" alignItems="center" >
       <Text key={`${key}-mark`} bold color={C('warning')}>{'⚠ '}</Text>
       {parts.map((p, i) =>
         p.command ? (
@@ -261,11 +250,14 @@ export function vsSectionHead(k: VsKit, key: string, name: string, open: boolean
       </Button>
       <Box key={`${key}-end`} flexDirection="row" columnGap={1} alignItems="center">
         {extra ?? null}
-        {count === undefined ? null : vsCount(k, `${key}-count`, count)}
+        {count === undefined ? null : vsBadge(k, `${key}-count`, count, 'inactive')}
       </Box>
     </Box>
   )
 }
+
+/** T-1002: the one label column's width in VS Code: "Agent time" (10) and a space. */
+export const VS_LABEL_W = 11
 
 /**
  * T-973: a label/value block in VS Code (the Live tab's Status and Today): one row each (`<key>-<row key>`), the labels
@@ -274,12 +266,11 @@ export function vsSectionHead(k: VsKit, key: string, name: string, open: boolean
  */
 export function vsFacts(k: VsKit, key: string, rows: readonly { key: string; label: string; value: RenderChildren }[]): RenderChildren {
   const { Box, Text, C } = k
-  const labelW = Math.max(0, ...rows.map(r => r.label.length)) + 2
-  return (
+    return (
     <Box key={key} flexDirection="column">
       {rows.map(r => (
         <Box key={`${key}-${r.key}`} flexDirection="row" hover={{ backgroundColor: ROW_HOVER }}>
-          <Box key={`${key}-${r.key}-label`} flexDirection="row" flexShrink={0} width={labelW}>
+          <Box key={`${key}-${r.key}-label`} flexDirection="row" flexShrink={0} width={VS_LABEL_W}>
             <Text color={C('inactive')}>{r.label}</Text>
           </Box>
           <Box key={`${key}-${r.key}-value`} flexDirection="row" flexWrap="wrap" flexGrow={1} flexShrink={1} columnGap={1} alignItems="center">
@@ -291,37 +282,33 @@ export function vsFacts(k: VsKit, key: string, rows: readonly { key: string; lab
   )
 }
 
-/** The footer in VS Code: a light rule (not on the Live tab, `rule` false: T-973, its sections have no rules), then
- *  (Tasks page) the mode switch as a quiet link and the search box, else one line that says how to act in the panel.
- *  No key hints. `extra`: more beside the switch (a "Clear search" button). */
+/** The footer in VS Code (T-1002: no rule and no hint): on the Tasks page the mode switch as a link and the search box;
+ *  nothing else. `rule` is ignored (the Live tab still passes it). `extra`: more beside the switch ("Clear search"). */
 export function vsFooter(k: VsKit, name: string, opts: { mode?: SymccMode; onSwitch?: () => void; search?: RenderChildren; extra?: RenderChildren; rule?: boolean } = {}): RenderChildren {
-  const { Box, Text, C, width } = k
+  const { Box } = k
   const to = opts.mode ? vsHref('mode', nextMode(opts.mode)) : ''
   return (
     <Box key={`${name}-footer`} flexDirection="column">
-      {opts.rule === false ? null : <Text key={`${name}-footer-rule`} wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text>}
       {opts.mode && opts.onSwitch ? (
-        <Box key="footer-mode" flexDirection="row" flexWrap="wrap" gap={1}>
-          {vsLink(k, 'mode', mdLink(switchLabel(opts.mode), to), [[to, opts.onSwitch]])}
-          {opts.extra}
-        </Box>
+        vsRow(k, 'footer-mode', [
+          { key: 'switch', node: vsLink(k, 'mode', mdLink(switchLabel(opts.mode), to), [[to, opts.onSwitch]]) },
+          ...(opts.extra ? [{ key: 'extra', node: opts.extra }] : []),
+        ])
       ) : null}
       {opts.search ?? null}
-      {opts.mode ? null : <Text key={`${name}-0`} wrap="wrap" color={C('inactive')}>{CLICK_HINT}</Text>}
     </Box>
   )
 }
 
-/** The background of a count badge for a status tone: the tone itself, but a neutral grey for the plain text color
- *  (a badge in the text color would read as a black or white block). */
-export const badgeTone = (tone: string) => (tone === 'text' ? 'inactive' : tone)
+/** A small label in VS Code ("editing", "replaced"): T-1002, plain words in `tone`'s color, no box. Put it in a row Box. */
+export const vsBadge = (k: VsKit, key: string, text: string | number, tone: string): RenderChildren => (
+  <k.Box key={key} flexDirection="row" flexShrink={0}>
+    <k.Text color={k.C(tone)}>{String(text)}</k.Text>
+  </k.Box>
+)
 
-/** A small badge or pill in VS Code ("3", "editing", "replaced"): T-973, one look for every badge on every page: the
- *  rounded Box of vsCount, in `tone`'s color. A Box, so it goes in a row Box, never inside a Text. */
-export const vsBadge = (k: VsKit, key: string, text: string | number, tone: string): RenderChildren => vsCount(k, key, text, tone)
-
-/** A section heading in VS Code: the status mark in its color, the name bold, then the count as a badge in the
- *  same color ("▶ Doing [2]"). */
+/** A section heading in VS Code: the status mark in its color, the name bold, then the count in plain dim words
+ *  ("▶ Doing 2"). */
 export function vsHeading(k: VsKit, key: string, mark: string, tone: string, label: string, n: number): RenderChildren {
   const { Box, Text, C } = k
   return (
@@ -330,7 +317,7 @@ export function vsHeading(k: VsKit, key: string, mark: string, tone: string, lab
         <Text color={C(tone)}>{`${mark} `}</Text>
         <Text color={C('text')}>{label}</Text>
       </Text>
-      {vsBadge(k, `${key}-count`, n, tone)}
+      {vsBadge(k, `${key}-count`, n, 'inactive')}
     </Box>
   )
 }
@@ -368,11 +355,11 @@ export const MORE = ' (more)'
 /** What a row with an empty title (or question text) shows, dim, beside its id: never "****" from empty bold marks. */
 export const NO_TITLE = '(no title)'
 
-/** A section heading on VS Code's task page: plain words, bold, in the heading color ("What to do"). */
+/** A section heading in VS Code: plain bold words in the text color, no fold ("What to do"). */
 export function vsSection(k: VsKit, key: string, label: string): RenderChildren {
   const { Text, C } = k
   return (
-    <Text key={key} wrap="wrap" bold color={C('suggestion')}>
+    <Text key={key} wrap="wrap" bold color={C('text')}>
       {label}
     </Text>
   )

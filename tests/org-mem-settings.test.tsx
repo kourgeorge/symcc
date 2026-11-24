@@ -268,7 +268,7 @@ test('T-790: VS Code: the org-mem page has the same header (back button, count, 
   await ui.press({ key: 'live-om-all' })
   const text = await pageText(ui as never)
   for (const w of ['Organizational memory (org-mem)', 'Notes shared with workers, checkers and scouts', '3 / 60', '▍About', '▍Notes']) expect(text).toContain(w)
-  expect((await ui.find({ key: 'vs-header-rule' }))?.text).toMatch(/^─+$/)
+  expect(await ui.find({ key: 'vs-header-rule' })).toBeUndefined()
   expect((await ui.find({ key: 'orgmem-delete' }))?.props.label).toBe('Delete')
   await ui.press({ key: 'orgmem-delete' })
   expect(await ui.find({ key: 'orgmem-delete-yes' })).toBeDefined()
@@ -540,7 +540,7 @@ test('T-772: VS Code draws the org-mem meter at 30 / 60 and 60 / 60 in the same 
     files[FILE] = manyNotes(n)
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
     const count = await ui.find({ key: 'live-om-head-count' })
-    expect([n, count?.type, count?.text, count?.props.backgroundColor, count?.props.borderColor]).toEqual([n, 'Box', `${n} / 60`, 'inactive', 'inactive'])
+    expect([n, count?.type, count?.text, count?.props.backgroundColor, count?.props.borderColor]).toEqual([n, 'Box', `${n} / 60`, undefined, undefined])
     expect((await ui.findAll({ type: 'Svg' })).some(x => String(x.props.alt).endsWith('of at most 60'))).toBe(false)
     await ui.unmount()
   }
