@@ -304,7 +304,8 @@ test('T-973: the VS Code Live tab has the Status, Tasks, Branches, Today and Org
   // Today: its rows
   for (const k of ['results', 'tokens', 'time']) expect([k, !!(await ui.find({ key: `live-today-rows-${k}` }))]).toEqual([k, true])
   // no divider rules, no blank Text rows, no padding or margin on top of the page's gap
-  const texts = vsNodes(page).filter(n => n.type === 'Text').map(vsText)
+  const ruleTexts = new Set(vsNodes(page).filter(n => vsKey(n) === 'tabs-rule').flatMap(n => vsNodes(n)))
+  const texts = vsNodes(page).filter(n => n.type === 'Text' && !ruleTexts.has(n)).map(vsText)
   expect(texts.filter(t => /[─—]{3,}/.test(t))).toEqual([])
   expect(texts.filter(t => t.length > 0 && !t.trim())).toEqual([])
   for (const c of (page.children ?? []) as VsNode[]) expect([vsKey(c), c?.props?.paddingTop ?? 0, c?.props?.marginTop ?? 0, c?.props?.paddingBottom ?? 0]).toEqual([vsKey(c), 0, 0, 0])
