@@ -2,6 +2,17 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.40 (2026-11-25)
+
+### Changed
+- VS Code board redesign, finished: the Tasks list has plain headings and the search on top, with no mode switch in its footer. Task pages, Scouts, Settings, Roles and Task types, organizational memory and question pages have no pills, borders or rules. Removing or resetting something asks in place, with a button and a Cancel link.
+- VS Code Live: each lane has its dim numbers line back, as a third line; the task type drops first when the panel is narrow.
+- Run now is only for a task that is to do; any other task is refused ("retry it or move it to todo first").
+- A retried `add` (for example after a tool timeout) makes no second task when every part of it is the same as an add made in the last 5 minutes.
+
+### Removed
+- The `copilot -p` backup runner for Copilot workers; Copilot runs through its extension only.
+
 ## 0.5.39 (2026-11-24)
 
 ### Changed
@@ -19,8 +30,8 @@ When a set of user-facing changes is ready to release, bump the version in both 
 ## 0.5.38 (2026-11-24)
 
 ### Added
-- GitHub Copilot CLI host: symcc installs as a Copilot plugin from this repo (`.github/plugin/`), with the lead's tools and `/symcc` commands, the text board, board updates that wake the lead, workers, checkers and scouts as Copilot sessions each with its own guard, your own models (BYOK, `SYMCC_COPILOT_MODELS`) and a status line script. Needs `copilot --experimental`. See the guide's Copilot part.
-- Run now (only on a task that is to do): a task page button (key `e`) and `/symcc-task T-5 run` start a task at once, even over the agent limit or on a paused board; it asks first when the task waits on unfinished tasks, and starts nothing in plan mode.
+- GitHub Copilot CLI host: symcc installs as a Copilot plugin from this repo (`.github/plugin/`), with the lead's tools and `/symcc` commands, the text board, board updates that wake the lead, workers, checkers and scouts as Copilot sessions each with its own guard, your own models (BYOK, `SYMCC_COPILOT_MODELS`), a `copilot -p` backup runner and a status line script. Needs `copilot --experimental`. See the guide's Copilot part.
+- Run now: a task page button (key `e`) and `/symcc-task T-5 run` start a task at once, even over the agent limit or on a paused board; it asks first when the task waits on unfinished tasks, and starts nothing in plan mode.
 - Task priority like Unix nice: a whole number from -20 to 19, 0 for every new task, lower starts first, ties go to the older task. It replaces the growing `order` number (converted once, with a backup). The task page shows "Priority  0 · 2nd in line".
 - Design notes: `docs/workspace-model.md` (one board over several repos) and the research notes behind it.
 

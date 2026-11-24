@@ -7327,8 +7327,7 @@ function healthText(found) {
 }
 
 // hooks/core/run-now.ts
-var RUN_NOW_FROM = ["todo", "paused", "failed", "dropped", "backlog"];
-var canRunNow = (t) => RUN_NOW_FROM.includes(t.status);
+var canRunNow = (t) => t.status === "todo";
 var stateWord = (s) => s === "doing" ? "running" : STATUS_WORD[s];
 function runNowWaits(b, t) {
   return [...new Set(t.after ?? [])].filter((a) => a !== t.id && !depDone(b, a)).map((a) => {
@@ -7340,14 +7339,13 @@ var runNowQuestion = (id, waits) => `${id} waits on ${waits.map((w) => `${w.id} 
 var runNowShares = (all, t) => all.filter((x) => x.id !== t.id && x.status === "doing" && shareFiles(x.files ?? [], t.files ?? [])).map((x) => x.id);
 function runNowLine(o) {
   const more = [
-    o.from === "backlog" ? "from the backlog" : "",
     o.waits?.length ? `without waiting for ${o.waits.map((w) => w.id).join(", ")}` : "",
     o.over ? `over the agent limit (${o.over.busy + 1}/${o.over.max} busy)` : "",
     o.paused ? "on a paused board" : ""
   ].filter(Boolean);
   return `started now by the owner${more.length ? ` (${more.join("; ")})` : ""}`;
 }
-var runNowRefusal = (t) => t.status === "doing" ? `${t.id} is already running` : `${t.id} is ${STATUS_WORD[t.status]}; Run now is for a task that is to do, paused, failed, dropped or in the backlog`;
+var runNowRefusal = (t) => t.status === "doing" ? `${t.id} is already running` : `${t.id} is ${STATUS_WORD[t.status]}; Run now is only for a task that is to do; retry it or move it to to do first`;
 var runNowPlanText = (id) => `${id} didn't start: plan mode: nothing starts; run it when plan mode ends`;
 
 // hooks/core/details.ts
@@ -9077,7 +9075,7 @@ function laneLines(lane, l, o) {
   const shown = times !== undefined && laneTimes(times);
   const median2 = shown && { text: ` (${shown.text}×median)`, tone: shown.warn ? "warning" : "dim" };
   const tokens = (withMedian) => lane.tokens === undefined ? done ? [] : [{ text: `${TOKEN_SIGN} at hand-back`, tone: "dim" }] : segs({ text: fmtTok(lane.tokens), tone: "text" }, lane.more && { text: " + …", tone: "dim" }, withMedian && median2);
-  const time = lane.activeMs ? [{ text: `⏱ ${rowDuration(lane.activeMs)}`, tone: "dim" }] : [];
+  const time = lane.activeMs && !o.noTime ? [{ text: `⏱ ${rowDuration(lane.activeMs)}`, tone: "dim" }] : [];
   const agents = [lane.workerTokens && `worker ${fmtTokens(lane.workerTokens)}`, lane.checkerTokens && `checker ${fmtTokens(lane.checkerTokens)}`].filter((x) => !!x);
   const split = agents.length ? [{ text: agents.join(" · "), tone: "dim" }] : [];
   const line = (level) => {
@@ -9089,7 +9087,7 @@ function laneLines(lane, l, o) {
     const gap = Math.max(2, textWidth(segText(first)) - textWidth(segText(xs)) - textWidth(lane.kind));
     return [...xs, { text: " ".repeat(gap) + lane.kind, tone: "dim" }];
   };
-  const tries = [4, 3, 2, 1, 0].flatMap((n) => [withKind(line(n)), line(n)]);
+  const tries = [4, 3, 2, 1, 0].flatMap((n) => o.noKind ? [line(n)] : [withKind(line(n)), line(n)]);
   tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: "dim" }));
   const second = tries.find(fits) ?? tries[tries.length - 1];
   return [first, done ? second.map((x) => x.tone === "text" && !x.text.trim() ? x : { ...x, tone: "dim" }) : second];
@@ -15415,6 +15413,8 @@ async function markMerged($, id, by) {
 
 // hooks/app/tools.ts
 var TOPIC_RULES = "reuse an existing topic when it fits (a new one only when nothing fits); keep about 6-10 topics; split a topic past ~15 notes, and merge one with only 1-2 notes into a close one; a topic disappears when its last note goes.";
+var sameJson = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+var ADD_AGAIN_MS = 5 * 60000;
 async function latestReport($, t) {
   const r = taskReports(t).at(-1);
   if (!r)
@@ -15574,7 +15574,7 @@ In the settings view: Enter on a row changes it: on/off flips, mode, notify, sco
   · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.
 In the panel nothing needs Esc: Enter on an empty text box cancels it (on the search it clears the
   search), and pick lists and pages have a Cancel or Back button. On the board list x clears a search.
-In an open task: b back · p pause · u resume · r retry · x drop · e run now (when it isn't running) · w watch the worker · n needs review on/off
+In an open task: b back · p pause · u resume · r retry · x drop · e run now (to do tasks) · w watch the worker · n needs review on/off
   · y copy the task's content · z stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).
   · h already merged: marks a failed, waiting, paused or dropped task done whose work was merged by hand (checked with git first; nothing is merged or tested).
@@ -15832,7 +15832,7 @@ var TOOLS = () => [
   { name: "merged", description: `Mark a task done whose work is already merged outside the board (by hand), e.g. after its only failure was the merge tests timing out. ${S.N.name} checks it with git first: every commit on the task's branch must be in the branch it merges into (merged, fast-forwarded, or rebased as equal changes); if not, it is refused with the reason ("T-5's branch has 2 commits that aren't in main yet"). Works for a task that is to do, running (its worker is stopped first), failed, waiting, paused, in review or dropped. The task becomes done with the history line "merged outside the board (<commit>); marked done by the lead", its commits are recorded, its folder and branch are cleaned up like after a merge, and tasks waiting on it can start. Nothing is merged and no test runs. Only on the owner's word or a rule the owner set.`, inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" } } } },
   { name: "pause", description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, reason: { type: "string" } } } },
   { name: "resume", description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" } } } },
-  { name: "run", description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. For a task that is to do, paused, failed, dropped (as a retry) or in the backlog (it moves to todo). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its history says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, anyway: { type: "boolean", description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
+  { name: "run", description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. Only for a task that is to do; any other task is refused with a short reason (retry it or move it to todo first). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its history says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, anyway: { type: "boolean", description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
   {
     name: "scouts",
     description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt, whole last report and its last few runs: when, outcome, findings, tasks made from it and its report file). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; optional findings: auto = you decide where its tasks go, backlog = every task from its findings goes to the backlog, default (or left out) = follow the board's scout_findings setting; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (a paused scout runs too, once, and stays paused; refused with the reason when it is already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
@@ -15999,13 +15999,21 @@ async function runTool($, name, a) {
       let forced = false;
       const own = scout && a.origin_by === "scout" ? await scoutFindingsFor($, scout) : undefined;
       let reviewMode = false;
+      let again = false;
       const [t, all] = await change($, (b) => {
         reviewMode = modeOf(b) === "review";
         const o = makeOrigin(said, now(), b);
         forced = findingToBacklog(b, a.origin_by, own) && a.backlog !== true;
         const [y, added] = addTask(b, { title: str(a.title) ?? "", details: str(a.details), files: a.files, after: a.after, priority: priorityIn(a), needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true || forced, S.plan), role, kind, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into }, now(), S.N.dir);
+        const first = b.tasks.find((x) => x.status !== "dropped" && x.status !== "done" && Date.parse(now()) - Date.parse(x.created_at) < ADD_AGAIN_MS && x.title === added.title && x.details === added.details && sameJson(x.files, added.files) && sameJson(x.after, added.after) && x.priority === added.priority && x.status === "backlog" === (added.status === "backlog") && (x.needs_review ?? false) === (added.needs_review ?? false) && (x.role ?? "") === (added.role ?? "") && (x.kind ?? "") === (added.kind ?? "") && x.merge_into === added.merge_into && sameJson({ ...x.origin, evidence: undefined, at: undefined }, { ...added.origin, evidence: undefined, at: undefined }));
+        if (first) {
+          again = true;
+          return [b, [first, b.tasks]];
+        }
         return [y, [added, y.tasks]];
       });
+      if (again)
+        return `${t.id} ${t.title} was added just before by the same add, so nothing was added again`;
       const og = originOf(t);
       if (og?.by === "scout" && og.scout)
         await linkTaskToScoutRun($, og.scout, t.id, all);
@@ -16303,17 +16311,13 @@ async function runNowTool($, id, anyway) {
   const busy = workers.size + starting.size;
   const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : undefined;
   const paused = modeOf(b) === "paused";
-  const from = t.status;
-  const again = from === "failed" || from === "dropped";
-  const clashed = failedOnClash(t) || from !== "failed" && !!t.merge_main;
   await change($, (x) => {
     const cur = find(x, t.id);
     if (!cur || !canRunNow(cur))
       return x;
-    const y = cur.status === "backlog" ? promoteTask(x, t.id, now()) : x;
-    return patchTask(y, t.id, { status: "todo", note: "started now by the owner", ...again ? { test_tries: 0 } : {}, merge_main: clashed || undefined }, now());
+    return patchTask(x, t.id, { note: "started now by the owner" }, now());
   });
-  const line = runNowLine({ waits: anyway ? waits : [], ...over ? { over } : {}, paused, from });
+  const line = runNowLine({ waits: anyway ? waits : [], ...over ? { over } : {}, paused });
   const claimed = await startNow2($, t.id, line);
   const after = claimed ? undefined : find(await load($), t.id);
   if (after?.status === "failed")
@@ -16324,7 +16328,6 @@ async function runNowTool($, id, anyway) {
   const shares2 = runNowShares((await load($)).tasks, t);
   return [
     `${t.id} started now`,
-    from === "backlog" ? " (moved from the backlog to todo)" : "",
     anyway && waits.length ? ` without waiting for ${waits.map((w) => w.id).join(", ")}` : "",
     over ? `; it runs one over the limit (${busy + 1}/${b.max_parallel} agents busy), and nothing else starts until the count is back under` : "",
     paused ? "; the board stays paused: only this task runs" : "",
