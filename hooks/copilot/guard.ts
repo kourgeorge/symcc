@@ -119,8 +119,9 @@ function splitShell(tool: string, args: unknown): boolean {
 }
 
 /**
- * Copilot's bash session keeps its folder between calls, but each call is judged as if it starts in the agent's own
- * folder. So symcc's agents (not the lead) may not move the shell anywhere else: see folderMoves and stayInside.
+ * Copilot's bash session keeps its folder between calls. So symcc's agents (not the lead) may not move the shell out
+ * of their own folder (see folderMoves and stayInside), and each command is judged from every folder inside it that
+ * the shell may be in (`shells`).
  */
 export const leaveFolderText = 'Refused: symcc workers stay in their own folder; use full paths instead of cd.'
 
@@ -132,36 +133,38 @@ const LEAD_WORDS = new Set(['builtin', 'command', 'exec', 'time', 'nohup', 'nogl
 const FOLDER_SETTINGS = /CDPATH|cdable_vars|PROMPT_COMMAND|autocd/i
 
 /**
- * Where a cd's target word `w` (quotes already dropped) goes, from folder `dir`; undefined when it can't be told (an
- * option, `-`, `~`, a variable, odd characters) or when it climbs above `dir` on the way (`../x`): the shell may be
- * deeper in the folder than `dir`, so only a path that never climbs above where it starts surely stays inside.
+ * A cd's target word `w` (quotes already dropped) as written, when it can be told: a full path inside folder `top`, or
+ * a relative one that never climbs above where it starts (`../x` is refused: where the shell is may not be where the
+ * guard thinks, see stayInside). Undefined for an option, `-`, `~`, a variable, odd characters, or a full path outside.
  */
-function cdPlace(dir: string, w: RawWord): string | undefined {
+function cdTarget(top: string, w: RawWord): string | undefined {
   if (w.expands || w.sign || !/^[\w./+@%,-]+$/.test(w.w) || /^[-+]/.test(w.w)) return undefined
-  if (w.w.startsWith('/')) return normalPath(w.w)
+  if (w.w.startsWith('/')) {
+    const p = normalPath(w.w)
+    return p === top || p.startsWith(`${top}/`) ? p : undefined
+  }
   let depth = 0
   for (const part of w.w.split('/')) {
     if (part === '..') depth--
     else if (part && part !== '.') depth++
     if (depth < 0) return undefined
   }
-  return normalPath(`${dir}/${w.w}`)
+  return w.w
 }
 
 /**
- * The folders shell command `command` (run from folder `dir`) may move the shell to, each inside `dir` as written (the
- * caller then looks on disk where each really leads, see stayInside), or undefined when it may leave `dir` in a way
- * that can't be told: a cd, pushd, popd, chdir or Set-Location (also after `builtin`, `command`, `x=1` and such) whose
- * target is outside, can't be told, or missing (`cd` alone goes home); a cd after any other command of the line (that
- * command could first turn its target into a link out, `ln -s / x && cd x`); text run again in this shell (`eval`,
- * `trap`, `alias`) that holds a cd; `source` or `.` (the file read could cd); a command name from a variable; or a
- * setting that makes a later cd go elsewhere (FOLDER_SETTINGS). A cd inside a subshell (`( cd x && ... )`, `$(cd x)`)
- * changes nothing after it.
+ * The cd targets of shell command `command` (an agent's, whose own folder is `dir`), in order and as written (a full
+ * path inside `dir`, or a relative one; the caller then looks on disk where each really leads, see stayInside), or
+ * undefined when it may leave `dir` in a way that can't be told: a cd, pushd, popd, chdir or Set-Location (also after
+ * `builtin`, `command`, `x=1` and such) whose target is outside, can't be told, or missing (`cd` alone goes home); a cd
+ * after any other command of the line (that command could first turn its target into a link out, `ln -s / x && cd x`);
+ * text run again in this shell (`eval`, `trap`, `alias`) that holds a cd; `source` or `.` (the file read could cd); a
+ * command name from a variable; or a setting that makes a later cd go elsewhere (FOLDER_SETTINGS). A cd inside a
+ * subshell (`( cd x && ... )`, `$(cd x)`) changes nothing after it.
  */
 export function folderMoves(dir: string, command: string, depth = 0): string[] | undefined {
   if (depth > 4 || FOLDER_SETTINGS.test(command)) return undefined
   const top = normalPath(dir)
-  const inside = (p: string) => p === top || p.startsWith(`${top}/`)
   const subs: boolean[] = []
   const out: string[] = []
   // `ran`: a command other than a cd at the line's top came before
@@ -190,8 +193,8 @@ export function folderMoves(dir: string, command: string, depth = 0): string[] |
     const rest = words.slice(i + 1)
     if (FOLDER_CMDS.has(cmd)) {
       if (ran || rest.length !== 1) return undefined
-      const to = cdPlace(top, rest[0]!)
-      if (to === undefined || !inside(to)) return undefined
+      const to = cdTarget(top, rest[0]!)
+      if (to === undefined) return undefined
       out.push(to)
       continue
     }
@@ -208,22 +211,47 @@ export function folderMoves(dir: string, command: string, depth = 0): string[] |
 }
 
 /**
- * Whether every folder in `moves` (folderMoves) is a folder on disk that really lies inside `dir`, links followed, so
- * `cd up` with `up` a link to "/" is caught. A folder that can't be looked up (missing, or the host can't tell) fails.
+ * Where each agent's Copilot shell may be: its own folder `top`, and every folder (real path) an allowed cd of its
+ * took it to since (a cd may fail, so the shell may be in any of them). Kept by agent id for the life of this copy.
  */
-async function stayInside(host: Host, dir: string, moves: string[]): Promise<boolean> {
-  if (!moves.length) return true
+const shells = new Map<string, { top: string; places: string[] }>()
+
+/** Forget where every agent's shell may be (for tests). */
+export function forgetShells() {
+  shells.clear()
+}
+
+/** A shell that has been cd'd into this many folders is refused further cds (the list is kept short). */
+const MAX_PLACES = 32
+
+/**
+ * Where the shell may be after cds to `targets` (folderMoves), starting from `places` (each folder it may be in now),
+ * or undefined when a cd may take it out of `dir`. Each target is looked up on disk, links followed, so `cd up` with
+ * `up` a link to "/" is caught; it must be a folder that really lies inside `dir` (one that can't be looked up fails).
+ * A relative target is allowed only while the shell is surely in `dir` itself (no earlier cd took it anywhere else,
+ * in this call or an earlier one): from a subfolder, `cd x` could reach a link the guard never looked at (the
+ * checker's `cd src && cd x`, with src/x a link to "/"). Use a full path then: it is checked wherever the shell is.
+ */
+async function stayInside(host: Host, dir: string, places: string[], targets: string[]): Promise<string[] | undefined> {
+  if (!targets.length) return places
   const realOf = async (p: string) => {
     const st = await Promise.resolve().then(() => host.fs.stat(p, { resolve: true })).catch(() => undefined)
     return st ? { kind: st.kind, real: normalPath(st.realPath ?? p) } : undefined
   }
   const top = normalPath(dir)
   const tops = [top, (await realOf(top))?.real ?? top]
-  for (const to of moves) {
-    const st = await realOf(to)
-    if (!st || st.kind !== 'dir' || !tops.some(t => st.real === t || st.real.startsWith(`${t}/`))) return false
+  const atTop = (p: string) => tops.includes(p)
+  const out = [...places]
+  for (const to of targets) {
+    const rel = !to.startsWith('/')
+    if (rel && !out.every(atTop)) return undefined
+    const st = await realOf(rel ? normalPath(`${top}/${to}`) : to)
+    if (!st || st.kind !== 'dir' || !tops.some(t => st.real === t || st.real.startsWith(`${t}/`))) return undefined
+    // kept under the folder's own name (not its real path, e.g. /private/tmp on macOS), as the shell check expects
+    const place = tops.slice(1).reduce((p, t) => (t !== top && (p === t || p.startsWith(`${t}/`)) ? top + p.slice(t.length) : p), st.real)
+    if (!out.includes(place)) out.push(place)
   }
-  return true
+  return out.length > MAX_PLACES ? undefined : out
 }
 
 /** The refusal of an agent's apply_patch call whose files can't be found, so it can't be checked. */
@@ -247,16 +275,26 @@ export async function preToolUse(host: Host, dir: string, agentId: string | unde
     if (call && 'deny' in call) return deny(call.deny)
     if (agentId && !knownTool(tool)) return deny(unknownToolText(tool))
     if (agentId && splitShell(tool, input?.toolArgs)) return deny(splitShellText)
+    // the folders a shell command may run from: wherever the agent's shell may be, and wherever its cds take it
+    let places = [dir]
     if (agentId && SHELL_TOOLS.has(tool)) {
+      const top = normalPath(dir)
+      const known = shells.get(agentId)
+      const now = known?.top === top ? known.places : [top]
       const moves = folderMoves(dir, commandOf(argsObject(input?.toolArgs).command))
-      if (!moves || !(await stayInside(host, dir, moves))) return deny(leaveFolderText)
+      const after = moves && (await stayInside(host, dir, now, moves))
+      if (!after) return deny(leaveFolderText)
+      places = after
     }
     const touches = copilotTouches(dir, tool, input?.toolArgs)
     if (agentId && tool === 'apply_patch' && !touches.length) return deny(patchNoFilesText)
     for (const touch of touches) {
-      const why = await toolCheck(host, agentId, touch, dir, kindOf)
-      if (why) return deny(why)
+      for (const cwd of 'command' in touch ? places : [dir]) {
+        const why = await toolCheck(host, agentId, touch, cwd, kindOf)
+        if (why) return deny(why)
+      }
     }
+    if (agentId && SHELL_TOOLS.has(tool) && places.length > 1) shells.set(agentId, { top: normalPath(dir), places })
     return undefined
   } catch (err) {
     const why = toolCheckFailed(host, agentId, { kind: 'error', message: (err as Error)?.message ?? String(err) })

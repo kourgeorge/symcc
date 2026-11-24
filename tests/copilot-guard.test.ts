@@ -6,7 +6,7 @@ import { addTask, emptyBoard, patchTask, blockedEditText, bashOutsideText } from
 import { runBy } from './agent-fixture'
 import { S, workers, toolName } from '../hooks/app/state'
 import { ASK_TOOL } from '../hooks/core/ask'
-import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText, patchNoFilesText, leaveFolderText, folderMoves } from '../hooks/copilot/guard'
+import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText, patchNoFilesText, leaveFolderText, folderMoves, forgetShells } from '../hooks/copilot/guard'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -26,6 +26,7 @@ function world() {
     run: async () => done(),
   })
   S.root = ROOT
+  forgetShells()
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() })
   return host
 }
@@ -124,12 +125,49 @@ test("the bash session keeps its folder between calls, so an agent may not cd ou
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'local_shell', toolArgs: { command: ['cd', '/'] } })).toEqual(refused)
   // a cd inside the folder, or inside a subshell, passes; so do words that only look like cd
   for (const command of ['cd src', 'cd ./src && ls', `cd ${WT}/src`, `cd ${WT}`, 'cd src/x/..', '( cd / && ls )', 'echo $(cd /tmp && pwd)', 'grep -r cd .', 'echo cd /', 'cat <<EOF\ncd /\nEOF']) {
+    forgetShells()
     expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, undefined])
   }
   expect(folderMoves(WT, "ls")).toEqual([])
-  expect(folderMoves(WT, "cd src && cd x")).toEqual([`${WT}/src`, `${WT}/x`])
+  expect(folderMoves(WT, `cd src && cd ${WT}/x`)).toEqual(['src', `${WT}/x`])
   // the lead is unchanged
   expect(await preToolUse(host, ROOT, undefined, { toolName: 'bash', toolArgs: { command: 'cd /' } })).toBe(undefined)
+  workers.clear()
+})
+
+test("once an agent's shell is in a subfolder, a relative cd is refused and each command is judged from every folder it may be in", async () => {
+  const host = world()
+  // the checker's disk: src/ and x/ real folders, src/x a link to "/", src/y a real folder
+  const disk: Record<string, { kind: 'dir' | 'file'; realPath: string }> = {
+    [WT]: { kind: 'dir', realPath: WT }, [`${WT}/src`]: { kind: 'dir', realPath: `${WT}/src` }, [`${WT}/x`]: { kind: 'dir', realPath: `${WT}/x` },
+    [`${WT}/src/x`]: { kind: 'dir', realPath: '/' }, [`${WT}/src/y`]: { kind: 'dir', realPath: `${WT}/src/y` },
+  }
+  const fileStat = host.fs.stat
+  host.fs.stat = async (p, o) => {
+    const d = disk[p]
+    return d ? { kind: d.kind, size: 0, mtimeMs: 0, isLink: d.realPath !== p, ...(o?.resolve ? { realPath: d.realPath } : {}) } : fileStat(p, o)
+  }
+  const refused = { permissionDecision: 'deny', permissionDecisionReason: leaveFolderText }
+  const bash = (command: string, agent = 'ag1') => preToolUse(host, WT, agent, { toolName: 'bash', toolArgs: { command } })
+  // the checker's probe on one line: real bash ends in "/"
+  expect(await bash('cd src && cd x')).toEqual(refused)
+  expect(await bash('cd src; cd x')).toEqual(refused)
+  // ... and over two calls: `cd src` passes, then `cd x` (or any relative cd, even `cd .`) is refused
+  expect(await bash('cd src')).toBe(undefined)
+  for (const command of ['cd x', 'cd y', 'cd .', 'cd ./x && ls']) expect([command, await bash(command)]).toEqual([command, refused])
+  // a full path is checked wherever the shell is: one to a real folder inside passes, the link out is refused
+  expect(await bash(`cd ${WT}/src/x`)).toEqual(refused)
+  expect(await bash(`cd ${WT}/src/y`)).toBe(undefined)
+  expect(await bash(`cd ${WT}`)).toBe(undefined)
+  // the shell may still be in src/ or src/y/ (a cd may fail), so relative cds stay refused
+  expect(await bash('cd x')).toEqual(refused)
+  // a write is judged from each folder the shell may be in: from src/, "../../worktrees/T-1/z" leaves the folder
+  workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() })
+  expect(await bash('echo x > ../../worktrees/T-1/src/a.ts', 'ag2')).toBe(undefined)
+  expect((await bash('echo x > ../../worktrees/T-1/src/a.ts'))?.permissionDecision).toBe('deny')
+  expect(await bash(`echo x > ${WT}/src/a.ts`)).toBe(undefined)
+  // each agent's shell is its own: another worker still at its top may cd relatively
+  expect(await bash('cd src', 'ag2')).toBe(undefined)
   workers.clear()
 })
 
