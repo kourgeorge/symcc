@@ -718,7 +718,7 @@ export const segText = (xs: readonly LiveSeg[]): string => xs.map(x => x.text).j
  * A lane's two lines as segments, never wider than the layout's width (unless even the tightest layout is wider):
  * 1. "▶ T-684 /symcc-doc…  ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2": passed stations ●━━, the current one blinking
  *    (`frame`, liveBlink), future ──○; the right column the queue place or the time at the station;
- * 2. "  bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · <worker 5.4M · checker 1.9M> · ⌕×2" (T-867, T-931): kind and
+ * 2. "  bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · <worker 5.4M · checker 1.9M> · ⌕ sent back ×2" (T-867, T-931): kind and
  *    try, its active time (all tries), the whole task's tokens (all its tries) and how many times the board's median
  *    tokens per merged task that is (the warning tone from LANE_WARN_TIMES), its tokens by agent kind in < > (a 0 part
  *    left out, no < > when there is none) and the checker's send-backs. When narrow, parts go: the < > split, then
@@ -754,7 +754,8 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   const name = segs({ text: done ? `${LIVE_DONE_MARK} ` : LIVE_RUN_MARK, tone: done ? 'dim' : 'run' }, { text: padWidth(lane.id, l.idW), tone: 'run' }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? 'dim' : 'text' })
   const first = [...name, { text: sep, tone: 'text' as const }, ...track, { text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: 'dim' as const }]
   // the second line (T-867: plain numbers, no bar)
-  const back: LiveSeg | false = lane.sentBack > 0 && { text: `⌕×${lane.sentBack}`, tone: 'dim' }
+  // T-982: the checker's send-backs, "⌕ sent back ×2"; the short "⌕ ×2" only once every other part is gone
+  const back = (short: boolean): LiveSeg | false => lane.sentBack > 0 && { text: `⌕${short ? '' : ' sent back'} ×${lane.sentBack}`, tone: 'dim' }
   const fits = (xs: LiveSeg[]) => textWidth(segText(xs)) <= l.width
   // "(7.6× median)": against the board's usual tokens per merged task; the warning tone from twice it
   const times = lane.tokens !== undefined && lane.usual ? lane.tokens / lane.usual : undefined
@@ -770,13 +771,14 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   const split: LiveSeg[] = agents.length ? [{ text: `<${agents.join(' · ')}>`, tone: 'dim' }] : []
   /** The line with the parts up to `level` (4: all; 3: no ‹ › split; 2: no "× median"; 1 (no kind): no ⌀; 0: no ⏱).
    *  T-931: the clock first, then the tokens, then the split; the clock is dropped only after the tokens. */
-  const line = (level: number, withKind: boolean): LiveSeg[] => {
+  const line = (level: number, withKind: boolean, short = false): LiveSeg[] => {
     const lead: LiveSeg = { text: `  ${withKind ? `${lane.kind} ` : ''}try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }
-    const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], back ? [back] : []].filter(x => x.length)
+    const b = back(short)
+    const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], b ? [b] : []].filter(x => x.length)
     return segs(lead, ...parts.flatMap((x, i): LiveSeg[] => [{ text: ' · ', tone: 'dim' }, ...x]))
   }
   const tries: LiveSeg[][] = [4, 3, 2].map(n => line(n, true))
-  tries.push(line(2, false), line(1, false), line(0, false), segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
+  tries.push(line(2, false), line(1, false), line(0, false), line(0, false, true), segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
   const second = tries.find(fits) ?? tries[tries.length - 1]!
   // T-771: a finished lane's second line is dim throughout
   return [first, done ? second.map(x => (x.tone === 'text' && !x.text.trim() ? x : { ...x, tone: 'dim' })) : second]
