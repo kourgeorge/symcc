@@ -53,7 +53,7 @@ test('tasks run in order, and a task waits for the ones it is after', async () =
   let b = emptyBoard()
   const [b1, a] = addTask(b, { origin: W, title: 'A', files: ['src/a.js'] }, T)
   const [b2, c] = addTask(b1, { origin: W, title: 'C', after: [a.id] }, T)
-  const [b3, d] = addTask(b2, { origin: W, title: 'D', order: 0 }, T)
+  const [b3, d] = addTask(b2, { origin: W, title: 'D', priority: -1 }, T)
   b = b3
   expect(ready(b).map(t => t.id)).toEqual([d.id, a.id])
   b = patchTask(b, a.id, { status: 'done' }, T)
@@ -604,7 +604,7 @@ test('the board list shows "→ branch" only for a task that merges into another
 })
 
 test("a task waiting only for the owner's files: its row and keys say to commit or stash them; a question is unchanged", () => {
-  const base: SymccTask = { id: 'T-2', title: 'x', details: '', files: [], status: 'waiting', note: 'waiting for your files on dev: a.ts; commit or stash them', order: 0, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '' }
+  const base: SymccTask = { id: 'T-2', title: 'x', details: '', files: [], status: 'waiting', note: 'waiting for your files on dev: a.ts; commit or stash them', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '' }
   const files = { ...base, live: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }, merge_into: 'dev' } as SymccTask
   expect(fileWaitText(files)).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
   expect(rowExtra(files, [files])).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
@@ -626,7 +626,7 @@ test("a task waiting only for the owner's files: its row and keys say to commit 
 })
 
 test('an old board: each task without its own branch gets the old target_branch, and target_branch is dropped', () => {
-  const task = (id: string, extra: object = {}) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', order: 0, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T, origin: { by: 'lead', why: 'x', at: T }, ...extra })
+  const task = (id: string, extra: object = {}) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T, origin: { by: 'lead', why: 'x', at: T }, ...extra })
   const old = { version: 1, next_id: 3, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, tasks: [task('T-1'), task('T-2', { merge_into: 'feature-x' })] }
   const r = readOld(JSON.stringify(old))
   expect(r.board.tasks.map(t => t.merge_into)).toEqual(['main', 'feature-x'])
@@ -643,7 +643,7 @@ test('an old board: each task without its own branch gets the old target_branch,
 // ---------------- today in full, older days folded ----------------
 
 const at = (id: string, status: string, updated: string, created = updated) =>
-  ({ id, title: id, details: '', files: [], status, note: '', order: 0, after: [], attempts: 0, history: [], branch: null, created_at: created, updated_at: updated }) as SymccTask
+  ({ id, title: id, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: created, updated_at: updated }) as SymccTask
 const NOW = Date.parse('2026-11-11T12:00:00Z')
 
 test('open tasks from old days stay on top, today in full, older days grouped newest day first', () => {
@@ -2214,7 +2214,7 @@ test('the worker prompt for a role with web tools has the web safety line; other
 })
 
 test('a board with old roles is migrated once: tests becomes tester, backend and frontend general', () => {
-  const task = (id: string, role?: string) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', order: 1, after: [], attempts: 0, history: [], branch: null, origin: W, created_at: T, updated_at: T, ...(role ? { role } : {}) })
+  const task = (id: string, role?: string) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', priority: 1, after: [], attempts: 0, history: [], branch: null, origin: W, created_at: T, updated_at: T, ...(role ? { role } : {}) })
   const r = readOld(JSON.stringify({ version: 1, next_id: 6, tasks: [task('T-1', 'tests'), task('T-2', 'backend'), task('T-3', 'Frontend'), task('T-4', 'docs'), task('T-5')] }))
   expect(r.board.tasks.map(t => t.role)).toEqual(['tester', 'general', 'general', 'docs', undefined])
   // saved and upgraded again, nothing more changes
@@ -2479,7 +2479,7 @@ test('a task without a why, or with a wrong origin, is refused with a clear erro
 
 test('T-348: a task with the removed stage engine\'s stage, stages and backs loads without them, once (board.json and archive.json)', () => {
   const origin = { by: 'lead', why: 'w', at: T }
-  const base = { title: 'A', details: 'A', files: [], note: '', order: 1, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, merge_into: 'main', origin }
+  const base = { title: 'A', details: 'A', files: [], note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, merge_into: 'main', origin }
   const staged = { stage: 'code', stages: [{ name: 'code', result: 'passed', at: T, try: 1 }], backs: { tests: 1 }, runs: [{ started: T, ended: T, stage: 'code' }] }
   const board = { version: 1, next_id: 3, mode: 'auto', test_commands: [], max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
     { ...base, id: 'T-1', status: 'todo', ...staged },
@@ -2502,7 +2502,7 @@ test('T-348: a task with the removed stage engine\'s stage, stages and backs loa
 
 test('a board whose tasks have no origin is migrated once: the lead made them before origins were kept', () => {
   const old = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
-    { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', order: 1, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T },
+    { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', priority: 1, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T },
   ] }
   const r = readOld(JSON.stringify(old))
   expect(r.board.tasks[0]!.origin).toEqual({ by: 'lead', why: 'made before origins were kept', at: T })
@@ -2742,7 +2742,7 @@ test('run.commits and merged are saved on the task and kept through a board save
 })
 
 test('broken commit fields are dropped, not fatal', () => {
-  const old = { version: 1, next_id: 2, tasks: [{ id: 'T-1', title: 'old', details: '', files: [], status: 'done', note: 'merged into main (47d4b71c)', order: 1, after: [], attempts: 1, history: [], runs: [{ started: T, ended: T }], branch: null, created_at: T, updated_at: T }] }
+  const old = { version: 1, next_id: 2, tasks: [{ id: 'T-1', title: 'old', details: '', files: [], status: 'done', note: 'merged into main (47d4b71c)', priority: 1, after: [], attempts: 1, history: [], runs: [{ started: T, ended: T }], branch: null, created_at: T, updated_at: T }] }
   const t = parseBoard(JSON.stringify(old)).tasks[0]!
   expect(t.runs).toEqual([{ started: T, ended: T }])
   expect('merged' in t).toBe(false)
@@ -2878,9 +2878,9 @@ test('after a plugin reload, a worker of this session is adopted, not stopped (T
 test('the panel sections: needs you, doing, to do by run order then paused, backlog, done and dropped finished-last first', () => {
   const tasks = [
     { ...at('T-1', 'done', '2026-11-10T10:00:00Z'), title: 'Yesterday work' },
-    { ...at('T-2', 'todo', '2026-11-11T10:00:00Z'), order: 5 },
-    { ...at('T-3', 'paused', '2026-11-11T10:00:00Z'), order: 1 },
-    { ...at('T-4', 'todo', '2026-11-11T10:00:00Z'), order: 2 },
+    { ...at('T-2', 'todo', '2026-11-11T10:00:00Z'), priority: 5 },
+    { ...at('T-3', 'paused', '2026-11-11T10:00:00Z'), priority: 1 },
+    { ...at('T-4', 'todo', '2026-11-11T10:00:00Z'), priority: 2 },
     at('T-5', 'failed', '2026-11-11T10:00:00Z'),
     at('T-6', 'review', '2026-11-11T09:00:00Z'),
     at('T-7', 'doing', '2026-11-11T10:00:00Z'),
@@ -2909,8 +2909,8 @@ test('the panel sections: needs you, doing, to do by run order then paused, back
   expect(head).toBe('▸ Done     2')
 })
 
-test('the panel to-do list: each task after the open tasks it waits for, else by order then id; loops list every task once', () => {
-  const td = (id: string, order: number, after: string[] = [], status: SymccStatus = 'todo') => ({ ...at(id, status, '2026-11-11T10:00:00Z'), order, after })
+test('the panel to-do list: each task after the open tasks it waits for, else by priority then id; loops list every task once', () => {
+  const td = (id: string, priority: number, after: string[] = [], status: SymccStatus = 'todo') => ({ ...at(id, status, '2026-11-11T10:00:00Z'), priority, after })
   const ids = (tasks: SymccTask[]) => panelSections(tasks, NOW, 0).todo.map(t => t.id)
   // a low-order task waiting on a high-order one is listed after it
   expect(ids([td('T-1', 1, ['T-2']), td('T-2', 9)])).toEqual(['T-2', 'T-1'])

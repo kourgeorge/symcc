@@ -29,7 +29,7 @@ test('new entries get at, kind and text through the helper', () => {
 })
 
 const OLD_TASK = {
-  id: 'T-1', title: 'old', details: '', files: [], status: 'failed', note: '', order: 1, after: [], attempts: 2, branch: null,
+  id: 'T-1', title: 'old', details: '', files: [], status: 'failed', note: '', priority: 1, after: [], attempts: 2, branch: null,
   created_at: '2026-11-01T08:00:00.000Z', updated_at: '2026-11-02T09:00:00.000Z', merge_into: 'main', origin: { by: 'owner', why: 'x', at: '2026-11-01T08:00:00.000Z' },
   runs: [{ started: '2026-11-01T09:00:00.000Z', ended: '2026-11-01T09:20:00.000Z' }, { started: '2026-11-02T08:00:00.000Z' }],
   history: [

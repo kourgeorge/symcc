@@ -122,6 +122,19 @@ export function migrateRunAgents(t: Raw): Raw | null {
   return { ...task, ...(runs.length ? { runs: out } : {}) }
 }
 
+/** The highest old `order` that counts as moved up by the lead or the owner (T-967): such a task gets priority -1. */
+export const MOVED_UP_ORDER = 10
+
+/**
+ * Task `t` with its old growing `order` number made a `priority` (T-967, like Unix nice): an order of MOVED_UP_ORDER or
+ * less (a task the lead or the owner moved up) becomes -1, any other 0; `order` is removed. Null when it has no `order`.
+ */
+export function withPriority(t: Raw): Raw | null {
+  if (!('order' in t)) return null
+  const { order, ...rest } = t
+  return { ...rest, priority: isNum(order) && order <= MOVED_UP_ORDER ? -1 : 0 }
+}
+
 /** Roles that were built in before and are gone now, and the role a task with one gets. */
 export const OLD_ROLES: Record<string, string> = { tests: 'tester', backend: 'general', frontend: 'general' }
 
@@ -440,6 +453,8 @@ export function upgradeTask(t: Raw, into = 'main'): Raw | null {
   if (live) out = live
   const ask = withAsk(out)
   if (ask) out = ask
+  const prio = withPriority(out)
+  if (prio) out = prio
   const queue = typeof out.note === 'string' ? /^queue \((\d+)\)$/.exec(out.note) : null
   const lv = isObj(out.live) ? out.live : {}
   const checking = lv.checking as Raw | undefined
@@ -456,8 +471,10 @@ export function upgradeArchiveTask(t0: Raw): Raw | null {
   const history = migrateHistory(clash as Parameters<typeof migrateHistory>[0])
   const agents = migrateRunAgents({ ...clash, ...(split ? { runs: split } : {}) })
   const asked = withAsk(clash)
-  if (clash === t0 && !split && !history && !agents && !asked) return null
-  const out: Raw = { ...(agents ?? clash), ...(split && !agents ? { runs: split } : {}), ...(history ? { history } : {}) }
+  const ordered = 'order' in clash
+  if (clash === t0 && !split && !history && !agents && !asked && !ordered) return null
+  let out: Raw = { ...(agents ?? clash), ...(split && !agents ? { runs: split } : {}), ...(history ? { history } : {}) }
+  out = withPriority(out) ?? out
   if (!asked) return out
   const { question: _q, options: _o, asked_files: _a, question_lead: _l, options_lead: _p, ...kept } = out
   return kept
@@ -572,7 +589,7 @@ export type OldInput = {
 
 /** The count of everything in old shape, as lines; rows with n = 0 are left out. */
 export function oldDataRows(i: OldInput): OldRow[] {
-  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0, live: 0, ask: 0, qBy: 0 }
+  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0, live: 0, ask: 0, qBy: 0, order: 0 }
   const task = (t: Raw, board: boolean) => {
     const runs = (Array.isArray(t.runs) ? t.runs : []).filter(isObj) as Raw[]
     for (const r of runs) {
@@ -584,6 +601,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     if (hasOldAgents(t)) c.chk++
     if (withoutStages(t)) c.stage++
     if (withoutConflictTries(t)) c.conflict++
+    if ('order' in t) c.order++
     for (const e of Array.isArray(t.history) ? t.history : []) {
       if (typeof e === 'string' || !isObj(e) || typeof e.text !== 'string') c.strHist++
       else if (!isHistoryKind(e.kind)) c.badKind++
@@ -634,6 +652,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: c.rerun, text: 'tasks with test_rerun / rerun_minutes fields', fix: true },
     { n: c.conflict, text: 'tasks with a conflict_tries field', fix: true },
     { n: c.live, text: 'tasks with try-only fields outside `live` (session, finishing, checking, merge_wait, extra_minutes, time_ask, wrap_up, try_question, try_refused), a merge_main that is false, or a clash failure known only from its note', fix: true },
+    { n: c.order, text: 'tasks with the old `order` number instead of a priority (order 10 or less becomes priority -1, any other 0)', fix: true },
     { n: c.ask, text: 'tasks with their question in several fields (question, options, asked_files, question_lead, options_lead, live.question) instead of one `ask` record', fix: true },
     { n: scoutFile ? 1 : 0, text: 'scouts.json with last_run / last_report entries', fix: true },
     { n: c.qBy, text: 'board questions with no `by`', fix: true },

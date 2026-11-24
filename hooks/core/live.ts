@@ -3,7 +3,7 @@
 // a client needs is worked out here, the lane text included (cut titles, station marks, the blinking current station),
 // so each client (Claude Code's terminal panel now; VS Code and OpenCode later) only draws the segments.
 import type { SymccMode, SymccTask } from '../../types'
-import { type BoardTask, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
+import { type BoardTask, byRunOrder, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
 import { stageStep, taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { median, taskFigures } from './stats'
@@ -131,11 +131,11 @@ export function liveIdle(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'
     .map(t => ({ t, at: finishedAt(t)?.atMs }))
     .filter((x): x is { t: BoardTask; at: number } => x.at !== undefined)
     .sort((a, b) => b.at - a.at || num(b.t.id) - num(a.t.id))[0]
-  const items = tasks.filter(t => t.status === 'backlog').sort((a, b) => a.order - b.order || num(a.id) - num(b.id))
+  const items = tasks.filter(t => t.status === 'backlog').sort(byRunOrder)
   const backlog = items.length
   const first = last ? `${LIVE_IDLE.done} · last merged ${last.t.id}, ${idleAgo(nowMs - last.at)} ago` : LIVE_IDLE.done
   const second = `${LIVE_IDLE.next}${backlog ? `, or move ${backlog === 1 ? 'the backlog item' : `one of ${backlog} backlog items`} to todo` : ''}.`
-  // T-924: the next backlog items (lowest order first, then oldest), one line each, then how many more
+  // T-924: the next backlog items (lowest priority first, then oldest), one line each, then how many more
   const next = items.slice(0, IDLE_BACKLOG).map(t => fitText(`  ${STATUS_MARK.backlog} ${t.id}  ${t.title}`, w))
   const more = backlog - next.length
   return [fitText(first, w), ...wrap(second), ...next, ...(more > 0 ? [fitText(`  … ${more} more in the backlog`, w)] : [])]
@@ -817,7 +817,7 @@ export function liveTrains(view: LiveView, nowMs: number, lanes: readonly LiveLa
   const board = { tasks: view.tasks as BoardTask[], archived_done: view.archived_done ?? [] }
   const byId = new Map(view.tasks.map(t => [t.id, t]))
   const laneOf = new Map(lanes.map(l => [l.id, l]))
-  const todo = waitOrder(view.tasks.filter(t => t.status === 'todo'), (x, y) => x.order - y.order || num(x.id) - num(y.id))
+  const todo = waitOrder(view.tasks.filter(t => t.status === 'todo'), byRunOrder)
   const rank = new Map(todo.map((t, i) => [t.id, i]))
   const open = new Map(todo.map(t => [t.id, [...new Set((t.after ?? []).filter(a => a !== t.id && !depDone(board, a)))]]))
   const parent = new Map<string, string>()

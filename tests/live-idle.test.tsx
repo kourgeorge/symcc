@@ -8,7 +8,7 @@ import { vsHref } from '../hooks/claude/ui/vscode'
 import { PANE, T0, seedBoard } from './board-fixture'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
-const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
+const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
 const merged = (id: string, minAgo: number) => task(id, 'done', { history: [{ kind: 'merged', at: iso(minAgo), text: 'try 1 → merged into main' }] })
 
 /** The four boards, and the lines each one shows. */
@@ -27,10 +27,10 @@ const CASES: { name: string; mode: 'auto' | 'paused'; tasks: unknown[]; lines: s
     lines: ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo.", '  ◇ T-893  Task T-893', '  ◇ T-894  Task T-894'],
   },
   {
-    // T-924: the next 3 backlog items (lowest order first, then oldest), then how many more
+    // T-924: the next 3 backlog items (lowest priority first, then oldest), then how many more
     name: 'big backlog',
     mode: 'auto',
-    tasks: [merged('T-891', 3), task('T-895', 'backlog', { order: 1 }), task('T-893', 'backlog', { order: 9 }), task('T-896', 'backlog', { order: 1 }), task('T-894', 'backlog', { order: 2 }), task('T-897', 'backlog', { order: 20 })],
+    tasks: [merged('T-891', 3), task('T-895', 'backlog', { priority: 1 }), task('T-893', 'backlog', { priority: 9 }), task('T-896', 'backlog', { priority: 1 }), task('T-894', 'backlog', { priority: 2 }), task('T-897', 'backlog', { priority: 19 })],
     lines: ['All done · last merged T-891, 3m ago', "Tell the lead what's next, or move one of 5 backlog items to todo.", '  ◇ T-895  Task T-895', '  ◇ T-896  Task T-896', '  ◇ T-894  Task T-894', '  … 2 more in the backlog'],
   },
   { name: 'empty', mode: 'auto', tasks: [], lines: ['No tasks yet. Tell the lead what you want built.'] },

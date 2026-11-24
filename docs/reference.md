@@ -40,6 +40,11 @@ The lead sees that T-2 needs T-1's index, and that T-1 and T-3 touch different f
 task starts only when every task in its `after` list is merged. Change the order any
 time: "do T-3 first", "T-2 should wait for T-3".
 
+Each task also has a `priority`, like Unix's nice value: a whole number from -20 to 19,
+0 for every new task, lower runs first. Among the tasks free to start, the lowest priority
+starts first; on a tie, the older task (lower number). "Do T-3 first" makes the lead give
+T-3 a priority below 0 (-1, -2…); work that can wait gets 1, 2…
+
 ## Install: other ways and fixes
 
 **Requirements.** Claude Code with plugin function hooks (the `$.tool`, `$.agent` and
