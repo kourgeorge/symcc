@@ -5,17 +5,17 @@
 // joinSession / createSession (hooks: { handlers: { onPreToolUse } }).
 //
 // What Copilot CLI 1.0.114 hands the hook (the T-955 spike, and the tool schemas in the CLI's own bundle):
-// - edit {path, old_str, new_str}, create {path, file_text}: one file each.
+// - edit, str_replace {path, old_str, new_str}, create {path, file_text}: one file each.
 // - str_replace_editor {command: view|create|str_replace|insert|..., path}: an edit unless its command is view.
 // - apply_patch: one raw patch string (the CLI also reads {input} or {patch}); its files are on its
 //   "*** Add File: ", "*** Update File: ", "*** Delete File: " and "*** Move to: " lines.
 // - bash, powershell, local_shell {command}: a shell command. write_bash, write_powershell {shellId, input}: text
 //   typed into a running shell; symcc's agents are refused those, and a shell call with a shellId or async (see splitShell).
 // - read-only ones (view, grep, rg, glob, lsp, web_fetch, read_bash, stop_bash, ...): nothing to check.
-// A tool not named here (an MCP tool, a newer built-in) has its path-like and command-like fields checked, so a file
-// tool symcc doesn't know is still kept inside the task's folder.
+// symcc's agents may use only the tools named here and symcc's own (knownTool); any other (an MCP tool, a newer
+// built-in) is refused them, since the guard can't tell what it touches. The lead may use any tool.
 import type { FileTouch, Host } from '../host'
-import { toolCall, toolCheck, toolCheckFailed } from '../app/symcc'
+import { toolCall, toolCheck, toolCheckFailed, isSymccTool } from '../app/symcc'
 import type { AgentKindOf } from '../app/ask'
 import { useName } from '../app/state'
 import { normalPath, isAbsolute } from '../app/store'
@@ -35,41 +35,19 @@ export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
 
 const SHELL_TOOLS: ReadonlySet<string> = new Set(['bash', 'powershell', 'local_shell'])
 const SHELL_INPUT_TOOLS: ReadonlySet<string> = new Set(['write_bash', 'write_powershell'])
-const FILE_TOOLS: ReadonlySet<string> = new Set(['edit', 'create', 'str_replace_editor'])
+const FILE_TOOLS: ReadonlySet<string> = new Set(['edit', 'create', 'str_replace_editor', 'str_replace'])
 
 /**
- * A field of a tool symcc doesn't know (an MCP tool's, a newer built-in's) that may name a file: by a word in its name
- * (path, file, dir, source, src, dest, target, ...: so both ends of a move like {source, destination} or
- * {old_path, new_path} are checked) or by being one of the short move words (from, to, old, new). Fields that carry a
- * file's text (content, text, data, body) are not paths.
+ * Whether `tool` is one the guard knows: a Copilot built-in it checks or that only reads, or one of symcc's own
+ * (those run symcc's toolCall, which judges them, see hooks/copilot/tools.ts). symcc's agents may use no other tool
+ * (an MCP tool, a newer built-in), since the guard can't tell what such a tool touches.
  */
-export function pathField(key: string): boolean {
-  if (/content|text|data|body/i.test(key)) return false
-  // the key's words: snake_case, kebab-case and camelCase are split ("old_path", "newPath" -> old, path / new, path)
-  const words = key.split(/[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])/).map(w => w.toLowerCase()).filter(Boolean)
-  return words.some(w => PATH_WORDS.has(w) || /(path|paths|filename|filenames)$/.test(w)) || MOVE_KEYS.has(words.join(''))
+export function knownTool(tool: string): boolean {
+  return READ_ONLY_TOOLS.has(tool) || FILE_TOOLS.has(tool) || SHELL_TOOLS.has(tool) || SHELL_INPUT_TOOLS.has(tool) || tool === 'apply_patch' || isSymccTool(tool)
 }
-const PATH_WORDS: ReadonlySet<string> = new Set([
-  'path', 'paths', 'file', 'files', 'filename', 'filenames', 'dir', 'dirs', 'directory', 'directories', 'folder', 'folders',
-  'source', 'sources', 'src', 'dest', 'destination', 'target', 'location', 'cwd', 'root',
-])
-/** Whole keys a move or rename names its two files by ("new" alone is a file, "new_str" is not). */
-const MOVE_KEYS: ReadonlySet<string> = new Set(['from', 'to', 'old', 'new', 'oldname', 'newname'])
-const COMMAND_FIELDS = ['command', 'cmd', 'script']
 
-/** How deep the fields of an unknown tool's arguments are walked (so {edits: [{path}]} is read too). */
-const WALK_DEPTH = 4
-
-/** The path-like strings among an unknown tool's fields, nested objects and lists included. */
-function pathValues(v: unknown, key: string | undefined, depth: number, out: string[]) {
-  if (typeof v === 'string') {
-    if (key !== undefined && pathField(key) && v.trim()) out.push(v.trim())
-  } else if (Array.isArray(v)) {
-    if (depth < WALK_DEPTH) for (const x of v) pathValues(x, key, depth + 1, out)
-  } else if (v && typeof v === 'object' && depth < WALK_DEPTH) {
-    for (const [k, x] of Object.entries(v as Record<string, unknown>)) pathValues(x, k, depth + 1, out)
-  }
-}
+/** The refusal of a tool the guard doesn't know, for symcc's agents. */
+export const unknownToolText = (tool: string) => `Refused: symcc workers in Copilot may only use known tools; ${tool || 'a tool with no name'} is not one.`
 
 /** The files a patch's text adds, changes, deletes or moves to; lenient on spaces and case, so no header slips past. */
 export function patchFiles(text: string): string[] {
@@ -118,12 +96,8 @@ export function copilotTouches(dir: string, toolName: string, toolArgs: unknown)
   if (FILE_TOOLS.has(toolName)) return toolName === 'str_replace_editor' && f.command === 'view' ? [] : str(f.path) ? [file(str(f.path))] : []
   if (SHELL_TOOLS.has(toolName)) return shell(commandOf(f.command))
   if (SHELL_INPUT_TOOLS.has(toolName)) return shell(str(f.input))
-  // a tool symcc doesn't know: every path-like and command-like field it has is checked, and patch text too
-  const paths: string[] = []
-  pathValues(f, undefined, 0, paths)
-  const patch = raw || str(f.input) || str(f.patch) || str(f.patchText)
-  const all = [...paths, ...patchFiles(patch)].filter((p, i, a) => p && a.indexOf(p) === i)
-  return [...all.map(file), ...COMMAND_FIELDS.flatMap(k => shell(commandOf(f[k])))]
+  // symcc's own tools, and any tool the guard doesn't know: nothing here (an agent is refused the unknown ones, see preToolUse)
+  return []
 }
 
 /**
@@ -158,6 +132,7 @@ export async function preToolUse(host: Host, dir: string, agentId: string | unde
     const tool = typeof input?.toolName === 'string' ? input.toolName : ''
     const call = await toolCall(host, `copilot:${tool || 'unknown'}`, agentId, {})
     if (call && 'deny' in call) return deny(call.deny)
+    if (agentId && !knownTool(tool)) return deny(unknownToolText(tool))
     if (agentId && splitShell(tool, input?.toolArgs)) return deny(splitShellText)
     for (const touch of copilotTouches(dir, tool, input?.toolArgs)) {
       const why = await toolCheck(host, agentId, touch, dir, kindOf)

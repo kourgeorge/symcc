@@ -1,11 +1,12 @@
 // T-958: Copilot CLI's onPreToolUse input ({ toolName, toolArgs }) goes through symcc's own edit and shell checks
 // (hooks/copilot/guard.ts). apply_patch's raw patch text gives its files (add, update, delete, move), bash's command
-// is judged as a shell command, read-only tools pass, and a tool symcc doesn't know still has its paths checked.
+// is judged as a shell command, read-only tools pass, and an agent's tool the guard doesn't know is refused.
 import { expect } from 'claude-code/testing'
 import { addTask, emptyBoard, patchTask, blockedEditText, bashOutsideText } from '../hooks/board'
 import { runBy } from './agent-fixture'
-import { S, workers } from '../hooks/app/state'
-import { copilotTouches, patchFiles, preToolUse, pathField, splitShellText } from '../hooks/copilot/guard'
+import { S, workers, toolName } from '../hooks/app/state'
+import { ASK_TOOL } from '../hooks/core/ask'
+import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText } from '../hooks/copilot/guard'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -106,28 +107,32 @@ test('read-only tools pass, even for paths outside the folder', async () => {
   workers.clear()
 })
 
-test("a tool symcc doesn't know has its path and command fields checked; odd input never throws or slips through", async () => {
+test("an agent's tool the guard doesn't know (an MCP tool, a newer built-in) is refused whatever its fields; odd input never throws", async () => {
   const host = world()
-  expect(copilotTouches(WT, 'mcp_write', { file_path: 'src/a.ts', paths: ['/repo/x', 3], cmd: 'ls' })).toEqual([{ path: `${WT}/src/a.ts` }, { path: '/repo/x' }, { command: 'ls' }])
-  expect((await preToolUse(host, WT, 'ag1', { toolName: 'some_mcp_write', toolArgs: { filePath: `${ROOT}/README.md`, content: 'x' } }))?.permissionDecision).toBe('deny')
-  expect(await preToolUse(host, WT, 'ag1', { toolName: 'some_mcp_tool', toolArgs: { query: 'hello' } })).toBe(undefined)
-  // both ends of a move are checked, whatever the fields are called, nested ones too
-  for (const toolArgs of [{ source: '/repo/README.md', destination: '/tmp/y' }, { old_path: '/repo/README.md', new_path: '/tmp/y' }, { src: '/repo/README.md', to: 'src/a.ts' }, { from: '/repo/README.md' }, { oldName: '/repo/README.md' }, { edits: [{ targetFile: '/repo/README.md' }] }]) {
-    expect((await preToolUse(host, WT, 'ag1', { toolName: 'some_mcp', toolArgs }))?.permissionDecision).toBe('deny')
+  const refused = (name: string) => ({ permissionDecision: 'deny', permissionDecisionReason: unknownToolText(name) })
+  // the checker's fields that slipped past the old field-name guess, moves, nested paths, harmless-looking ones too
+  for (const toolArgs of [{ dataPath: '/repo/README.md' }, { contextFile: '/repo/README.md' }, { contentPath: '/repo/x' }, { source: '/repo/README.md', destination: '/tmp/y' }, { edits: [{ targetFile: '/repo/README.md' }] }, { query: 'hello' }, {}]) {
+    expect(await preToolUse(host, WT, 'ag1', { toolName: 'mcp_fs_write', toolArgs })).toEqual(refused('mcp_fs_write'))
   }
-  expect(copilotTouches(WT, 'move_file', { source: 'src/a.ts', destination: 'src/b.ts' })).toEqual([{ path: `${WT}/src/a.ts` }, { path: `${WT}/src/b.ts` }])
-  // a file's text, an edit's strings and other words are not paths
-  for (const k of ['content', 'file_text', 'new_str', 'old_str', 'profile', 'direction', 'query', 'description']) expect(pathField(k)).toBe(false)
-  expect(await preToolUse(host, WT, 'ag1', { toolName: 'some_mcp_write', toolArgs: { path: 'src/a.ts', content: 'x', new_str: 'y', file_text: 'z' } })).toBe(undefined)
-  // no name, odd argument shapes: nothing to check, no error
-  expect(await preToolUse(host, WT, 'ag1', { toolName: 42, toolArgs: null })).toBe(undefined)
-  expect(await preToolUse(host, WT, 'ag1', undefined)).toBe(undefined)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'write_agent', toolArgs: { text: 'hi' } })).toEqual(refused('write_agent'))
+  // no name or no input at all is refused too, and never throws
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 42, toolArgs: null })).toEqual(refused(''))
+  expect(await preToolUse(host, WT, 'ag1', undefined)).toEqual(refused(''))
+  expect(knownTool('mcp_fs_write')).toBe(false)
+  for (const t of ['apply_patch', 'edit', 'create', 'str_replace_editor', 'str_replace', 'bash', 'powershell', 'local_shell', 'view', 'rg', 'glob', 'read_bash', 'web_fetch', toolName(ASK_TOOL), toolName('board')]) expect(knownTool(t)).toBe(true)
+  // symcc's own tools pass the guard (their handler runs symcc's toolCall, which judges them)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: toolName(ASK_TOOL), toolArgs: { question: 'q' } })).toBe(undefined)
+  // the hidden str_replace edit tool is checked by its path like edit
+  expect((await preToolUse(host, WT, 'ag1', { toolName: 'str_replace', toolArgs: { path: '/repo/README.md', old_str: 'a', new_str: 'b' } }))?.permissionDecision).toBe('deny')
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'str_replace', toolArgs: { path: 'src/a.ts', old_str: 'a', new_str: 'b' } })).toBe(undefined)
+  // odd argument shapes of known tools: nothing to check, no error
   expect(copilotTouches(WT, 'edit', { path: ['a'] })).toEqual([])
   expect(copilotTouches(WT, 'bash', { command: { x: 1 } })).toEqual([])
+  expect(copilotTouches(WT, 'mcp_fs_write', { path: '/repo/README.md' })).toEqual([])
   // a JSON text of the arguments is read like the object
   expect(copilotTouches(WT, 'edit', JSON.stringify({ path: 'src/b.ts' }))).toEqual([{ path: `${WT}/src/b.ts` }])
-  // a Copilot tool named like one of symcc's is never run as symcc's tool here: it is only judged
-  expect(await preToolUse(host, WT, 'ag1', { toolName: 'board', toolArgs: {} })).toBe(undefined)
+  // the lead may still use a tool the guard doesn't know
+  expect(await preToolUse(host, ROOT, undefined, { toolName: 'mcp_fs_write', toolArgs: { dataPath: '/repo/README.md' } })).toBe(undefined)
   workers.clear()
 })
 
