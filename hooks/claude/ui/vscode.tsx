@@ -282,8 +282,7 @@ export function vsFacts(k: VsKit, key: string, rows: readonly { key: string; lab
   )
 }
 
-/** The footer in VS Code (T-1002: no rule and no hint): on the Tasks page the mode switch as a link and the search box;
- *  nothing else. `extra`: more under the search box ("Clear search"). */
+/** The footer in VS Code (T-1002: no rule and no hint): only what the page passes in (`search`, `extra`). `extra`: more under the search box ("Clear search"). */
 export function vsFooter(k: VsKit, name: string, opts: { search?: RenderChildren; extra?: RenderChildren } = {}): RenderChildren {
   const { Box } = k
   return (

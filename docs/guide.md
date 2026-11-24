@@ -1480,8 +1480,9 @@ unchanged.
     hour), Yesterday, and 7 days.
   - **Organizational memory** `2 / 60`: one line, with an `All notes` link that opens the page
     of notes.
-- **Tasks**: grouped under headings (Questions for you, Waiting for you, Review, Failed, Doing,
-  To do), each with its colored mark and its count as plain dim words (`▶ Doing 2`; the task page's
+- **Tasks**: grouped under headings (Questions for you, Waiting for you, Review, Failed), each with
+  its colored mark and its count as plain dim words (`? Questions 2`); doing and to-do tasks follow as one
+  list with no heading (the task page's
   status is plain bold words in its color too), a blank line
   between them. Each task is one line: the ID (a link), its state cell (`▶ 2m`,
   `? waiting for 5m`, `✗ failed 3m ago`, lined up in one column per group), the whole title
