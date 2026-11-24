@@ -1,12 +1,12 @@
 // T-958: Copilot CLI's onPreToolUse input ({ toolName, toolArgs }) goes through symcc's own edit and shell checks
 // (hooks/copilot/guard.ts). apply_patch's raw patch text gives its files (add, update, delete, move), bash's command
-// is judged as a shell command, read-only tools pass, and an agent's tool the guard doesn't know is refused.
+// is judged as a shell command and, for an agent, wrapped to run from its own folder, read-only tools pass, and an agent's tool the guard doesn't know is refused.
 import { expect } from 'claude-code/testing'
 import { addTask, emptyBoard, patchTask, blockedEditText, bashOutsideText } from '../hooks/board'
 import { runBy } from './agent-fixture'
 import { S, workers, toolName } from '../hooks/app/state'
 import { ASK_TOOL } from '../hooks/core/ask'
-import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText, patchNoFilesText, leaveFolderText, folderMoves, forgetShells } from '../hooks/copilot/guard'
+import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText, patchNoFilesText, shellWrap, shellUnreadText } from '../hooks/copilot/guard'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -26,7 +26,6 @@ function world() {
     run: async () => done(),
   })
   S.root = ROOT
-  forgetShells()
   workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() })
   return host
 }
@@ -89,90 +88,42 @@ test('edit, create and str_replace_editor are checked by their path; str_replace
 test('bash: a write outside the folder is denied, one inside passes',async () => {
   const host = world()
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'echo x > /repo/README.md' } })).toEqual({ permissionDecision: 'deny', permissionDecisionReason: bashOutsideText('README.md', WT) })
-  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: `echo x > ${WT}/src/a.ts` } })).toBe(undefined)
+  // one inside passes, wrapped to run from the folder (see the wrap test below)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: `echo x > ${WT}/src/a.ts` } })).toEqual({ modifiedArgs: { command: shellWrap(WT, 'bash', `echo x > ${WT}/src/a.ts`) } })
   expect((await preToolUse(host, WT, 'ag1', { toolName: 'powershell', toolArgs: { command: 'echo x > /repo/README.md' } }))?.permissionDecision).toBe('deny')
-  // Copilot's bash session lives on between calls, so moving it out of the folder is refused (see the cd test below)
-  expect((await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'cd /repo' } }))?.permissionDecision).toBe('deny')
-  expect((await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'cd ../../..' } }))?.permissionDecision).toBe('deny')
   // an argument list (local_shell's) is quoted into one line, so the same words are judged
   expect(copilotTouches(WT, 'local_shell', { command: ['sh', '-c', 'echo x > /repo/README.md'] })).toEqual([{ command: "sh -c 'echo x > /repo/README.md'" }])
   workers.clear()
 })
 
-test("the bash session keeps its folder between calls, so an agent may not cd out of its own folder", async () => {
+test("an agent's shell call is wrapped to run in a new shell from its own folder, so the session shell never moves", async () => {
   const host = world()
-  // the disk: the folder with src/ and src/x/ in it, a link "up" to "/", and a file
-  const disk: Record<string, { kind: 'dir' | 'file'; realPath: string }> = {
-    [WT]: { kind: 'dir', realPath: WT }, [`${WT}/src`]: { kind: 'dir', realPath: `${WT}/src` }, [`${WT}/src/x`]: { kind: 'dir', realPath: `${WT}/src/x` },
-    [`${WT}/up`]: { kind: 'dir', realPath: '/' }, [`${WT}/f.txt`]: { kind: 'file', realPath: `${WT}/f.txt` },
+  const wrapped = (tool: string, command: string | string[], extra: Record<string, unknown> = {}) => ({ modifiedArgs: { ...extra, command: shellWrap(WT, tool, command) } })
+  // the checkers' ways out of the folder over two calls: each call now starts from the folder again (real bash, in the
+  // hand-back's probe, prints the folder after each of these), so they pass, wrapped
+  for (const command of ['cd /', 'cd ~', 'cd', 'cd -', 'cd $HOME', 'cd src', 'cd ./src && ls', 'exec bash -c "cd /; exec bash"', 'f() { cd /; }; alias ls="cd /"', 'shopt -s autocd']) {
+    expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, wrapped('bash', command)])
   }
-  const fileStat = host.fs.stat
-  host.fs.stat = async (p, o) => {
-    const d = disk[p]
-    return d ? { kind: d.kind, size: 0, mtimeMs: 0, isLink: d.realPath !== p, ...(o?.resolve ? { realPath: d.realPath } : {}) } : fileStat(p, o)
+  // the bash form: cd into the folder, then the command as one quoted word to a new bash with no input, so a ")" or an
+  // open here-document in it can't end the wrap and run the rest in the session shell
+  expect(shellWrap(WT, 'bash', 'ls')).toBe(`( cd -- '${WT}' || exit 1\nexec bash -c 'ls'\n) </dev/null`)
+  expect(shellWrap("/w/it's", 'bash', "x\n) ; cd /; cat <<'EOF'")).toBe(`( cd -- '/w/it'\\''s' || exit 1\nexec bash -c 'x\n) ; cd /; cat <<'\\''EOF'\\'''\n) </dev/null`)
+  // PowerShell: the folder and command go in -EncodedCommand (UTF-16LE base64) to a new PowerShell with no input
+  expect(shellWrap('/w', 'powershell', 'dir')).toBe('$null | & (Get-Process -Id $PID).Path -NoProfile -NonInteractive -EncodedCommand UwBlAHQALQBMAG8AYwBhAHQAaQBvAG4AIAAtAEwAaQB0AGUAcgBhAGwAUABhAHQAaAAgACcALwB3ACcAIAAtAEUAcgByAG8AcgBBAGMAdABpAG8AbgAgAFMAdABvAHAACgBkAGkAcgA=')
+  // local_shell's argument list runs as is from the folder; other fields are kept; a JSON text comes back as one
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'local_shell', toolArgs: { command: ['ls', '-l'], timeout_ms: 5 } })).toEqual(wrapped('local_shell', ['ls', '-l'], { timeout_ms: 5 }))
+  expect(shellWrap(WT, 'local_shell', ['ls', '-l'])).toEqual(['bash', '-c', 'cd -- "$0" || exit 1\nexec "$@"', WT, 'ls', '-l'])
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'powershell', toolArgs: JSON.stringify({ command: 'dir', description: 'd' }) })).toEqual({ modifiedArgs: JSON.stringify({ command: shellWrap(WT, 'powershell', 'dir'), description: 'd' }) })
+  // every call is judged from the folder by the shared check, a cd inside the command included
+  expect((await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'echo x > ../../../README.md' } }))?.permissionDecision).toBe('deny')
+  expect((await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'cd / && echo x > repo/README.md' } }))?.permissionDecision).toBe('deny')
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'echo x > src/a.ts' } })).toEqual(wrapped('bash', 'echo x > src/a.ts'))
+  // a command that can't be read is refused, not run unwrapped
+  for (const command of [{ x: 1 }, 42, [], [1], undefined]) {
+    expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })).toEqual({ permissionDecision: 'deny', permissionDecisionReason: shellUnreadText })
   }
-  const refused = { permissionDecision: 'deny', permissionDecisionReason: leaveFolderText }
-  // a link inside the folder that leads out, a folder not there (yet), a file, and a cd after a command that could make a link
-  for (const command of ['cd up', 'cd up/', 'cd missing', 'cd f.txt', 'ln -s / up2 && cd up2', '(ln -s / up2) && cd up2', 'mkdir y; cd y']) {
-    expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, refused])
-  }
-  // the checker's probe: `cd /`, then `echo x > repo/README.md` in the next call, wrote the owner's README
-  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'cd /' } })).toEqual(refused)
-  for (const command of ['cd //', 'cd /tmp', 'cd ~', 'cd ~root', 'cd', 'cd -', 'cd $HOME', 'cd "$OLDPWD"', 'cd ..', 'cd ../T-2', 'cd src/../..', 'pushd /tmp', 'popd', 'builtin cd /', 'command cd /tmp', 'X=1 cd /', "'cd' /", 'chdir /', 'cd -P /', 'ls && cd /', 'if true; then cd /; fi', 'f() { cd /; }; f', 'eval "cd /"', 'eval cd $X', 'trap "cd /" DEBUG', "alias ls='cd /'", 'source x.sh', '. ./x.sh', '$C /', 'export CDPATH=/', 'shopt -s cdable_vars', 'PROMPT_COMMAND="cd /"', 'cd src; cd ..']) {
-    expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, refused])
-  }
-  // the checker's probes: a `function` body holding a cd (it runs later, from wherever the shell is), and a command
-  // name bash brace-expands into a cd (`{cd,/}` runs `cd /`)
-  for (const command of ['function ls { cd /; }', 'function go { builtin cd /tmp; }', 'function ls { cd src; }', 'function ls() { cd /; }', 'function ls { eval "cd /"; }', '{cd,/}', '{builtin,cd,/tmp}', 'c{d,} /', 'command {cd,/}']) {
-    expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, refused])
-  }
-  expect(await preToolUse(host, WT, 'ag1', { toolName: 'powershell', toolArgs: { command: 'Set-Location C:\\' } })).toEqual(refused)
-  expect(await preToolUse(host, WT, 'ag1', { toolName: 'local_shell', toolArgs: { command: ['cd', '/'] } })).toEqual(refused)
-  // a cd inside the folder, or inside a subshell, passes; so do words that only look like cd
-  for (const command of ['cd src', 'cd ./src && ls', `cd ${WT}/src`, `cd ${WT}`, 'cd src/x/..', '( cd / && ls )', 'echo $(cd /tmp && pwd)', 'grep -r cd .', 'echo cd /', 'cat <<EOF\ncd /\nEOF', 'function hi { echo hi; }; hi', 'echo {a,b}', '{ ls; }']) {
-    forgetShells()
-    expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, undefined])
-  }
-  expect(folderMoves(WT, "ls")).toEqual([])
-  expect(folderMoves(WT, `cd src && cd ${WT}/x`)).toEqual(['src', `${WT}/x`])
-  // the lead is unchanged
+  // the lead is unchanged: not wrapped
   expect(await preToolUse(host, ROOT, undefined, { toolName: 'bash', toolArgs: { command: 'cd /' } })).toBe(undefined)
-  workers.clear()
-})
-
-test("once an agent's shell is in a subfolder, a relative cd is refused and each command is judged from every folder it may be in", async () => {
-  const host = world()
-  // the checker's disk: src/ and x/ real folders, src/x a link to "/", src/y a real folder
-  const disk: Record<string, { kind: 'dir' | 'file'; realPath: string }> = {
-    [WT]: { kind: 'dir', realPath: WT }, [`${WT}/src`]: { kind: 'dir', realPath: `${WT}/src` }, [`${WT}/x`]: { kind: 'dir', realPath: `${WT}/x` },
-    [`${WT}/src/x`]: { kind: 'dir', realPath: '/' }, [`${WT}/src/y`]: { kind: 'dir', realPath: `${WT}/src/y` },
-  }
-  const fileStat = host.fs.stat
-  host.fs.stat = async (p, o) => {
-    const d = disk[p]
-    return d ? { kind: d.kind, size: 0, mtimeMs: 0, isLink: d.realPath !== p, ...(o?.resolve ? { realPath: d.realPath } : {}) } : fileStat(p, o)
-  }
-  const refused = { permissionDecision: 'deny', permissionDecisionReason: leaveFolderText }
-  const bash = (command: string, agent = 'ag1') => preToolUse(host, WT, agent, { toolName: 'bash', toolArgs: { command } })
-  // the checker's probe on one line: real bash ends in "/"
-  expect(await bash('cd src && cd x')).toEqual(refused)
-  expect(await bash('cd src; cd x')).toEqual(refused)
-  // ... and over two calls: `cd src` passes, then `cd x` (or any relative cd, even `cd .`) is refused
-  expect(await bash('cd src')).toBe(undefined)
-  for (const command of ['cd x', 'cd y', 'cd .', 'cd ./x && ls']) expect([command, await bash(command)]).toEqual([command, refused])
-  // a full path is checked wherever the shell is: one to a real folder inside passes, the link out is refused
-  expect(await bash(`cd ${WT}/src/x`)).toEqual(refused)
-  expect(await bash(`cd ${WT}/src/y`)).toBe(undefined)
-  expect(await bash(`cd ${WT}`)).toBe(undefined)
-  // the shell may still be in src/ or src/y/ (a cd may fail), so relative cds stay refused
-  expect(await bash('cd x')).toEqual(refused)
-  // a write is judged from each folder the shell may be in: from src/, "../../worktrees/T-1/z" leaves the folder
-  workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: Date.now() })
-  expect(await bash('echo x > ../../worktrees/T-1/src/a.ts', 'ag2')).toBe(undefined)
-  expect((await bash('echo x > ../../worktrees/T-1/src/a.ts'))?.permissionDecision).toBe('deny')
-  expect(await bash(`echo x > ${WT}/src/a.ts`)).toBe(undefined)
-  // each agent's shell is its own: another worker still at its top may cd relatively
-  expect(await bash('cd src', 'ag2')).toBe(undefined)
   workers.clear()
 })
 
@@ -188,7 +139,7 @@ test("an agent may not type into a running shell or start one by id, so a comman
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'ls', async: true } })).toEqual(refused)
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'powershell', toolArgs: { command: 'dir', shellId: 0 } })).toEqual(refused)
   // a plain bash call is checked whole as before, async: false included
-  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'ls', async: false } })).toBe(undefined)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'ls', async: false } })).toEqual({ modifiedArgs: { command: shellWrap(WT, 'bash', 'ls'), async: false } })
   expect((await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'echo x > /repo/README.md' } }))?.permissionDecisionReason).toBe(bashOutsideText('README.md', WT))
   // the lead is unchanged
   expect(await preToolUse(host, ROOT, undefined, { toolName: 'write_bash', toolArgs: { shellId: 's1', input: 'ls\n' } })).toBe(undefined)

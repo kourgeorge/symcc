@@ -11,6 +11,8 @@
 //   "*** Add File: ", "*** Update File: ", "*** Delete File: " and "*** Move to: " lines.
 // - bash, powershell, local_shell {command}: a shell command. write_bash, write_powershell {shellId, input}: text
 //   typed into a running shell; symcc's agents are refused those, and a shell call with a shellId or async (see splitShell).
+//   An agent's shell command is rewritten (modifiedArgs, see shellWrap) to run in a new shell started in its own
+//   folder, so Copilot's long-lived session shell never moves and each call is judged from that folder.
 // - read-only ones (view, grep, rg, glob, lsp, web_fetch, read_bash, stop_bash, ...): nothing to check.
 // symcc's agents may use only the tools named here and symcc's own (knownTool); any other (an MCP tool, a newer
 // built-in) is refused them, since the guard can't tell what it touches. The lead may use any tool.
@@ -19,13 +21,18 @@ import { toolCall, toolCheck, toolCheckFailed, isSymccTool } from '../app/symcc'
 import type { AgentKindOf } from '../app/ask'
 import { useName } from '../app/state'
 import { normalPath, isAbsolute } from '../app/store'
-import { rawWords, shellPieces, type RawWord } from '../core/shell-words'
 
 /** Copilot's onPreToolUse input, as far as the guard reads it (anything else in it is ignored). */
 export type CopilotPreToolUse = { toolName?: unknown; toolArgs?: unknown }
 
 /** What onPreToolUse answers to refuse a call; Copilot then tells the model "Denied by preToolUse hook: <reason>". */
 export type CopilotDeny = { permissionDecision: 'deny'; permissionDecisionReason: string }
+
+/** What onPreToolUse answers to run a call with changed arguments (the SDK's PreToolUseHookOutput.modifiedArgs). */
+export type CopilotModify = { modifiedArgs: unknown; permissionDecision?: undefined; permissionDecisionReason?: undefined }
+
+/** onPreToolUse's answer: refuse, run with changed arguments, or nothing (Copilot goes on as usual). */
+export type CopilotPreToolUseAnswer = CopilotDeny | CopilotModify | undefined
 
 /** Copilot's built-in tools that only read, wait or talk: nothing to check (a stopped agent is still refused, see preToolUse). */
 export const READ_ONLY_TOOLS: ReadonlySet<string> = new Set([
@@ -119,149 +126,53 @@ function splitShell(tool: string, args: unknown): boolean {
 }
 
 /**
- * Copilot's bash session keeps its folder between calls. So symcc's agents (not the lead) may not move the shell out
- * of their own folder (see folderMoves and stayInside), and each command is judged from every folder inside it that
- * the shell may be in (`shells`).
+ * Copilot's bash session lives on between calls, and a command could move it (`cd /`), leave a child shell reading
+ * its next input (`exec bash -c "cd /; exec bash"`), or define a function or alias that runs later. So an agent's shell
+ * command (not the lead's) is handed back rewritten (modifiedArgs) to run in a new shell, started in the agent's own
+ * folder, whose input is empty: the session shell never runs any of the agent's text itself, so it never moves and
+ * keeps nothing from one call to the next, and every call is judged whole from the agent's folder.
+ *
+ * The command goes to the new shell as one quoted word (bash `-c '<command>'`, PowerShell `-EncodedCommand`), not
+ * pasted between the wrap's own lines: pasted, a command holding `)` or an open here-document could end the wrap early
+ * and run its rest in the session shell.
  */
-export const leaveFolderText = 'Refused: symcc workers stay in their own folder; use full paths instead of cd.'
-
-/** Commands that change the shell's folder (bash and PowerShell names, compared in lower case). */
-const FOLDER_CMDS = new Set(['cd', 'pushd', 'popd', 'chdir', 'set-location', 'sl', 'push-location', 'pop-location'])
-/** Words that may come before a command's name and still run it in this shell. */
-const LEAD_WORDS = new Set(['builtin', 'command', 'exec', 'time', 'nohup', 'noglob', 'if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', '{'])
-// `function` is read on its own in folderMoves (its body runs later)
-/** Settings that make a later, harmless-looking command move the shell (a cd searched in CDPATH, a cd to a variable's value, a command run before each prompt). */
-const FOLDER_SETTINGS = /CDPATH|cdable_vars|PROMPT_COMMAND|autocd/i
-
-/**
- * A cd's target word `w` (quotes already dropped) as written, when it can be told: a full path inside folder `top`, or
- * a relative one that never climbs above where it starts (`../x` is refused: where the shell is may not be where the
- * guard thinks, see stayInside). Undefined for an option, `-`, `~`, a variable, odd characters, or a full path outside.
- */
-function cdTarget(top: string, w: RawWord): string | undefined {
-  if (w.expands || w.sign || !/^[\w./+@%,-]+$/.test(w.w) || /^[-+]/.test(w.w)) return undefined
-  if (w.w.startsWith('/')) {
-    const p = normalPath(w.w)
-    return p === top || p.startsWith(`${top}/`) ? p : undefined
+export function shellWrap(dir: string, tool: string, command: string | string[]): string | string[] {
+  if (Array.isArray(command)) {
+    // an argument list (local_shell's) is run as is, from the folder: no text of it is read by a shell
+    return ['bash', '-c', 'cd -- "$0" || exit 1\nexec "$@"', dir, ...command]
   }
-  let depth = 0
-  for (const part of w.w.split('/')) {
-    if (part === '..') depth--
-    else if (part && part !== '.') depth++
-    if (depth < 0) return undefined
+  if (tool === 'powershell') {
+    const child = `Set-Location -LiteralPath ${psQuote(dir)} -ErrorAction Stop\n${command}`
+    return `$null | & (Get-Process -Id $PID).Path -NoProfile -NonInteractive -EncodedCommand ${utf16Base64(child)}`
   }
-  return w.w
+  return `( cd -- ${shQuote(dir)} || exit 1\nexec bash -c ${shQuote(command)}\n) </dev/null`
 }
 
-/**
- * The cd targets of shell command `command` (an agent's, whose own folder is `dir`), in order and as written (a full
- * path inside `dir`, or a relative one; the caller then looks on disk where each really leads, see stayInside), or
- * undefined when it may leave `dir` in a way that can't be told: a cd, pushd, popd, chdir or Set-Location (also after
- * `builtin`, `command`, `x=1` and such) whose target is outside, can't be told, or missing (`cd` alone goes home); a cd
- * after any other command of the line (that command could first turn its target into a link out, `ln -s / x && cd x`);
- * text run again in this shell (`eval`, `trap`, `alias`) that holds a cd; `source` or `.` (the file read could cd); a
- * command name from a variable; or a setting that makes a later cd go elsewhere (FOLDER_SETTINGS). A cd inside a
- * subshell (`( cd x && ... )`, `$(cd x)`) changes nothing after it.
- */
-export function folderMoves(dir: string, command: string, depth = 0): string[] | undefined {
-  if (depth > 4 || FOLDER_SETTINGS.test(command)) return undefined
-  const top = normalPath(dir)
-  const subs: boolean[] = []
-  const out: string[] = []
-  // `ran`: a command other than a cd at the line's top came before
-  let ran = false
-  for (const piece of shellPieces(command)) {
-    if ('op' in piece) {
-      if (piece.op === '(') subs.push(piece.sub)
-      else if (piece.op === ')') subs.pop()
-      continue
-    }
-    const words = rawWords(piece.text)
-    if (!words.length) continue
-    if (piece.doc || subs.includes(true)) {
-      ran = true
-      continue
-    }
-    let i = 0
-    while (i < words.length && (/^[A-Za-z_]\w*=/.test(words[i]!.raw) || LEAD_WORDS.has(words[i]!.w) || (i > 0 && LEAD_WORDS.has(words[i - 1]!.w) && words[i]!.w.startsWith('-')))) i++
-    const name = words[i]
-    if (!name) {
-      ran = true
-      continue
-    }
-    // a name from a variable, or one bash brace-expands (`{cd,/}` runs `cd /`): what runs can't be told
-    if (name.expands || (/[{}]/.test(name.raw) && name.w !== '}')) return undefined
-    const cmd = name.w.toLowerCase()
-    const rest = words.slice(i + 1)
-    // `function ls { cd /; }`: the body runs later, from wherever the shell is then, so it may hold no cd at all
-    // (read as if after another command, so any cd in it is refused)
-    if (cmd === 'function') {
-      if (folderMoves(dir, `true; ${rest.slice(1).map(w => w.raw).join(' ')}`, depth + 1)?.length !== 0) return undefined
-      ran = true
-      continue
-    }
-    if (FOLDER_CMDS.has(cmd)) {
-      if (ran || rest.length !== 1) return undefined
-      const to = cdTarget(top, rest[0]!)
-      if (to === undefined) return undefined
-      out.push(to)
-      continue
-    }
-    ran = true
-    if (cmd === 'source' || cmd === '.') return undefined
-    if (cmd === 'eval' || cmd === 'trap' || cmd === 'alias') {
-      if (rest.some(w => w.expands)) return undefined
-      // alias x='cd /' gives the word "x=cd /": its text after "=" is what runs later
-      const text = rest.map(w => (cmd === 'alias' ? w.w.replace(/^[^=]*=/, '') : w.w)).join(cmd === 'eval' ? ' ' : '\n')
-      if (folderMoves(dir, text, depth + 1)?.length !== 0) return undefined
-    }
+/** `s` as one bash word: in single quotes, each ' written as '\''. */
+const shQuote = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
+
+/** `s` as one PowerShell word: in single quotes, each single-quote mark (PowerShell also takes the curly ones) doubled. */
+const psQuote = (s: string) => `'${s.replace(/['‘’‚‛]/g, m => m + m)}'`
+
+/** `s` as UTF-16LE bytes in base64, what PowerShell's -EncodedCommand reads (no Buffer or btoa needed). */
+function utf16Base64(s: string): string {
+  const bytes: number[] = []
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i)
+    bytes.push(c & 0xff, c >> 8)
+  }
+  const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  let out = ''
+  for (let i = 0; i < bytes.length; i += 3) {
+    const [a, b, c] = [bytes[i]!, bytes[i + 1], bytes[i + 2]]
+    const n = (a << 16) | ((b ?? 0) << 8) | (c ?? 0)
+    out += abc[(n >> 18) & 63]! + abc[(n >> 12) & 63]! + (b === undefined ? '=' : abc[(n >> 6) & 63]!) + (c === undefined ? '=' : abc[n & 63]!)
   }
   return out
 }
 
-/**
- * Where each agent's Copilot shell may be: its own folder `top`, and every folder (real path) an allowed cd of its
- * took it to since (a cd may fail, so the shell may be in any of them). Kept by agent id for the life of this copy.
- */
-const shells = new Map<string, { top: string; places: string[] }>()
-
-/** Forget where every agent's shell may be (for tests). */
-export function forgetShells() {
-  shells.clear()
-}
-
-/** A shell that has been cd'd into this many folders is refused further cds (the list is kept short). */
-const MAX_PLACES = 32
-
-/**
- * Where the shell may be after cds to `targets` (folderMoves), starting from `places` (each folder it may be in now),
- * or undefined when a cd may take it out of `dir`. Each target is looked up on disk, links followed, so `cd up` with
- * `up` a link to "/" is caught; it must be a folder that really lies inside `dir` (one that can't be looked up fails).
- * A relative target is allowed only while the shell is surely in `dir` itself (no earlier cd took it anywhere else,
- * in this call or an earlier one): from a subfolder, `cd x` could reach a link the guard never looked at (the
- * checker's `cd src && cd x`, with src/x a link to "/"). Use a full path then: it is checked wherever the shell is.
- */
-async function stayInside(host: Host, dir: string, places: string[], targets: string[]): Promise<string[] | undefined> {
-  if (!targets.length) return places
-  const realOf = async (p: string) => {
-    const st = await Promise.resolve().then(() => host.fs.stat(p, { resolve: true })).catch(() => undefined)
-    return st ? { kind: st.kind, real: normalPath(st.realPath ?? p) } : undefined
-  }
-  const top = normalPath(dir)
-  const tops = [top, (await realOf(top))?.real ?? top]
-  const atTop = (p: string) => tops.includes(p)
-  const out = [...places]
-  for (const to of targets) {
-    const rel = !to.startsWith('/')
-    if (rel && !out.every(atTop)) return undefined
-    const st = await realOf(rel ? normalPath(`${top}/${to}`) : to)
-    if (!st || st.kind !== 'dir' || !tops.some(t => st.real === t || st.real.startsWith(`${t}/`))) return undefined
-    // kept under the folder's own name (not its real path, e.g. /private/tmp on macOS), as the shell check expects
-    const place = tops.slice(1).reduce((p, t) => (t !== top && (p === t || p.startsWith(`${t}/`)) ? top + p.slice(t.length) : p), st.real)
-    if (!out.includes(place)) out.push(place)
-  }
-  return out.length > MAX_PLACES ? undefined : out
-}
+/** The refusal of an agent's shell call whose command is neither a text nor a list of texts, so it can't be checked. */
+export const shellUnreadText = "Refused: symcc couldn't read this shell command; give the command as one text."
 
 /** The refusal of an agent's apply_patch call whose files can't be found, so it can't be checked. */
 export const patchNoFilesText = "Refused: symcc couldn't find which files this patch changes; give each file a '*** Add File: ', '*** Update File: ' or '*** Delete File: ' line."
@@ -274,9 +185,11 @@ export const deny = (reason: string): CopilotDeny => ({ permissionDecision: 'den
  * undefined for the owner's own session, the lead): a deny with symcc's reason, or undefined to let Copilot go on as
  * usual. An agent symcc stopped is refused any call (toolCall, here "copilot:<tool>", so a Copilot tool is never
  * taken for one of symcc's own and run); an agent's call that types into a running shell is refused (splitShell);
- * a worker's or checker's edits and shell commands go through toolCheck from the copy's folder `dir`. An error refuses the call of symcc's own agents only (toolCheckFailed); the owner's goes on.
+ * a worker's or checker's edits and shell commands go through toolCheck from the copy's folder `dir`, and an agent's
+ * shell call that passes is answered with its command wrapped to run from `dir` (modifiedArgs, see shellWrap). An
+ * error refuses the call of symcc's own agents only (toolCheckFailed); the owner's goes on.
  */
-export async function preToolUse(host: Host, dir: string, agentId: string | undefined, input: CopilotPreToolUse | undefined, kindOf?: AgentKindOf): Promise<CopilotDeny | undefined> {
+export async function preToolUse(host: Host, dir: string, agentId: string | undefined, input: CopilotPreToolUse | undefined, kindOf?: AgentKindOf): Promise<CopilotPreToolUseAnswer> {
   try {
     useName(host)
     const tool = typeof input?.toolName === 'string' ? input.toolName : ''
@@ -284,27 +197,21 @@ export async function preToolUse(host: Host, dir: string, agentId: string | unde
     if (call && 'deny' in call) return deny(call.deny)
     if (agentId && !knownTool(tool)) return deny(unknownToolText(tool))
     if (agentId && splitShell(tool, input?.toolArgs)) return deny(splitShellText)
-    // the folders a shell command may run from: wherever the agent's shell may be, and wherever its cds take it
-    let places = [dir]
-    if (agentId && SHELL_TOOLS.has(tool)) {
-      const top = normalPath(dir)
-      const known = shells.get(agentId)
-      const now = known?.top === top ? known.places : [top]
-      const moves = folderMoves(dir, commandOf(argsObject(input?.toolArgs).command))
-      const after = moves && (await stayInside(host, dir, now, moves))
-      if (!after) return deny(leaveFolderText)
-      places = after
-    }
+    // an agent's shell command must be readable, since it is checked and then wrapped (see shellWrap)
+    const args = argsObject(input?.toolArgs)
+    const command = args.command
+    const shellCall = !!agentId && SHELL_TOOLS.has(tool)
+    if (shellCall && typeof command !== 'string' && !(Array.isArray(command) && command.length && command.every(x => typeof x === 'string'))) return deny(shellUnreadText)
     const touches = copilotTouches(dir, tool, input?.toolArgs)
     if (agentId && tool === 'apply_patch' && !touches.length) return deny(patchNoFilesText)
     for (const touch of touches) {
-      for (const cwd of 'command' in touch ? places : [dir]) {
-        const why = await toolCheck(host, agentId, touch, cwd, kindOf)
-        if (why) return deny(why)
-      }
+      const why = await toolCheck(host, agentId, touch, dir, kindOf)
+      if (why) return deny(why)
     }
-    if (agentId && SHELL_TOOLS.has(tool) && places.length > 1) shells.set(agentId, { top: normalPath(dir), places })
-    return undefined
+    if (!shellCall) return undefined
+    const wrapped = { ...args, command: shellWrap(normalPath(dir), tool, command as string | string[]) }
+    // handed back in the shape it came in: an object, or a JSON text of one
+    return { modifiedArgs: typeof input?.toolArgs === 'string' ? JSON.stringify(wrapped) : wrapped }
   } catch (err) {
     const why = toolCheckFailed(host, agentId, { kind: 'error', message: (err as Error)?.message ?? String(err) })
     return why ? deny(why) : undefined
