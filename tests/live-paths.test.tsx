@@ -1,6 +1,6 @@
-// T-846: a Live lane shows the task's real path: an investigation goes work → answer, a docs-only change shows check as
-// skipped ("–") once it handed back, a task that needs review has a "you" station before merged and sits at it while it
-// waits for the owner; a normal code task keeps work → check → queue → tests → merged. Core, terminal and VS Code here;
+// T-846: a Live lane shows the task's real path: an investigation goes work → done, a docs-only change shows check as
+// skipped ("–") once it handed back, a task that needs review has a "you" station before done and sits at it while it
+// waits for the owner; a normal code task keeps work → check → queue → tests → done. Core, terminal and VS Code here;
 // OpenCode in hooks/opencode/tests/opencode-tui.spec.ts.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
@@ -24,15 +24,15 @@ const ALL = [INVESTIGATION, DOCS_RUNNING, DOCS_HANDED, REVIEW_TESTS, REVIEW_WAIT
 const view = (tasks: unknown[], mode: 'auto' | 'review' = 'auto') => ({ tasks: tasks as never[], checker: true, mode, max_parallel: 3 })
 const lane = (id: string, mode: 'auto' | 'review' = 'auto') => liveLanes(view(ALL, mode), T0).find(l => l.id === id)!
 
-test('T-846: an investigation lane has only work and answer, a normal code task keeps its stations', () => {
-  expect(lane('T-801').stations).toEqual(['work', 'answer'])
+test('T-846: an investigation lane has only work and done, a normal code task keeps its stations', () => {
+  expect(lane('T-801').stations).toEqual(['work', 'done'])
   expect([lane('T-801').station, lane('T-801').at, lane('T-801').agent]).toEqual(['work', 0, true])
-  expect(lane('T-806').stations).toEqual(['work', 'check', 'queue', 'tests', 'merged'])
+  expect(lane('T-806').stations).toEqual(['work', 'check', 'queue', 'tests', 'done'])
   expect(lane('T-806').skipped).toBeUndefined()
   expect(lane('T-806').station).toBe('tests')
   // the shared columns hold every station any lane has, in order
-  expect(liveColumns(liveLanes(view(ALL), T0), true)).toEqual(['work', 'check', 'queue', 'tests', 'you', 'merged', 'answer'])
-  expect(liveColumns(liveLanes(view([INVESTIGATION]), T0), true)).toEqual(['work', 'answer'])
+  expect(liveColumns(liveLanes(view(ALL), T0), true)).toEqual(['work', 'check', 'queue', 'tests', 'you', 'done'])
+  expect(liveColumns(liveLanes(view([INVESTIGATION]), T0), true)).toEqual(['work', 'done'])
 })
 
 test('T-846: a docs-only change shows check as skipped after hand-back; before it nothing changes', () => {
@@ -50,21 +50,21 @@ test('T-846: a docs-only change shows check as skipped after hand-back; before i
 })
 
 test('T-846: a task that needs review has a "you" station, and its lane stays at it while it waits for the owner', () => {
-  expect(lane('T-804').stations).toEqual(['work', 'check', 'queue', 'tests', 'you', 'merged'])
+  expect(lane('T-804').stations).toEqual(['work', 'check', 'queue', 'tests', 'you', 'done'])
   expect(lane('T-804').station).toBe('tests')
-  expect(lane('T-805').stations).toEqual(['work', 'check', 'queue', 'tests', 'you', 'merged'])
+  expect(lane('T-805').stations).toEqual(['work', 'check', 'queue', 'tests', 'you', 'done'])
   expect([lane('T-805').station, lane('T-805').at, lane('T-805').agent]).toEqual(['you', 4, false])
   // the board in approve-merge mode: every code task has "you"
-  expect(lane('T-806', 'review').stations).toEqual(['work', 'check', 'queue', 'tests', 'you', 'merged'])
-  // approved: the approve runs on, its lane goes on to merged
+  expect(lane('T-806', 'review').stations).toEqual(['work', 'check', 'queue', 'tests', 'you', 'done'])
+  // approved: the approve runs on, its lane goes on to done
   const approving = liveLanes(view([task('T-805', 'Waits for you', { needs_review: true, status: 'review', ...handed, live: { checking: { step: 'merging', at: iso(0) } } })]), T0)[0]!
-  expect([approving.station, approving.at]).toEqual(['merged', 5])
-  // the lane line: work, check, queue and tests passed, you current, merged ahead
+  expect([approving.station, approving.at]).toEqual(['done', 5])
+  // the lane line: work, check, queue and tests passed, you current, done ahead
   const lanes = liveLanes(view(ALL), T0)
   const layout = liveLayout(lanes, liveColumns(lanes, true), 140)
   expect(liveLabelLine(layout)).toContain('you')
   expect(segText(laneLines(lane('T-805'), layout, { nowMs: T0, frame: 0 })[0]!)).toMatch(/●━+●━+●━+●━+◉─+○/)
-  // an investigation's line runs straight through the columns it has no station at, to its answer
+  // an investigation's line runs straight through the columns it has no station at, to done
   expect(segText(laneLines(lane('T-801'), layout, { nowMs: T0, frame: 0 })[0]!)).toMatch(/◉─+─ *─+.*○ /)
 })
 
@@ -110,9 +110,9 @@ test('T-846: an approved auto-mode review task keeps "you" and sits past it; a d
   const auto = task('T-807', 'Review by hand', { status: 'review', ...handed, live: { checking: at } })
   const l = liveLanes(view([auto]), T0)[0]!
   expect(l.stations).toContain('you')
-  expect(l.station).toBe('merged')
+  expect(l.station).toBe('done')
   const tests = liveLanes(view([task('T-808', 'Again', { status: 'review', needs_review: true, ...handed, live: { checking: { step: 'testing', at: iso(0) } } })]), T0)[0]!
-  expect(tests.station).toBe('merged')
+  expect(tests.station).toBe('done')
   const prep = liveLanes(view([DOCS_HANDED]), T0)
   const lines = (frame: number) => segText(laneLines(prep[0]!, liveLayout(prep, liveColumns(prep, true), 140), { nowMs: T0, frame })[0]!)
   expect(lines(0)).toMatch(/◉|◎/)

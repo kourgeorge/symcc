@@ -40,10 +40,10 @@ const view = (checker: boolean) => ({ tasks: TASKS as never[], checker, mode: 'a
 test('T-690: liveLanes puts each doing task at its station, and leaves check out when the checker is off', () => {
   const at = (checker: boolean) => Object.fromEntries(liveLanes(view(checker), T0).map(l => [l.id, l.station]))
   expect(at(true)).toEqual({ 'T-687': 'work', 'T-688': 'check', 'T-686': 'check', 'T-685': 'tests', 'T-684': 'queue' })
-  expect(liveLanes(view(true), T0)[0]!.stations).toEqual(['work', 'check', 'queue', 'tests', 'merged'])
+  expect(liveLanes(view(true), T0)[0]!.stations).toEqual(['work', 'check', 'queue', 'tests', 'done'])
   // checker off: no check station; prep counts at work
   const off = liveLanes(view(false), T0)
-  expect(off[0]!.stations).toEqual(['work', 'queue', 'tests', 'merged'])
+  expect(off[0]!.stations).toEqual(['work', 'queue', 'tests', 'done'])
   expect(at(false)['T-688']).toBe('work')
   // only tasks in doing get a lane
   expect(off.map(l => l.id).sort()).toEqual(['T-684', 'T-685', 'T-686', 'T-687', 'T-688'])
@@ -66,15 +66,15 @@ test('T-709: an approved task in review, or a waiting one whose merge runs, gets
   const lanes = (...tasks: unknown[]) => liveLanes({ tasks: tasks as never[], checker: true, mode: 'auto', max_parallel: 3 }, T0)
   // (1) a review task whose approve is in its tests, then in the merge queue at place 2
   const testing = lanes(task('T-1', 'Approved', { status: 'review', ...tried, live: { checking: { step: 'testing', at: sec(5) } }, }))
-  expect(testing.map(l => [l.id, l.station])).toEqual([['T-1', 'merged']]) // T-846: approved, so past "you"
+  expect(testing.map(l => [l.id, l.station])).toEqual([['T-1', 'done']]) // T-846: approved, so past "you"
   const queued = lanes(task('T-1', 'Approved', { status: 'review', ...tried, live: { checking: { step: 'queue', at: sec(5), place: 2 } }, }))
-  expect(queued.map(l => [l.station, l.place])).toEqual([['merged', 2]])
+  expect(queued.map(l => [l.station, l.place])).toEqual([['done', 2]])
   // (2) a stale check step, or none: the task only waits for the owner, so its lane (T-846) sits at "you"
   expect(lanes(task('T-1', 'Approved', { status: 'review', ...tried, live: { checking: { step: 'testing', at: new Date(T0 - FINISH_STALE_MS - 1000).toISOString() } }, })).map(l => l.station)).toEqual(['you'])
   expect(lanes(task('T-1', 'Approved', { status: 'review', ...tried })).map(l => l.station)).toEqual(['you'])
   // (3) a waiting task whose merge runs once its files are clear
   const merging = lanes(task('T-2', 'Files cleared', { status: 'waiting', ...tried, live: { checking: { step: 'merging', at: sec(5) } }, }))
-  expect(merging.map(l => [l.id, l.station])).toEqual([['T-2', 'merged']])
+  expect(merging.map(l => [l.id, l.station])).toEqual([['T-2', 'done']])
   // order: an approve by when it started (its prep line), next to the doing tasks by when their try started
   const order = lanes(
     task('T-3', 'Worker', { runs: [{ started: iso(10) }] }),
