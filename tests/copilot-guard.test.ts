@@ -132,6 +132,8 @@ test("an agent's shell call is wrapped to run in a new shell from its own folder
   for (const command of ['cd /', 'cd ~', 'cd', 'cd -', 'cd $HOME', 'cd src', 'cd ./src && ls', 'exec bash -c "cd /; exec bash"', 'f() { cd /; }; alias ls="cd /"', 'shopt -s autocd']) {
     expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, wrapped('bash', command)])
   }
+  // a cd to a path built from a variable can't be checked, so it is refused (T-963)
+  expect((await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'cd $HOME' } }))?.permissionDecision).toBe('deny')
   // the bash form: cd into the folder, then the command as one quoted word to a new bash with no input, so a ")" or an
   // open here-document in it can't end the wrap and run the rest in the session shell
   expect(shellWrap(WT, 'bash', 'ls')).toBe(`( cd -- '${WT}' || exit 1\nexec bash -c 'ls'\n) </dev/null`)
