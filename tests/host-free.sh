@@ -147,4 +147,18 @@ if [ -n "$oc_files" ]; then
   fi
 fi
 
-if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hooks/process/, hosts/node/ and hooks/opencode/ need no Claude Code, and hooks/engine.ts is re-exports only"; else exit 1; fi
+# The Copilot CLI host (hooks/copilot/, T-957) is type-checked with the rest of hooks/ (the program parts are given
+# in, so it imports no Node), but like the other hosts it never imports 'claude-code', hooks/claude/, hooks/opencode/
+# or hooks/register.tsx, nor a Node built-in or Bun.
+cp_files=$(find hooks/copilot -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort)
+if [ -n "$cp_files" ]; then
+  q="['\"\`]"
+  nq="[^'\"\`]"
+  hits=$(grep -nHE "(^|[^[:alnum:]_\$.])(from|import)[[:space:]]*\(?[[:space:]]*$q(claude-code(/$nq*)?|node:$nq*|bun(:$nq*)?|$nq*/claude(/$nq*)?|$nq*/opencode(/$nq*)?|$nq*/register(\.tsx)?)$q" $cp_files)
+  if [ -n "$hits" ]; then
+    echo "$hits" | while IFS= read -r hit; do echo "host-free: the Copilot host imports Claude Code, OpenCode, Node or Bun (its program parts are given in): $hit" >&2; done
+    fails=$((fails + 1))
+  fi
+fi
+
+if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hooks/process/, hosts/node/, hooks/opencode/ and hooks/copilot/ need no Claude Code, and hooks/engine.ts is re-exports only"; else exit 1; fi
