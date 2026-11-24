@@ -179,8 +179,13 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       // T-968: the owner's board actions waiting as "Meanwhile" lines go beside the prompt the lead takes, as a quiet
       // message in its chat (kept there once, not in the system prompt); a board update finds none left to repeat
       const withMeanwhile = async (sessionID: string, delivery?: string) => {
-        const text = meanwhileForPrompt()
-        if (text) await ctx.session.synthetic({ sessionID, text, description: 'board meanwhile', ...(delivery === 'steer' || delivery === 'queue' ? { delivery } : {}), resume: false }).catch(() => undefined)
+        const { text, back } = meanwhileForPrompt()
+        if (!text) return
+        // not in the chat: the lines wait (at the front, in order) for the next board update, and the failure is shown
+        await ctx.session.synthetic({ sessionID, text, description: 'board meanwhile', ...(delivery === 'steer' || delivery === 'queue' ? { delivery } : {}), resume: false }).catch((err: unknown) => {
+          back()
+          host.ui.log(`the owner's board actions could not go with their prompt (${err instanceof Error ? err.message : String(err)}); the next board update carries them`)
+        })
       }
       regs.push(
         await ctx.session.hook('prompt', async e => {

@@ -108,10 +108,18 @@ export function noteForLead(text: string) {
 /**
  * T-968: the owner sent the lead a prompt: the "Meanwhile" lines waiting, as one block for the host to attach to that
  * prompt (Claude Code's prompt context, a message beside it on OpenCode, Copilot's added context), so they stay in the
- * chat once. They leave the queue, so no later board update repeats them. '' when none wait or symcc is off.
+ * chat once. They leave the queue, so no later board update repeats them; `back` puts them back at the front (in order)
+ * when that prompt never reaches the chat (dropped, or the host failed), so the next board update still carries them.
+ * `text` is '' when none wait or symcc is off.
  */
-export function meanwhileForPrompt(): string {
+export function meanwhileForPrompt(): { text: string; back: () => void } {
   const lines = meanwhile.splice(0)
-  if (!lines.length || !S.enabledNow) return ''
-  return `[${S.N.name}] ${meanwhileText(lines)}\n(Done on the board before this message from the owner; take it into account.)`
+  if (!lines.length || !S.enabledNow) return { text: '', back: () => {} }
+  let put = false
+  const back = () => {
+    if (put) return
+    put = true
+    meanwhile.unshift(...lines)
+  }
+  return { text: `[${S.N.name}] ${meanwhileText(lines)}\n(Done on the board before this message from the owner; take it into account.)`, back }
 }

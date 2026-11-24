@@ -3,7 +3,7 @@
 // (named "symcc_<tool>", skipPermission) and its /symcc commands, a tool call reaches symcc's toolCall and answers its
 // text, Copilot's own sub-agents are refused the lead's tools, /symcc writes the text board to the timeline
 // (session.log), each prompt gets the lead's guide, and a board update wakes the lead with session.send (enqueue, and
-// immediate when urgent). Agents are not built yet: a start is "not ready".
+// immediate when urgent). With no SDK given for the agents, a start is "not ready" (the agents: copilot-agents.test.ts).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { memoryFs, done } from './fake-host'

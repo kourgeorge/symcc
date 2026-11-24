@@ -126,8 +126,16 @@ export const register: Register = on => {
     if (!owners && !e.command && starterFrame(e.text)) return { drop: '▸ agent started' }
     // T-968: the owner's board actions waiting as "Meanwhile" lines go beside their prompt (its context, kept in the chat
     // once, not in the system prompt); attached on the way down, as context added after next() is not
-    const meanwhile = owners && !e.command && !e.isMeta ? meanwhileForPrompt() : ''
-    const r = await next(meanwhile ? { ...e, context: [...(e.context ?? []), meanwhile] } : e)
+    // (put back on the queue when the prompt never reaches the chat: a drop, or a later hook throws)
+    const meanwhile = owners && !e.command && !e.isMeta ? meanwhileForPrompt() : undefined
+    let r: Awaited<ReturnType<typeof next>>
+    try {
+      r = await next(meanwhile?.text ? { ...e, context: [...(e.context ?? []), meanwhile.text] } : e)
+    } catch (err) {
+      meanwhile?.back()
+      throw err
+    }
+    if (r && typeof r === 'object' && 'drop' in r) meanwhile?.back()
     if (owners && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') {
       // T-929: in a DAM image, an owner's sdk prompt means this is a Slack session (not a DAM terminal window)
       if (kind === 'sdk') damOwnerPrompt()
