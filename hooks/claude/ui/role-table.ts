@@ -1,4 +1,4 @@
-// What the terminal's and VS Code's Roles and Kinds pages share (T-918): the rows of their tables (core's def-table.ts),
+// What the terminal's and VS Code's Roles and Task types pages share (T-918): the rows of their tables (core's def-table.ts),
 // and the role Edit page's Save with its "Writes" pick (code or prose only).
 import type { RoleDef, KindDef } from '../../board'
 import { findKind } from '../../board'

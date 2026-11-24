@@ -4,7 +4,7 @@
 // to draw the banner and band (folder, home, name, version), to .<name>/view.json in the project's main folder. The
 // TUI reads that file on a timer (board-view.ts parses it). Each scout's recent runs ride along (scout_runs, T-559:
 // the TUI's scout page lists them; a run's report stays in its own file, which the TUI reads when the run is opened),
-// and so do the roles and kinds (T-562: the TUI's Roles and Kinds pages under Settings list them), org-mem's notes (T-619: its Organizational memory page) and each task in review's changed files (T-580: the TUI runs no git).
+// and so do the roles and task types (T-562: the TUI's Roles and Task types pages under Settings list them), org-mem's notes (T-619: its Organizational memory page) and each task in review's changed files (T-580: the TUI runs no git).
 // The panel's own values (which task, tab and scout are
 // open) stay in the TUI; the server side keeps them in memory only, as their start values for symcc's logic.
 import type { SymccView } from '../../types'
@@ -103,7 +103,7 @@ export async function changesOf(host: Host, v: SymccView): Promise<ViewChanges> 
   return out
 }
 
-/** The roles and kinds for the TUI's Roles and Kinds pages: each one (built-in, or the owner's over it), and the
+/** The roles and task types for the TUI's Roles and Task types pages: each one (built-in, or the owner's over it), and the
  *  owner's files that can't be read (see viewDefs). */
 export async function defsOf(host: Host): Promise<{ roles: ViewDef[]; kinds: ViewDef[] }> {
   const r = await roleLists(host)

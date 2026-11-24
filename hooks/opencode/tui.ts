@@ -10,11 +10,11 @@
 //     page when one is opened; and, like the Claude Code board, the Live, Scouts and Settings tabs (keys l, t, s and c,
 //     or a click on a tab, T-559, T-692; Live's lanes open their task on Enter or a click): a scout's page runs it now (r) or pauses it (p) with /<name>-scout, and edits it (e:
 //     how often, model or instructions, /<name>-scout <name> every|model|prompt VALUE, T-562); a setting is changed
-//     with /<name>-settings NAME VALUE, and the Roles and Kinds pages under Settings turn a role or kind off or on
-//     (o) or reset it to the built-in one (r) with /<name>-settings role|kind <name> on|off|reset; and (T-706) as on
+//     with /<name>-settings NAME VALUE, and the Roles and Task types pages under Settings turn a role or task type off or on
+//     (o) or reset it to the built-in one (r) with /<name>-settings role|type <name> on|off|reset; and (T-706) as on
 //     Claude Code's panel, edit it (e: an edit page with Save and Cancel, the changed boxes sent in one /<name>-settings
-//     role|kind <name> save {...}), remove an added one (d, after a yes), make a new one (n on the Roles or Kinds
-//     page: /<name>-settings role|kind NAME add, then its edit page) and a new scout (n on the Scouts tab: /<name>-scout
+//     role|type <name> save {...}), remove an added one (d, after a yes), make a new one (n on the Roles or Kinds
+//     page: /<name>-settings role|type NAME add, then its edit page) and a new scout (n on the Scouts tab: /<name>-scout
 //     NAME new INSTRUCTIONS); the banner's Set up git (g) asks for a yes, then sends /<name>-settings git setup;
 //   - session.composer.top: the band above the prompt, like Claude Code's (the header line, a click on it opens or closes the board panel, T-567; then the questions, and
 //     the tasks that need the owner or run).
@@ -443,7 +443,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
       showTab('live')
     }
   }
-  /** Opens the page of the role, kind or scout just made here once the view file has it (a new role or kind in its
+  /** Opens the page of the role, kind or scout just made here once the view file has it (a new role or task type in its
    *  edit mode, as Claude Code's New role does). */
   const openMade = () => {
     const p = pendingOpen
@@ -603,7 +603,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (field === 'every' && everyMinutesOf(value) === null) return say('every must be a whole number of minutes: 0 for only on demand, or 1 or more', 'error')
     await send(sessionID, { kind: 'scout-edit', scout: sc.name, field, value: field === 'model' && value.toLowerCase() === 'none' ? '' : value })
   }
-  /** Opens the edit mode of the open role or kind, with the cursor on its first box (Claude Code's autoFocus). */
+  /** Opens the edit mode of the open role or task type, with the cursor on its first box (Claude Code's autoFocus). */
   const openEdit = (list: 'roles' | 'kinds', x: Parameters<typeof defDraftOf>[1]) => {
     setRunCursor(EDIT_FIRST_BOX)
     setScroll(0)
@@ -611,11 +611,11 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   /** Asks a yes (Claude Code's confirm step) before `what`; true when the owner picked it. */
   const yes = async (title: string, label: string) => (await ctx.ui.dialog.select({ title, options: [{ title: label, value: 'yes' }, { title: 'Cancel', value: 'no' }] })) === 'yes'
-  /** "+ New role" / "+ New kind" (n): asks the name, then /<name>-settings role|kind NAME add; its page opens in the edit
+  /** "+ New role" / "+ New kind" (n): asks the name, then /<name>-settings role|type NAME add; its page opens in the edit
    *  mode once the view file has it. Esc or an empty name leaves it. */
   const newDef = async (list: 'roles' | 'kinds', sessionID: string) => {
     const noun = list === 'roles' ? 'role' : 'kind'
-    const asked = await askNewName(noun, `New ${noun}'s name`, `Enter makes ${dataDir(file()?.name || name)}/${list}/<name>.md and opens it`, 'letters, digits, - and _')
+    const asked = await askNewName(noun, `New ${noun === 'role' ? 'role' : 'task type'}'s name`, `Enter makes ${dataDir(file()?.name || name)}/${list}/<name>.md and opens it`, 'letters, digits, - and _')
     if (!asked) return
     if (await sendOk(sessionID, { kind: 'def-add', def: noun, name: asked })) pendingOpen = { tab: 'settings', id: defPageId(list, list === 'kinds' ? asked.toLowerCase() : asked), edit: true, at: d.now() }
   }
@@ -654,7 +654,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   /** Save on the edit page: a value the lead's tool would refuse (draftError: an empty description, a tool word a role
    *  may not have, ...) stays on the page with Claude Code's error and sends nothing; else the changed boxes go in one
-   *  /<name>-settings role|kind NAME save {...} (one edit: all or none), and the page goes back to the role or kind
+   *  /<name>-settings role|type NAME save {...} (one edit: all or none), and the page goes back to the role or task type
    *  once it is sent. */
   const saveEdit = async (sessionID: string) => {
     const e = edit()
@@ -676,7 +676,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (await yes(SETUP_GIT_ASK, 'Yes, set up git')) await send(sessionID, { kind: 'setup-git' })
   }
   /** The Settings tab's keys: the list moves, changes a setting or opens the Roles or Kinds page; that page moves and
-   *  opens a role or kind (n makes a new one); its page turns it off or on (o), resets it (r), edits it (e) or
+   *  opens a role or task type (n makes a new one); its page turns it off or on (o), resets it (r), edits it (e) or
    *  removes it (d, after a yes); b goes back one page. On the edit page ↑↓ move over Save, Cancel and the boxes,
    *  Enter changes a box or presses the button, x (Cancel) and b leave it without saving. */
   const pressSettings = async (key: PanelKey, sessionID: string) => {

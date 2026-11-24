@@ -50,7 +50,7 @@ const settle = async (until: () => boolean) => {
 }
 const lastView = (views: string[]) => views[views.length - 1] ?? ''
 
-test('fileToolHits: a written or edited scout, role or kind file counts; a command only when it changes files', () => {
+test('fileToolHits: a written or edited scout, role or task type file counts; a command only when it changes files', () => {
   const S = '.symcc/scouts', R = '.symcc/roles', K = '.symcc/kinds'
   expect(fileToolHits({ path: '/p/.symcc/scouts/x.md' }, S, R, K)).toEqual({ scouts: true, roles: false, kinds: false })
   expect(fileToolHits({ path: '/p/.symcc/roles/docs.md' }, S, R, K)).toEqual({ scouts: false, roles: true, kinds: false })

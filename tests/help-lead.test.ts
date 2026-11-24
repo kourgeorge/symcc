@@ -106,7 +106,7 @@ test('/symcc-help commands names the newer command forms and the l (Live) key', 
   const text = manual('commands')
   for (const form of [
     '-scout NAME every N', '-scout NAME model M', '-scout NAME prompt TEXT', '-scout NAME new TEXT',
-    '-settings role|kind NAME on|off|reset|remove|add', '-settings role|kind NAME edit FIELD VALUE', '-settings role|kind NAME save {json}',
+    '-settings role|type NAME on|off|reset|remove|add', '-settings role|type NAME edit FIELD VALUE', '-settings role|type NAME save {json}',
     '-settings git setup', '-settings orgmem delete N [KEY]', 'On the board: t tasks · l live',
   ]) expect(text).toContain(form)
   expect(manual('commands', { ...ALL_FEATURES, panel: false })).toContain('-board ')

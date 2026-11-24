@@ -7,9 +7,9 @@
 // to the engine as symcc's slash commands (actionCommand), run in the TUI's session (R6 of T-468). Like the Claude Code
 // board it has four tabs (T-559, T-692): Live (core/live.ts's lanes and today), Tasks, Scouts (the list, a scout's page with its runs, a run's report) and
 // Settings (every setting in its group, with its value and default; the groups open and close as on the Claude Code
-// board, T-585). Like it, Settings opens the Roles and Kinds
+// board, T-585). Like it, Settings opens the Roles and Task types
 // pages (a list, then one role's or kind's page: turn it off or on, reset it to the built-in one, T-562) and a
-// scout's page edits the scout (how often, model, instructions); the roles and kinds come in the view file too.
+// scout's page edits the scout (how often, model, instructions); the roles and task types come in the view file too.
 // The Live tab's Organizational memory section at its bottom (T-718, core's liveOrgMem: the count and a fill bar, the
 // 3 newest notes, the topics with their counts) opens the Organizational memory page (T-619): Enter on a topic its
 // notes only ("orgmem:tests"), on a newest note all notes with the cursor on it, (T-866) the "[all]" button next to "newest" all notes.
@@ -72,7 +72,7 @@ export type ViewFile = {
  *  them in the view file, T-580: the TUI can't run git; its task page lists them under Changes). */
 export type ViewChanges = Record<string, { files: DiffFile[]; error: string }>
 
-/** One role or kind as the Roles and Kinds pages show it (view.ts puts them in the view file, made with viewDefs). */
+/** One role or task type as the Roles and Task types pages show it (view.ts puts them in the view file, made with viewDefs). */
 export type ViewDef = {
   name: string
   description: string
@@ -105,7 +105,7 @@ export type ViewDef = {
   changed_at?: string
 }
 
-/** The roles or kinds as the view file carries them: each merged one (built-in, or the owner's over it) in order, then
+/** The roles or task types as the view file carries them: each merged one (built-in, or the owner's over it) in order, then
  *  the owner's files that can't be read. `dir` is the owner's folder for them (".symcc/roles"). */
 export function viewDefs(def: 'role' | 'kind', all: readonly (RoleDef | KindDef)[], builtIn: readonly { name: string }[], project: readonly { name: string }[], broken: readonly BrokenDef[], dir: string, days: Record<string, string> = {}): ViewDef[] {
   const brokenRow = (b: BrokenDef): ViewDef => {
@@ -348,7 +348,7 @@ export type PanelChoice = {
  *  value as changed so far (core's ROLE_EDIT_FIELDS, KIND_EDIT_FIELDS), and what Save found wrong. */
 export type DefDraft = { page: string; values: Record<string, string>; error?: string }
 
-/** The edit mode of role or kind `d`, filled from it (as Claude Code's roleDraftOf, kindDraftOf). */
+/** The edit mode of role or task type `d`, filled from it (as Claude Code's roleDraftOf, kindDraftOf). */
 export function defDraftOf(list: DefList, d: ViewDef): DefDraft {
   const values: Record<string, string> = list === 'roles'
     ? { description: d.description, model: d.model ?? '', skills: (d.skills ?? []).join(', '), tools: (d.tools ?? []).join(', '), code: codePickOf(d) === 'prose' ? 'false' : 'true', checklist: d.text }
@@ -358,13 +358,13 @@ export function defDraftOf(list: DefList, d: ViewDef): DefDraft {
 
 /** The boxes of the edit page, in Claude Code's order with its names and placeholders. */
 export const DEF_EDIT_BOXES: Record<DefEditField, { label: string; placeholder: (def: 'role' | 'kind') => string }> = {
-  description: { label: 'Description', placeholder: def => (def === 'role' ? 'what the role is for, in a few words' : 'what this kind of task is, in a few words') },
+  description: { label: 'Description', placeholder: def => (def === 'role' ? 'what the role is for, in a few words' : 'what this task type is, in a few words') },
   model: { label: 'Model', placeholder: () => "empty: the session's model" },
   skills: { label: 'Skills', placeholder: () => 'skill names joined with ", " (empty: none)' },
   tools: { label: 'Tools', placeholder: () => 'extra tools: web, to search and read the web (empty: none)' },
   code: { label: 'Writes', placeholder: () => 'Enter switches: code (its tests run before merging) or prose only (only .md files; only docs checks run)' },
   checklist: { label: 'Checklist', placeholder: () => 'what a worker with this role checks, one line each' },
-  body: { label: 'Body', placeholder: () => 'free text about the kind' },
+  body: { label: 'Body', placeholder: () => 'free text about the task type' },
 }
 
 /** An edit box's cursor id ("box:model"). */
@@ -375,17 +375,17 @@ export const EDIT_CANCEL_ID = 'edit:cancel'
 /** Where the edit page's cursor starts: its first box (Description), as Claude Code's autoFocus; ↑ reaches Cancel and Save. */
 export const EDIT_FIRST_BOX = 2
 
-/** The fields of the edit mode's role or kind whose value differs from `d`'s (in the page's order): what Save sends. */
+/** The fields of the edit mode's role or task type whose value differs from `d`'s (in the page's order): what Save sends. */
 export function draftChanges(list: DefList, d: ViewDef, draft: DefDraft): DefEditField[] {
   const before = defDraftOf(list, d).values
   return defEditFields(list === 'roles' ? 'role' : 'kind').filter(k => (draft.values[k] ?? '') !== (before[k] ?? ''))
 }
 
 /** What Save says when the description is empty (Claude Code's words). */
-export const noDescriptionText = (list: DefList) => `description is missing: say in a few words what ${list === 'roles' ? 'the role is for' : 'this kind of task is'}`
+export const noDescriptionText = (list: DefList) => `description is missing: say in a few words what ${list === 'roles' ? 'the role is for' : 'this task type is'}`
 
 /** Why Save can't save the edit mode of `name` (Claude Code's error words), or '' when it can: an empty description,
- *  a tool word a role may not have (roleTools), or a file the role or kind could not be read from (roleSkipReason,
+ *  a tool word a role may not have (roleTools), or a file the role or task type could not be read from (roleSkipReason,
  *  kindSkipReason, on the file text the lead's tool would write). The panel shows it on the edit page and sends nothing,
  *  as Claude Code's saveRoleDraft keeps its edit page open with the tool's error. */
 export function draftError(list: DefList, name: string, draft: DefDraft): string {
@@ -480,7 +480,7 @@ export function hasPage(f: ViewFile | null, id: string, tab: PanelTab = 'tasks')
 /** Scout `scout`'s recent runs in the view file, newest first. */
 export const scoutRunsIn = (f: ViewFile | null, scout: string): ScoutRun[] => (Array.isArray(f?.view.scout_runs?.[scout]) ? f!.view.scout_runs![scout]! : [])
 
-/** The Settings pages that list roles or kinds. */
+/** The Settings pages that list roles or task types. */
 type DefList = SettingPage
 
 /** The Organizational memory page's id on the Live tab (T-687: all notes); T-718: "orgmem:tests" is topic tests' notes only. */
@@ -507,7 +507,7 @@ export const branchIdTask = (id: string): string | null => (id.startsWith('br:')
 
 /** A page under Settings: the Roles or Kinds list (`id` "roles" or "kinds"),
  *  or one role's or kind's page ("role:tester", "kind:bug"; its list is `list`), or (T-685) the built-in prompt a role
- *  goes in, view only ("prompt:tester:change", `prompt`); null when there is no such page (or the role or kind left the view). */
+ *  goes in, view only ("prompt:tester:change", `prompt`); null when there is no such page (or the role or task type left the view). */
 export function settingsPlace(f: ViewFile | null, id: string): { list: SettingPage; def?: ViewDef; prompt?: RolePromptKind } | null {
   if (id === 'roles' || id === 'kinds') return { list: id }
   const p = /^prompt:(.+):([^:]+)$/.exec(id)
@@ -523,7 +523,7 @@ export function settingsPlace(f: ViewFile | null, id: string): { list: SettingPa
   return def ? { list, def } : null
 }
 
-/** The roles or kinds in the view file. */
+/** The roles or task types in the view file. */
 export const defsIn = (f: ViewFile | null, list: DefList): ViewDef[] => (Array.isArray(f?.view[list]) ? f!.view[list]! : [])
 
 /** A role's or kind's page id: "role:tester", "kind:bug". */
@@ -545,7 +545,7 @@ export function newNameError(f: ViewFile | null, what: 'role' | 'kind' | 'scout'
   const there = defNamed(defsIn(f, what === 'role' ? 'roles' : 'kinds'), n)
   if (!there) return ''
   if (there.broken) return `${there.file} is already there but ${there.broken}: ${there.canReset ? 'open it in the list to Reset to built-in' : 'open it in the list to Remove it'}, or fix the file by hand`
-  return `a ${what} named ${there.name} already exists; open it in the list to change it`
+  return `a ${what === 'role' ? 'role' : 'task type'} named ${there.name} already exists; open it in the list to change it`
 }
 
 /** How long a "+ New ..." waits for its role, kind or scout to show in the view file before it stops waiting (ms). */
@@ -565,9 +565,9 @@ export const defButtons = (list: DefList, d: ViewDef): PanelButton[] => [
   ...(d.canRemove ? [{ label: 'Remove', hit: { key: 'd' as const } }] : []),
 ]
 
-/** The "+ New role", "+ New kind" and "+ New scout" buttons (n), as on Claude Code's Roles, Kinds and Scouts pages. */
+/** The "+ New role", "+ New task type" and "+ New scout" buttons (n), as on Claude Code's Roles, Kinds and Scouts pages. */
 export const NEW_ROLE_BUTTON: PanelButton = { label: '+ New role', hit: { key: 'n' } }
-export const NEW_KIND_BUTTON: PanelButton = { label: '+ New kind', hit: { key: 'n' } }
+export const NEW_KIND_BUTTON: PanelButton = { label: '+ New task type', hit: { key: 'n' } }
 export const NEW_SCOUT_BUTTON: PanelButton = { label: '+ New scout', hit: { key: 'n' } }
 
 /** The banner's git row (T-706, as Claude Code's): with no git repo or no commit yet, what is wrong and the
@@ -597,7 +597,7 @@ export const SETUP_GIT_BUTTON: PanelButton = { label: 'Set up git (g)', hit: { k
 export const SETUP_GIT_ASK = 'Set up git here? It runs git init on main (if there is no repo), writes a .gitignore and makes a first commit of the current files, leaving out ones that look like secrets; it never pushes.'
 
 /** What a role's or kind's Remove asks before it sends the command (Claude Code's words). */
-export const removeAsk = (list: DefList, d: ViewDef) => `Remove ${list === 'roles' ? 'role' : 'kind'} ${d.name} and delete ${d.file}?`
+export const removeAsk = (list: DefList, d: ViewDef) => `Remove ${list === 'roles' ? 'role' : 'task type'} ${d.name} and delete ${d.file}?`
 
 /** The buttons of the built-in prompt page: Back (to the role), then the role's other prompts ("The checker prompt"). */
 export const rolePromptButtons = (role: string, kind: RolePromptKind): PanelButton[] => [
@@ -612,7 +612,7 @@ const scoutNamed = (f: ViewFile | null, name: string): SymccScout | undefined =>
  * The keys of the list, and of a task's or question's page (the main actions only); on the Scouts tab, of the list,
  * (`merging`: the task's approve is in progress, see approveInProgress, so no approve, reject or merge now),
  * a scout's page (r run now, p pause or resume, e edit) and a run's page; on the Settings tab, of the settings list,
- * the Roles and Kinds lists and a role's or kind's page (o turn off or on, r reset to the built-in one).
+ * the Roles and Task types lists and a role's or kind's page (o turn off or on, r reset to the built-in one).
  */
 export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 'tasks', run = '', heading = false, merging = false): KeyHint[] {
   return tabKeys(f, opened, tab, run, heading, merging)
@@ -631,7 +631,7 @@ function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string,
     const place = settingsPlace(f, opened)
     // the settings list: core's keys, as Claude Code's (Enter open/close on a group heading, else change)
     if (!place) return settingsKeys(heading)
-    // the Roles and Kinds lists: Claude Code's keys (n makes a new one)
+    // the Roles and Task types lists: Claude Code's keys (n makes a new one)
     if (!place.def) return place.list === 'roles' ? rolesKeys() : kindsKeys()
     if (place.prompt) return rolePromptKeys()
     // core's keys of Claude Code's role page (T-706: with Edit and Remove); a role's page has none (T-871: its header
@@ -1106,18 +1106,18 @@ export const settingGroupId = (title: string) => `settings-group:${title}`
 export const settingGroupOf = (id: string): string | null => (id.startsWith('settings-group:') ? id.slice(15) : null)
 
 /** The rows the cursor goes over on the Settings tab, in the Claude Code board's groups and order: each group's
- *  heading, then (when it is open) its settings and the Roles and Kinds rows that open their pages. */
+ *  heading, then (when it is open) its settings and the Roles and Task types rows that open their pages. */
 export const settingRows = (open: readonly string[]): string[] => SETTING_GROUPS.flatMap(g => [settingGroupId(g.title), ...(open.includes(g.title) ? g.items : [])])
 
 /** "6 roles · 1 off" (the Settings row of the Roles or Kinds page). */
 function defsCount(f: ViewFile, list: DefList): string {
   const all = defsIn(f, list)
   const off = all.filter(x => x.off).length
-  const noun = list === 'roles' ? 'role' : 'kind'
+  const noun = list === 'roles' ? 'role' : 'task type'
   return `${all.length} ${noun}${all.length === 1 ? '' : 's'}${off ? ` · ${off} off` : ''}`
 }
 
-/** A role or kind of the view file as a line of the Roles or Kinds table (core's def-table.ts). */
+/** A role or task type of the view file as a line of the Roles or Kinds table (core's def-table.ts). */
 export function viewDefRow(list: DefList, x: ViewDef): DefRow & { warning?: string } {
   if (x.broken) return { name: x.name, off: false, cells: {}, broken: x.broken }
   const source = (x.source || undefined) as DefSource | undefined
@@ -1127,14 +1127,14 @@ export function viewDefRow(list: DefList, x: ViewDef): DefRow & { warning?: stri
 }
 
 /** The Roles or Kinds page (T-918, as Claude Code's): "▍Roles  8 roles · 2 changed by you", the column heads, one line
- *  per role or kind (core's defLayout: lined up, the description cut with "…", columns dropped when narrow; the
+ *  per role or task type (core's defLayout: lined up, the description cut with "…", columns dropped when narrow; the
  *  cursor's line marked ❯), then "+ New role (n)". Enter opens one; the footer's keys say n and b. */
 function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
   const b = bodyMaker()
   const all = defsIn(f, list)
   const noun = list === 'roles' ? 'role' : 'kind'
   const rows = all.map(x => viewDefRow(list, x))
-  b.add([{ text: `▍${list === 'roles' ? 'Roles' : 'Kinds'}`, color: 'suggestion', bold: true }, { text: `  ${defsCountText(noun, rows)}`, color: 'inactive' }])
+  b.add([{ text: `▍${list === 'roles' ? 'Roles' : 'Task types'}`, color: 'suggestion', bold: true }, { text: `  ${defsCountText(noun, rows)}`, color: 'inactive' }])
   const layout = defLayout(rows, list === 'roles' ? ROLE_COLS : KIND_COLS, w)
   if (!all.length) b.add([{ text: `  (none in the board's view yet)`, color: 'inactive' }])
   else b.add([{ text: ' '.repeat(TABLE_INDENT), color: 'inactive' }, ...defCells(layout, 'head').map(c => ({ text: c.text, color: 'inactive' }))])
@@ -1368,7 +1368,7 @@ function orgMemBody(f: ViewFile, cursor: number, w: number, topic = ''): Body {
 /** The Settings tab: each group (Work, Checks before merging, ...) as a heading that opens or closes, like the
  *  Claude Code board's (T-585): "▸ Work · auto · 3 at once" closed (its values in short, core's groupSummaryParts),
  *  "▾ Work" open with its settings under it: name, value, default and range, and what it does on the line under it;
- *  the Roles and Kinds rows open their pages. */
+ *  the Roles and Task types rows open their pages. */
 function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: number): Body {
   const b = bodyMaker()
   const v = f.view
@@ -1389,7 +1389,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
     b.add([front, { text: `▾ ${g.title}`, color: 'text', bold: true }], hit)
     for (const item of g.items) {
       if (isSettingPage(item)) {
-        const label = item === 'roles' ? 'Roles' : 'Kinds'
+        const label = item === 'roles' ? 'Roles' : 'Task types'
         const hit = { page: item }
         b.add(
           [
@@ -1399,7 +1399,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
           ],
           hit,
         )
-        b.add([{ text: `    Enter opens the ${label} page: the ${item === 'roles' ? 'worker roles' : 'task kinds'}, to open, turn off or reset`, color: 'inactive' }], hit)
+        b.add([{ text: `    Enter opens the ${label} page: the ${item === 'roles' ? 'worker roles' : 'task types'}, to open, turn off or reset`, color: 'inactive' }], hit)
         continue
       }
       const x = settingInfo(item)!
@@ -1730,14 +1730,14 @@ export type PanelAction =
   | { kind: 'setting'; setting: SettingName; value: string }
   /** change one part of a scout's file: how often it runs, its model ('' = the session's), its instructions */
   | { kind: 'scout-edit'; scout: string; field: ScoutEditField; value: string }
-  /** turn a role or kind off or on, or reset it to the built-in one */
+  /** turn a role or task type off or on, or reset it to the built-in one */
   | { kind: 'def'; def: 'role' | 'kind'; name: string; action: DefAction }
   /** delete note `n` (its place in the file) from organizational memory (T-619); `key`: its check word
    *  (orgMemNoteKey), so a note that moved meanwhile is not the one deleted */
   | { kind: 'orgmem-delete'; n: number; key?: string }
   /** set the board mode (the list's [m] button, T-685): /<name>-mode review|auto */
   | { kind: 'mode'; mode: SymccMode }
-  /** (T-706) a new role or kind from the template, one part of a role's or kind's file, a new scout, and setting up git */
+  /** (T-706) a new role or task type from the template, one part of a role's or kind's file, a new scout, and setting up git */
   | { kind: 'def-add'; def: 'role' | 'kind'; name: string }
   /** the edit page's Save: its changed boxes in one edit (a bad value saves none) */
   | { kind: 'def-save'; def: 'role' | 'kind'; name: string; fields: Partial<Record<DefEditField, string>> }
@@ -1753,6 +1753,9 @@ export type PanelAction =
  */
 export const PANEL_MARK = '⁣'
 
+/** The word the settings command takes for a role or a task type (the engine's `kind`): role or type. */
+const defCommandWord = (def: 'role' | 'kind') => (def === 'kind' ? 'type' : def)
+
 /** The slash command (its name, without the slash, and its text) that does `a` for plugin `name`. */
 export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { name: string; text: string } {
   if (a.kind === 'approve') return { name: `${name}-approve`, text: a.id }
@@ -1762,11 +1765,11 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'scout') return { name: `${name}-scout`, text: a.paused === undefined ? a.scout : `${a.scout} ${a.paused ? 'pause' : 'resume'}` }
   if (a.kind === 'setting') return { name: `${name}-settings`, text: `${a.setting} ${a.value.trim()}` }
   if (a.kind === 'scout-edit') return { name: `${name}-scout`, text: `${a.scout} ${a.field} ${a.value.trim() || (a.field === 'model' ? 'none' : '')}`.trim() }
-  if (a.kind === 'def') return { name: `${name}-settings`, text: `${a.def} ${a.name} ${a.action}` }
+  if (a.kind === 'def') return { name: `${name}-settings`, text: `${defCommandWord(a.def)} ${a.name} ${a.action}` }
   if (a.kind === 'mode') return { name: `${name}-mode`, text: a.mode }
   if (a.kind === 'orgmem-delete') return { name: `${name}-settings`, text: `orgmem delete ${a.n}${a.key ? ` ${a.key}` : ''}` }
-  if (a.kind === 'def-add') return { name: `${name}-settings`, text: `${a.def} ${a.name} add` }
-  if (a.kind === 'def-save') return { name: `${name}-settings`, text: `${a.def} ${a.name} save ${JSON.stringify(a.fields)}` }
+  if (a.kind === 'def-add') return { name: `${name}-settings`, text: `${defCommandWord(a.def)} ${a.name} add` }
+  if (a.kind === 'def-save') return { name: `${name}-settings`, text: `${defCommandWord(a.def)} ${a.name} save ${JSON.stringify(a.fields)}` }
   if (a.kind === 'scout-new') return { name: `${name}-scout`, text: `${a.scout} new ${a.prompt.trim()}` }
   if (a.kind === 'setup-git') return { name: `${name}-settings`, text: 'git setup' }
   if (a.kind === 'check-git') return { name: `${name}-settings`, text: 'git check' }

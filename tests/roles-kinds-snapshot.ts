@@ -1,6 +1,6 @@
 // Written by snapshot-format.ts (one drawn row per line, T-705). To re-capture a page, print
 // `snapshotEntry(key, drawnData(await ui.drawn()))` from a short probe test and put its lines in place of that entry.
-// The Roles and Kinds pages' drawn trees (and one role's and one kind's page) for ROLE_KIND_SCENES of scouts-settings-scenes.ts
+// The Roles and Task types pages' drawn trees (and one role's and one kind's page) for ROLE_KIND_SCENES of scouts-settings-scenes.ts
 // on the terminal, the desktop and mobile, captured from the code before their VS Code pages (T-460). That work must leave
 // these exactly as they are (compared exactly in vscode-scouts-settings.test.tsx).
 export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
@@ -928,7 +928,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -1169,7 +1169,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -1410,7 +1410,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -1701,7 +1701,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -1967,7 +1967,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -2233,7 +2233,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -2515,7 +2515,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -2772,7 +2772,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -3029,7 +3029,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -3357,7 +3357,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -3660,7 +3660,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -3963,7 +3963,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -4233,7 +4233,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -4491,7 +4491,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -4749,7 +4749,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "props": {"color":"inactive"},
-                "children": [" ","the task's kind and what it is for, e.g. \"Kind of task: bug (something that works wrongly).\""]
+                "children": [" ","the task's type and what it is for, e.g. \"The task type is bug (something that works wrongly).\""]
               }
             ]
           },
@@ -5115,8 +5115,8 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "type": "Text",
         "props": {"wrap":"truncate"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍Kinds"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  7 kinds · 2 changed by you · 1 off"]}
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  7 task types · 2 changed by you · 1 off"]}
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"inactive"},"children":["  NAME                           FROM          WH…"]},
@@ -5200,9 +5200,9 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"kind-new","label":"+ New kind (n)","plain":true},
+        "props": {"key":"kind-new","label":"+ New task type (n)","plain":true},
         "press": {"plugin":"symcc"},
-        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New kind (n)"]}]
+        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New task type (n)"]}]
       },
       {
         "type": "Box",
@@ -5230,7 +5230,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
                 "children": [
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["n"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" new kind"]}
+                  {"type":"Text","props":{"color":"inactive"},"children":[" new type"]}
                 ]
               },
               {
@@ -5362,8 +5362,8 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "type": "Text",
         "props": {"wrap":"truncate"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍Kinds"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  7 kinds · 2 changed by you · 1 off"]}
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  7 task types · 2 changed by you · 1 off"]}
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"inactive"},"children":["  NAME                           FROM          WH…"]},
@@ -5447,9 +5447,9 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"kind-new","label":"+ New kind (n)","plain":true},
+        "props": {"key":"kind-new","label":"+ New task type (n)","plain":true},
         "press": {"plugin":"symcc"},
-        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New kind (n)"]}]
+        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New task type (n)"]}]
       },
       {
         "type": "Box",
@@ -5481,7 +5481,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
                 "children": [
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" new kind"]}
+                  {"type":"Text","props":{"color":"inactive"},"children":[" new type"]}
                 ]
               },
               {
@@ -5621,8 +5621,8 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "type": "Text",
         "props": {"wrap":"truncate"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍Kinds"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  7 kinds · 2 changed by you · 1 off"]}
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  7 task types · 2 changed by you · 1 off"]}
         ]
       },
       {"type":"Text","props":{"wrap":"truncate","color":"inactive"},"children":["  NAME                           FROM          WH…"]},
@@ -5706,9 +5706,9 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"kind-new","label":"+ New kind (n)","plain":true},
+        "props": {"key":"kind-new","label":"+ New task type (n)","plain":true},
         "press": {"plugin":"symcc"},
-        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New kind (n)"]}]
+        "children": [{"type":"Text","props":{"color":"text"},"children":["  + New task type (n)"]}]
       },
       {
         "type": "Box",
@@ -5740,7 +5740,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
                 "children": [
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" new kind"]}
+                  {"type":"Text","props":{"color":"inactive"},"children":[" new type"]}
                 ]
               },
               {
@@ -6078,7 +6078,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
             ]
           },
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["a general change when no other kind fits (the default)"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["a general change when no other task type fits (the default)"]}
         ]
       },
       {
@@ -6153,7 +6153,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
             ]
           },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a general change when no other kind fits (the default)"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a general change when no other task type fits (the default)"]}
         ]
       },
       {
@@ -6236,7 +6236,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
             ]
           },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a general change when no other kind fits (the default)"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a general change when no other task type fits (the default)"]}
         ]
       },
       {

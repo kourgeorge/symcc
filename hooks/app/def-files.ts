@@ -10,7 +10,7 @@ import { skippedRoleNote } from '../board'
 /** What the tool gets: the action and name; the rest is the role's or kind's own fields. */
 export type DefInput = { action?: unknown; name?: unknown; description?: unknown }
 
-/** The parts where roles and kinds differ. */
+/** The parts where roles and task types differ. */
 export type DefKind<D extends Def, A extends DefInput> = {
   /** "role" or "kind" */
   noun: string
@@ -137,7 +137,7 @@ async function manageText<D extends Def, A extends DefInput>(host: Host, k: DefK
     const bad = k.nameError(asked)
     if (bad) return action === 'list' || asked ? bad : `say which ${noun} to ${action} (name)`
   }
-  if (action !== 'list' && !S.root) return `no project folder yet, so ${k.plural} can not be changed`
+  if (action !== 'list' && !S.root) return `no project folder yet, so ${noun}s can not be changed`
   const { builtIn, project, broken, dir } = await defLists(host, k)
   const have = () => `have: ${k.get().map(d => d.name).join(', ') || 'none'}`
   if (action === 'list' && !asked) return k.listText(builtIn, project, dir, broken)

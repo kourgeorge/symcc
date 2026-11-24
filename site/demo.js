@@ -117,7 +117,7 @@
     // T-867: no bar: the whole task's tokens (every try; the running try's are known only at its hand-back), how many
     // times the median per task (the warning tone from twice it), its time so far, who spent them, the send-backs.
     // T-931: the clock first, then the tokens, then the worker/checker split in < > (no ⌀ inside). When the line is too
-    // wide, parts go: the < > split, then "(× median)", then the kind, then ⌀, then ⏱
+    // wide, parts go: the < > split, then "(× median)", then the task type, then ⌀, then ⏱
     const total = (l.prior || 0) + (l.tokens || 0)
     // rounded as shown, and the tone decided on the rounded number (so "(2× median)" is always the warning tone)
     const times = Math.round((total / USUAL) * 10) / 10
@@ -267,7 +267,7 @@
     const status = lane ? (lane.at === 0 ? `doing · try ${lane.tryNo}/3 · the worker is building it` : `doing · try ${lane.tryNo}/3 · the checker is trying to break it`) : 'done'
     const row = (k, v, tone) => L.push('   ' + sp(pad(k, 8), 'dim') + sp(v, tone))
     row('Status', status, 'current')
-    row('Kind', 'bug', 'heading')
+    row('Type', 'bug', 'heading')
     row('From', 'lead', 'text')
     row('Why', 'On T-738 a doubled hand-back started two checkers and a stopped checker\'s "stopped" answer sent the task back, wasting a try (~$7)', 'text')
     row('Files', 'hooks/app/checker.ts, hooks/app/workers.ts, tests/', 'file')

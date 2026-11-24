@@ -1,7 +1,7 @@
 import { expect, test } from 'claude-code/testing'
 import { SETTING_GROUPS, SETTING_NAMES, SETTING_PAGES, emptyBoard, leadSettingsText, settingsText } from '../hooks/board'
 
-test('every setting is in exactly one category (a new setting needs one), and so are the Roles and Kinds pages', () => {
+test('every setting is in exactly one category (a new setting needs one), and so are the Roles and Task types pages', () => {
   const all = SETTING_GROUPS.flatMap(g => g.items)
   for (const name of [...SETTING_NAMES, ...SETTING_PAGES]) expect(all.filter(x => x === name)).toHaveLength(1)
   expect(all).toHaveLength(SETTING_NAMES.length + SETTING_PAGES.length)
@@ -28,7 +28,7 @@ test("the lead's settings listing shows the same headings, each with its setting
   const text = leadSettingsText(emptyBoard(), { sound: true, voice: false })
   const got = sections(text, l => (l.startsWith('## ') ? l.slice(3) : null), l => /^(\w+): /.exec(l)?.[1] ?? null)
   expect(got.map(([t, names]) => [t, names.filter(n => n !== 'roles')])).toEqual(expected)
-  expect(text).toContain('roles and kinds: use the roles and kinds tools')
+  expect(text).toContain('roles and task types: use the roles and kinds tools')
 })
 
 test("the owner's settings text (when the panel can't be shown) is grouped the same way", () => {

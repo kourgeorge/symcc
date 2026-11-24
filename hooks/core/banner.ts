@@ -463,8 +463,8 @@ export const footerRule = (width: number) => '─'.repeat(Math.max(1, Math.floor
 export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).join('')
 
 /** What the lead's board tool lists: tasks with one of `status` and matching `search` (see parseSearch: plain words and
- *  filter words like last:5 or kind:bug); `limit` and `sort` are the same as last:N ("newest", the default) and
- *  top:N ("order"). `kinds`: the known kinds, so an unknown kind: word gives an error. */
+ *  filter words like last:5 or type:bug); `limit` and `sort` are the same as last:N ("newest", the default) and
+ *  top:N ("order"). `kinds`: the known kinds, so an unknown type: word gives an error. */
 export type BoardFilter = { status?: SymccStatus[]; search?: string; limit?: number; sort?: 'newest' | 'order'; kinds?: readonly string[]; /** false: another session drives the board (see sessionNote) */ driving?: boolean }
 
 /** The board tool's status words (a list, or one string like "todo, doing") as statuses; "open" adds every OPEN one.

@@ -96,7 +96,7 @@ const pageText = async (ui: { findAll: (q: { type: string }) => Promise<{ props:
   '\n' +
   (await ui.findAll({ type: 'Markdown' })).map(m => String(m.props.text ?? '')).join('\n')
 
-test('T-687: Settings no longer lists org-mem (terminal and VS Code); the Workers group has only Roles and Kinds', async ($, on) => {
+test('T-687: Settings no longer lists org-mem (terminal and VS Code); the Workers group has only Roles and Task types', async ($, on) => {
   stateOf(on, SETTINGS_VIEW)
   fakeOrgMem(on, NOTES)
   const ui = await settings($)

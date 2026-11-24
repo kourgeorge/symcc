@@ -1,4 +1,4 @@
-// The built-in kinds' texts, by name (one module each, like the worker prompts in prompts/).
+// The built-in task types' texts, by name (one module each, like the worker prompts in prompts/).
 import change from './change'
 import bug from './bug'
 import feature from './feature'

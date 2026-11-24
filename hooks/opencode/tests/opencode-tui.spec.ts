@@ -1659,7 +1659,7 @@ test('T-559: the view file carries each scout\'s recent runs, newest first, with
   expect(got['docs-check']![0]!.tasks).toEqual(['T-4'])
 })
 
-/** The view file with roles and kinds as view.ts writes them (viewDefs): general and checker built-in, tester the
+/** The view file with roles and task types as view.ts writes them (viewDefs): general and checker built-in, tester the
  *  owner's copy and off, oops a role file that can't be read; the kinds change (always on) and bug (the owner's copy). */
 function defsViewFile(): ViewFile {
   const f = scoutsViewFile()
@@ -1697,13 +1697,13 @@ test('T-562: viewDefs gives each role and kind where it comes from, whether it c
   expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, roles: 'x' as never } }))!.view.roles).toBe(undefined)
 })
 
-test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a role\'s and a kind\'s page show it, and turn it off or on or reset it with /symcc-settings role|kind', () => {
+test('T-562: the Settings tab opens the Roles and Task types pages from view.json; a role\'s and a kind\'s page show it, and turn it off or on or reset it with /symcc-settings role|type', () => {
   const f = defsViewFile()
-  // the Settings list: the Roles and Kinds rows with their counts, each a row the cursor goes over
+  // the Settings list: the Roles and Task types rows with their counts, each a row the cursor goes over
   const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ['Workers'] }, NOW, 140)
   const s = settings.lines.map(lineText)
   expect(s.find(l => l.includes('Roles'))).toMatch(/Roles +4 roles · 1 off/)
-  expect(s.find(l => /^ +Kinds/.test(l))).toMatch(/Kinds +2 kinds/)
+  expect(s.find(l => /^ +Task types/.test(l))).toMatch(/Task types +2 task types/)
   expect(settings.ids).toContain('roles')
   expect(settings.ids).toContain('kinds')
   expect(settings.hits[s.findIndex(l => l.includes('4 roles'))]).toEqual({ page: 'roles' })
@@ -1764,7 +1764,7 @@ test('T-562: the Settings tab opens the Roles and Kinds pages from view.json; a 
   expect(panelKeys(f, 'role:gone', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the actions as slash commands
   expect(actionCommand({ kind: 'def', def: 'role', name: 'tester', action: 'on' })).toEqual({ name: 'symcc-settings', text: 'role tester on' })
-  expect(actionCommand({ kind: 'def', def: 'kind', name: 'bug', action: 'reset' })).toEqual({ name: 'symcc-settings', text: 'kind bug reset' })
+  expect(actionCommand({ kind: 'def', def: 'kind', name: 'bug', action: 'reset' })).toEqual({ name: 'symcc-settings', text: 'type bug reset' })
   expect(actionCommand({ kind: 'scout-edit', scout: 'deps', field: 'every', value: ' 15 ' })).toEqual({ name: 'symcc-scout', text: 'deps every 15' })
   expect(actionCommand({ kind: 'scout-edit', scout: 'deps', field: 'model', value: '' })).toEqual({ name: 'symcc-scout', text: 'deps model none' })
 })
@@ -1847,7 +1847,7 @@ test('T-562: startTui: Settings opens Roles, a role\'s page turns it on and rese
   expect(sent).toEqual([
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'role tester on' },
     { sessionID: 'ses_1', name: 'symcc-settings', text: 'role tester reset' },
-    { sessionID: 'ses_1', name: 'symcc-settings', text: 'kind bug off' },
+    { sessionID: 'ses_1', name: 'symcc-settings', text: 'type bug off' },
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps every 15' },
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps model none' },
     { sessionID: 'ses_1', name: 'symcc-scout', text: 'deps prompt Check the lock file too.' },
@@ -2022,7 +2022,7 @@ test('T-585: the Settings tab\'s groups open and close like the Claude Code boar
   expect(SETTINGS_OPEN).toEqual([])
   const closed = panelLines(f, { tab: 'settings', opened: '', cursor: 0 }, NOW, 140)
   const c = closed.lines.map(lineText)
-  const pages = { roles: '0 roles', kinds: '0 kinds' }
+  const pages = { roles: '0 roles', kinds: '0 task types' }
   for (const g of SETTING_GROUPS) {
     const sum = groupSummaryParts(g, f.view, 136, pages)
     expect(c.some(l => l.endsWith(`▸ ${sum.title}${sum.values}`))).toBe(true)
@@ -2848,7 +2848,7 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   // Back (b) on each list page, as Claude Code's
   const back = (c: Partial<PanelChoice>) => draw(c).lines.flat().filter(s => s.text === '[ Back (b) ]').map(s => s.hit)
   for (const c of [{ tab: 'scouts' }, { tab: 'settings' }] as const) expect([c, back(c)]).toEqual([c, [{ key: 'back' }]])
-  // T-918: the Roles and Kinds tables have no Back button (their key line says b back)
+  // T-918: the Roles and Task types tables have no Back button (their key line says b back)
   for (const c of [{ tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }] as const) expect([c, back(c)]).toEqual([c, []])
   // T-790: the org-mem page has the shared detail header: "‹ [Live]" and the count, the title, the subtitle, "[Delete]" (no key in it),
   // a thin rule, kept at the top; then ▍About and ▍Notes; the old Back (b) button is gone
@@ -2996,11 +2996,11 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   await board.press('open', 's')
   expect(board.state().opened).toBe('T-2')
   await toList()
-  // Back (b) on the list pages: Scouts and Settings go to the task list, Roles and Kinds to Settings, org-mem to the Live tab
+  // Back (b) on the list pages: Scouts and Settings go to the task list, Roles and Task types to Settings, org-mem to the Live tab
   expect((await same(async () => (await toList(), await board.press('s', 's')), '[ Back (b) ]', 'back')).state.tab).toBe('tasks')
   expect((await same(() => toSettings(), '[ Back (b) ]', 'back')).state.tab).toBe('tasks')
-  // T-918: the Roles and Kinds tables have no Back button; b goes back to Settings
-  for (const row of ['4 roles', '2 kinds']) {
+  // T-918: the Roles and Task types tables have no Back button; b goes back to Settings
+  for (const row of ['4 roles', '2 task types']) {
     await toSettings(row)
     await board.press('back', 's')
     expect(board.state()).toEqual({ ...board.state(), tab: 'settings', opened: '' })
@@ -3022,10 +3022,10 @@ test('T-685: in the TUI a click on each of those buttons does exactly what its k
   expect((await same(tester, '[Reset to built-in]', 'r', { select: ['yes'] })).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role tester reset' }])
   expect((await same(tester, '[Reset to built-in]', 'r', { select: ['no'] })).sent).toEqual([])
   // a kind's page: Back, Turn off, Reset to built-in
-  const bug = () => toSettings('2 kinds', 'A bug to fix')
+  const bug = () => toSettings('2 task types', 'A bug to fix')
   expect((await same(bug, '[ Back ]', 'back')).state.opened).toBe('kinds')
-  expect((await same(bug, '[ Turn off ]', 'o')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind bug off' }])
-  expect((await same(bug, '[ Reset to built-in ]', 'r')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind bug reset' }])
+  expect((await same(bug, '[ Turn off ]', 'o')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'type bug off' }])
+  expect((await same(bug, '[ Reset to built-in ]', 'r')).sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'type bug reset' }])
   // the prompt page: Back goes back to the role; its other prompt's button opens that one; o and r do nothing there
   const promptPage = async () => (await tester(), await board.press('p', 's'))
   expect((await same(promptPage, '[ Back ]', 'back')).state.opened).toBe('role:tester')
@@ -3585,7 +3585,7 @@ function addedViewFile(git?: 'no-repo' | 'no-commits'): ViewFile {
   return { ...f, view: { ...f.view, roles: [...f.view.roles!, ...docs], kinds: [...f.view.kinds!, ...chore], ...(git ? { git_state: git, branch_note: gitNote(git) } : {}) } }
 }
 
-test('T-706: a role\'s and a kind\'s page draw Claude Code\'s Edit and Remove (its order, labels and keys for the same role or kind); the lists draw + New role / + New kind, the Scouts tab + New scout', () => {
+test('T-706: a role\'s and a kind\'s page draw Claude Code\'s Edit and Remove (its order, labels and keys for the same role or task type); the lists draw + New role / + New kind, the Scouts tab + New scout', () => {
   const f = addedViewFile()
   const W = 140
   const texts = (c: Partial<PanelChoice>) => panelLines(f, { opened: '', cursor: 0, ...c }, NOW, W)
@@ -3604,9 +3604,9 @@ test('T-706: a role\'s and a kind\'s page draw Claude Code\'s Edit and Remove (i
   expect(lineText(buttons('kind:chore'))).toBe('[ Back ] [ Edit ] [ Turn off ] [ Remove ]')
   expect(panelKeys(f, 'kind:chore', 'settings')).toEqual(roleKeys({ canEdit: true, canOff: true, off: false, canReset: false, canRemove: true }))
   expect(panelKeys(f, 'kind:change', 'settings')).toEqual(roleKeys({ canEdit: true, canOff: false, off: false, canReset: false, canRemove: false }))
-  // the Roles and Kinds lists (T-918): the table, then one plain "+ New role (n)" line (n); no hint line and no Back
+  // the Roles and Task types lists (T-918): the table, then one plain "+ New role (n)" line (n); no hint line and no Back
   // button (the footer keys say them)
-  for (const [list, label, keys] of [['roles', '  + New role (n)', rolesKeys()], ['kinds', '  + New kind (n)', kindsKeys()]] as const) {
+  for (const [list, label, keys] of [['roles', '  + New role (n)', rolesKeys()], ['kinds', '  + New task type (n)', kindsKeys()]] as const) {
     const d = texts({ tab: 'settings', opened: list })
     const t = d.lines.map(lineText)
     const at = t.indexOf(label)
@@ -3667,7 +3667,7 @@ test('T-706: Edit opens Claude Code\'s edit page: "<name> editing", where Save w
   expect(panelLines(f, { tab: 'settings', opened: 'role:docs', cursor: 0, edit }, NOW, 140).lines.map(lineText).some(l => l.startsWith('[Edit] [Prompt]'))).toBe(true)
   // the commands they send
   expect(actionCommand({ kind: 'def', def: 'role', name: 'docs', action: 'remove' })).toEqual({ name: 'symcc-settings', text: 'role docs remove' })
-  expect(actionCommand({ kind: 'def-add', def: 'kind', name: 'chore' })).toEqual({ name: 'symcc-settings', text: 'kind chore add' })
+  expect(actionCommand({ kind: 'def-add', def: 'kind', name: 'chore' })).toEqual({ name: 'symcc-settings', text: 'type chore add' })
   expect(actionCommand({ kind: 'def-add', def: 'role', name: 'remove' })).toEqual({ name: 'symcc-settings', text: 'role remove add' })
   expect(actionCommand({ kind: 'def-save', def: 'role', name: 'docs', fields: { model: '', checklist: '- one\n- two' } })).toEqual({ name: 'symcc-settings', text: 'role docs save {"model":"","checklist":"- one\\n- two"}' })
   expect(actionCommand({ kind: 'scout-new', scout: 'lint', prompt: ' Look for lint. ' })).toEqual({ name: 'symcc-scout', text: 'lint new Look for lint.' })
@@ -3723,7 +3723,7 @@ async function tuiOn(f: ViewFile) {
   return { board, files, sent, answers, asked, descs, lines, click, clickRow, toSettings }
 }
 
-test('T-706: startTui: Remove (d, or a click) asks Claude Code\'s question first; Cancel sends nothing, Yes sends /symcc-settings role|kind NAME remove and goes back to the list', async () => {
+test('T-706: startTui: Remove (d, or a click) asks Claude Code\'s question first; Cancel sends nothing, Yes sends /symcc-settings role|type NAME remove and goes back to the list', async () => {
   const t = await tuiOn(addedViewFile())
   const docs = () => t.toSettings('5 roles', 'Writes docs')
   for (const how of ['key', 'click'] as const) {
@@ -3741,11 +3741,11 @@ test('T-706: startTui: Remove (d, or a click) asks Claude Code\'s question first
     expect([how, t.sent, t.board.state().opened]).toEqual([how, [{ sessionID: 's', name: 'symcc-settings', text: 'role docs remove' }], 'roles'])
   }
   // a kind the same way; a replaced built-in has no Remove: d does nothing
-  await t.toSettings('3 kinds', 'A small chore')
+  await t.toSettings('3 task types', 'A small chore')
   t.sent.length = 0
   t.answers.select.push('yes')
   await t.board.press('d', 's')
-  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind chore remove' }])
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'type chore remove' }])
   await t.toSettings('5 roles', 'My tester')
   t.sent.length = 0
   t.asked.length = 0
@@ -3754,7 +3754,7 @@ test('T-706: startTui: Remove (d, or a click) asks Claude Code\'s question first
   t.board.stop()
 })
 
-test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a click on a box asks its value; Save sends the changed boxes in one /symcc-settings role|kind NAME save {...}; Cancel (x), an empty description or a bad tool word send nothing and keep the page with the error', async () => {
+test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a click on a box asks its value; Save sends the changed boxes in one /symcc-settings role|type NAME save {...}; Cancel (x), an empty description or a bad tool word send nothing and keep the page with the error', async () => {
   const t = await tuiOn(addedViewFile())
   const tester = () => t.toSettings('5 roles', 'My tester')
   await tester()
@@ -3803,7 +3803,7 @@ test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a clic
   await t.board.press('x', 's')
   expect(t.lines().some(l => l.includes('editing'))).toBe(false)
   // nothing changed: Save sends nothing; a kind's Body
-  await t.toSettings('3 kinds', 'A small chore')
+  await t.toSettings('3 task types', 'A small chore')
   await t.board.press('e', 's')
   await t.click('[ Save ]')
   expect(t.sent).toEqual([])
@@ -3812,11 +3812,11 @@ test('T-706: startTui: Edit (e, or a click) opens the edit page; Enter or a clic
   t.clickRow('  Body')
   await new Promise<void>(res => setTimeout(res, 0))
   await t.click('[ Save ]')
-  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind chore save {"body":"Tidy one thing."}' }])
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'type chore save {"body":"Tidy one thing."}' }])
   t.board.stop()
 })
 
-test('T-706: startTui: + New role / + New kind (n, or a click) ask the name and send /symcc-settings role|kind NAME add, then open it in the edit page once the view has it; + New scout asks name and instructions and sends /symcc-scout NAME new', async () => {
+test('T-706: startTui: + New role / + New kind (n, or a click) ask the name and send /symcc-settings role|type NAME add, then open it in the edit page once the view has it; + New scout asks name and instructions and sends /symcc-scout NAME new', async () => {
   const f = addedViewFile()
   const t = await tuiOn(f)
   await t.toSettings('5 roles')
@@ -3833,13 +3833,13 @@ test('T-706: startTui: + New role / + New kind (n, or a click) ask the name and 
   expect(t.board.state().opened).toBe('role:writer')
   expect(t.lines()[0]).toBe('writer editing')
   // Esc on the name box sends nothing; n on the Kinds page sends kind NAME add
-  await t.toSettings('3 kinds')
+  await t.toSettings('3 task types')
   t.sent.length = 0
   t.answers.prompt.push(undefined)
   await t.board.press('n', 's')
   t.answers.prompt.push('Chores')
   await t.board.press('n', 's')
-  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'kind Chores add' }])
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'type Chores add' }])
   // + New scout: its name, then what it does
   await t.board.press('s', 's')
   t.sent.length = 0
@@ -3858,7 +3858,7 @@ test('T-706: startTui: + New role / kind / scout with a taken or bad name asks a
   const f = addedViewFile()
   expect(newNameError(f, 'role', 'docs')).toBe('a role named docs already exists; open it in the list to change it')
   expect(newNameError(f, 'role', 'DOCS')).toBe('a role named docs already exists; open it in the list to change it')
-  expect(newNameError(f, 'kind', 'chore')).toBe('a kind named chore already exists; open it in the list to change it')
+  expect(newNameError(f, 'kind', 'chore')).toBe('a task type named chore already exists; open it in the list to change it')
   expect(newNameError(f, 'role', 'a/b')).toBe(roleNameError('a/b'))
   expect(newNameError(f, 'role', 'writer')).toBe('')
   expect(newNameError(f, 'scout', 'deps')).toBe('a scout named deps already exists')
@@ -4568,7 +4568,7 @@ test('T-918: the Roles table drops MODEL, then WEB, then WRITES when narrow, the
   expect(row(24, 'researcher')).toBe('  researcher  built-in')
   // the Kinds table: NAME, FROM, WHAT IT'S FOR
   const kinds = panelLines(g, { tab: 'settings', opened: 'kinds', cursor: 1 }, NOW, 140).lines.map(lineText)
-  expect(kinds).toContain('▍Kinds  2 kinds · 1 changed by you')
+  expect(kinds).toContain('▍Task types  2 task types · 1 changed by you')
   expect(kinds).toContain("  NAME    FROM      WHAT IT'S FOR")
   expect(kinds).toContain('❯ bug     changed   A bug to fix')
   // every role's page says what it writes

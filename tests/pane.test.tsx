@@ -1327,7 +1327,7 @@ test('Settings groups its rows under 5 headings, in order; with every group open
   const under: Record<string, string[]> = {
     Work: ['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled'],
     'Checks before merging': ['test_commands', 'docs_test_commands', 'test_minutes', 'tests_with_changes', 'checker'],
-    Workers: ['Roles', 'Kinds'],
+    Workers: ['Roles', 'Task types'],
     Scouts: ['scout_findings'],
     'Board and alerts': ['notify', 'open_on_start', 'archive_days'],
   }
@@ -1341,7 +1341,7 @@ test('Settings groups its rows under 5 headings, in order; with every group open
     }
   })
   // the ↑↓ stops are each heading then its rows, category after category
-  const rows = titles.flatMap(t => [`group:${t}`, ...under[t]!.map(n => (n === 'Roles' ? 'settings-roles' : n === 'Kinds' ? 'settings-kinds' : `setting:${n}`))])
+  const rows = titles.flatMap(t => [`group:${t}`, ...under[t]!.map(n => (n === 'Roles' ? 'settings-roles' : n === 'Task types' ? 'settings-kinds' : `setting:${n}`))])
   const isStop = (k: string) => k.startsWith('group:') || k.startsWith('setting:') || k === 'settings-roles' || k === 'settings-kinds'
   const stops = (await ui.findAll({ type: 'Button' })).map(b => String(b.key ?? '')).filter(isStop)
   expect(stops).toEqual(rows)
@@ -1367,7 +1367,7 @@ test('Settings groups start closed with the first heading focused; Enter opens a
   expect(work?.props.label).toBe('▸ Work · auto merge · 3 at once · 45 min · 2 re…')
   expect(await ui.find({ type: 'Text', text: '▸ Work' })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: ' · auto merge · 3 at once · 45 min · 2 re…' })).toBeDefined()
-  expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles? · \d+ kinds?/)
+  expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles? · \d+ task types?/)
   expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
   // Enter opens Work: its rows show under "▾ Work"; ↑↓ go from its last row to the next heading, past nothing hidden
   await ui.press({ key: 'group:Work' })
@@ -2192,7 +2192,7 @@ test('an answered investigation opens with its full answer and Done, Keep as a n
   expect(await ui.find({ type: 'Text', text: /Changes \(/ })).toBeUndefined()
   expect(L.some(l => /^x ask more/.test(l))).toBe(true)
   expect(L.some(l => /a done|v keep as a note/.test(l))).toBe(false)
-  expect(L.some(l => /^Kind:\s+investigation — nothing is merged$/.test(l))).toBe(true)
+  expect(L.some(l => /^Type:\s+investigation — nothing is merged$/.test(l))).toBe(true)
   // no badge under the title (T-693); the header's state line says it is answered (T-701, T-751)
   expect(L.some(l => /^\[◆ answered: read it\]$/.test(l))).toBe(false)
   expect(L.some(l => l.startsWith('◆ answered: read it'))).toBe(true)

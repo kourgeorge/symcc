@@ -15,7 +15,7 @@ import { arrows, headingFocused, row } from './arrows'
 import { settingsPageVs } from './vscode-settings'
 import { rolesPageVs, rolePageVs, brokenRolePageVs, rolePromptPageVs, roleEditPageVs, kindsPageVs, kindPageVs, kindEditPageVs } from './vscode-roles'
 import { claudeHost } from '../host'
-import { type DefRow, type DefCol, type CodePick, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICKS, CODE_PICK_LABEL, CODE_PICK_HINT, defsCountText, defLayout, defCells, defCellTone, defLineText, newDefText, roleWritesLine, codePickOf } from '../../core/def-table'
+import { type DefRow, type DefCol, type CodePick, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICKS, CODE_PICK_LABEL, CODE_PICK_HINT, defsCountText, defWord, defLayout, defCells, defCellTone, defLineText, newDefText, roleWritesLine, codePickOf } from '../../core/def-table'
 import { type CodeDraft, roleRows, kindRows, saveRoleEdit } from './role-table'
 
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
@@ -280,7 +280,7 @@ function brokenRolePage($: $, pane: PaneParts, b: BrokenDef, builtIn: RoleDef[])
 }
 
 /** T-918: the Roles or Kinds page on the terminal: "▍Roles  8 roles · 2 changed by you", the column heads, one line per
- *  role or kind (core's defLayout: the columns lined up, the description cut with "…", columns dropped when narrow; the
+ *  role or task type (core's defLayout: the columns lined up, the description cut with "…", columns dropped when narrow; the
  *  cursor's line marked ❯), then "+ New role (n)" (or its name box) and the footer's keys. Enter opens a line; n and b
  *  are hidden Buttons (the key line says them). */
 function defTable($: $, pane: PaneParts, o: { noun: 'role' | 'kind'; rows: (DefRow & { warning?: string })[]; cols: readonly DefCol[]; naming: { name: string; error: string } | null; open: (name: string) => () => void; startNew: () => void; back: () => void; newBox: unknown; keys: ReturnType<typeof rolesKeys> }) {
@@ -295,7 +295,7 @@ function defTable($: $, pane: PaneParts, o: { noun: 'role' | 'kind'; rows: (DefR
     <Box flexDirection="column">
       {header(page)}
       <Text key={`${page}-heading`} wrap="truncate">
-        <Text bold color={C('suggestion')}>{`▍${noun === 'role' ? 'Roles' : 'Kinds'}`}</Text>
+        <Text bold color={C('suggestion')}>{`▍${noun === 'role' ? 'Roles' : 'Task types'}`}</Text>
         <Text color={C('inactive')}>{`  ${defsCountText(noun, rows)}`}</Text>
       </Text>
       <Text key={`${page}-cols`} wrap="truncate" color={C('inactive')}>{defLineText(layout, 'head')}</Text>
@@ -335,7 +335,7 @@ function defPage($: $, pane: PaneParts, o: { noun: 'role' | 'kind'; view: DefPag
     <Box key={`${noun}-new-box`} flexDirection="column">
       <Input
         key={`${noun}-new-name`}
-        label={`New ${noun}'s name`}
+        label={`New ${defWord(noun)}'s name`}
         placeholder="letters, digits, - and _"
         value={view.naming.name}
         autoFocus
@@ -399,7 +399,7 @@ function kindEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
         <Text>
           <Text bold color={C('claude')}>{d.kind}</Text> <Text bold color={C('warning')}>editing</Text>
         </Text>
-        <Text color={C('inactive')}>save writes {kindFileOf(d.kind)}{source === 'built-in' ? ' (a copy of the built-in kind; Reset to built-in undoes it)' : ''}</Text>
+        <Text color={C('inactive')}>save writes {kindFileOf(d.kind)}{source === 'built-in' ? ' (a copy of the built-in task type; Reset to built-in undoes it)' : ''}</Text>
       </Box>
       <Box flexDirection="row" gap={1}>
         <Button key="kind-save" label="Save" onPress={act(async () => {
@@ -409,8 +409,8 @@ function kindEditPage($: $, pane: PaneParts, source: DefSource | undefined) {
         <Button key="kind-edit-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
       </Box>
       {d.error ? <Text color={C('error')}>{d.error}</Text> : null}
-      {box('description', 'Description', 'what this kind of task is, in a few words', { autoFocus: true })}
-      {box('body', 'Body', 'free text about the kind', { rows: 6 })}
+      {box('description', 'Description', 'what this task type is, in a few words', { autoFocus: true })}
+      {box('body', 'Body', 'free text about the task type', { rows: 6 })}
       {footer(roleEditKeys(), 'kind-edit-keys')}
     </Box>
   )
@@ -451,7 +451,7 @@ function kindPage($: $, pane: PaneParts, k: KindDef | undefined, source: DefSour
       ], 'kind-buttons')}
       {kindView.confirmRemove && canRemove ? (
         <Box key="kind-remove-box" flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
-          <Text color={C('warning')}>Remove kind {name} and delete {broken ? broken.file : kindFileOf(name)}?</Text>
+          <Text color={C('warning')}>Remove task type {name} and delete {broken ? broken.file : kindFileOf(name)}?</Text>
           <Box flexDirection="row" gap={1}>
             <Button key="kind-remove-yes" label="Yes, remove (y)" hotkey="y" autoFocus onPress={run({ action: 'remove', name }, () => (kindView.open = ''))} />
             <Button key="kind-remove-cancel" label="Cancel (x)" hotkey="x" onPress={() => ((kindView.confirmRemove = false), $.ui.invalidate('ui.render'))} />
@@ -515,7 +515,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   const offCount = roles.filter(r => r.off && !isCheckerRole(r.name)).length
   const rolesCount = `${roles.length} role${roles.length === 1 ? '' : 's'}${offCount ? ` · ${offCount} off` : ''}`
   const kindsOff = kinds.filter(k => k.off).length
-  const kindsCount = `${kinds.length} kind${kinds.length === 1 ? '' : 's'}${kindsOff ? ` · ${kindsOff} off` : ''}`
+  const kindsCount = `${kinds.length} task type${kinds.length === 1 ? '' : 's'}${kindsOff ? ` · ${kindsOff} off` : ''}`
   const cancel = () => ((S.settingEdit = null), (S.settingPick = null), $.ui.invalidate('ui.render'))
   const cancelButton = <Button key="setting-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
   const saveIt = (input: SettingsInput) => act(async () => {
@@ -612,10 +612,10 @@ export async function settingsPage($: $, pane: PaneParts) {
         <Text color={C('inactive')}> · Enter opens the Roles page: the worker roles, to open, edit, turn off or add</Text>
       </Button>
     ) : (
-      <Button key={row('settings-kinds')} plain label={`Kinds: ${kindsCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (kindView.list = true), $.ui.invalidate('ui.render'))}>
-        <Text bold color={C('claude')}>{'Kinds'.padEnd(nameWidth)}</Text>
+      <Button key={row('settings-kinds')} plain label={`Task types: ${kindsCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (kindView.list = true), $.ui.invalidate('ui.render'))}>
+        <Text bold color={C('claude')}>{'Task types'.padEnd(nameWidth)}</Text>
         <Text bold color={C('text')}> {kindsCount}</Text>
-        <Text color={C('inactive')}> · Enter opens the Kinds page: the task kinds, to open, edit, turn off or add</Text>
+        <Text color={C('inactive')}> · Enter opens the Task types page: to open, edit, turn off or add</Text>
       </Button>
     )
   return (

@@ -270,7 +270,7 @@ export function scoutButtons(sc: Pick<SymccScout, 'running' | 'paused'>): Header
   ]
 }
 
-/** Which buttons a role or kind page gets (the same rules on every client): Edit, Turn off or on, Reset to built-in,
+/** Which buttons a role or task type page gets (the same rules on every client): Edit, Turn off or on, Reset to built-in,
  *  Remove. A file that can't be read (`broken`) only gets Reset (when a built-in one has its name) or Remove (when not),
  *  and neither when its name is not a valid one. Otherwise Reset is for a replaced one, Remove for an added one, and
  *  every one can be turned off but the general role, the checker role and the always-on kinds. */

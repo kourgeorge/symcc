@@ -81,8 +81,8 @@ for (const [name, t] of [['a bug in doing with a role, tries and a checker step'
     expect(new Set(drawn.map(r => r.labelWidth))).toEqual(new Set([VS_LABEL_WIDTH]))
     for (const [i, r] of drawn.entries()) {
       const e = expected[i]!
-      // the Role and Kind rows: the page knows their descriptions (the roles and kinds folders), the rows here don't
-      if (e.label === 'Role' || e.label === 'Kind') expect(r.text.startsWith(e.text), r.key).toBe(true)
+      // the Role and Type rows: the page knows their descriptions (the roles and task types folders), the rows here don't
+      if (e.label === 'Role' || e.label === 'Type') expect(r.text.startsWith(e.text), r.key).toBe(true)
       // an After row: its task id is a link (Markdown), the rest beside it (the gap between them is the space)
       else if (e.label === 'After') expect(r.text, r.key).toBe(e.text.replace(' ', ''))
       else expect([r.text, r.colors], r.key).toEqual([e.text, e.colors])
@@ -92,7 +92,7 @@ for (const [name, t] of [['a bug in doing with a role, tries and a checker step'
     expect(drawn[0]!.label).toBe(t.status === 'doing' ? 'Steps' : 'Added')
     expect((await ui.find({ key: 'vs-state-status' }))?.text).toMatch(t.status === 'doing' ? /^▶ doing · checker · ⏱ \d+m$/ : /^○ to do$/)
     if (t === BUG) {
-      expect(drawn.map(r => r.label)).toEqual(['Steps', 'Added', 'Priority', 'Role', 'Kind', 'From', 'Why', 'Request', 'Files', 'Into', 'After', 'Branch', 'Tries'])
+      expect(drawn.map(r => r.label)).toEqual(['Steps', 'Added', 'Priority', 'Role', 'Type', 'From', 'Why', 'Request', 'Files', 'Into', 'After', 'Branch', 'Tries'])
       expect(drawn.find(r => r.label === 'Steps')!.text).toContain('● checker')
       // T-966: a doing task's Priority row is only its number
       expect(drawn.find(r => r.label === 'Priority')!.text).toBe('0')

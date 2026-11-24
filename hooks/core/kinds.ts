@@ -1,15 +1,15 @@
-// Task kinds: what a task is for (change, bug, feature, refactor, docs, investigation, or the owner's own).
+// Task types: what a task is for (change, bug, feature, refactor, docs, investigation, or the owner's own).
 // The built-in ones are texts in the plugin's kinds/<name>.ts (like the worker prompts); the owner's own are files
 // `.<plugin name>/kinds/<name>.md` in the project, which win over a built-in one with the same name. Front matter: description (needed; the lead reads it
 // to choose) and off: true (optional: the kind is never picked for a new task). The body is free text for now.
-// Every kind runs like a change, except investigation.
+// Every task type runs like a change, except investigation.
 import { DEFAULT_NAME } from '../name'
 import { BUILT_IN_KIND_TEXTS } from '../../kinds'
 import { DEFAULT_KIND, INVESTIGATION, KIND_NAME, kindOf } from './board-file'
 import { frontMatterLine, splitFrontMatter } from './text'
 import { type DefSource, type BrokenDef, brokenNamed, defSource, defNameError, leadBrokenDefLine, sourceLabel } from './def-files'
 
-/** A task kind, read from its file. Its name is always its file name (lowercase). */
+/** A task type, read from its file. Its name is always its file name (lowercase). */
 export type KindDef = { name: string; description: string; body: string; off?: boolean }
 
 /** The kinds that come with the plugin (one text each in its kinds/ folder), in the order they are listed. */
@@ -53,7 +53,7 @@ export function builtInKinds(): KindDef[] {
   })
 }
 
-/** The built-in kinds with the project's added: a project kind replaces a built-in one with the same name.
+/** The built-in task types with the project's added: a project kind replaces a built-in one with the same name.
  *  Built-in ones first in their own order (change first), then the owner's own by name. */
 export function mergeKinds(builtIn: KindDef[], project: KindDef[]): KindDef[] {
   const out = new Map<string, KindDef>()
@@ -84,8 +84,8 @@ export function checkKind(kinds: readonly KindDef[], name: unknown): string {
   const n = typeof name === 'string' ? name.trim().toLowerCase() : ''
   const names = kindNames(kinds)
   if (names.includes(n)) return n
-  if (findKind(kinds, n)?.off) throw new Error(`Nothing changed: kind "${n}" is turned off (the owner can turn it on again: kinds action "on"); the kinds are: ${names.join(', ')}`)
-  throw new Error(`Nothing changed: unknown kind "${String(name)}"; the kinds are: ${names.join(', ')}`)
+  if (findKind(kinds, n)?.off) throw new Error(`Nothing changed: task type "${n}" is turned off (the owner can turn it on again: kinds action "on"); the task types are: ${names.join(', ')}`)
+  throw new Error(`Nothing changed: unknown task type "${String(name)}"; the task types are: ${names.join(', ')}`)
 }
 
 /** The short kind mark for lists: the kind name, or '' for change (which shows nothing, to keep lines short). */
@@ -94,10 +94,10 @@ export const kindMark = (t: { kind?: unknown }): string => {
   return k === DEFAULT_KIND ? '' : k
 }
 
-/** What the worker prompt's {{kind}} becomes: "Kind of task: bug (something that works wrongly)." on its own line. */
+/** What the worker prompt's {{kind}} becomes: "The task type is bug (something that works wrongly)." on its own line. */
 export function kindSection(name: string, kinds: readonly KindDef[]): string {
   const k = findKind(kinds, name)
-  return `\nKind of task: ${name}${k ? ` (${k.description})` : ''}.\n`
+  return `\nThe task type is ${name}${k ? ` (${k.description})` : ''}.\n`
 }
 
 /** The lead's paragraph about kinds: each one with its description, and how to pick. */
@@ -106,13 +106,13 @@ export function kindsLeadText(kinds: readonly KindDef[], name: string = DEFAULT_
     const k = findKind(kinds, n)
     return k ? `${n} (${k.description})` : n
   })
-  return `- Task kinds (kind in ${name} add / change): ${list.join('; ')}. Pick the kind that fits each task; ${DEFAULT_KIND} when unsure. Every kind is worked, tested and merged like a change, except ${INVESTIGATION} (see below).`
+  return `- Task types (the kind parameter of ${name} add / change): ${list.join('; ')}. Pick the task type that fits each task; ${DEFAULT_KIND} when unsure. Every task type is worked, tested and merged like a change, except ${INVESTIGATION} (see below).`
 }
 
 // ---------------- managing kinds (the lead's kinds tool and the panel's Kinds page; like the roles) ----------------
 
 /** Why `name` can't be a kind name (it goes into a file path), or null when it can. */
-export const kindNameError = (name: string): string | null => defNameError('kind', name)
+export const kindNameError = (name: string): string | null => defNameError('task type', name)
 
 /** A kind's file text: the front matter (description, then off when set), then the body. */
 export function kindFileText(k: Omit<KindDef, 'name'>): string {
@@ -125,18 +125,18 @@ export function kindFileText(k: Omit<KindDef, 'name'>): string {
 const leadKindLine = (k: KindDef, source: DefSource): string => `- ${k.name} (${sourceLabel(source, k.off)}): ${k.description}`
 
 /** The lead's line for a broken kind file: what it is, why, and the way out (reset for a built-in's name, remove for an added kind). */
-export const leadBrokenKindLine = (b: BrokenDef, builtIn: readonly KindDef[]): string => leadBrokenDefLine('kind', b, builtIn)
+export const leadBrokenKindLine = (b: BrokenDef, builtIn: readonly KindDef[]): string => leadBrokenDefLine('task type', b, builtIn)
 
-/** The lead's kinds list: every kind, where it comes from and whether it is off; a kind whose file can't be read shows why instead. */
+/** The lead's kinds list: every task type, where it comes from and whether it is off; a kind whose file can't be read shows why instead. */
 export function leadKindsText(builtIn: readonly KindDef[], project: readonly KindDef[], dir: string, broken: readonly BrokenDef[] = []): string {
   const all = mergeKinds([...builtIn], [...project])
-  if (!all.length && !broken.length) return 'no kinds found'
+  if (!all.length && !broken.length) return 'no task types found'
   const lines = all.map(k => {
     const b = brokenNamed(broken, k.name)
     return b ? leadBrokenKindLine(b, builtIn) : leadKindLine(k, defSource(k.name, builtIn, project)!)
   })
   for (const b of broken) if (!findKind(all, b.name)) lines.push(leadBrokenKindLine(b, builtIn))
-  return `Kinds (built-in = from the plugin, replaced = your ${dir}/<name>.md over a built-in, added = your own, off = never picked):\n${lines.join('\n')}`
+  return `Task types (built-in = from the plugin, replaced = your ${dir}/<name>.md over a built-in, added = your own, off = never picked):\n${lines.join('\n')}`
 }
 
 /** One kind in full for the lead: its line, its file, its front matter and its body. */
@@ -146,6 +146,6 @@ export function leadKindText(k: KindDef, source: DefSource, file: string): strin
 
 /** What a new kind made in the panel starts with (the owner changes it in the edit mode). */
 export const NEW_KIND_TEMPLATE = {
-  description: 'what this kind of task is, in a few words (the lead reads it to choose)',
-  body: 'What the worker does for this kind of task.',
+  description: 'what this task type is, in a few words (the lead reads it to choose)',
+  body: 'What the worker does for this task type.',
 } as const
