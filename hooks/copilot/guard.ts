@@ -57,15 +57,38 @@ export function knownTool(tool: string): boolean {
 /** The refusal of a tool the guard doesn't know, for symcc's agents. */
 export const unknownToolText = (tool: string) => `Refused: symcc workers in Copilot may only use known tools; ${tool || 'a tool with no name'} is not one.`
 
+// Copilot's patch reader (native, like Codex's) splits lines on \n only and trims each line of every Unicode space
+// (\v, \f, \u0085, \u00a0, \u2000-\u200a, \u3000, ...), so the guard does the same: a JS regex's `.`, `^`/`$` and
+// `\s` would stop at or miss some of those, and a header could hide behind one or end early at a \r.
+const SPACE = '\\s\\u0085'
+const LEAD_SPACE = new RegExp(`^[${SPACE}]+`)
+const EDGE_SPACE = new RegExp(`^[${SPACE}]+|[${SPACE}]+$`, 'g')
+const HEADER = new RegExp(`^\\*\\*\\*[${SPACE}]*(?:(?:add|update|delete)[${SPACE}]+file|move[${SPACE}]+to)[${SPACE}]*:([^\\n]*)$`, 'i')
+// Characters a header line may not hold: control characters but tab, line and paragraph separators, \u0085, and
+// the byte order mark, since readers split or trim on them differently.
+const ODD_CHAR = /[\u0000-\u0008\u000a-\u001f\u007f-\u009f\u2028\u2029\ufeff]/
+
+/** A patch's header lines: every \n-line that starts with "***" once its leading spaces are stripped. */
+const patchHeaders = (text: string) => text.split('\n').filter(line => line.replace(LEAD_SPACE, '').startsWith('***'))
+
 /** The files a patch's text adds, changes, deletes or moves to; lenient on spaces and case, so no header slips past. */
 export function patchFiles(text: string): string[] {
   const out: string[] = []
-  for (const m of text.matchAll(/^[ \t]*\*\*\*[ \t]*(?:(?:add|update|delete)[ \t]+file|move[ \t]+to)[ \t]*:(.*)$/gim)) {
-    const p = (m[1] ?? '').trim()
+  for (const line of patchHeaders(text)) {
+    const m = HEADER.exec(line.replace(LEAD_SPACE, ''))
+    const p = (m?.[1] ?? '').replace(EDGE_SPACE, '')
     if (p && !out.includes(p)) out.push(p)
   }
   return out
 }
+
+/** Whether a patch's text has a header line holding a character readers may read differently (see ODD_CHAR). */
+export function patchOddHeader(text: string): boolean {
+  return patchHeaders(text).some(line => ODD_CHAR.test(line))
+}
+
+/** The refusal of an agent's apply_patch call with an odd character in a header line. */
+export const patchOddText = "Refused: symcc can't read this patch's file names safely; remove control characters (like \\r) and odd line breaks from its '***' lines."
 
 const str = (v: unknown) => (typeof v === 'string' ? v : '')
 
@@ -93,15 +116,20 @@ function argsObject(args: unknown): Record<string, unknown> {
   return {}
 }
 
+/** Every place an apply_patch call's patch text can be: raw, in {input}/{patch}/{patchText}, or a JSON text of those. */
+function patchTexts(toolArgs: unknown): string[] {
+  const f = argsObject(toolArgs)
+  return [typeof toolArgs === 'string' ? toolArgs : '', str(f.input), str(f.patch), str(f.patchText)]
+}
+
 /** What a Copilot tool call touches, in symcc's words (see the list at the top). Relative paths are from `dir`, the folder the session runs in. */
 export function copilotTouches(dir: string, toolName: string, toolArgs: unknown): FileTouch[] {
   if (READ_ONLY_TOOLS.has(toolName)) return []
   const f = argsObject(toolArgs)
-  const raw = typeof toolArgs === 'string' ? toolArgs : ''
   const file = (p: string): FileTouch => ({ path: normalPath(isAbsolute(p) ? p : `${dir}/${p}`) })
   const shell = (c: string): FileTouch[] => (c.trim() ? [{ command: c }] : [])
   // the patch can come raw, in {input}/{patch}, or as a JSON text of those: every place is read, so none hides a file
-  if (toolName === 'apply_patch') return [...new Set([raw, str(f.input), str(f.patch), str(f.patchText)].flatMap(patchFiles))].map(file)
+  if (toolName === 'apply_patch') return [...new Set(patchTexts(toolArgs).flatMap(patchFiles))].map(file)
   if (FILE_TOOLS.has(toolName)) return toolName === 'str_replace_editor' && f.command === 'view' ? [] : str(f.path) ? [file(str(f.path))] : []
   if (SHELL_TOOLS.has(toolName)) return shell(commandOf(f.command))
   if (SHELL_INPUT_TOOLS.has(toolName)) return shell(str(f.input))
@@ -202,6 +230,7 @@ export async function preToolUse(host: Host, dir: string, agentId: string | unde
     const command = args.command
     const shellCall = !!agentId && SHELL_TOOLS.has(tool)
     if (shellCall && typeof command !== 'string' && !(Array.isArray(command) && command.length && command.every(x => typeof x === 'string'))) return deny(shellUnreadText)
+    if (agentId && tool === 'apply_patch' && patchTexts(input?.toolArgs).some(patchOddHeader)) return deny(patchOddText)
     const touches = copilotTouches(dir, tool, input?.toolArgs)
     if (agentId && tool === 'apply_patch' && !touches.length) return deny(patchNoFilesText)
     for (const touch of touches) {

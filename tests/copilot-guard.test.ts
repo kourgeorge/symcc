@@ -6,7 +6,7 @@ import { addTask, emptyBoard, patchTask, blockedEditText, bashOutsideText } from
 import { runBy } from './agent-fixture'
 import { S, workers, toolName } from '../hooks/app/state'
 import { ASK_TOOL } from '../hooks/core/ask'
-import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText, patchNoFilesText, shellWrap, shellUnreadText } from '../hooks/copilot/guard'
+import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText, patchNoFilesText, patchOddHeader, patchOddText, shellWrap, shellUnreadText } from '../hooks/copilot/guard'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -73,6 +73,34 @@ test("apply_patch as a JSON text is read from its input/patch field; an agent's 
   }
   // the lead is unchanged
   expect(await preToolUse(host, ROOT, undefined, { toolName: 'apply_patch', toolArgs: patch('+x') })).toBe(undefined)
+  workers.clear()
+})
+
+test("apply_patch headers are read like Copilot's reader: lines split on \\n only, any Unicode space before '***'; odd characters refused", async () => {
+  const host = world()
+  const odd = { permissionDecision: 'deny', permissionDecisionReason: patchOddText }
+  // the checker's first probe: a \r (or \u2028, \u2029, \u0085) inside a header hid the rest of the path
+  for (const c of ['\r', '\u2028', '\u2029', '\u0085', '\u0000', '\u001b', '\ufeff']) {
+    const text = patch(`*** Add File: src/a.ts${c}/../../../../../README.md`, '+x')
+    expect(patchFiles(text)).toEqual([`src/a.ts${c}/../../../../../README.md`])
+    expect(patchOddHeader(text)).toBe(true)
+    expect(await preToolUse(host, WT, 'ag1', { toolName: 'apply_patch', toolArgs: text })).toEqual(odd)
+    expect(await preToolUse(host, WT, 'ag1', { toolName: 'apply_patch', toolArgs: { input: text } })).toEqual(odd)
+  }
+  // the checker's second probe: a header after a Unicode space, next to a listed file's header, was not seen
+  for (const c of ['\u00a0', '\u2003', '\u3000', '\u1680', '\u202f', '\v', '\f', '\u0085', ' \t']) {
+    const text = patch(`${c}*** Add File: /repo/README.md`, '+x', '*** Update File: src/a.ts', '@@', '-1', '+2')
+    expect(patchFiles(text)).toEqual(['/repo/README.md', 'src/a.ts'])
+    const out = await preToolUse(host, WT, 'ag1', { toolName: 'apply_patch', toolArgs: text })
+    expect(out?.permissionDecision).toBe('deny')
+  }
+  // Unicode spaces between the header's words and around the path are read too
+  expect(patchFiles(patch('***\u00a0Add\u2003File:\u3000/repo/README.md\u00a0'))).toEqual(['/repo/README.md'])
+  // a plain listed-file patch still passes; Windows line ends are refused for an agent but not for the lead
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'apply_patch', toolArgs: patch('*** Update File: src/a.ts', '@@', '-1', '+2') })).toBe(undefined)
+  const crlf = '*** Begin Patch\r\n*** Update File: src/a.ts\r\n*** End Patch'
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'apply_patch', toolArgs: crlf })).toEqual(odd)
+  expect(await preToolUse(host, ROOT, undefined, { toolName: 'apply_patch', toolArgs: crlf })).toBe(undefined)
   workers.clear()
 })
 
