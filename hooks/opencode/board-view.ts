@@ -30,7 +30,7 @@ import {
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingShown, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
-  searchTasks, showsHeader, type BoardPage,
+  searchTasks, showsHeader, type BoardPage, groupLabel,
   LIVE_TABS, LIVE_DIVIDER, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveNowSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { notSetUpAnswer } from '../core/settings'
@@ -219,8 +219,9 @@ export type PanelGroup = 'backlog' | 'done' | 'dropped'
  *  role's or kind's page ("role:tester", "kind:bug", see settingsPlace); and (T-583) pick answer choice `choice`
  *  (1 = the first of answerOptions) of the open task or question; and (T-585) open or close a Settings group (its title);
  *  and (T-680) press a task page's button that has no key (Drop in review): `action`, its id in core's taskActions;
- *  and (T-706) on a role's or kind's edit page, change one of its boxes (`editField`) or press Save (`save`). */
-export type PanelHit = { open: string } | { group: PanelGroup } | { more: 'backlog' } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId } | { editField: DefEditField } | { save: true }
+ *  and (T-706) on a role's or kind's edit page, change one of its boxes (`editField`) or press Save (`save`);
+ *  and (T-946) open or fold an older day's row in the open Done group (`day`, "2026-11-22"). */
+export type PanelHit = { open: string } | { group: PanelGroup } | { more: 'backlog' } | { day: string } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId } | { editField: DefEditField } | { save: true }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -338,6 +339,8 @@ export type PanelChoice = {
   from?: PageFrom
   /** T-945: the whole backlog is shown, not only its first BACKLOG_SHOWN rows (Enter or a click on "… N more") */
   backlogAll?: boolean
+  /** T-946: the older days open in the Done group ("2026-11-22"), as the terminal's openDays; none when left out */
+  openDays?: string[]
 }
 
 /** A role's or kind's edit mode (T-706, as Claude Code's Edit page): the page it is for ("role:tester"), each box's
@@ -441,6 +444,9 @@ export const groupId = (g: PanelGroup) => `group:${g}`
 export const groupOf = (id: string): PanelGroup | null => (id.startsWith('group:') ? (id.slice(6) as PanelGroup) : null)
 /** T-945: the backlog's "… N more (Enter to show all)" row as a cursor id. */
 export const BACKLOG_MORE_ID = 'backlog-more'
+/** T-946: an older day's row in the open Done group as a cursor id ("day:2026-11-22"), and back (null for others). */
+export const dayId = (day: string) => `day:${day}`
+export const dayOfId = (id: string): string | null => (id.startsWith('day:') ? id.slice(4) : null)
 
 /** The key a key hint's word stands for, so a click on the hint does what the key does ('' for "move"). */
 const HINT_KEY: Record<string, PanelKey> = { open: 'open', 'open/close': 'open', close: 'close', back: 'back', change: 'open', report: 'open' }
@@ -695,7 +701,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     // the approve in progress takes the same buttons and keys away (approveInProgress)
     const busy = !!t && approveInProgress(f, t, choice.approving, nowMs)
     const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore) : null
-    body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '', choice.searchMore, choice.backlogAll ?? false)
+    body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '', choice.searchMore, choice.backlogAll ?? false, choice.openDays ?? [])
     keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!page && busy)
     if (!page) modeRow = modeLines(f, !!choice.search?.trim(), w)
   }
@@ -1424,7 +1430,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
  *  With a search on (`search`, core's searchTasks words, T-685) only the matching tasks are listed, as on Claude Code's
  *  list: no questions, every group with a match open (the whole backlog), none without one; the search line and the
  *  [f] change search and [x] clear search buttons stay at the top. */
-function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean>, nowMs: number, w: number, search = '', more?: SearchMore, backlogAll = false): Body {
+function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean>, nowMs: number, w: number, search = '', more?: SearchMore, backlogAll = false, openDays: readonly string[] = []): Body {
   const v = f.view
   const query = search.trim()
   const filtering = query !== ''
@@ -1433,7 +1439,12 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
   const questions = filtering ? [] : (v.questions ?? [])
   const open: Record<PanelGroup, boolean> = filtering ? { backlog: true, done: true, dropped: true } : open0
   const backlog = open.backlog ? (filtering || backlogAll ? parts.backlog : parts.backlog.slice(0, BACKLOG_SHOWN)) : []
-  const done = open.done ? parts.done : []
+  // T-946: the open Done group lists today's tasks, then a folded row per older day ("▸ Yesterday · 6 done") whose
+  // tasks show when that day is open (a search opens them all), as the terminal's and VS Code's lists
+  const dayOpen = (day: string) => filtering || openDays.includes(day)
+  const doneToday = open.done ? parts.doneToday : []
+  const doneDays = open.done ? parts.doneDays : []
+  const done = [...doneToday, ...doneDays.flatMap(g => (dayOpen(g.day) ? g.tasks : []))]
   const dropped = open.dropped ? parts.dropped : []
   const gone = filtering ? 0 : archivedOf(v).done
   const groups: { g: PanelGroup; label: string; all: SymccTask[]; rows: SymccTask[] }[] = [
@@ -1446,11 +1457,13 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
   // the cursor's rows in the order drawn: questions, tasks, and each group's row before its tasks
   // T-945: the backlog's "… N more" row is a cursor stop after its tasks
   const hasMore = (x: (typeof groups)[number]) => x.g === 'backlog' && x.rows.length > 0 && x.all.length > x.rows.length
-  const ids = [...questions.map(q => q.id), ...parts.needsYou.map(t => t.id), ...running.map(t => t.id), ...groups.flatMap(x => [groupId(x.g), ...x.rows.map(t => t.id), ...(hasMore(x) ? [BACKLOG_MORE_ID] : [])])]
+  const rowIds = (x: (typeof groups)[number]) =>
+    x.g === 'done' ? [...doneToday.map(t => t.id), ...doneDays.flatMap(g => [dayId(g.day), ...(dayOpen(g.day) ? g.tasks.map(t => t.id) : [])])] : x.rows.map(t => t.id)
+  const ids = [...questions.map(q => q.id), ...parts.needsYou.map(t => t.id), ...running.map(t => t.id), ...groups.flatMap(x => [groupId(x.g), ...rowIds(x), ...(hasMore(x) ? [BACKLOG_MORE_ID] : [])])]
   const at = ids.length ? Math.min(Math.max(0, cursor), ids.length - 1) : -1
   const selected = at >= 0 ? ids[at]! : ''
   const since = (id: string) => v.working.find(x => x.task === id)?.since
-  const idWidth = Math.max(4, ...ids.filter(id => !groupOf(id) && id !== BACKLOG_MORE_ID).map(id => id.length))
+  const idWidth = Math.max(4, ...ids.filter(id => !groupOf(id) && !dayOfId(id) && id !== BACKLOG_MORE_ID).map(id => id.length))
   // a doing task: the total work time of all tries, "1h40m", "⊛ 9m", with no try mark (T-628: the band and the task
   // page show it); narrow, the time is left out (see rowStates)
   // T-893: one space between the state and the title ("T-888 ⊛ 1m title"), none when no row has a state
@@ -1503,7 +1516,14 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
   for (const x of groups) {
     const label = foldedRow(x.label, x.all.length, open[x.g], countWidth)
     add([{ text: `${pointer(groupId(x.g), 2)}${[label, x.g === 'done' ? archivedNote(gone) : ''].filter(Boolean).join(' ')}`, color: 'text', ...(groupId(x.g) === selected ? { bold: true } : {}) }], { group: x.g })
-    for (const t of x.rows) task(t, 4)
+    if (x.g === 'done' && open.done) {
+      for (const t of doneToday) task(t, 4)
+      for (const g of doneDays) {
+        const id = dayId(g.day)
+        add([{ text: `${pointer(id, 4)}${groupLabel(g, dayOpen(g.day))}`, color: 'text', ...(id === selected ? { bold: true } : {}) }], { day: g.day })
+        if (dayOpen(g.day)) for (const t of g.tasks) task(t, 6)
+      }
+    } else for (const t of x.rows) task(t, 4)
     if (hasMore(x)) add([{ text: `${pointer(BACKLOG_MORE_ID, 4)}${backlogMoreLabel(x.all.length - x.rows.length)}`, color: 'inactive', ...(BACKLOG_MORE_ID === selected ? { bold: true } : {}) }], { more: 'backlog' })
   }
   return { lines, hits, ids, selected, head: top }

@@ -1290,6 +1290,73 @@ test('T-945: the backlog\'s "… N more (Enter to show all)" row is a cursor sto
   }
 })
 
+test('T-946: the open Done group lists today\'s tasks, then a folded row per older day; Enter or a click opens a day', async () => {
+  const f0 = viewFile()
+  let b: Board = emptyBoard()
+  const days = [0, 0, 1, 1, 1, 4]
+  for (let i = 0; i < days.length; i++) b = addTask(b, { origin: { why: 'a test' }, title: `work ${i}`, files: ['src/'] }, AT)[0]
+  const tasks = b.tasks.map((t, i) => ({ ...t, status: 'done' as const, updated_at: new Date(NOW - days[i]! * 86_400_000 - (i + 1) * 60_000).toISOString() }))
+  const f = { ...f0, view: { ...f0.view, tasks, working: [], questions: [] } }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  for (const how of ['enter', 'click'] as const) {
+    const slots: { append: string; render: (input: never) => unknown }[] = []
+    const ctx: TuiContext = {
+      location: { directory: '/work/proj' },
+      theme: {},
+      renderer: { width: 120, height: 200 },
+      client: { session: { command: async () => undefined } },
+      keymap: { layer: () => undefined },
+      ui: {
+        toast: { show: () => undefined },
+        dialog: { prompt: async () => undefined, select: async () => undefined },
+        panel: { open: () => true, close: () => undefined, current: () => undefined },
+        slot: claim => (slots.push(claim as never), () => undefined),
+      },
+    }
+    const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+    await board.refresh()
+    const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 100, focused: false, close: () => undefined, focus: () => undefined } as never) as El
+    const texts = () => rowEls(panel).map(r => r.text)
+    const ids = () => panelLines(f, { opened: '', cursor: 0, groups: board.state().groups, openDays: board.state().openDays }, NOW, 98).ids
+    // open Done: today's two tasks first, then the folded days, newest first, with their counts
+    const done = rowEls(panel).find(r => r.text.includes('▸ Done'))!
+    ;(done.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+    await Promise.resolve()
+    expect(board.state().groups.done).toBe(true)
+    const from = texts().findIndex(t => t.includes('▾ Done'))
+    const four = texts().slice(from + 1, from + 5).map(t => t.trim())
+    expect(four.slice(0, 2).map(t => t.split(/\s+/)[0]).sort()).toEqual(['T-1', 'T-2'])
+    expect(four.slice(2)).toEqual(['▸ Yesterday · 3 done', '▸ Sun 15 Nov · 1 done'])
+    expect(texts().some(t => t.includes('T-5 '))).toBe(false)
+    expect(ids().filter(id => id.startsWith('day:'))).toEqual(['day:2026-11-18', 'day:2026-11-15'])
+    // Yesterday opens: its three tasks show under it
+    if (how === 'enter') {
+      while (ids()[board.state().cursor] !== 'day:2026-11-18') await board.press('down', 'ses_1')
+      expect(texts().find(t => t.includes('Yesterday'))!.trim()).toBe('› ▸ Yesterday · 3 done')
+      await board.press('open', 'ses_1')
+    } else {
+      const row = rowEls(panel).find(r => r.text.includes('Yesterday'))!
+      ;(row.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+      await Promise.resolve()
+    }
+    expect(board.state().openDays).toEqual(['2026-11-18'])
+    expect(board.state().opened).toBe('')
+    const y = texts().findIndex(t => t.includes('▾ Yesterday · 3 done'))
+    expect(texts().slice(y + 1, y + 4).map(t => t.trim().replace(/^› /, '').split(/\s+/)[0]).sort()).toEqual(['T-3', 'T-4', 'T-5'])
+    expect(texts()[y + 4]!.trim()).toBe('▸ Sun 15 Nov · 1 done')
+    expect(texts().some(t => t.includes('T-6 '))).toBe(false)
+    // and folds again
+    if (how === 'enter') await board.press('open', 'ses_1')
+    else {
+      ;(rowEls(panel).find(r => r.text.includes('Yesterday'))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+      await Promise.resolve()
+    }
+    expect(board.state().openDays).toEqual([])
+    expect(texts().some(t => t.includes('T-5 '))).toBe(false)
+    board.stop()
+  }
+})
+
 test('T-558: panelLines gives each list row what a click on it does, and scrolls the list between the banner and the footer', () => {
   const f = viewFile()
   const d = panelLines(f, { opened: '', cursor: 0 }, NOW, 100)
