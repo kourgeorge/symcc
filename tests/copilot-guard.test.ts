@@ -121,10 +121,15 @@ test("the bash session keeps its folder between calls, so an agent may not cd ou
   for (const command of ['cd //', 'cd /tmp', 'cd ~', 'cd ~root', 'cd', 'cd -', 'cd $HOME', 'cd "$OLDPWD"', 'cd ..', 'cd ../T-2', 'cd src/../..', 'pushd /tmp', 'popd', 'builtin cd /', 'command cd /tmp', 'X=1 cd /', "'cd' /", 'chdir /', 'cd -P /', 'ls && cd /', 'if true; then cd /; fi', 'f() { cd /; }; f', 'eval "cd /"', 'eval cd $X', 'trap "cd /" DEBUG', "alias ls='cd /'", 'source x.sh', '. ./x.sh', '$C /', 'export CDPATH=/', 'shopt -s cdable_vars', 'PROMPT_COMMAND="cd /"', 'cd src; cd ..']) {
     expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, refused])
   }
+  // the checker's probes: a `function` body holding a cd (it runs later, from wherever the shell is), and a command
+  // name bash brace-expands into a cd (`{cd,/}` runs `cd /`)
+  for (const command of ['function ls { cd /; }', 'function go { builtin cd /tmp; }', 'function ls { cd src; }', 'function ls() { cd /; }', 'function ls { eval "cd /"; }', '{cd,/}', '{builtin,cd,/tmp}', 'c{d,} /', 'command {cd,/}']) {
+    expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, refused])
+  }
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'powershell', toolArgs: { command: 'Set-Location C:\\' } })).toEqual(refused)
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'local_shell', toolArgs: { command: ['cd', '/'] } })).toEqual(refused)
   // a cd inside the folder, or inside a subshell, passes; so do words that only look like cd
-  for (const command of ['cd src', 'cd ./src && ls', `cd ${WT}/src`, `cd ${WT}`, 'cd src/x/..', '( cd / && ls )', 'echo $(cd /tmp && pwd)', 'grep -r cd .', 'echo cd /', 'cat <<EOF\ncd /\nEOF']) {
+  for (const command of ['cd src', 'cd ./src && ls', `cd ${WT}/src`, `cd ${WT}`, 'cd src/x/..', '( cd / && ls )', 'echo $(cd /tmp && pwd)', 'grep -r cd .', 'echo cd /', 'cat <<EOF\ncd /\nEOF', 'function hi { echo hi; }; hi', 'echo {a,b}', '{ ls; }']) {
     forgetShells()
     expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, undefined])
   }

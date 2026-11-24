@@ -129,6 +129,7 @@ export const leaveFolderText = 'Refused: symcc workers stay in their own folder;
 const FOLDER_CMDS = new Set(['cd', 'pushd', 'popd', 'chdir', 'set-location', 'sl', 'push-location', 'pop-location'])
 /** Words that may come before a command's name and still run it in this shell. */
 const LEAD_WORDS = new Set(['builtin', 'command', 'exec', 'time', 'nohup', 'noglob', 'if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', '{'])
+// `function` is read on its own in folderMoves (its body runs later)
 /** Settings that make a later, harmless-looking command move the shell (a cd searched in CDPATH, a cd to a variable's value, a command run before each prompt). */
 const FOLDER_SETTINGS = /CDPATH|cdable_vars|PROMPT_COMMAND|autocd/i
 
@@ -188,9 +189,17 @@ export function folderMoves(dir: string, command: string, depth = 0): string[] |
       ran = true
       continue
     }
-    if (name.expands) return undefined
+    // a name from a variable, or one bash brace-expands (`{cd,/}` runs `cd /`): what runs can't be told
+    if (name.expands || (/[{}]/.test(name.raw) && name.w !== '}')) return undefined
     const cmd = name.w.toLowerCase()
     const rest = words.slice(i + 1)
+    // `function ls { cd /; }`: the body runs later, from wherever the shell is then, so it may hold no cd at all
+    // (read as if after another command, so any cd in it is refused)
+    if (cmd === 'function') {
+      if (folderMoves(dir, `true; ${rest.slice(1).map(w => w.raw).join(' ')}`, depth + 1)?.length !== 0) return undefined
+      ran = true
+      continue
+    }
     if (FOLDER_CMDS.has(cmd)) {
       if (ran || rest.length !== 1) return undefined
       const to = cdTarget(top, rest[0]!)
