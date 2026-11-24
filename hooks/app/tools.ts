@@ -21,7 +21,7 @@ import { markMerged } from './merged'
 import { publish, enableHere } from './lead'
 import { orgMemTool } from './org-mem'
 import { ORG_MEM_MAX_LINES, TOPIC_MAX_CHARS } from '../core/org-mem'
-import { canRunNow, runNowLine, runNowQuestion, runNowRefusal, runNowShares, runNowWaits } from '../core/run-now'
+import { canRunNow, runNowLine, runNowPlanText, runNowQuestion, runNowRefusal, runNowShares, runNowWaits } from '../core/run-now'
 
 /** T-717: how the lead keeps org-mem's topics tidy (in the orgmem tool's description and the lead's guide). */
 const TOPIC_RULES = 'reuse an existing topic when it fits (a new one only when nothing fits); keep about 6-10 topics; split a topic past ~15 notes, and merge one with only 1-2 notes into a close one; a topic disappears when its last note goes.'
@@ -894,7 +894,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
  * T-954: Run now (the lead's run tool, the task pages' Run now, /<name>-task T-5 run [anyway]): task `id` goes to todo
  * (from paused, failed, dropped or the backlog) and its worker starts at once, past max_parallel and a paused board.
  * A task that waits on unfinished tasks only starts with `anyway` (the owner's "Start anyway"); else the reply is the
- * question and nothing changes. Only in the window that drives the board.
+ * question and nothing changes. Only in the window that drives the board, and never in plan mode.
  */
 export async function runNowTool($: Host, id: string, anyway: boolean): Promise<string> {
   const t = await taskOrThrow($, id)
@@ -902,6 +902,8 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   if (mergingNow(t.id)) return MERGING_TEXT(t.id)
   if (checkingNow(t.id)) return `${CHECKING_TEXT(t.id)}; run it now again when that ends`
   if (!S.driving) return `${t.id} didn't start: another window drives this board, so run it now from there`
+  // plan mode: nothing starts, not even a run now (T-964); the task is left as it is (a backlog one stays there)
+  if (inPlan(S.plan)) return runNowPlanText(t.id)
   const b = await load($)
   const waits = runNowWaits(b, t)
   if (waits.length && !anyway) return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`
