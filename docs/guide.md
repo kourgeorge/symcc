@@ -2361,7 +2361,7 @@ its read-only `stats` tool.
   price compared with input (input 1, cache write 1.25, cache read 0.1, output 5), i.e. how many
   plain input tokens would cost the same. It is an estimate: real prices depend on the model.
   Elsewhere (the board, the banner, a task's page, the per-task and per-day rows) one short
-  figure is shown, "in all": every task type added up.
+  figure is shown, "in all": every kind of token added up.
 - **Unsplit tokens:** tries and scout runs saved before the kinds were kept apart only have one
   number. symcc changes those files once (when a session starts): the number is kept as it was,
   marked *unsplit*. They count in the "in all" figures and are shown as `unsplit`, but are left
