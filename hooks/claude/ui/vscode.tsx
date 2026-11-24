@@ -283,10 +283,9 @@ export function vsFacts(k: VsKit, key: string, rows: readonly { key: string; lab
 }
 
 /** The footer in VS Code (T-1002: no rule and no hint): on the Tasks page the mode switch as a link and the search box;
- *  nothing else. `rule` is ignored (the Live tab still passes it). `extra`: more beside the switch ("Clear search"). */
-export function vsFooter(k: VsKit, name: string, opts: { mode?: SymccMode; onSwitch?: () => void; search?: RenderChildren; extra?: RenderChildren; rule?: boolean } = {}): RenderChildren {
+ *  nothing else. `extra`: more under the search box ("Clear search"). */
+export function vsFooter(k: VsKit, name: string, opts: { search?: RenderChildren; extra?: RenderChildren } = {}): RenderChildren {
   const { Box } = k
-  // T-1005: no mode switch here (it is on Live); `mode` and `onSwitch` are accepted for the shared footer and ignored
   return (
     <Box key={`${name}-footer`} flexDirection="column">
       {opts.search ?? null}
