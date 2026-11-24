@@ -233,7 +233,7 @@ test('no panel: /symcc-help says /symcc shows the board, not that it opens the p
     expect(manual('')).toContain(line)
   }
   // T-1012: the task page keys list e (run now)
-  expect(manual('')).toContain("x drop · e run now (when it isn't running) · w watch the worker")
+  expect(manual('')).toContain("x drop · e run now (to do tasks) · w watch the worker")
   // the lead topic too: no band line, no panel button; open_on_start only as OpenCode's (T-765); the question tool is still named
   const lead = manual('lead', BARE)
   expect(lead).toContain('question puts a question for you')

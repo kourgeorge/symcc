@@ -583,11 +583,11 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   const keysOf = (id: string) => panelTaskActions(task(id)).map(a => `${a.key} ${a.id}`)
   expect(keysOf('T-1')).toEqual(['p pause', 'x drop', 'n needs-review'])
   expect(keysOf('T-2')).toEqual(['a done', 'v keep-note', 'x ask-more', 'n needs-review'])
-  expect(keysOf('T-3')).toEqual(['r retry', 'e run-now', 'z stash', 'l role', 'h already-merged', 'x drop', 'n needs-review'])
-  expect(keysOf('T-4')).toEqual(['o to-todo', 'e run-now', 'l role', 'x drop', 'n needs-review'])
+  expect(keysOf('T-3')).toEqual(['r retry', 'z stash', 'l role', 'h already-merged', 'x drop', 'n needs-review'])
+  expect(keysOf('T-4')).toEqual(['o to-todo', 'l role', 'x drop', 'n needs-review'])
   // the footer's hints are buttons for their own keys (u, z, l, h, n too)
   const footer = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 140).lines.at(-1)!
-  expect(footer.filter(x => x.hit).map(x => x.hit)).toEqual([{ key: 'r' }, { key: 'e' }, { key: 'z' }, { key: 'l' }, { key: 'h' }, { key: 'x' }, { key: 'n' }, { key: 'back' }])
+  expect(footer.filter(x => x.hit).map(x => x.hit)).toEqual([{ key: 'r' }, { key: 'z' }, { key: 'l' }, { key: 'h' }, { key: 'x' }, { key: 'n' }, { key: 'back' }])
 
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   const sent: { sessionID: string; name: string; text: string }[] = []
@@ -766,7 +766,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
     expect(buttonRow(id)).toBe(claude.map(g => g.map(pillText).join(' ')).join('   '))
   }
   expect(buttonRow('T-2')).toBe('[Approve]   [Show changes]   [Reject] [Drop]   [☐ Needs review]')
-  expect(buttonRow('T-3')).toBe('[Retry]   [Run now] [Stash to backlog] [Role] [Already merged]   [Drop]   [☐ Needs review]')
+  expect(buttonRow('T-3')).toBe('[Retry]   [Stash to backlog] [Role] [Already merged]   [Drop]   [☐ Needs review]')
   // T-775: every button drawn the same: "[Label]" in the text color, not bold (no filled pill, no red, no dim word)
   for (const id of ['T-1', 'T-2', 'T-3']) {
     const ls = panelLines(f, { opened: id, cursor: 0 }, NOW, 140).lines
@@ -778,7 +778,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
   // a narrow panel puts the buttons on more rows, between the groups when they fit, never cutting a button
   const narrow = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 40).lines.map(lineText)
   const rule = narrow.findIndex(l => /^─+$/.test(l))
-  expect(narrow.slice(rule - 4, rule)).toEqual(['[Retry]', '[Run now] [Stash to backlog] [Role]', '[Already merged]   [Drop]', '[☐ Needs review]'])
+  expect(narrow.slice(rule - 4, rule)).toEqual(['[Retry]', '[Stash to backlog] [Role]', '[Already merged]   [Drop]', '[☐ Needs review]'])
   // the scout pages (as Claude Code's: Run now when it isn't running, Edit, Pause or Resume; paused said as a fact) and a question's
   expect(buttonRow('deps', 'scouts')).toBe('[Edit]   [Pause]')
   expect(buttonRow('docs', 'scouts')).toBe('[Run now]   [Edit]   [Resume] ⏸ paused')

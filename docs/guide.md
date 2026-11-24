@@ -234,8 +234,8 @@ can start. Nothing is merged and no test runs: the work is already in. Stats cou
 
 A task waits for its turn: for a free agent slot (`max_parallel`), for the tasks it waits on
 (its `after` list) and for the board to run (not paused). **Run now** skips the wait for one
-task you pick. It is on the page of a task that is to do, paused, failed, dropped or in the
-backlog: the `[Run now]` button, or the `e` key (in Claude Code's terminal, VS Code and
+task you pick. It is on the page of a task that is to do (retry or move other tasks to to do
+first): the `[Run now]` button, or the `e` key (in Claude Code's terminal, VS Code and
 OpenCode). In the chat: `/symcc-task T-5 run`, or tell the lead "run T-5 now" (its `run` tool).
 
 - **All slots busy**: it starts anyway and runs one over the limit. The board says so honestly

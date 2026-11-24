@@ -174,7 +174,7 @@ In the settings view: Enter on a row changes it: on/off flips, mode, notify, sco
   · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.
 In the panel nothing needs Esc: Enter on an empty text box cancels it (on the search it clears the
   search), and pick lists and pages have a Cancel or Back button. On the board list x clears a search.
-In an open task: b back · p pause · u resume · r retry · x drop · e run now (when it isn't running) · w watch the worker · n needs review on/off
+In an open task: b back · p pause · u resume · r retry · x drop · e run now (to do tasks) · w watch the worker · n needs review on/off
   · y copy the task's content · z stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).
   · h already merged: marks a failed, waiting, paused or dropped task done whose work was merged by hand (checked with git first; nothing is merged or tested).
@@ -443,7 +443,7 @@ export const TOOLS = () => [
   { name: 'merged', description: `Mark a task done whose work is already merged outside the board (by hand), e.g. after its only failure was the merge tests timing out. ${S.N.name} checks it with git first: every commit on the task's branch must be in the branch it merges into (merged, fast-forwarded, or rebased as equal changes); if not, it is refused with the reason ("T-5's branch has 2 commits that aren't in main yet"). Works for a task that is to do, running (its worker is stopped first), failed, waiting, paused, in review or dropped. The task becomes done with the history line "merged outside the board (<commit>); marked done by the lead", its commits are recorded, its folder and branch are cleaned up like after a merge, and tasks waiting on it can start. Nothing is merged and no test runs. Only on the owner's word or a rule the owner set.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
-  { name: 'run', description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. For a task that is to do, paused, failed, dropped (as a retry) or in the backlog (it moves to todo). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its history says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, anyway: { type: 'boolean', description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
+  { name: 'run', description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. Only for a task that is to do; any other task is refused with a short reason (retry it or move it to todo first). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its history says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, anyway: { type: 'boolean', description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
   {
     name: 'scouts',
     description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt, whole last report and its last few runs: when, outcome, findings, tasks made from it and its report file). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; optional findings: auto = you decide where its tasks go, backlog = every task from its findings goes to the backlog, default (or left out) = follow the board's scout_findings setting; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (a paused scout runs too, once, and stays paused; refused with the reason when it is already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
@@ -919,8 +919,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
 }
 
 /**
- * T-954: Run now (the lead's run tool, the task pages' Run now, /<name>-task T-5 run [anyway]): task `id` goes to todo
- * (from paused, failed, dropped or the backlog) and its worker starts at once, past max_parallel and a paused board.
+ * T-954: Run now (the lead's run tool, the task pages' Run now, /<name>-task T-5 run [anyway]): the to-do task `id`'s worker starts at once, past max_parallel and a paused board.
  * A task that waits on unfinished tasks only starts with `anyway` (the owner's "Start anyway"); else the reply is the
  * question and nothing changes. Only in the window that drives the board, and never in plan mode.
  */
@@ -939,17 +938,12 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   const busy = workers.size + starting.size
   const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : undefined
   const paused = modeOf(b) === 'paused'
-  const from = t.status
-  // as retry: a failed or dropped task's automatic retries start over, and one that failed on a clash merges main in first
-  const again = from === 'failed' || from === 'dropped'
-  const clashed = failedOnClash(t) || (from !== 'failed' && !!t.merge_main)
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || !canRunNow(cur)) return x
-    const y = cur.status === 'backlog' ? promoteTask(x, t.id, now()) : x
-    return patchTask(y, t.id, { status: 'todo', note: 'started now by the owner', ...(again ? { test_tries: 0 } : {}), merge_main: clashed || undefined }, now())
+    return patchTask(x, t.id, { note: 'started now by the owner' }, now())
   })
-  const line = runNowLine({ waits: anyway ? waits : [], ...(over ? { over } : {}), paused, from })
+  const line = runNowLine({ waits: anyway ? waits : [], ...(over ? { over } : {}), paused })
   const claimed = await startNow($, t.id, line)
   const after = claimed ? undefined : find(await load($), t.id)
   // its start failed outright (startNow failed the task): say so, not "it starts when there is room"
@@ -960,7 +954,6 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   const shares = runNowShares((await load($)).tasks, t)
   return [
     `${t.id} started now`,
-    from === 'backlog' ? ' (moved from the backlog to todo)' : '',
     anyway && waits.length ? ` without waiting for ${waits.map(w => w.id).join(', ')}` : '',
     over ? `; it runs one over the limit (${busy + 1}/${b.max_parallel} agents busy), and nothing else starts until the count is back under` : '',
     paused ? '; the board stays paused: only this task runs' : '',

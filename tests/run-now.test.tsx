@@ -9,7 +9,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { type Board, addTask, emptyBoard, patchTask, boardHealth, parseCommand, taskActions, taskKeys, detailRows, type BoardTask } from '../hooks/board'
 import { QUEUED_NOTE } from '../hooks/app/starts'
-import { canRunNow, runNowPlanText, runNowQuestion, runNowShareText, runNowWaits, RUN_NOW_FROM } from '../hooks/core/run-now'
+import { canRunNow, runNowPlanText, runNowQuestion, runNowShareText, runNowWaits } from '../hooks/core/run-now'
 import { TASK_ACTION_COMMANDS, actionCommand } from '../hooks/opencode/board-view'
 import { taskDoTool } from '../hooks/app/symcc'
 import { ran } from './fakes'
@@ -79,19 +79,17 @@ const runNowLines = (t: BoardTask) => t.history.filter(e => e.kind === 'run-now'
 
 test('T-954: run now with a free slot starts the task at once, with its history line', async ($, on) => {
   const w = world(on)
-  const b = todo(2, 3)
-  // 3 slots: T-1 starts on its own; T-2 is paused
-  w.files.set(BOARD, JSON.stringify(patchTask(b, 'T-2', { status: 'paused', note: 'paused' }, ISO)))
+  // 3 slots, the board paused: nothing starts on its own, T-2 todo
+  w.files.set(BOARD, JSON.stringify(todo(2, 3, 'paused')))
   await $.session.start({ cwd: '/repo' } as never)
   await w.clock.settle()
-  expect(w.task('T-1').status).toBe('doing')
-  expect(w.task('T-2').status).toBe('paused')
+  expect(w.task('T-2').status).toBe('todo')
   const said = await runTool($, 'T-2')
   expect(said).toContain('T-2 started now')
   expect(said).not.toContain('over the limit')
   expect(w.task('T-2').status).toBe('doing')
   expect(w.task('T-2').note).toBe(QUEUED_NOTE)
-  expect(runNowLines(w.task('T-2')).map(e => [e.text, e.try])).toEqual([['try 1: started now by the owner', 1]])
+  expect(runNowLines(w.task('T-2')).map(e => [e.text, e.try])).toEqual([['try 1: started now by the owner (on a paused board)', 1]])
 })
 
 test('T-954: run now with every slot busy runs one over the limit, and nothing else starts until the count is back under', async ($, on) => {
@@ -165,14 +163,12 @@ test('T-954: a task that waits on an unfinished task asks "Start anyway?" first:
   expect(runNowLines(w.task('T-3'))[0]!.text).toContain('without waiting for T-1')
 })
 
-test('T-954: on a paused board run now starts only that task; the rest stays paused (and a backlog task moves to todo and starts)', async ($, on) => {
+test('T-954: on a paused board run now starts only that task; the rest stays paused ', async ($, on) => {
   const w = world(on)
-  let b = todo(3, 3, 'paused')
-  b = patchTask(b, 'T-3', { status: 'backlog', note: 'in the backlog' }, ISO)
-  w.files.set(BOARD, JSON.stringify(b))
+  w.files.set(BOARD, JSON.stringify(todo(3, 3, 'paused')))
   await $.session.start({ cwd: '/repo' } as never)
   await w.clock.settle()
-  expect(['T-1', 'T-2', 'T-3'].map(id => w.task(id).status)).toEqual(['todo', 'todo', 'backlog'])
+  expect(['T-1', 'T-2', 'T-3'].map(id => w.task(id).status)).toEqual(['todo', 'todo', 'todo'])
   const said = await runTool($, 'T-2')
   expect(said).toContain('the board stays paused: only this task runs')
   expect(w.task('T-2').status).toBe('doing')
@@ -180,12 +176,6 @@ test('T-954: on a paused board run now starts only that task; the rest stays pau
   await w.clock.advance(2 * 60_000)
   await w.clock.settle()
   expect(w.task('T-1').status).toBe('todo')
-  // from the backlog: to todo and started
-  const back = await runTool($, 'T-3')
-  expect(back).toContain('T-3 started now (moved from the backlog to todo)')
-  expect(w.task('T-3').status).toBe('doing')
-  expect(w.task('T-3').history.some(e => e.kind === 'moved-backlog' && e.text === 'moved from the backlog to todo')).toBe(true)
-  expect(runNowLines(w.task('T-3'))[0]!.text).toBe('try 1: started now by the owner (from the backlog; on a paused board)')
   expect(w.task('T-1').status).toBe('todo')
 })
 
@@ -205,20 +195,20 @@ test('T-954: /symcc-task T-5 run (and run anyway) runs the lead\'s run tool; a t
   await $.session.start({ cwd: '/repo' } as never)
   await w.clock.settle()
   const r = (await $.command.run({ command: 'symcc-task', args: 'T-2 run', origin: { kind: 'composer' }, presentation: 'text' } as never)) as unknown
-  expect(JSON.stringify(r)).toContain('T-2 is ready for review; Run now is for a task that is to do, paused, failed, dropped or in the backlog')
+  expect(JSON.stringify(r)).toContain('T-2 is ready for review; Run now is only for a task that is to do; retry it or move it to to do first')
   expect(w.task('T-2').status).toBe('review')
   const doing = (await $.command.run({ command: 'symcc-task', args: 'T-1 run', origin: { kind: 'composer' }, presentation: 'text' } as never)) as unknown
   expect(JSON.stringify(doing)).toContain('T-1 is already running')
 })
 
-test('T-954: the task page offers Run now (key e) for to do, paused, failed, dropped and backlog tasks only', () => {
-  expect(RUN_NOW_FROM).toEqual(['todo', 'paused', 'failed', 'dropped', 'backlog'])
+test('T-954: the task page offers Run now (key e) for to do tasks only (T-1023)', () => {
   let b = todo(1)
   for (const status of ['todo', 'paused', 'failed', 'dropped', 'backlog', 'doing', 'review', 'waiting', 'done'] as const) {
     b = patchTask(b, 'T-1', { status }, ISO)
     const t = b.tasks[0]!
     const run = taskActions(t).find(x => x.id === 'run-now')
-    expect([status, !!run]).toEqual([status, canRunNow(t)])
+    expect([status, !!run]).toEqual([status, status === 'todo'])
+    expect(canRunNow(t)).toBe(status === 'todo')
     if (run) {
       expect(run).toMatchObject({ label: 'Run now', key: 'e', word: 'run now', group: 'task' })
       expect(taskKeys(taskActions(t)).some(k => k.key === 'e' && k.word === 'run now')).toBe(true)
@@ -247,12 +237,10 @@ test('T-954: the question names each unfinished task with its state; a run now t
 })
 
 // T-964: in plan mode nothing starts, Run now included: the task is left as it is and the reply says why
-test('T-964: run now in plan mode starts nothing: a todo task stays to do, a backlog task stays in the backlog', async ($, on) => {
+test('T-964: run now in plan mode starts nothing: a todo task stays to do', async ($, on) => {
   const w = world(on)
   on('classic.UserPromptSubmit', () => ({}) as never)
-  let b = todo(2, 1, 'paused')
-  b = patchTask(b, 'T-2', { status: 'backlog', note: 'in the backlog' }, ISO)
-  w.files.set(BOARD, JSON.stringify(b))
+  w.files.set(BOARD, JSON.stringify(todo(2, 1, 'paused')))
   await $.session.start({ cwd: '/repo' } as never)
   await w.clock.settle()
   // the main session enters plan mode (Claude Code's permission mode on its hooks)
@@ -260,42 +248,25 @@ test('T-964: run now in plan mode starts nothing: a todo task stays to do, a bac
   await w.clock.advance(10)
   const before = [JSON.stringify(w.task('T-1')), JSON.stringify(w.task('T-2'))]
   expect(await runTool($, 'T-1')).toBe(runNowPlanText('T-1'))
-  expect(await runTool($, 'T-2')).toBe(runNowPlanText('T-2'))
   expect(runNowPlanText('T-1')).toBe("T-1 didn't start: plan mode: nothing starts; run it when plan mode ends")
   await w.clock.settle()
-  expect([w.task('T-1').status, w.task('T-2').status]).toEqual(['todo', 'backlog'])
+  expect([w.task('T-1').status, w.task('T-2').status]).toEqual(['todo', 'todo'])
   expect([JSON.stringify(w.task('T-1')), JSON.stringify(w.task('T-2'))]).toEqual(before)
 })
 
-test('T-964: run now on a task that failed on a clash starts it as a retry that merges main in first', async ($, on) => {
+test('T-1023: run now refuses a paused, failed, dropped or backlog task, and changes nothing', async ($, on) => {
   const w = world(on)
-  let b = todo(1, 1, 'paused')
-  b = patchTask(b, 'T-1', { status: 'failed', failed_on: 'clash', test_tries: 2, note: 'conflicts with the latest main' }, ISO)
+  let b = todo(4, 1, 'paused')
+  b = patchTask(b, 'T-1', { status: 'paused', note: 'paused' }, ISO)
+  b = patchTask(b, 'T-2', { status: 'failed', note: 'failed' }, ISO)
+  b = patchTask(b, 'T-3', { status: 'dropped', note: 'dropped' }, ISO)
+  b = patchTask(b, 'T-4', { status: 'backlog', note: 'in the backlog' }, ISO)
   w.files.set(BOARD, JSON.stringify(b))
   await $.session.start({ cwd: '/repo' } as never)
   await w.clock.settle()
-  const said = await runTool($, 'T-1')
-  expect(said.startsWith('T-1 started now')).toBe(true)
-  const t = w.task('T-1')
-  expect(t.status).toBe('doing')
-  expect(t.test_tries).toBe(0)
-  expect(t.merge_main).toBe(true)
-  expect(runNowLines(t).length).toBe(1)
-})
-
-test('T-964: run now on a dropped task (no clash) starts it as a retry, without merging main in', async ($, on) => {
-  const w = world(on)
-  let b = todo(1, 1, 'paused')
-  b = patchTask(b, 'T-1', { status: 'dropped', test_tries: 1, note: 'dropped' }, ISO)
-  w.files.set(BOARD, JSON.stringify(b))
-  await $.session.start({ cwd: '/repo' } as never)
-  await w.clock.settle()
-  const said = await runTool($, 'T-1')
-  expect(said.startsWith('T-1 started now')).toBe(true)
-  const t = w.task('T-1')
-  expect(t.status).toBe('doing')
-  expect(t.test_tries).toBe(0)
-  expect(t.merge_main ?? false).toBe(false)
+  const before = JSON.stringify(w.board().tasks)
+  for (const id of ['T-1', 'T-2', 'T-3', 'T-4']) expect(await runTool($, id)).toContain('Run now is only for a task that is to do; retry it or move it to to do first')
+  expect(JSON.stringify(w.board().tasks)).toBe(before)
 })
 
 test('T-964: run now is refused, the task unchanged, when another window drives the board', async ($, on) => {
@@ -315,9 +286,7 @@ test('T-964: run now is refused, the task unchanged, when another window drives 
 
 test('T-964: run now is refused, the task unchanged, when git is not set up', async ($, on) => {
   const w = world(on, { noRepo: true })
-  let b = todo(1, 1, 'paused')
-  b = patchTask(b, 'T-1', { status: 'backlog', note: 'in the backlog' }, ISO)
-  w.files.set(BOARD, JSON.stringify(b))
+  w.files.set(BOARD, JSON.stringify(todo(1, 1, 'paused')))
   await $.session.start({ cwd: '/repo' } as never)
   await w.clock.settle()
   const before = JSON.stringify(w.task('T-1'))
