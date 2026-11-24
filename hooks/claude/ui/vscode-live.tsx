@@ -7,7 +7,8 @@
 //   Branches      (T-727: core's liveBranches drawn with real lines: see branchesVs; the next redesign task changes it)
 //   Today         Results, Tokens (one color), Agent time, Per task, Hours, 7 days (core's liveTodayRows)
 //   Organizational memory  2 / 60   All notes   (one line)
-// A lane is one line, the cells of vsRow:  ▶ T-684  the full title (cut by its cell)  ●━━━━●━━━━◉────○────○  try 2 · 12m
+// A lane is two lines: ▶ T-684  the full title (cut only when the panel is too narrow), then under it the track and the time
+//   ●━━━━●━━━━◉────○────○            try 2 · 12m
 // and the station names ("work check queue tests done") are drawn once above all lanes in one Svg, so every train lines
 // up under them. The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code asks for
 // reduced motion. T-715: under a lane hang its waiting trains, one line each, indented by their level.
@@ -172,7 +173,9 @@ function branchesVs($: $, pane: PaneParts, open: (id: string) => () => void) {
 const monoLink = (id: string, href: string) => `[\`${id.replace(/`/g, '')}\`](${href})`
 
 /** The room for a time cell: "merged 10m ago", and "try 2 · " before a running time. */
-const TIME_W = 16
+const TIME_W = 14
+/** The indent of a lane's second line (under the title's start: the mark's cell and a gap). */
+const TRACK_INDENT = 2
 
 /**
  * The Live tab in VS Code (T-1003: plain headings, nothing folds, one line per lane, see the top of this file);
@@ -186,12 +189,21 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   // T-771: the running lanes, then the just-merged ones (dim, ✓ at "merged")
   const lanes = liveTaskLanes(v, nowMs)
   const running = lanes.filter(l => !l.done)
-  // the shared columns, as wide as the terminal's widest layout, with the stations in full words
+  // the shared columns, in full words, 4 columns (40px) between stations so the words never run into each other
   const stations = liveColumns(lanes, v.checker === true)
-  // the gap is at least 4 columns (40px between stations) so the full words never run into each other, at any panel width
   const base = liveLayout(lanes, stations, liveInner(width))
-  const layout = { ...base, gap: Math.max(base.gap, 4), labels: stations.map(s => FULL_LABELS[s]) }
+  const layout = { ...base, gap: 4, labels: stations.map(s => FULL_LABELS[s]) }
   const trains = liveTrains(v, nowMs, lanes)
+  // a lane is two lines: line 1 mark, id, title; line 2 (indented 2) the track and the time at the right. The track and
+  // the header are drawn smaller (one scale for both) when the panel is too narrow for them.
+  const inner = liveInner(width)
+  const trainLists = lanes.map(l => trainRows(trains.lanes[l.id] ?? [], inner))
+  const idW = Math.max(4, layout.idW, ...trainLists.flat().map(r => textWidth(r.id ?? '')))
+  const natural = stationsSvg(layout)
+  const trackRoom = Math.max(8, inner - TRACK_INDENT - 1 - TIME_W) * COL_PX
+  const scale = Math.min(1, trackRoom / natural.width)
+  const shown = (d: { width: number; height: number }) => ({ width: Math.floor(d.width * scale), height: Math.ceil(d.height * scale) })
+  const trackCols = Math.ceil(natural.width * scale / COL_PX)
   const open = (id: string) => act(() => panelValues($).updateOpened(() => id))
   /** A line of text in a Box of its own: VS Code keeps a Box's key (a Text's it drops), so each line can be found by it. */
   const line = (key: string, text: string, color: string, bold = false) => (
@@ -256,12 +268,12 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       </Box>
     )
   })
-  // one line per lane: mark, id (a link), the full title (cut by its cell), the train, the time (and "try N" above 1)
-  const idW = layout.idW
-  const head = lanes.length ? stationsSvg(layout) : null
-  const laneRows = lanes.map(lane => {
+  // two lines per lane (see above); under them hang the waiting trains, one line each
+  const head = lanes.length ? natural : null
+  const laneRows = lanes.map((lane, li) => {
     const done = !!lane.done
     const track = trackSvg(lane, layout, false)
+    const tShown = shown(track)
     const href = vsHref('task', lane.id)
     const time = laneRight(lane, nowMs, TIME_W)
     const when = [!done && lane.tryNo > 1 ? `try ${lane.tryNo}` : '', time].filter(Boolean).join(' · ')
@@ -278,10 +290,14 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
               </Box>
             ),
           },
-          { key: 'track', width: Math.ceil(track.width / COL_PX), node: <Svg key={`live-track:${lane.id}`} source={track.source} width={track.width} height={track.height} alt={`${lane.id} at ${layout.labels[layout.stations.indexOf(lane.station)] ?? lane.station}`} /> },
-          { key: 'time', width: TIME_W, node: line(`live-right:${lane.id}`, when, 'inactive') },
         ])}
-        {trainRows(trains.lanes[lane.id] ?? [], liveInner(width)).map(r => {
+        <Box key={`live-line2:${lane.id}`} paddingLeft={TRACK_INDENT}>
+          {vsRow(vs, `live-bottom:${lane.id}`, [
+            { key: 'track', width: trackCols, node: <Svg key={`live-track:${lane.id}`} source={track.source} width={tShown.width} height={tShown.height} alt={`${lane.id} at ${layout.labels[layout.stations.indexOf(lane.station)] ?? lane.station}`} /> },
+            { key: 'time', node: <Box key={`live-time:${lane.id}`} flexDirection="row" flexGrow={1} justifyContent="flex-end">{line(`live-right:${lane.id}`, when, 'inactive')}</Box> },
+          ])}
+        </Box>
+        {trainLists[li]!.map(r => {
           // a waiting train: one line, the id and title a link, "waits" and "+ also" dim
           if (!r.id) return <Box key={`live-more:${lane.id}`} flexDirection="column" paddingLeft={2}>{line(`live-more-text:${lane.id}`, segText(r.segs).trim(), 'inactive')}</Box>
           const name = r.segs.filter(s => s.tone === 'wait').map(s => s.text.trim()).join(' ')
@@ -301,15 +317,14 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       </Box>
     )
   })
-  // the one station header, drawn once above the lanes: the same cells as a lane, so the names sit over the dots
-  const stationRow = head
-    ? vsRow(vs, 'live-stations', [
-        { key: 'mark', width: 1, node: <Box key="live-stations-mark" /> },
-        { key: 'id', width: idW, node: <Box key="live-stations-id" /> },
-        { key: 'title', node: <Box key="live-stations-title" flexGrow={1} flexShrink={1} /> },
-        { key: 'track', width: Math.ceil(head.width / COL_PX), node: <Svg key="live-stations-svg" source={head.source} width={head.width} height={head.height} alt={layout.labels.join(' ')} /> },
-        { key: 'time', width: TIME_W, node: <Box key="live-stations-time" /> },
-      ])
+  // the one station header, drawn once above the lanes, lined up with the tracks (line 2 of a lane)
+  const hShown = head ? shown(head) : null
+  const stationRow = head && hShown
+    ? (
+        <Box key="live-stations-line" paddingLeft={TRACK_INDENT}>
+          {vsRow(vs, 'live-stations', [{ key: 'track', width: trackCols, node: <Svg key="live-stations-svg" source={head.source} width={hShown.width} height={hShown.height} alt={layout.labels.join(' ')} /> }])}
+        </Box>
+      )
     : null
   const idle = liveIdleFacts(v, nowMs)
   const backlogCount = v.tasks.filter(t => t.status === 'backlog').length

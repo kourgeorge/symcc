@@ -707,6 +707,32 @@ for (const bodyColumns of [100, 40])
     await ui.unmount()
   })
 
+// T-1003: a VS Code lane is two lines (mark, id, full title; then the track and the time); nothing is wider than the panel
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1003: VS Code lanes are two lines, the full title shows when it fits, a 6-character waiting id fits its cell (${bodyColumns} columns)`, async ($, on) => {
+    const long = JSON.parse(JSON.stringify(TRAINS).split('T-713').join('T-7130')) as typeof TRAINS
+    seedBoard(on, { view: liveView(long) })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.press({ key: 'tab-live' })
+    const inner = liveInner(bodyColumns)
+    const title = await ui.find({ key: 'live-title:T-712' })
+    expect(title?.props.wrap ?? 'truncate').toBeDefined()
+    if (bodyColumns >= 64) expect(title?.text).toBe(String(long.find(t => t.id === 'T-712')!.title).replace(/\s+/g, ' ').trim())
+    // line 2: the track cell and the svg fit the panel, the header's svg is as wide as the track's
+    const track = await ui.find({ key: 'live-bottom:T-712-track' })
+    const svg = (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('T-712 at '))!
+    const head = (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.source).includes('<text'))!
+    expect(Number(track?.props.width) + 2 + 1 + 14).toBeLessThanOrEqual(inner)
+    expect(Number(svg.props.width)).toBeLessThanOrEqual(Number(track?.props.width) * 8)
+    expect(head.props.width).toBe(svg.props.width)
+    // the waiting train's id cell holds its 6 characters
+    const cell = await ui.find({ key: 'live-train:T-7130-row-id' })
+    expect(Number(cell?.props.width)).toBeGreaterThanOrEqual(6)
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  })
+
 // T-767: a running lane starts "▶ ", its mark, id and title bold in the accent color; a waiting train's row is all dim.
 for (const surface of ['terminal', 'desktop', 'mobile'] as const)
   test(`T-767: on the ${surface} Live tab a running lane is "▶ " with its id and title bold in the accent color, and a waiting train is dim`, async ($, on) => {
