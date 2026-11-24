@@ -1,35 +1,29 @@
-// The board panel's Live tab in VS Code's side panel (T-691): the same lanes and today as the terminal's Live
-// tab (live.tsx), all worked out in core/live.ts (liveLanes, liveLayout, laneLines, liveTrains, liveToday ...); this file
-// only draws them richer.
-// T-973: the tab is in sections like VS Code's side bar (the owner's pick "native sections"): each section a small bold
-// UPPERCASE heading with a chevron (▾ open, ▸ folded; a press folds it, remembered while the session lasts, see
-// liveFolds) and a count badge on the right where it has one; no rules and no blank lines (the page Box's gap):
-//   ▾ STATUS        Mode ⏵ auto merge · agents 0/1 busy, its meaning, a quiet "Switch to …" button; Branch; Tests
-//   ▾ TASKS  [17 backlog]   what needs you, then the lanes; when nothing runs why, and when all is done the last merge,
-//                   "Up next from the backlog" (3 rows, then "14 more in the backlog"), and the primary "Tell the lead" button
-//   ▾ BRANCHES      (T-727: core's liveBranches drawn with real lines: see branchesVs)
-//   ▾ TODAY         Results, Tokens, Agent time, Per task, Hours, Yesterday, 7 days (core's liveTodayRows) as label/value rows
-//   ▸ ORGANIZATIONAL MEMORY  [2 / 60]  All notes   (folded at first; open: the newest notes, one row each, and the topics)
-// Each lane is:
-//   ▶ T-684 /symcc-doctor…               #2      (the id and cut title a link: a click, or Enter on it, opens the task)
-//   ●━━━━━●━━━━━◉─────○─────○                    (real lines and dots in an Svg, the station names under the dots)
-//   try 2/3 · ⏱ 12m · ⌀ 1.1M (0.3×median) · worker 1.1M · ⌕ × 1   change   (T-867: plain numbers, no bar)
-// The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code (the person's system)
-// asks for reduced motion (`prefers-reduced-motion`). Each drawing's `alt` is the terminal's text for it.
-// T-715: under each lane hang its waiting trains (core's liveTrains and trainRows): each one indented by its level,
-// "└─◇", its id and cut title a link that opens the task, then "waits" and "+ also T-n" dim.
-// T-767: a running lane's name starts with "▶" (the accent color) and is bold; a waiting train's whole row is dim.
+// The board panel's Live tab in VS Code's side panel (T-691, T-1003): the same lanes and today as the terminal's Live
+// tab (live.tsx), worked out in core/live.ts (liveTaskLanes, liveLayout, liveTrains, liveTodayRows ...); this file draws
+// them in VS Code's plain style: bold headings, no folds, no legend, links for what you go to.
+//   Status        Mode (with "change" a link), Scouts, Branch, Tests: one row each
+//   Tasks  17 backlog   what needs you, then the lanes; when nothing runs why, and when all is done "All done", "Up next
+//                 from the backlog" and the one primary "Tell the lead" button
+//   Branches      (T-727: core's liveBranches drawn with real lines: see branchesVs; the next redesign task changes it)
+//   Today         Results, Tokens (one color), Agent time, Per task, Hours, 7 days (core's liveTodayRows)
+//   Organizational memory  2 / 60   All notes   (one line)
+// A lane is two lines: ▶ T-684  the full title (cut only when the panel is too narrow), then under it the track and the time
+//   ●━━━━●━━━━◉────○────○            try 2 · 12m
+// and the station names ("work check queue tests done") are drawn once above all lanes in one Svg, so every train lines
+// up under them. The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code asks for
+// reduced motion. T-715: under a lane hang its waiting trains, one line each, indented by their level.
 import type { RenderChildren } from 'claude-code'
-import { type BranchRow, type LiveBranches, liveBranches, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, liveLegend, LIVE_SECTIONS, type LiveLane, liveInner, type LiveLayout, type LiveSeg, LIVE_TONE, laneLines, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
+import { liveInner, type BranchRow, type LiveBranches, liveBranches, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, LIVE_SECTIONS, type LiveLane, type LiveStation, type LiveLayout, type LiveSeg, LIVE_TONE, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
 import { STATUS_MARK } from '../../core/details'
-import { MODE_MEANING } from '../../board'
+import { textWidth } from '../../core/width'
+import { nextMode } from '../../board'
 import { S } from '../../app/state'
 import { panelValues, type $ } from '../panel'
 import type { PaneParts } from './parts'
-import { LIVE_TICK_MS, ORG_MEM_ALL_KEY, branchKey, needKey, laneKey, liveTick, newestKey, openOrgMemPage, topicKey, trainKey } from './live'
-import { cutEnd, mdLink, mdText, modeColor, NO_TITLE, ROW_HOVER, switchLabel, testsValue, vsFacts, vsFooter, vsHref, vsLink, vsSectionHead } from './vscode'
+import { ORG_MEM_ALL_KEY, branchKey, needKey, laneKey, liveTick, openOrgMemPage, trainKey } from './live'
+import { cutEnd, mdLink, mdText, modeColor, NO_TITLE, ROW_HOVER, testsValue, vsFacts, vsFooter, vsHref, vsLink, vsRow } from './vscode'
 import { ASK_LEAD, askLead, vsRowRoom } from './vscode-list'
-import { ORG_MEM_MAX_LINES, orgMemShortDay, type OrgMemNote } from '../../core/org-mem'
+import { ORG_MEM_MAX_LINES, type OrgMemNote } from '../../core/org-mem'
 
 /** The pixels per text column in the drawings (about one character of VS Code's panel font). */
 const COL_PX = 8
@@ -41,12 +35,12 @@ export const BLINK_CSS = '@keyframes symcc-blink{50%{opacity:.25}}.cur{animation
 
 /** A lane's track as an Svg document: a dot per station (passed filled green, the current one blue and blinking, future
  *  hollow grey), lines between them (bold up to the current one), the station names (layout.labels) under the dots. */
-export function trackSvg(lane: Pick<LiveLane, 'at'> & Partial<Pick<LiveLane, 'done' | 'stations' | 'skipped'>>, l: LiveLayout): { source: string; width: number; height: number } {
+export function trackSvg(lane: Pick<LiveLane, 'at'> & Partial<Pick<LiveLane, 'done' | 'stations' | 'skipped'>>, l: LiveLayout, names = true): { source: string; width: number; height: number } {
   const step = (l.gap + 1) * COL_PX
   const r = 5
   const x0 = r + 2
   const width = x0 * 2 + step * (l.stations.length - 1) + COL_PX * 4
-  const height = 30
+  const height = names ? 30 : 18
   const y = 9
   const parts: string[] = [`<style>${BLINK_CSS}</style>`]
   // T-846: the lane's own stations on the shared columns; the line runs through columns it has no station at
@@ -69,9 +63,20 @@ export function trackSvg(lane: Pick<LiveLane, 'at'> & Partial<Pick<LiveLane, 'do
     else if (i === lane.at && lane.done) parts.push(`<path d="M${x - r} ${y} L${x - 1} ${y + r - 1} L${x + r + 1} ${y - r}" fill="none" stroke="${INK.passed}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`)
     else if (i === lane.at) parts.push(`<circle class="cur" cx="${x}" cy="${y}" r="${r + 1}" fill="${INK.current}" stroke="${INK.current}" stroke-width="2" fill-opacity=".85"/>`)
     else parts.push(`<circle cx="${x}" cy="${y}" r="${r - 1}" fill="none" stroke="${INK.future}" stroke-width="1.5"/>`)
-    parts.push(`<text x="${x}" y="${height - 2}" text-anchor="${col ? (col === l.stations.length - 1 ? 'end' : 'middle') : 'start'}" font-family="sans-serif" font-size="10" fill="${i === lane.at ? (lane.done ? INK.passed : INK.current) : INK.label}"${i === lane.at ? ' font-weight="bold"' : ''}>${(l.labels[col] ?? '').split(LIVE_AGENT_MARK).join(`<tspan fill="${INK.mark}">${LIVE_AGENT_MARK}</tspan>`)}</text>`)
+    if (names) parts.push(`<text x="${x}" y="${height - 2}" text-anchor="${col ? (col === l.stations.length - 1 ? 'end' : 'middle') : 'start'}" font-family="sans-serif" font-size="10" fill="${i === lane.at ? (lane.done ? INK.passed : INK.current) : INK.label}"${i === lane.at ? ' font-weight="bold"' : ''}>${(l.labels[col] ?? '').split(LIVE_AGENT_MARK).join(`<tspan fill="${INK.mark}">${LIVE_AGENT_MARK}</tspan>`)}</text>`)
   })
   return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${parts.join('')}</svg>`, width, height }
+}
+
+/** T-1003: the station names in full words as one Svg (drawn once above all lanes, so every train lines up under it). */
+export const FULL_LABELS: Record<LiveStation, string> = { work: 'work', check: 'check', queue: 'queue', tests: 'tests', you: 'you', done: 'done' }
+export function stationsSvg(l: LiveLayout): { source: string; width: number; height: number } {
+  const step = (l.gap + 1) * COL_PX
+  const x0 = 5 + 2
+  const width = x0 * 2 + step * (l.stations.length - 1) + COL_PX * 4
+  const height = 14
+  const text = l.stations.map((s, col) => `<text x="${x0 + col * step}" y="${height - 3}" text-anchor="${col ? (col === l.stations.length - 1 ? 'end' : 'middle') : 'start'}" font-family="sans-serif" font-size="11" fill="${INK.label}">${FULL_LABELS[s]}</text>`)
+  return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${text.join('')}</svg>`, width, height }
 }
 
 /** T-727: the pixels from one commit's dot to the next in the Branches drawings, and each drawing's height. */
@@ -108,30 +113,22 @@ export function branchRowSvg(r: Pick<BranchRow, 'col' | 'lines' | 'tee' | 'kind'
   return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${BR_H}" viewBox="0 0 ${width} ${BR_H}">${parts.join('')}</svg>`, width, height: BR_H }
 }
 
-/** T-973: the Live tab's sections in VS Code, in order, and whether each is open until the owner folds it (the
- *  Organizational memory section starts folded). */
-export const LIVE_FOLD_DEFAULT = { status: true, tasks: true, branches: true, today: true, orgmem: false } as const
-export type LiveFold = keyof typeof LIVE_FOLD_DEFAULT
-/** T-973: the folds the owner changed on VS Code's Live tab; kept while the session lasts, not on disk. */
-export const liveFolds = new Map<LiveFold, boolean>()
-export const resetLiveFolds = () => liveFolds.clear()
-export const liveFoldOpen = (name: LiveFold): boolean => liveFolds.get(name) ?? LIVE_FOLD_DEFAULT[name]
-/** T-973: the section names on VS Code's Live tab (core's LIVE_SECTIONS, and Status). */
-export const LIVE_STATUS = 'Status'
 /** T-973: the line over the backlog picks when all is done. */
 export const LIVE_UP_NEXT = 'Up next from the backlog'
+/** The Live tab's Status heading. */
+export const LIVE_STATUS = 'Status'
 
-/** T-973: one section of the Live tab in VS Code (`live-<key>`): its heading (`live-<key>-head`, a press folds or opens
- *  it, see vsSectionHead), then what it holds while open. No rules and no blank lines: the page Box's gap spaces the
- *  sections, and a section holds its rows tight. */
-function liveSection($: $, pane: PaneParts, key: string, fold: LiveFold, name: string, body: () => RenderChildren[], count?: number | string, extra?: RenderChildren) {
-  const { Box, vs } = pane
-  const open = liveFoldOpen(fold)
-  const toggle = () => (liveFolds.set(fold, !open), $.ui.invalidate('ui.render'))
+/** T-1003: one section of the Live tab in VS Code (`live-<key>`): a plain bold heading (`live-<key>-head`, with an
+ *  optional dim count after it; nothing folds), then its rows tight. The page Box's gap spaces the sections. */
+function liveSection($: $, pane: PaneParts, key: string, name: string, body: () => RenderChildren[], count?: number | string) {
+  const { Box, Text, C } = pane
   return (
     <Box key={`live-${key}`} flexDirection="column" rowGap="xs">
-      {vsSectionHead(vs, `live-${key}-head`, name, open, toggle, count, extra)}
-      {open ? (body() as never) : null}
+      <Box key={`live-${key}-head`} flexDirection="row" columnGap={1}>
+        <Text bold color={C('text')}>{name}</Text>
+        {count === undefined ? null : <Text color={C('inactive')}>{String(count)}</Text>}
+      </Box>
+      {body() as never}
     </Box>
   )
 }
@@ -145,7 +142,7 @@ function branchesVs($: $, pane: PaneParts, open: (id: string) => () => void) {
   if (!br) return null
   const main = branchMainSvg(br)
   const words = (xs: LiveSeg[]) => xs.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)
-  return liveSection($, pane, 'br', 'branches', LIVE_SECTIONS.branches, () => [
+  return liveSection($, pane, 'br', LIVE_SECTIONS.branches, () => [
     <Box key="live-br-main" flexDirection="row" gap={1} alignItems="center">
       <Svg key="live-br-main-svg" source={main.source} width={main.width} height={main.height} alt={segText(br.main).trim()} />
       <Box key="live-br-main-text" flexDirection="column">
@@ -175,23 +172,38 @@ function branchesVs($: $, pane: PaneParts, open: (id: string) => () => void) {
 /** A task id as markdown code (drawn in the mono face) inside a link: "[`T-5`](…)". */
 const monoLink = (id: string, href: string) => `[\`${id.replace(/`/g, '')}\`](${href})`
 
+/** The room for a time cell: "merged 10m ago", and "try 2 · " before a running time. */
+const TIME_W = 14
+/** The indent of a lane's second line (under the title's start: the mark's cell and a gap). */
+const TRACK_INDENT = 2
+
 /**
- * The Live tab in VS Code (T-973: in sections like VS Code's side bar, see the top of this file); `notes`: org-mem's
- * notes (newest first), for its Organizational memory section (T-718).
+ * The Live tab in VS Code (T-1003: plain headings, nothing folds, one line per lane, see the top of this file);
+ * `notes`: org-mem's notes, only counted for its one line (T-718).
  */
 export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   const { Box, Text, Button, v, width, C, act, header, nowMs, vs, goTab, mode, switchMode } = pane
   const { Svg } = vs
   // the times beside the lanes ("2m") are redrawn every tick; the blink itself is the drawing's own animation
   liveTick($)
-  const frame = Math.floor(nowMs / LIVE_TICK_MS)
   // T-771: the running lanes, then the just-merged ones (dim, ✓ at "merged")
   const lanes = liveTaskLanes(v, nowMs)
   const running = lanes.filter(l => !l.done)
-  // the terminal's words at its width under a heading (liveInner), so both say the same
-  const inner = liveInner(width)
-  const layout = liveLayout(lanes, liveColumns(lanes, v.checker === true), inner)
+  // the shared columns, in full words, 4 columns (40px) between stations so the words never run into each other
+  const stations = liveColumns(lanes, v.checker === true)
+  const base = liveLayout(lanes, stations, liveInner(width))
+  const layout = { ...base, gap: 4, labels: stations.map(s => FULL_LABELS[s]) }
   const trains = liveTrains(v, nowMs, lanes)
+  // a lane is two lines: line 1 mark, id, title; line 2 (indented 2) the track and the time at the right. The track and
+  // the header are drawn smaller (one scale for both) when the panel is too narrow for them.
+  const inner = liveInner(width)
+  const trainLists = lanes.map(l => trainRows(trains.lanes[l.id] ?? [], inner))
+  const idW = Math.max(4, layout.idW, ...trainLists.flat().map(r => textWidth(r.id ?? '')))
+  const natural = stationsSvg(layout)
+  const trackRoom = Math.max(8, inner - TRACK_INDENT - 1 - TIME_W) * COL_PX
+  const scale = Math.min(1, trackRoom / natural.width)
+  const shown = (d: { width: number; height: number }) => ({ width: Math.floor(d.width * scale), height: Math.ceil(d.height * scale) })
+  const trackCols = Math.ceil(natural.width * scale / COL_PX)
   const open = (id: string) => act(() => panelValues($).updateOpened(() => id))
   /** A line of text in a Box of its own: VS Code keeps a Box's key (a Text's it drops), so each line can be found by it. */
   const line = (key: string, text: string, color: string, bold = false) => (
@@ -199,33 +211,29 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       <Text wrap="wrap" bold={bold || undefined} color={C(color)}>{text}</Text>
     </Box>
   )
-  const segsText = (xs: readonly LiveSeg[]) => xs.map(s => <Text tabular color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)
+  const segsText = (xs: readonly LiveSeg[], tone?: string) => xs.map(s => <Text tabular color={C(tone ?? LIVE_TONE[s.tone])}>{s.text}</Text>)
 
-  // ---- Status: the mode line (T-938's "Now:" row, with its scout mark), the branch and who drives, the tests and limits
+  // ---- Status: Mode, Scouts, Branch and Tests, one row each (the label column is VS_LABEL_W wide)
   const nowSegs = liveNowSegs(v, running, nowMs, Infinity).slice(1)
   const driving = v.driving ?? S.driving
   const tv = testsValue(v)
+  const modeTo = vsHref('mode', nextMode(mode))
+  const scoutsText = nowSegs.length > 3 ? nowSegs.slice(3).map(x => x.text).join('').trim() : ''
+  const scoutsTo = vsHref('tab', 'scouts')
   const status = () => [
     vsFacts(vs, 'live-status-rows', [
       {
         key: 'mode',
         label: 'Mode',
         value: [
-          // T-770: while scouts run or one is due, their mark at the end: the names a quiet button that opens the Scouts tab
-          <Box key="live-head" flexDirection="row" flexWrap="wrap" alignItems="center">
-            <Text bold color={C(modeColor(mode))}>{nowSegs[0]?.text ?? ''}</Text>
-            {nowSegs.length > 2 ? <Text color={C(LIVE_TONE.scouts)}>{`${nowSegs[1]!.text}${nowSegs[2]!.text} `}</Text> : null}
-            {nowSegs.length > 3 ? (
-              <Box key="live-scouts-box" flexDirection="row">
-                <Button key="live-scouts" plain dimColor label={nowSegs.slice(3).map(x => x.text).join('').trim()} hover={{ dimColor: false }} onPress={goTab('scouts')} />
-              </Box>
-            ) : null}
-          </Box>,
-          <Text key="live-mode-meaning" wrap="wrap" color={C('inactive')}>{MODE_MEANING[mode]}</Text>,
-          <Box key="live-mode-switch-box" flexDirection="row">
-            <Button key="live-mode-switch" plain dimColor label={switchLabel(mode)} hover={{ dimColor: false }} onPress={switchMode} />
-          </Box>,
+          <Box key="live-head" flexDirection="row"><Text bold color={C(modeColor(mode))}>{nowSegs[0]?.text ?? ''}</Text></Box>,
+          vsLink(vs, 'live-mode-switch', mdLink('change', modeTo), [[modeTo, switchMode]]),
         ],
+      },
+      {
+        key: 'scouts',
+        label: 'Scouts',
+        value: [scoutsText ? vsLink(vs, 'live-scouts', mdLink(scoutsText, scoutsTo), [[scoutsTo, goTab('scouts')]]) : <Text key="live-scouts-none" color={C('inactive')}>none running</Text>],
       },
       {
         key: 'branch',
@@ -243,7 +251,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
     ]),
   ]
 
-  // ---- Tasks: what needs you, then the lanes (or why nothing runs, and what is next), then the key to the marks
+  // ---- Tasks: what needs you, then the lanes (or why nothing runs, and what is next)
   // T-786: the needs-you rows: the warning mark and text, the id a link that opens the task or question
   const needs = liveNeeds(v, nowMs, Infinity)
   const needRows = needs.map(n => {
@@ -251,63 +259,73 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
     const rest = text.slice(text.indexOf(n.id) + n.id.length).trim()
     const href = vsHref('task', n.id)
     return (
-      <Box key={`live-need-row:${n.id}`} flexDirection="row" gap={1} hover={{ backgroundColor: ROW_HOVER }}>
-        {line(`live-need-mark:${n.id}`, '⚠', LIVE_TONE.warning)}
-        {vsLink(vs, needKey(n.id), mdLink(n.id, href), [[href, open(n.id)]])}
-        {line(`live-need-text:${n.id}`, rest, LIVE_TONE.warning)}
+      <Box key={`live-need-row:${n.id}`} hover={{ backgroundColor: ROW_HOVER }}>
+        {vsRow(vs, `live-need:${n.id}`, [
+          { key: 'mark', width: 1, node: line(`live-need-mark:${n.id}`, '⚠', LIVE_TONE.warning) },
+          { key: 'id', width: Math.max(4, textWidth(n.id)), node: vsLink(vs, needKey(n.id), mdLink(n.id, href), [[href, open(n.id)]]) },
+          { key: 'text', node: line(`live-need-text:${n.id}`, rest, LIVE_TONE.warning) },
+        ])}
       </Box>
     )
   })
-  const isTrack = (s: LiveSeg) => s.tone === 'passed' || s.tone === 'current' || s.tone === 'future'
-  const laneRows = lanes.map(lane => {
-    // the terminal's two lines (steady: the drawing blinks by itself), drawn in pieces
-    const [first, second] = laneLines(lane, layout, { nowMs, frame, steady: true })
-    // T-767/T-777: the running lane's id (the 'run' tone, past its "▶ " mark) in the accent color, its title normal text
-    // T-771: a finished lane's id and title are dim, with no mark before them
+  // two lines per lane (see above); under them hang the waiting trains, one line each
+  const head = lanes.length ? natural : null
+  const laneRows = lanes.map((lane, li) => {
     const done = !!lane.done
-    const idAt = first.findIndex(s => s.tone === 'run' && s.text !== LIVE_RUN_MARK)
-    const runId = first[idAt]?.text.trim() ?? ''
-    // T-850: a finished lane has a dim "✓" before its id (still the accent color), then its dim title
-    const name = (done ? first.slice(idAt + 1, -1).filter(s => s.tone === 'dim') : first[idAt + 1]?.tone === 'text' ? [first[idAt + 1]!] : []).map(s => s.text.trim()).filter(Boolean).join(' ')
-    const right = first[first.length - 1]?.tone === 'dim' ? first[first.length - 1]!.text.trim() : ''
-    const track = trackSvg(lane, layout)
+    const track = trackSvg(lane, layout, false)
+    const tShown = shown(track)
     const href = vsHref('task', lane.id)
+    const time = laneRight(lane, nowMs, TIME_W)
+    const when = [!done && lane.tryNo > 1 ? `try ${lane.tryNo}` : '', time].filter(Boolean).join(' · ')
     return (
       <Box key={`live-lane:${lane.id}`} flexDirection="column" hover={{ backgroundColor: ROW_HOVER }}>
-        <Box key={`live-top:${lane.id}`} flexDirection="row" gap={2}>
-          <Box key={`live-run:${lane.id}`} flexDirection="row" gap={1}>
-            {done ? line(`live-done-mark:${lane.id}`, '✓', 'inactive') : null}
-            {done ? (name ? line(`live-run-mark:${lane.id}`, runId, LIVE_TONE.run, true) : vsLink(vs, laneKey(lane.id), mdLink(runId || lane.id, href), [[href, open(lane.id)]], true)) : line(`live-run-mark:${lane.id}`, `${LIVE_RUN_MARK}${name ? runId : ''}`.trim(), LIVE_TONE.run, true)}
-            {done ? (name ? vsLink(vs, laneKey(lane.id), mdLink(name, href), [[href, open(lane.id)]], true) : null) : vsLink(vs, laneKey(lane.id), mdLink(name || lane.id, href), [[href, open(lane.id)]])}
-          </Box>
-          {right ? line(`live-right:${lane.id}`, right, 'inactive') : null}
+        {vsRow(vs, `live-top:${lane.id}`, [
+          { key: 'mark', width: 1, node: line(`live-run-mark:${lane.id}`, done ? '✓' : LIVE_RUN_MARK.trim(), done ? 'inactive' : LIVE_TONE.run, true) },
+          { key: 'id', width: idW, node: vsLink(vs, laneKey(lane.id), mdLink(lane.id, href), [[href, open(lane.id)]], done) },
+          {
+            key: 'title',
+            node: (
+              <Box key={`live-title:${lane.id}`} flexDirection="row" flexGrow={1} flexShrink={1}>
+                <Text wrap="truncate" color={C(done ? 'inactive' : 'text')}>{lane.title.replace(/\s+/g, ' ').trim() || NO_TITLE}</Text>
+              </Box>
+            ),
+          },
+        ])}
+        <Box key={`live-line2:${lane.id}`} paddingLeft={TRACK_INDENT}>
+          {vsRow(vs, `live-bottom:${lane.id}`, [
+            { key: 'track', width: trackCols, node: <Svg key={`live-track:${lane.id}`} source={track.source} width={tShown.width} height={tShown.height} alt={`${lane.id} at ${layout.labels[layout.stations.indexOf(lane.station)] ?? lane.station}`} /> },
+            { key: 'time', node: <Box key={`live-time:${lane.id}`} flexDirection="row" flexGrow={1} justifyContent="flex-end">{line(`live-right:${lane.id}`, when, 'inactive')}</Box> },
+          ])}
         </Box>
-        <Svg key={`live-track:${lane.id}`} source={track.source} width={track.width} height={track.height} alt={`${lane.id} at ${layout.labels[layout.stations.indexOf(lane.station)] ?? lane.station}: ${segText(first.filter(isTrack))}`} />
-        <Box key={`live-sub:${lane.id}`} flexDirection="row" gap={1} alignItems="center">
-          {(() => {
-            // the terminal's line (T-867: plain numbers, no bar), its leading spaces left out
-            const parts = second.map((s, i) => ({ ...s, text: !s.text.trim() ? '  ' : i === 0 ? s.text.trimStart() : s.text })).filter((s, i, all) => s.text.trim() || (i > 0 && i < all.length - 1))
-            return parts.length ? [<Text key="w0">{segsText(parts)}</Text>] : []
-          })()}
-        </Box>
-        {trainRows(trains.lanes[lane.id] ?? [], inner).map(r => {
-          // the terminal's row in pieces: the connector, the id and title (a link), then "waits" and "+ also"
+        {trainLists[li]!.map(r => {
+          // a waiting train: one line, the id and title a link, "waits" and "+ also" dim
           if (!r.id) return <Box key={`live-more:${lane.id}`} flexDirection="column" paddingLeft={2}>{line(`live-more-text:${lane.id}`, segText(r.segs).trim(), 'inactive')}</Box>
           const name = r.segs.filter(s => s.tone === 'wait').map(s => s.text.trim()).join(' ')
           const rest = r.segs.slice(1).filter(s => s.tone === 'dim').map(s => s.text.trim()).filter(Boolean).join('  ')
           const href = vsHref('task', r.id)
           return (
-            <Box key={`live-train-row:${r.id}`} flexDirection="row" gap={1} paddingLeft={2 * r.depth}>
-              {line(`live-train-mark:${r.id}`, '└─◇', 'inactive')}
-              {name ? line(`live-train-id:${r.id}`, r.id, LIVE_TONE.run, true) : null}
-              {vsLink(vs, trainKey(r.id), mdLink(name || r.id, href), [[href, open(r.id)]], true)}
-              {rest ? line(`live-train-note:${r.id}`, rest, 'inactive') : null}
+            <Box key={`live-train-row:${r.id}`} paddingLeft={2 * r.depth}>
+              {vsRow(vs, `live-train:${r.id}-row`, [
+                { key: 'mark', width: 3, node: line(`live-train-mark:${r.id}`, '└─◇', 'inactive') },
+                ...(name ? [{ key: 'id', width: idW, node: line(`live-train-id:${r.id}`, r.id, LIVE_TONE.run, true) }] : []),
+                { key: 'name', node: vsLink(vs, trainKey(r.id), mdLink(name || r.id, href), [[href, open(r.id)]], true) },
+                ...(rest ? [{ key: 'note', node: line(`live-train-note:${r.id}`, rest, 'inactive') }] : []),
+              ])}
             </Box>
           )
         })}
       </Box>
     )
   })
+  // the one station header, drawn once above the lanes, lined up with the tracks (line 2 of a lane)
+  const hShown = head ? shown(head) : null
+  const stationRow = head && hShown
+    ? (
+        <Box key="live-stations-line" paddingLeft={TRACK_INDENT}>
+          {vsRow(vs, 'live-stations', [{ key: 'track', width: trackCols, node: <Svg key="live-stations-svg" source={head.source} width={hShown.width} height={hShown.height} alt={layout.labels.join(' ')} /> }])}
+        </Box>
+      )
+    : null
   const idle = liveIdleFacts(v, nowMs)
   const backlogCount = v.tasks.filter(t => t.status === 'backlog').length
   /** The backlog's fold on the Tasks tab opens, then the Tasks tab shows. */
@@ -327,6 +345,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         </Box>,
         ask,
       ]
+    const moreTo = vsHref('more', 'backlog')
     return [
       <Box key="live-idle" flexDirection="column" rowGap="xs">
         <Box key="live-empty" flexDirection="row" flexWrap="wrap">
@@ -345,11 +364,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
                 </Box>
               )
             })}
-            {idle.more > 0 ? (
-              <Box key="live-backlog-more-box" flexDirection="row">
-                <Button key="live-backlog-more" plain dimColor label={`${idle.more} more in the backlog`} hover={{ dimColor: false }} onPress={toBacklog} />
-              </Box>
-            ) : null}
+            {idle.more > 0 ? <Box key="live-backlog-more-box" flexDirection="row">{vsLink(vs, 'live-backlog-more', mdLink(`${idle.more} more in the backlog`, moreTo), [[moreTo, toBacklog]])}</Box> : null}
           </Box>
         ) : (
           line('live-empty-1', `${LIVE_IDLE.next}.`, 'inactive')
@@ -361,71 +376,38 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   const tasks = () => [
     ...(needs.length ? [<Box key="live-needs" flexDirection="column">{needRows}</Box>] : []),
     ...idleRows(),
-    ...(lanes.length ? [<Box key="live-lanes" flexDirection="column" rowGap="sm">{laneRows}</Box>] : []),
-    ...(lanes.length ? [<Box key="live-key" flexDirection="column">{line('live-legend', liveLegend(Infinity).join(' '), 'inactive')}</Box>] : []),
+    ...(lanes.length ? [<Box key="live-lanes" flexDirection="column" rowGap="xs">{[stationRow, ...laneRows]}</Box>] : []),
   ]
 
-  // ---- Today: the day's figures as label/value rows (core's liveTodayRows)
-  const today = () => [vsFacts(vs, 'live-today-rows', liveTodayRows(v, nowMs).map(r => ({ key: r.key, label: r.label, value: [<Text key="v" wrap="wrap">{segsText(r.segs)}</Text>] })))]
+  // ---- Today: the day's figures as label/value rows (core's liveTodayRows); Tokens in one color
+  const today = () => [vsFacts(vs, 'live-today-rows', liveTodayRows(v, nowMs).map(r => ({ key: r.key, label: r.label, value: [<Text key="v" wrap="wrap">{segsText(r.segs, r.key === 'tokens' ? 'text' : undefined)}</Text>] })))]
 
   return (
     <Box flexDirection="column" gap={1} flexGrow={1}>
       {header('live')}
-      {liveSection($, pane, 'status', 'status', LIVE_STATUS, status)}
-      {liveSection($, pane, 'tasks', 'tasks', LIVE_SECTIONS.tasks, tasks, backlogCount ? `${backlogCount} backlog` : undefined)}
+      {liveSection($, pane, 'status', LIVE_STATUS, status)}
+      {liveSection($, pane, 'tasks', LIVE_SECTIONS.tasks, tasks, backlogCount ? `${backlogCount} backlog` : undefined)}
       {branchesVs($, pane, open)}
-      {liveSection($, pane, 'today', 'today', LIVE_SECTIONS.today, today)}
-      {orgMemSectionVs($, pane, notes)}
+      {liveSection($, pane, 'today', LIVE_SECTIONS.today, today)}
+      {orgMemLineVs($, pane, notes)}
       {/* T-930, T-933: the footer's Box takes the room left on a short page and puts the footer at its bottom */}
       <Box key="live-foot" flexDirection="column" flexGrow={1} justifyContent="flex-end">{vsFooter(vs, 'live-hint', { rule: false })}</Box>
     </Box>
   )
 }
 
-/** T-718/T-973: the Live tab's Organizational memory section in VS Code: folded at first; its heading's count "2 / 60"
- *  and a quiet "All notes" button (ORG_MEM_ALL_KEY, there even while folded). Open, the newest notes one row each
- *  (the day, the text cut short, a link that opens all notes with that one marked, the topic dim), then the topics as
- *  links with their counts. */
-function orgMemSectionVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
-  const { Box, Text, Button, C, width, vs } = pane
-  const om = liveOrgMem(notes, width)
-  const room = Math.max(16, vsRowRoom(width) - 24)
-  const all = (
-    <Box key="live-om-all-box" flexDirection="row">
-      <Button key={ORG_MEM_ALL_KEY} plain dimColor label="All notes" hover={{ dimColor: false }} onPress={openOrgMemPage($)} />
+/** T-1003: Organizational memory on the Live tab is one line: the bold name, the dim count "2 / 60", and an "All notes"
+ *  link (ORG_MEM_ALL_KEY) that opens the notes page. The newest notes and the topics live on that page. */
+function orgMemLineVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
+  const { Box, Text, C, vs } = pane
+  const to = vsHref('page', 'orgmem')
+  return (
+    <Box key="live-om" flexDirection="row" columnGap={2} alignItems="center">
+      <Box key="live-om-head" flexDirection="row" columnGap={1}>
+        <Text bold color={C('text')}>{LIVE_SECTIONS.orgMem}</Text>
+        <Text key="live-om-head-count" color={C('inactive')}>{`${notes.length} / ${ORG_MEM_MAX_LINES}`}</Text>
+      </Box>
+      {vsLink(vs, ORG_MEM_ALL_KEY, mdLink('All notes', to), [[to, openOrgMemPage($)]])}
     </Box>
-  )
-  return liveSection(
-    $,
-    pane,
-    'om',
-    'orgmem',
-    LIVE_SECTIONS.orgMem,
-    () => [
-      ...(om.empty ? [<Box key="live-om-empty" flexDirection="column"><Text wrap="wrap" color={C('inactive')}>{om.empty.trim()}</Text></Box>] : []),
-      ...om.newest.map(x => {
-        const href = vsHref('do', `orgmem-note/${x.note.n}`)
-        return (
-          <Box key={`live-om-note-row:${x.note.n}`} flexDirection="row" columnGap={2} hover={{ backgroundColor: ROW_HOVER }}>
-            <Text key="day" tabular color={C('inactive')}>{orgMemShortDay(x.note.date)}</Text>
-            {vsLink(vs, newestKey(x.note.n), mdLink(cutEnd(x.note.text, room), href), [[href, openOrgMemPage($, null, x.note)]])}
-            <Text key="topic" color={C('inactive')}>{x.note.topic}</Text>
-          </Box>
-        )
-      }),
-      ...(om.grid.length
-        ? [
-            <Box key="live-om-topics" flexDirection="row" flexWrap="wrap" columnGap={2} alignItems="center">
-              <Text key="live-om-topics-label" color={C('inactive')}>Topics</Text>
-              {om.grid.flat().map(c => {
-                const href = vsHref('page', `orgmem-topic/${c.topic}`)
-                return vsLink(vs, topicKey(c.topic), `${mdLink(c.topic, href)} ${c.count}`, [[href, openOrgMemPage($, c.topic)]])
-              })}
-            </Box>,
-          ]
-        : []),
-    ],
-    `${notes.length} / ${ORG_MEM_MAX_LINES}`,
-    all,
   )
 }

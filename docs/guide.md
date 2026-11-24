@@ -1253,6 +1253,13 @@ words as bold headings with the same spacing):
   `max_parallel`. It never sits under the task rows. When the page is shorter than the screen (the panel in VS Code), the
   empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
 - On the right: the time at the current station, or the place in the merge queue (`#2`).
+- In VS Code (T-1003) a running lane is two lines: the mark, the id (a link) and the full title (cut with `…` only when
+  the panel is too narrow), then, indented under the title, the train and the time at the right (`try 2 · 12m`; "try"
+  only from the second try). One header row above all the lanes names the stations in full words (`work check queue tests
+  done`, with `you` when a task waits for you), so every train lines up under it. VS Code has no legend line and no
+  folding sections: the headings are plain bold words. Status is split into Mode (with a `change` link), Scouts, Branch
+  and Tests rows; Organizational memory is one line with an `All notes` link. When nothing runs: `All done`, `Up next
+  from the backlog`, and one primary `Tell the lead` button. On a narrow panel the train and header shrink together.
 - The second row has no bar, only numbers about this task:
   `try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6×median) · worker 5.4M · checker 1.9M · ⌕ × 2` and, at the right end of the row, `bug`. That is
   the try (`try 2/3`, auto retries after failing tests included), the task's working
@@ -1444,29 +1451,31 @@ unchanged.
 - **Style**: only real actions are buttons (Approve, Retry, Save, Send, ...), with at most
   one main (primary) button on a page. Going somewhere is a link. Headings are plain bold
   words, counts are plain dim words, and there are no pills, rules or hint lines. Only the
-  Live tab's sections and the Tasks list's Backlog, Done and Dropped headings still fold. The labels of a label and value list share one column, 11 characters wide.
+  Tasks list's Backlog, Done and Dropped headings still fold. The labels of a label and value list share one column, 11 characters wide.
   A link in a row sits in a cell of a set width, so it never drops onto a line of its own.
-- **Live tab**: in sections like VS Code's side bar. Each section has a small bold UPPERCASE
-  heading with a chevron (`▾` open, `▸` folded); click it to fold or open the section (the
-  board remembers it while the session lasts). The count sits on the right as plain dim
-  words where the section has one. No divider lines and no blank rows.
-  - **Status**: Mode (`⏵ auto merge · agents 0/3 busy`, with what the mode means and a quiet
-    `Switch to …` button; running scouts are named at its end and open the Scouts tab),
-    Branch (and which window drives), Tests (short, then the time limit and retries).
-  - **Tasks** `[17 backlog]`: what needs you first, then the running lanes (as the terminal's,
-    drawn with real lines) and the key to their marks. When nothing runs it says why; when
-    all is done: "✓ All done · last merged T-93 20h ago", then **Up next from the backlog**
-    with the first 3 backlog tasks (each opens its page) and "14 more in the backlog" (opens
-    the Tasks tab with Backlog open). The main button, `Tell the lead what to do next`, puts
-    "Next task: " in the prompt box.
+- **Live tab**: plain bold headings (`Status`, `Tasks 17 backlog`, `Branches`, `Today`) with
+  the count as plain dim words. Nothing folds: no chevrons. No divider lines and no blank rows.
+  - **Status**: one row each. Mode (`⏵ auto merge · agents 0/3 busy`, with `change` as a link
+    that switches the mode), Scouts (the running ones, a link to the Scouts tab; "none running"
+    otherwise), Branch (and which window drives), Tests (short, then the time limit and retries).
+  - **Tasks**: what needs you first, then the running lanes, **two lines each**: the mark
+    (`▶`, or `✓` for a just-merged one), the id (a link that opens the task) and the whole title
+    (cut with `…` only when the panel is too narrow), then, indented under the title, the train
+    drawn with real lines and the time at the right (`3m`, `#2` in the queue, `merged 3m ago`). `try 2 · 3m` shows the try
+    only when it is above 1. The station names ("work check queue tests done", with "you" when
+    a task waits for you) are drawn once above all the lanes, so every train lines up under
+    them. There is no legend line. A waiting task hangs under its lane as one line. When nothing
+    runs it says why; when all is done: "✓ All done · last merged T-93 20h ago", then **Up next
+    from the backlog** with the first 3 backlog tasks (each opens its page) and "14 more in the
+    backlog" (a link that opens the Tasks tab with Backlog open). The one main button, `Tell the
+    lead what to do next`, puts "Next task: " in the prompt box.
   - **Branches**: as in the terminal, drawn with real lines.
   - **Today**: label and value rows: Results (`✓ 0 merged · ↺ 0 sent back · ✗ 0 failed`, in
-    green, yellow and red), Tokens (all of today's, then who spent them), Agent time (and the
-    cost when known), Per task, Hours (the day's token bars and the busiest hour), Yesterday,
-    and 7 days.
-  - **Organizational memory** `[2 / 60]`: folded at first, with a quiet `All notes` button on
-    its heading. Open, it lists the newest notes one row each (the date, the text cut short,
-    the topic dim; click a note to open all notes on it), then the topics with their counts.
+    green, yellow and red), Tokens (all of today's, then who spent them, all in one color),
+    Agent time (and the cost when known), Per task, Hours (the day's token bars and the busiest
+    hour), Yesterday, and 7 days.
+  - **Organizational memory** `2 / 60`: one line, with an `All notes` link that opens the page
+    of notes.
 - **Tasks**: grouped under headings (Questions for you, Waiting for you, Review, Failed, Doing,
   To do), each with its colored mark and its count as plain dim words (`▶ Doing 2`; the task page's
   status is plain bold words in its color too), a blank line
