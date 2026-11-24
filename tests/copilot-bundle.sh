@@ -62,6 +62,11 @@ node -e '
   const plugin = path.join(root, entry.source)
   const manifest = read(path.relative(root, path.join(plugin, ".github/plugin/plugin.json")))
   if (manifest.name !== "symcc" || typeof manifest.extensions !== "string") bad("plugin.json needs name symcc and an extensions folder")
+  // Without a hooks field Copilot reads the Claude Code hooks/hooks.json and logs "Invalid hooks config" every session
+  if (typeof manifest.hooks !== "string") bad("plugin.json needs a hooks path (else Copilot reads the Claude Code hooks/hooks.json)")
+  if (path.normalize(manifest.hooks) === path.normalize("hooks/hooks.json")) bad("plugin.json hooks must not be the Claude Code hooks/hooks.json")
+  const hooks = read(path.relative(root, path.join(plugin, manifest.hooks)))
+  if (!hooks.hooks || typeof hooks.hooks !== "object" || Array.isArray(hooks.hooks)) bad(manifest.hooks + " needs a hooks object")
   const ext = path.join(plugin, manifest.extensions, "symcc", "extension.mjs")
   if (!fs.existsSync(ext)) bad("plugin.json points at " + ext + ", which is missing (run sh scripts/build-copilot.sh)")
   for (const d of ["roles", "kinds", "examples/scouts", ".claude-plugin/plugin.json"]) if (!fs.existsSync(path.join(plugin, d))) bad("the plugin folder has no " + d + " (the extension reads it from there)")

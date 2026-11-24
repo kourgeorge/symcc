@@ -4,5 +4,6 @@
   "author": { "name": "George Kour", "url": "https://github.com/kourgeorge" },
   "homepage": "https://github.com/kourgeorge/symcc",
   "license": "MIT",
-  "extensions": "copilot/extensions"
+  "extensions": "copilot/extensions",
+  "hooks": "copilot/hooks.json"
 }
