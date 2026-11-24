@@ -42,7 +42,8 @@ async function mergeCommitOf($: Host, tip: string, into: string): Promise<string
 /**
  * Checks with git that task `t`'s work is all in the branch it merges into. Its branch's tip must be in it (merged or
  * fast-forwarded), or else every commit of the branch must have an equal change there (rebased or cherry-picked).
- * With no branch left, its newest recorded commit must be in it. Throws a plain reason when it isn't.
+ * With no branch left, or a branch with no commits of its own (remade or reset), its newest recorded commit must be
+ * in it. Throws a plain reason when it isn't.
  */
 export async function findMerged($: Host, t: BoardTask): Promise<MergedFound> {
   const into = intoOf(t)
@@ -60,6 +61,12 @@ export async function findMerged($: Host, t: BoardTask): Promise<MergedFound> {
   if (!isSha(tip)) throw new Error(`git could not read ${t.id}'s branch ${branch}`)
   const own = await ownCommits($, t.id, tip)
   if (!own.length && !recorded.length) throw new Error(`${t.id}'s branch ${branch} has no commits of its own, so there is no work to find in ${into}`)
+  if (!own.length) {
+    // the branch was remade or reset (its tip says nothing about the work): the recorded commits must be in `into`
+    const last = recorded[0]!
+    if (!(await inBranch($, last, `refs/heads/${into}`))) throw new Error(`${t.id}'s last commit ${shortSha(last)} isn't in ${into} yet (its branch ${branch} has no commits of its own)`)
+    return { sha: await mergeCommitOf($, last, into), commits: [...recorded].reverse() }
+  }
   if (await inBranch($, tip, `refs/heads/${into}`)) return { sha: await mergeCommitOf($, tip, into), commits: own }
   // Not merged as it is: every commit may still be in `into` as an equal change (a rebase or cherry-pick).
   const ch = await git($, ['cherry', `refs/heads/${into}`, `refs/heads/${branch}`])

@@ -22,10 +22,11 @@ const ok = (stdout = ''): Res => ({ exitCode: 0, stdout, stderr: '' })
 const fail = (stderr = ''): Res => ({ exitCode: 1, stdout: '', stderr })
 
 /** What the fake git knows: whether the branch is there, whether its tip is in main, and its commits main lacks (`missing`). */
-type Git = { branch: boolean; merged: boolean; missing: number; worktree: boolean; status: string }
+/** `remade`: the branch was remade from main (its tip is M0, it has no commits of its own); `inMain` then lists the commits main holds. */
+type Git = { branch: boolean; merged: boolean; missing: number; worktree: boolean; status: string; remade: boolean; inMain: string[] }
 
 function world(g: Partial<Git> = {}) {
-  const git: Git = { branch: true, merged: true, missing: 0, worktree: true, status: '', ...g }
+  const git: Git = { branch: true, merged: true, missing: 0, worktree: true, status: '', remade: false, inMain: [], ...g }
   const files = new Map<string, string>()
   const calls: string[] = []
   const commitRec = (sha: string, n: number) => `${sha}\x1fT-1: Do it (try ${n})\n\nSymcc-Task: T-1\nSymcc-Try: ${n}\n\x1e`
@@ -35,9 +36,9 @@ function world(g: Partial<Git> = {}) {
     if (s === 'rev-parse --is-inside-work-tree') return ok('true')
     if (s === 'rev-parse --verify -q HEAD') return ok(M0)
     if (s === 'rev-parse --verify -q refs/heads/main') return ok(git.merged ? MERGE : M0)
-    if (s === 'rev-parse --verify -q refs/heads/symcc/T-1') return git.branch ? ok(C2) : fail()
-    if (a[0] === 'log' && a.includes('--grep=Symcc-Task: T-1')) return ok(commitRec(C2, 2) + '\n' + commitRec(C1, 1))
-    if (a[0] === 'merge-base' && a[1] === '--is-ancestor') return git.merged ? ok() : fail()
+    if (s === 'rev-parse --verify -q refs/heads/symcc/T-1') return git.branch ? ok(git.remade ? M0 : C2) : fail()
+    if (a[0] === 'log' && a.includes('--grep=Symcc-Task: T-1')) return ok(git.remade ? '' : commitRec(C2, 2) + '\n' + commitRec(C1, 1))
+    if (a[0] === 'merge-base' && a[1] === '--is-ancestor') return (git.remade ? a[2] === M0 || git.inMain.includes(a[2]!) : git.merged) ? ok() : fail()
     if (a[0] === 'rev-list' && a.includes('--ancestry-path')) return ok(`${MERGE} ${M0} ${C2}\n`)
     if (a[0] === 'cherry') return ok([...Array(2 - git.missing).fill(`- ${C1}`), ...Array(git.missing).fill(`+ ${C2}`)].join('\n'))
     if (a[0] === 'status') return ok(git.status)
@@ -179,6 +180,29 @@ test("a gone branch whose last recorded commit isn't in main is refused, and not
   const err = await runTool(w.$, 'merged', { task: 'T-1' }).then(() => '', (e: Error) => e.message)
   expect(err).toMatch(/^T-1's last commit c1c1c1\w* isn't in main yet \(its branch symcc\/T-1 is gone\)$/)
   expect(await load(w.$)).toEqual(before)
+  expect(mergesOrTests(w.calls)).toEqual([])
+})
+
+test("T-950: a branch remade from main (no commits of its own) whose recorded commit isn't in main is refused, and nothing changes", async () => {
+  const w = world({ remade: true })
+  const before = await seed(w, 'failed')
+  const err = await runTool(w.$, 'merged', { task: 'T-1' }).then(() => '', (e: Error) => e.message)
+  expect(err).toMatch(/^T-1's last commit c1c1c1\w* isn't in main yet \(its branch symcc\/T-1 has no commits of its own\)$/)
+  expect(await load(w.$)).toEqual(before)
+  expect(w.files.has(`${WT}/.git`)).toBe(true)
+  expect(w.git.branch).toBe(true)
+  expect(w.calls.filter(c => /git (worktree remove|update-ref -d)/.test(c))).toEqual([])
+  expect(mergesOrTests(w.calls)).toEqual([])
+})
+
+test('T-950: a branch remade from main whose recorded commit is in main is marked done', async () => {
+  const w = world({ remade: true, inMain: [C1] })
+  await seed(w, 'failed')
+  const out = await runTool(w.$, 'merged', { task: 'T-1' })
+  expect(out).toContain('T-1 done: its work is already in main (c1c1c1c1), merged outside the board')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.merged).toBe(C1)
   expect(mergesOrTests(w.calls)).toEqual([])
 })
 
