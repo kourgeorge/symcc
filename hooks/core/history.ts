@@ -7,7 +7,7 @@ import { ellipsis, isObj, squash } from './text'
 export const ANSWER_LINE_CHARS = 300
 
 /** The fields of a change that count as "what changed" in a restart line, in this order. */
-const CHANGE_FIELDS = ['title', 'details', 'files', 'after', 'order', 'role', 'needs_review', 'merge_into'] as const
+const CHANGE_FIELDS = ['title', 'details', 'files', 'after', 'priority', 'role', 'needs_review', 'merge_into'] as const
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 

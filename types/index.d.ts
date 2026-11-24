@@ -172,7 +172,8 @@ export type SymccTask = {
   files: string[]
   status: SymccStatus
   note: string
-  order: number
+  /** like Unix nice: a whole number from -20 to 19, 0 for every new task; lower runs first (ties: the older task) */
+  priority: number
   after: string[]
   attempts: number
   /** set (only ever to true) when the next try must first merge main into the branch and resolve conflicts */

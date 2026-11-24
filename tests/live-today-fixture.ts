@@ -9,7 +9,7 @@ import { dayOf } from '../hooks/core/days'
  */
 export function todayTasks(t0: number) {
   const iso = (minAgo: number) => new Date(t0 - minAgo * 60_000).toISOString()
-  const task = (id: string, x: Record<string, unknown>) => ({ id, title: id, details: '', files: [], status: 'done', note: '', order: 1, after: [], attempts: 1, history: [], branch: null, created_at: iso(200), updated_at: iso(1), ...x })
+  const task = (id: string, x: Record<string, unknown>) => ({ id, title: id, details: '', files: [], status: 'done', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: iso(200), updated_at: iso(1), ...x })
   const merged = (minAgo: number) => [{ kind: 'merged', at: iso(minAgo), text: 'try 1 → merged into main' }]
   return [
     task('T-1', { runs: [{ started: iso(100), ended: iso(90), agents: [{ kind: 'worker' as const, started: iso(100), ended: iso(90), tokens: { input: 900_000 } }, { kind: 'checker', started: iso(95), ended: iso(90), tokens: { input: 100_000 } }] }], history: merged(80) }),

@@ -1,7 +1,7 @@
 // Board titles, the status line, the banner at the top of the panel, and the board as text.
 import type { SymccMode, SymccStatus, SymccTask } from '../../types'
 import { DEFAULT_NAME, ICON, ICON_ART, namesFor } from '../name'
-import { type Board, type BoardTask, emptyBoard, kindOf, modeOf, OPEN, STATUS_WORD } from './board-file'
+import { type Board, type BoardTask, emptyBoard, isFinished, kindOf, modeOf, OPEN, priorityMark, STATUS_WORD } from './board-file'
 import { cutTitle, padWidth, textWidth } from './width'
 import { boardSections, type BoardSections, localOffset } from './days'
 import { fromText } from './origin'
@@ -485,8 +485,8 @@ function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number, 
   const asks = (phase.waitsFor === 'answer' || phase.waitsFor === 'files') && askText(t.ask) ? 'asks: ' : ''
   const extra = end ? ` — ${asks}${end}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
-  // the kind and the role, e.g. " [bug · tester]" (a plain change with the general role shows nothing)
-  const tag = [kindMark(t), roleMark(t)].filter(Boolean).join(' · ')
+  // the kind, the role and a priority other than 0, e.g. " [bug · tester · p-1]" (a plain change with the general role and priority 0 shows nothing)
+  const tag = [kindMark(t), roleMark(t), isFinished(t) ? '' : priorityMark(t.priority)].filter(Boolean).join(' · ')
   const role = tag ? ` [${tag}]` : ''
   // a later try: "T-5   ▶ doing   · try 2/3 <title>" (see tryMark)
   const mark = tryMark(t, autoRetries)

@@ -9,16 +9,16 @@ import { parseSearch, searchTasks, taskMatches, boardText, emptyBoard, type Boar
 const NOW = Date.parse('2026-11-19T12:00:00Z')
 const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
 const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) =>
-  ({ id, title, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: hoursAgo(500), updated_at: hoursAgo(500), ...extra }) as unknown as SymccTask
+  ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: hoursAgo(500), updated_at: hoursAgo(500), ...extra }) as unknown as SymccTask
 
 // done tasks changed 1h, 2h, ... 8h ago (T-1 newest); some to do ones in a run order unlike their numbers
 const tasks: SymccTask[] = [
   ...Array.from({ length: 8 }, (_, i) => task(`T-${i + 1}`, 'done', `Done ${i + 1}${i === 0 ? ' notify' : ''}`, { updated_at: hoursAgo(i + 1), kind: i % 2 ? 'bug' : 'feature', role: i === 2 ? 'tester' : undefined })),
-  task('T-20', 'todo', 'Third to run', { order: 30 }),
-  task('T-21', 'todo', 'First to run', { order: 10 }),
-  task('T-22', 'todo', 'Second to run', { order: 20, updated_at: hoursAgo(100) }),
-  task('T-23', 'todo', 'Waits for T-20', { order: 5, after: ['T-20'] }),
-  task('T-24', 'backlog', 'An idea notify', { order: 1 }),
+  task('T-20', 'todo', 'Third to run', { priority: 3 }),
+  task('T-21', 'todo', 'First to run', { priority: 1 }),
+  task('T-22', 'todo', 'Second to run', { priority: 2, updated_at: hoursAgo(100) }),
+  task('T-23', 'todo', 'Waits for T-20', { priority: 5, after: ['T-20'] }),
+  task('T-24', 'backlog', 'An idea notify', { priority: 1 }),
 ]
 const ids = (ts: SymccTask[]) => ts.map(t => t.id)
 

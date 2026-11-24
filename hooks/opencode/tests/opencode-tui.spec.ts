@@ -3047,15 +3047,15 @@ test('T-696: a long-title row in the list keeps "waits for T-1" / "[feature]" at
  *  merged today after a send-back, a failed one, two to do (one waiting on the other). Times are minutes before NOW. */
 function liveTasks(): SymccTask[] {
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   return [
     task('T-610', 'Organizational memory search', { runs: [{ started: ago(4) }] }),
     task('T-611', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 1_100_000 } }] }, { started: ago(30), ended: ago(10), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(10), tokens: { input: 1_100_000 } }] }], live: { checking: { step: 'queue', at: ago(0), place: 2 } }, history: [{ kind: 'checker-problems', at: ago(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: ago(5), text: 'try 2: waits in the merge queue (place 2)', try: 2, step: 'queue' }] }),
     task('T-612', 'Scout page: drop the first line', { runs: [{ started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 540_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(2) }] }], live: { checking: { step: 'checker', at: ago(0) } }, history: [{ kind: 'stage', at: ago(2), text: 'try 1: prep started', try: 1, step: 'prep' }] }),
     task('T-600', 'A merged one', { status: 'done', merged: 'abc1234', updated_at: ago(1), runs: [{ started: ago(200), ended: ago(100), agents: [{ kind: 'worker' as const, started: ago(200), ended: ago(100), tokens: { input: 800_000 } }] }], history: [{ kind: 'checker-problems', at: ago(90), text: 'try 1: checker: problems, a long reason' }, { kind: 'merged', at: ago(30), text: 'try 2 → merged into main' }] }),
     task('T-601', 'A failed one', { status: 'failed', updated_at: ago(20) }),
-    task('T-620', 'Live tab part 1', { status: 'todo', order: 5 }),
-    task('T-621', 'Live tab in VS Code', { status: 'todo', after: ['T-620'], order: 1 }),
+    task('T-620', 'Live tab part 1', { status: 'todo', priority: 5 }),
+    task('T-621', 'Live tab in VS Code', { status: 'todo', after: ['T-620'], priority: 1 }),
   ]
 }
 
@@ -3086,7 +3086,7 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
 test('T-846: the OpenCode Live tab draws an investigation as work → answer, a docs-only check as "–", and a needs-review task at "you"', () => {
   const f0 = viewFile()
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const handed = { runs: [{ started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 300_000 } }] }] }
   const tasks = [
     task('T-801', 'Why is it slow', { kind: 'investigation', runs: [{ started: ago(4) }] }),
@@ -3223,7 +3223,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
 test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the median (warning from twice it), its time and who spent them, no bar, and the key line without the bar', () => {
   const f0 = viewFile()
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const tasks = [
     task('T-800', 'Done at 4M', { status: 'done', merged: 'abc1234', runs: [{ started: ago(300), ended: ago(200), agents: [{ kind: 'worker' as const, started: ago(300), ended: ago(200), tokens: { input: 4_000_000 } }] }], history: [{ kind: 'merged', at: ago(30), text: 'try 1 → merged into main' }] }),
     task('T-801', 'Try 2 running', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }] }, { started: ago(20) }] }),
@@ -3269,7 +3269,7 @@ test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the 
 test('T-709: the Live tab shows a lane for an approved task in review while its tests run (as the Tasks tab counts it in doing)', () => {
   const f0 = viewFile()
   const ago = (s: number) => new Date(NOW - s * 1000).toISOString()
-  const approved = { id: 'T-630', title: 'Approved, in its tests', details: '', files: [], status: 'review', note: '', order: 30, after: [], attempts: 1, history: [], branch: null, created_at: ago(9000), updated_at: ago(60), runs: [{ started: ago(2400), ended: ago(1200) }], live: { checking: { step: 'testing', at: ago(5) } }, } as unknown as SymccTask
+  const approved = { id: 'T-630', title: 'Approved, in its tests', details: '', files: [], status: 'review', note: '', priority: 19, after: [], attempts: 1, history: [], branch: null, created_at: ago(9000), updated_at: ago(60), runs: [{ started: ago(2400), ended: ago(1200) }], live: { checking: { step: 'testing', at: ago(5) } }, } as unknown as SymccTask
   const tasks = [...liveTasks().filter(t => t.status !== 'doing'), approved]
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
@@ -3354,7 +3354,7 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
 // them, for each other and for a failed task; one free, one waiting for the free one.
 const trainTasks = (): SymccTask[] => {
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   return [
     task('T-712', 'Scout ordering fix', { runs: [{ started: ago(2) }] }),
     task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: ago(30), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(3), tokens: { input: 1_400_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(3) }] }], live: { checking: { step: 'checker', at: ago(0) } }, history: [{ kind: 'stage', at: ago(3), text: 'try 2: prep started', try: 2, step: 'prep' }] }),
@@ -3364,7 +3364,7 @@ const trainTasks = (): SymccTask[] => {
     task('T-716', 'Live deps drawn as trains', { status: 'todo', after: ['T-712', 'T-690'] }),
     task('T-717', 'Waits for a todo and a lane', { status: 'todo', after: ['T-690', 'T-713'] }),
     task('T-718', 'Waits for the failed one', { status: 'todo', after: ['T-701'] }),
-    task('T-715', 'Free to start', { status: 'todo', order: 1 }),
+    task('T-715', 'Free to start', { status: 'todo', priority: -1 }),
     task('T-719', 'Waits for the free one', { status: 'todo', after: ['T-715'] }),
   ]
 }
@@ -3459,7 +3459,7 @@ test('T-715: in the TUI, ↓ to a train and Enter (or a click on it) opens that 
 // running ones, at most 3, newest first; one merged 11 minutes ago, failed or dropped tasks get none.
 const finishedTasks = (): SymccTask[] => {
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const merged = (id: string, title: string, min: number) => task(id, title, { status: 'done', runs: [{ started: ago(min + 20), ended: ago(min + 2), agents: [{ kind: 'worker' as const, started: ago(min + 20), ended: ago(min + 2), tokens: { input: 900_000 } }] }], history: [{ kind: 'merged', at: ago(min), text: 'try 1 → merged into main' }] })
   return [
     task('T-760', 'A running one', { runs: [{ started: ago(4) }] }),
@@ -4516,13 +4516,13 @@ test('T-904: the Tasks search finds done tasks (one a minute ago, one 5 days ago
 test('T-903: with no task running, the OpenCode Live tab says why (paused, waiting, all done, a new board) and what to do next', () => {
   const f0 = viewFile()
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const cases: [SymccMode, SymccTask[], string[]][] = [
     ['paused', [task('T-1', 'todo')], ['Paused: nothing starts. /symcc-mode auto starts work again.']],
     ['auto', [task('T-6', 'paused'), task('T-7', 'todo', { after: ['T-6'] }), task('T-5', 'waiting', { ask: { by: 'worker', text: 'Which one?', asked_at: ago(2) } })], ['Nothing running · 3 waiting: T-5 needs you, T-6 paused, T-7 waits for T-6']],
     ['auto', [task('T-891', 'done', { history: [{ kind: 'merged', at: ago(12), text: 'try 1 → merged into main' }] }), task('T-893', 'backlog'), task('T-894', 'backlog')], ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo.", '  ◇ T-893  Task T-893', '  ◇ T-894  Task T-894']],
-    // T-924: the next 3 backlog items (lowest order first, then oldest), then how many more
-    ['auto', [task('T-891', 'done', { history: [{ kind: 'merged', at: ago(3), text: 'try 1 → merged into main' }] }), task('T-895', 'backlog', { order: 1 }), task('T-893', 'backlog', { order: 9 }), task('T-896', 'backlog', { order: 1 }), task('T-894', 'backlog', { order: 2 }), task('T-897', 'backlog', { order: 20 })], ['All done · last merged T-891, 3m ago', "Tell the lead what's next, or move one of 5 backlog items to todo.", '  ◇ T-895  Task T-895', '  ◇ T-896  Task T-896', '  ◇ T-894  Task T-894', '  … 2 more in the backlog']],
+    // T-924: the next 3 backlog items (lowest priority first, then oldest), then how many more
+    ['auto', [task('T-891', 'done', { history: [{ kind: 'merged', at: ago(3), text: 'try 1 → merged into main' }] }), task('T-895', 'backlog', { priority: 1 }), task('T-893', 'backlog', { priority: 9 }), task('T-896', 'backlog', { priority: 1 }), task('T-894', 'backlog', { priority: 2 }), task('T-897', 'backlog', { priority: 19 })], ['All done · last merged T-891, 3m ago', "Tell the lead what's next, or move one of 5 backlog items to todo.", '  ◇ T-895  Task T-895', '  ◇ T-896  Task T-896', '  ◇ T-894  Task T-894', '  … 2 more in the backlog']],
     ['auto', [], ['No tasks yet. Tell the lead what you want built.']],
   ]
   for (const [mode, tasks, want] of cases) {

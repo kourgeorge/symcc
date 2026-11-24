@@ -10,7 +10,7 @@ import { askShape } from './ask-shape'
 export const T0 = Date.UTC(2026, 10, 18, 12, 0, 0)
 const iso = (ms: number) => new Date(ms).toISOString()
 
-const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', order: Number(id.slice(2)), after: [], attempts: 0, history: [], branch: null, created_at: iso(T0 - 3_600_000), updated_at: iso(T0 - 60_000), ...askShape(extra) })
+const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(T0 - 3_600_000), updated_at: iso(T0 - 60_000), ...askShape(extra) })
 
 export const BOARD_TASKS = [
   task('T-401', 'doing', 'Show the plugin version in the board title and the band above the prompt', { role: 'worker', kind: 'docs' }), // T-722: only its kind shows in the row

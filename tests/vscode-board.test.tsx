@@ -313,7 +313,7 @@ for (const [name, driving, tasks, want] of [
 // lead's questions in the warning tone, the closed groups folded behind links, and a friendly empty board with one
 // primary button. No Buttons for rows, folds or tabs: VS Code draws a Button as a filled blue box whose label never wraps.
 const QUESTION = { id: 'Q-3', text: 'Should the board open by itself when a session starts?', options: ['Yes', 'No'], asked_at: new Date(T0 - 5 * 60_000).toISOString() }
-const LONG = { ...BOARD_TASKS.find(t => t.id === 'T-410')!, id: 'T-421', order: 421, title: 'Draw the board list in the VS Code side panel with clear headings, count badges and one button per task, so it is easy to scan' }
+const LONG = { ...BOARD_TASKS.find(t => t.id === 'T-410')!, id: 'T-421', priority: 0, title: 'Draw the board list in the VS Code side panel with clear headings, count badges and one button per task, so it is easy to scan' }
 const MIXED_VIEW = { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, LONG], questions: [QUESTION] } }
 const EMPTY_VIEW = { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, working: [], tasks: [] } }
 
@@ -471,8 +471,8 @@ test('mdText keeps a title plain in markdown', () => {
 
 test('in VS Code a row keeps its kind when its question or reason has the same word, and one option is "1 choice"', async ($, on) => {
   const base = BOARD_TASKS.find(t => t.id === 'T-404')!
-  const DOCS = { ...base, id: 'T-501', order: 501, kind: 'docs', ask: { by: 'worker', text: 'Should the docs page list every setting?', asked_at: '' } }
-  const BUG = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-502', order: 502, kind: 'bug', note: 'the bug is still there', history: hist('try 1: the bug is still there') }
+  const DOCS = { ...base, id: 'T-501', priority: 0, kind: 'docs', ask: { by: 'worker', text: 'Should the docs page list every setting?', asked_at: '' } }
+  const BUG = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-502', priority: 0, kind: 'bug', note: 'the bug is still there', history: hist('try 1: the bug is still there') }
   const ONE = { ...QUESTION, id: 'Q-4', options: ['Yes'] }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, DOCS, BUG], questions: [ONE] } } })
   on('ui.toast', () => ({ value: undefined }))
@@ -490,9 +490,9 @@ test('in VS Code a row keeps its kind when its question or reason has the same w
 test('T-722: in VS Code a row tag is only the kind ("[docs]", "[bug]"), never the role; a plain change with a role shows no tag', async ($, on) => {
   const doing = BOARD_TASKS.find(t => t.id === 'T-402')!
   const todo = BOARD_TASKS.find(t => t.id === 'T-408')!
-  const DOCS = { ...doing, id: 'T-601', order: 601, kind: 'docs', role: 'docs' }
-  const BUG = { ...todo, id: 'T-602', order: 602, kind: 'bug', role: 'tester' }
-  const PLAIN = { ...todo, id: 'T-603', order: 603, role: 'tester' }
+  const DOCS = { ...doing, id: 'T-601', priority: 0, kind: 'docs', role: 'docs' }
+  const BUG = { ...todo, id: 'T-602', priority: 0, kind: 'bug', role: 'tester' }
+  const PLAIN = { ...todo, id: 'T-603', priority: 0, role: 'tester' }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, DOCS, BUG, PLAIN] } } })
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
@@ -633,10 +633,10 @@ test('in VS Code a doing row shows only the total work time of all tries, no Σ,
 
 test('T-590: in VS Code each open task and question is one line: id, state, then the title; a long title is cut with "…" first', async ($, on) => {
   const long = 'Let the lead read every archived task and its whole history when the owner asks about old work from months ago'
-  const after = { ...BOARD_TASKS.find(t => t.id === 'T-407')!, id: 'T-578', order: 578, kind: 'feature', title: long, after: ['T-406'] }
+  const after = { ...BOARD_TASKS.find(t => t.id === 'T-407')!, id: 'T-578', priority: 0, kind: 'feature', title: long, after: ['T-406'] }
   const doing = { ...BOARD_TASKS.find(t => t.id === 'T-401')!, kind: 'investigation', role: 'researcher', attempts: 2 }
   const reason = 'the tests still fail because the merge line runs the old copy of the plugin and never sees the new code that the worker wrote'
-  const failed = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-579', order: 579, kind: 'bug', title: long, note: reason, history: hist(`try 1: ${reason}`) }
+  const failed = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-579', priority: 0, kind: 'bug', title: long, note: reason, history: hist(`try 1: ${reason}`) }
   const tasks = [...BOARD_TASKS.map(t => (t.id === 'T-401' ? doing : t)), after, failed]
   const ask = { ...QUESTION, text: 'Should the board open by itself when a session starts, or only when the owner asks for it?' }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks, questions: [ask] } } })
@@ -717,8 +717,8 @@ test('T-702: vsFit is the shared fitRow with one more lead column for " · ": a 
 
 test('T-702: in VS Code a row waiting on another task says "waits for T-…" and a long-titled row keeps its whole end, as fitRow fits it', async ($, on) => {
   const long = 'Board list: keep the row\'s end visible by cutting the title instead, so the owner sees what the task waits for'
-  const waits = { ...BOARD_TASKS.find(t => t.id === 'T-407')!, id: 'T-702', order: 702, title: long, after: ['T-406'] }
-  const tagged = { ...BOARD_TASKS.find(t => t.id === 'T-406')!, id: 'T-703', order: 703, kind: 'feature', title: long }
+  const waits = { ...BOARD_TASKS.find(t => t.id === 'T-407')!, id: 'T-702', priority: 0, title: long, after: ['T-406'] }
+  const tagged = { ...BOARD_TASKS.find(t => t.id === 'T-406')!, id: 'T-703', priority: 0, kind: 'feature', title: long }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, waits, tagged] } } })
   on('ui.toast', () => ({ value: undefined }))
   for (const bodyColumns of [30, 40, 60]) {
@@ -780,7 +780,7 @@ test('T-644: paneWidth: VS Code takes the pane width, the surface width only whe
 test('T-644: in VS Code a wide panel shows a long title whole on one line with its state; only a narrow one cuts it with "…"', async ($, on) => {
   const long = 'Engine/client split: add the engine-only entry point and move the host-free view helpers next to it'
   const doing = { ...BOARD_TASKS.find(t => t.id === 'T-401')!, title: long }
-  const todo = { ...BOARD_TASKS.find(t => t.id === 'T-406')!, id: 'T-635', order: 635, kind: 'refactor', title: long }
+  const todo = { ...BOARD_TASKS.find(t => t.id === 'T-406')!, id: 'T-635', priority: 0, kind: 'refactor', title: long }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS.map(t => (t.id === 'T-401' ? doing : t)), todo] } } })
   on('ui.toast', () => ({ value: undefined }))
   // wide: as the panel tells it (bodyColumns; 80 is about what VS Code told for the owner's ~950px panel, where main cut
@@ -893,7 +893,7 @@ test('T-698: in VS Code a thin rule sits between the header and the tabs on the 
 test('T-698: in VS Code a long title row fills more of the line (2.1 times the columns), stays one line and keeps its end part', async ($, on) => {
   expect(VS_ROW_SCALE).toBe(2.1)
   const long = 'Dashboard: non-UTF-8 or non-object baseline.json/final.json/events.jsonl must not crash the whole dashboard page when it loads'
-  const todo = { ...BOARD_TASKS.find(t => t.id === 'T-406')!, id: 'T-635', order: 635, kind: 'bug', title: long }
+  const todo = { ...BOARD_TASKS.find(t => t.id === 'T-406')!, id: 'T-635', priority: 0, kind: 'bug', title: long }
   const questions = [{ id: 'Q-9', text: long, asked_at: new Date(T0).toISOString() }]
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, questions, tasks: [...BOARD_TASKS, todo] } } })
   on('ui.toast', () => ({ value: undefined }))

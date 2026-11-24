@@ -19,7 +19,7 @@ function done(id: string, title: string, made: number, tries: SymccRun[], over: 
   // T-806: the facts of each line (step, reason, how ...) as the writers set them, here read out of the text by the doctor's old parsers
   const withFacts = (t: SymccTask): SymccTask => ({ ...t, history: t.history.map(e => ({ ...e, ...oldHistoryFacts(e) })) })
   return withFacts({
-    id, title, details: '', files: [], status: 'done', note: '', order: 0, after: [], attempts: tries.length, branch: null,
+    id, title, details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: tries.length, branch: null,
     created_at: iso(made), updated_at: at(9), runs: tries,
     history: [
       { at: iso(made), kind: 'added', text: 'added' },
@@ -50,9 +50,9 @@ export function viewInput(over: Partial<StatsInput> = {}): StatsInput {
       history: [{ at: iso(210), kind: 'added', text: 'added' }, { at: iso(190), kind: 'checker-problems', text: 'try 1: done → the checker found problems: a bar is too wide' }, { at: iso(189), kind: 'checker-problems', text: 'try 1: done → the checker found problems: a bar is too wide' }, { at: iso(188), kind: 'checker-problems', text: 'try 1: done → the checker found problems: a bar is too wide' }, { at: iso(165), kind: 'stage', text: 'try 2: tests started' }, { at: iso(160), kind: 'merged', text: 'try 2: done → merged into main (abc1234)' }],
     }),
     done('T-4', 'Footer hints', 120, [run(110, 100, 1500)], { origin: { by: 'scout', scout: 'bugs' } as SymccTask['origin'] }),
-    { id: 'T-5', title: 'Still going', details: '', files: [], status: 'doing', note: '', order: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(60), updated_at: iso(5), runs: [{ started: iso(50), agents: [{ kind: 'worker' as const, started: iso(50), tokens: { input: 800 } }] }], origin: { by: 'worker', task: 'T-1' } as SymccTask['origin'] },
-    { id: 'T-6', title: 'Dropped idea', details: '', files: [], status: 'dropped', note: '', order: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(90), updated_at: iso(80), origin: { by: 'scout', scout: 'ideas' } as SymccTask['origin'] },
-    { id: 'T-7', title: 'Why is the lead slow?', details: '', files: [], status: 'done', kind: 'investigation', note: '', order: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(150), updated_at: iso(100), runs: [run(140, 130, 700, { ended_by: 'finished', ended_note: 'answered' })], origin: { by: 'owner' } as SymccTask['origin'] },
+    { id: 'T-5', title: 'Still going', details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(60), updated_at: iso(5), runs: [{ started: iso(50), agents: [{ kind: 'worker' as const, started: iso(50), tokens: { input: 800 } }] }], origin: { by: 'worker', task: 'T-1' } as SymccTask['origin'] },
+    { id: 'T-6', title: 'Dropped idea', details: '', files: [], status: 'dropped', note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(90), updated_at: iso(80), origin: { by: 'scout', scout: 'ideas' } as SymccTask['origin'] },
+    { id: 'T-7', title: 'Why is the lead slow?', details: '', files: [], status: 'done', kind: 'investigation', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(150), updated_at: iso(100), runs: [run(140, 130, 700, { ended_by: 'finished', ended_note: 'answered' })], origin: { by: 'owner' } as SymccTask['origin'] },
   ]
   let scouts = addScoutRun(null, 'bugs', { endMs: VIEW_NOW - 3_600_000, ms: 120_000, tokens: { input: 5000, output: 400 } })
   scouts = addScoutRun(scouts, 'ideas', { endMs: VIEW_NOW - 7_200_000, ms: 60_000, tokens: { input: 1200 } })

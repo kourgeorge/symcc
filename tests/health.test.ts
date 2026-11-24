@@ -6,7 +6,7 @@ const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
 
 function task(id: string, over: Partial<BoardTask> = {}): BoardTask {
-  return { id, title: `task ${id}`, details: '', files: [`src/${id}.ts`], status: 'todo', note: '', order: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(10), updated_at: iso(10), ...over }
+  return { id, title: `task ${id}`, details: '', files: [`src/${id}.ts`], status: 'todo', note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(10), updated_at: iso(10), ...over }
 }
 const board = (tasks: BoardTask[], extra: Partial<Board> = {}): Board => ({ ...emptyBoard(), tasks, ...extra })
 const reasons = (b: Board) => boardHealth(b, NOW).map(f => `${f.reason}:${f.tasks.join(',')}`)
