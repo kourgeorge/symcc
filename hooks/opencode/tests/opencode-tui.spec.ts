@@ -3256,22 +3256,22 @@ test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the 
   // T-867: no bar
   for (const x of tasks.slice(1)) expect([x.id, /[▕▏█░]/.test(sub(x.id))]).toEqual([x.id, false])
   // (a) try 2 running: try 1's 4M, more coming, 1× the median 4M
-  expect(sub('T-801')).toContain('⌀ 4M + … (1× median)')
+  expect(sub('T-801')).toContain('⌀ 4M + … (1×median)')
   // (b) handed back with 1M: the sum, its active time and the worker's share (the checker's 0 left out)
   // T-931: the clock first, " · " between parts, the per-agent tokens in < > without ⌀
-  expect(sub('T-802')).toMatch(/^ {2,}change try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3× median\) · <worker 5M>$/)
+  expect(sub('T-802')).toMatch(/^ {2,}try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3×median\) · worker 5M +\w+$/)
   // (c) try 1 running: no < > part (no breakdown yet)
-  expect(sub('T-803')).toMatch(/^ {2,}change try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back$/)
+  expect(sub('T-803')).toMatch(/^ {2,}try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back +\w+$/)
   // (d) at the median and at half
-  expect(sub('T-804')).toContain('⌀ 4M (1× median)')
-  expect(sub('T-805')).toContain('⌀ 2M (0.5× median)')
+  expect(sub('T-804')).toContain('⌀ 4M (1×median)')
+  expect(sub('T-805')).toContain('⌀ 2M (0.5×median)')
   expect([warn('T-802'), warn('T-804')]).toEqual([false, false])
   // (e) past twice the median: the warning color, no ⚠
-  expect(sub('T-806')).toContain('⌀ 9M (2.3× median)')
+  expect(sub('T-806')).toContain('⌀ 9M (2.3×median)')
   expect(sub('T-806')).not.toContain('⚠')
   expect(warn('T-806')).toBe(true)
   // (f) T-931: merged with worker and checker: both in one < >, no ⌀ inside
-  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ 4M \(1× median\) · <worker 3M · checker 1M>$/)
+  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ 4M \(1×median\) · worker 3M · checker 1M +\w+$/)
   expect(texts.some(t => t.includes('usual per task'))).toBe(false)
   // narrow: the worker/checker split and ⏱ go first, ⌀ and the try stay
   const narrow = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 44).lines.map(lineText)

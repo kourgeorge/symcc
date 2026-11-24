@@ -116,8 +116,8 @@
     const one = ' ' + (l.done ? sp('✓ ', 'dim') + sp(pad(l.id, ID_W), 'run') + sp(title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track + sp('  ' + right.padStart(6), 'dim')
     // T-867: no bar: the whole task's tokens (every try; the running try's are known only at its hand-back), how many
     // times the median per task (the warning tone from twice it), its time so far, who spent them, the send-backs.
-    // T-931: the clock first, then the tokens, then the worker/checker split in < > (no ⌀ inside). When the line is too
-    // wide, parts go: the < > split, then "(× median)", then the task type, then ⌀, then ⏱
+    // T-931: the clock first, then the tokens, then the worker/checker split (no ⌀ inside), the task type at the right end. When the line is too
+    // wide, parts go: the < > split, then "(×median)", then ⌀, then ⏱
     const total = (l.prior || 0) + (l.tokens || 0)
     // rounded as shown, and the tone decided on the rounded number (so "(2× median)" is always the warning tone)
     const times = Math.round((total / USUAL) * 10) / 10
@@ -127,16 +127,21 @@
     const tokens = withMedian =>
       !total
         ? [['⌀ at hand-back', 'dim']]
-        : [['⌀ ' + tok(total), tone('text')], ...(l.tokens === null ? [[' + …', 'dim']] : []), ...(withMedian ? [[` (${timesText}× median)`, tone(times >= 2 ? 'warning' : 'dim')]] : [])]
+        : [['⌀ ' + tok(total), tone('text')], ...(l.tokens === null ? [[' + …', 'dim']] : []), ...(withMedian ? [[` (${timesText}×median)`, tone(times >= 2 ? 'warning' : 'dim')]] : [])]
     const agents = [l.worker && `worker ${tok(l.worker)}`, l.checker && `checker ${tok(l.checker)}`].filter(Boolean)
-    const split = agents.length ? [[[`<${agents.join(' · ')}>`, 'dim']]] : []
+    const split = agents.length ? [[[agents.join(' · '), 'dim']]] : []
     // (T-982) the send-backs "⌕ × 1", spaces around ×
-    const line = (level, withKind) => {
+    const line = level => {
       const parts = [...(level >= 1 ? [[[`⏱ ${dur(mins)}`, 'dim']]] : []), ...(level >= 2 ? [tokens(level >= 3)] : []), ...(level >= 4 ? split : []), ...(l.back ? [[[`⌕ × ${l.back}`, 'dim']]] : [])]
-      return [[`  ${withKind ? l.kind + ' ' : ''}try ${l.tryNo}/${l.tries}`, 'dim'], ...parts.flatMap(x => [[' · ', 'dim'], ...x])]
+      return [[`  try ${l.tryNo}/${l.tries}`, 'dim'], ...parts.flatMap(x => [[' · ', 'dim'], ...x])]
     }
-    const tries = [line(4, true), line(3, true), line(2, true), line(2, false), line(1, false), line(0, false)]
     const width = xs => 1 + xs.reduce((n, [t]) => n + t.length, 0)
+    // (T-1010) the task type dim at the right edge of the row; dropped (never wrapped) when it does not fit
+    const withKind = xs => {
+      const gap = PANEL_W - width(xs) - l.kind.length
+      return gap >= 2 ? [...xs, [' '.repeat(gap), 'text'], [l.kind, 'dim']] : xs
+    }
+    const tries = [4, 3, 2, 1, 0].map(n => withKind(line(n)))
     const pick = tries.find(xs => width(xs) <= PANEL_W) || tries[tries.length - 1]
     const two = ' ' + pick.map(([t, k]) => sp(t, k)).join('')
     return [one, two]

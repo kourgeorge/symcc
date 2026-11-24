@@ -88,13 +88,13 @@ for (const w of ['16:28', '16:50', 'try 1: 22m · 4.0M tokens in all'])
 if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts view has no gaps-bot')
 // (T-757, T-867) T-740 on try 2: its lane shows the whole task's tokens (try 1's 4.0M, more coming) against the median
 // tokens per merged task (268.6M / 56 = 4.8M, so 0.8×) and its time, no bar; the key line has no bar text
-// (T-931) the clock first: "bug try 2/3 · ⏱ 25m · ⌀ 4.0M + … (0.8× median)"
-if (!/bug try 2\/3 · ⏱ \d+m · ⌀ 4\.0M \+ … \(0\.8× median\)/.test(board)) bad('still frame: T-740\'s lane does not show "bug try 2/3 · ⏱ … · ⌀ 4.0M + … (0.8× median)"')
+// (T-931, T-1010) the clock first, the kind at the right end: "try 2/3 · ⏱ 25m · ⌀ 4.0M + … (0.8×median)   bug"
+if (!/try 2\/3 · ⏱ \d+m · ⌀ 4\.0M \+ … \(0\.8×median\).* bug\b/.test(board) || /bug try 2\/3/.test(board)) bad('still frame: T-740\'s lane does not show "try 2/3 · ⏱ … · ⌀ 4.0M + … (0.8×median)" with "bug" at the right end')
 if (/▕[█░]+▏ ⌀/.test(board) || /▕[█░]+▏ ⌀/.test(page)) bad('still frame: a lane still has a token bar')
 if (board.includes('usual per task')) bad('still frame: the key line still explains the bar')
 // (T-757, T-867) the hand-drawn Live tab card tells the same story: whole-task tokens × the median, time, who spent them
 if (/tokens of each try|T-740[\s\S]{0,80}tokens at hand-back/.test(page)) bad('home page: the Live tab card still shows tokens per try ("tokens at hand-back" on T-740\'s try 2)')
-if (!page.includes('bug try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8× median) · &lt;worker 2.6M · checker 1.4M&gt; · ⌕ × 1')) bad('home page: the Live tab card\'s T-740 lane does not show "⏱ 22m · ⌀ 4.0M + … (0.8× median) · <worker … · checker …>"')
+if (!page.includes('try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8×median) · worker 2.6M · checker 1.4M · ⌕ × 1  bug')) bad('home page: the Live tab card\'s T-740 lane does not show "⏱ 22m · ⌀ 4.0M + … (0.8×median) · worker … · checker …"')
 if (page.includes('usual per task')) bad('home page: the Live tab card still explains the bar')
 // (T-767) the lines under a ▍heading start with 1 space; a running lane with "▶ ", its id in the accent color, its title normal text
 for (const [name, t] of [['board', board], ['Live tab', live]]) {

@@ -13,7 +13,7 @@
 // Each lane is:
 //   ▶ T-684 /symcc-doctor…               #2      (the id and cut title a link: a click, or Enter on it, opens the task)
 //   ●━━━━━●━━━━━◉─────○─────○                    (real lines and dots in an Svg, the station names under the dots)
-//   change try 2/3 · ⏱ 12m · ⌀ 1.1M (0.3× median) · <worker 1.1M> · ⌕ × 1   (T-867: plain numbers, no bar)
+//   try 2/3 · ⏱ 12m · ⌀ 1.1M (0.3×median) · worker 1.1M · ⌕ × 1   change   (T-867: plain numbers, no bar)
 // The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code (the person's system)
 // asks for reduced motion (`prefers-reduced-motion`). Each drawing's `alt` is the terminal's text for it.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows): each one indented by its level,
