@@ -6,7 +6,7 @@ import { addTask, emptyBoard, patchTask, blockedEditText, bashOutsideText } from
 import { runBy } from './agent-fixture'
 import { S, workers, toolName } from '../hooks/app/state'
 import { ASK_TOOL } from '../hooks/core/ask'
-import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText, patchNoFilesText } from '../hooks/copilot/guard'
+import { copilotTouches, patchFiles, preToolUse, knownTool, unknownToolText, splitShellText, patchNoFilesText, leaveFolderText, folderMoves } from '../hooks/copilot/guard'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -90,11 +90,46 @@ test('bash: a write outside the folder is denied, one inside passes',async () =>
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'echo x > /repo/README.md' } })).toEqual({ permissionDecision: 'deny', permissionDecisionReason: bashOutsideText('README.md', WT) })
   expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: `echo x > ${WT}/src/a.ts` } })).toBe(undefined)
   expect((await preToolUse(host, WT, 'ag1', { toolName: 'powershell', toolArgs: { command: 'echo x > /repo/README.md' } }))?.permissionDecision).toBe('deny')
-  // Copilot's bash session lives on between calls, so moving it out of the folder is refused in the first place
+  // Copilot's bash session lives on between calls, so moving it out of the folder is refused (see the cd test below)
   expect((await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'cd /repo' } }))?.permissionDecision).toBe('deny')
   expect((await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'cd ../../..' } }))?.permissionDecision).toBe('deny')
   // an argument list (local_shell's) is quoted into one line, so the same words are judged
   expect(copilotTouches(WT, 'local_shell', { command: ['sh', '-c', 'echo x > /repo/README.md'] })).toEqual([{ command: "sh -c 'echo x > /repo/README.md'" }])
+  workers.clear()
+})
+
+test("the bash session keeps its folder between calls, so an agent may not cd out of its own folder", async () => {
+  const host = world()
+  // the disk: the folder with src/ and src/x/ in it, a link "up" to "/", and a file
+  const disk: Record<string, { kind: 'dir' | 'file'; realPath: string }> = {
+    [WT]: { kind: 'dir', realPath: WT }, [`${WT}/src`]: { kind: 'dir', realPath: `${WT}/src` }, [`${WT}/src/x`]: { kind: 'dir', realPath: `${WT}/src/x` },
+    [`${WT}/up`]: { kind: 'dir', realPath: '/' }, [`${WT}/f.txt`]: { kind: 'file', realPath: `${WT}/f.txt` },
+  }
+  const fileStat = host.fs.stat
+  host.fs.stat = async (p, o) => {
+    const d = disk[p]
+    return d ? { kind: d.kind, size: 0, mtimeMs: 0, isLink: d.realPath !== p, ...(o?.resolve ? { realPath: d.realPath } : {}) } : fileStat(p, o)
+  }
+  const refused = { permissionDecision: 'deny', permissionDecisionReason: leaveFolderText }
+  // a link inside the folder that leads out, a folder not there (yet), a file, and a cd after a command that could make a link
+  for (const command of ['cd up', 'cd up/', 'cd missing', 'cd f.txt', 'ln -s / up2 && cd up2', '(ln -s / up2) && cd up2', 'mkdir y; cd y']) {
+    expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, refused])
+  }
+  // the checker's probe: `cd /`, then `echo x > repo/README.md` in the next call, wrote the owner's README
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command: 'cd /' } })).toEqual(refused)
+  for (const command of ['cd //', 'cd /tmp', 'cd ~', 'cd ~root', 'cd', 'cd -', 'cd $HOME', 'cd "$OLDPWD"', 'cd ..', 'cd ../T-2', 'cd src/../..', 'pushd /tmp', 'popd', 'builtin cd /', 'command cd /tmp', 'X=1 cd /', "'cd' /", 'chdir /', 'cd -P /', 'ls && cd /', 'if true; then cd /; fi', 'f() { cd /; }; f', 'eval "cd /"', 'eval cd $X', 'trap "cd /" DEBUG', "alias ls='cd /'", 'source x.sh', '. ./x.sh', '$C /', 'export CDPATH=/', 'shopt -s cdable_vars', 'PROMPT_COMMAND="cd /"', 'cd src; cd ..']) {
+    expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, refused])
+  }
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'powershell', toolArgs: { command: 'Set-Location C:\\' } })).toEqual(refused)
+  expect(await preToolUse(host, WT, 'ag1', { toolName: 'local_shell', toolArgs: { command: ['cd', '/'] } })).toEqual(refused)
+  // a cd inside the folder, or inside a subshell, passes; so do words that only look like cd
+  for (const command of ['cd src', 'cd ./src && ls', `cd ${WT}/src`, `cd ${WT}`, 'cd src/x/..', '( cd / && ls )', 'echo $(cd /tmp && pwd)', 'grep -r cd .', 'echo cd /', 'cat <<EOF\ncd /\nEOF']) {
+    expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, undefined])
+  }
+  expect(folderMoves(WT, "ls")).toEqual([])
+  expect(folderMoves(WT, "cd src && cd x")).toEqual([`${WT}/src`, `${WT}/x`])
+  // the lead is unchanged
+  expect(await preToolUse(host, ROOT, undefined, { toolName: 'bash', toolArgs: { command: 'cd /' } })).toBe(undefined)
   workers.clear()
 })
 

@@ -19,6 +19,7 @@ import { toolCall, toolCheck, toolCheckFailed, isSymccTool } from '../app/symcc'
 import type { AgentKindOf } from '../app/ask'
 import { useName } from '../app/state'
 import { normalPath, isAbsolute } from '../app/store'
+import { rawWords, shellPieces, type RawWord } from '../core/shell-words'
 
 /** Copilot's onPreToolUse input, as far as the guard reads it (anything else in it is ignored). */
 export type CopilotPreToolUse = { toolName?: unknown; toolArgs?: unknown }
@@ -117,6 +118,114 @@ function splitShell(tool: string, args: unknown): boolean {
   return (f.shellId !== undefined && f.shellId !== null) || (f.async !== undefined && f.async !== false)
 }
 
+/**
+ * Copilot's bash session keeps its folder between calls, but each call is judged as if it starts in the agent's own
+ * folder. So symcc's agents (not the lead) may not move the shell anywhere else: see folderMoves and stayInside.
+ */
+export const leaveFolderText = 'Refused: symcc workers stay in their own folder; use full paths instead of cd.'
+
+/** Commands that change the shell's folder (bash and PowerShell names, compared in lower case). */
+const FOLDER_CMDS = new Set(['cd', 'pushd', 'popd', 'chdir', 'set-location', 'sl', 'push-location', 'pop-location'])
+/** Words that may come before a command's name and still run it in this shell. */
+const LEAD_WORDS = new Set(['builtin', 'command', 'exec', 'time', 'nohup', 'noglob', 'if', 'then', 'else', 'elif', 'do', 'while', 'until', '!', '{'])
+/** Settings that make a later, harmless-looking command move the shell (a cd searched in CDPATH, a cd to a variable's value, a command run before each prompt). */
+const FOLDER_SETTINGS = /CDPATH|cdable_vars|PROMPT_COMMAND|autocd/i
+
+/**
+ * Where a cd's target word `w` (quotes already dropped) goes, from folder `dir`; undefined when it can't be told (an
+ * option, `-`, `~`, a variable, odd characters) or when it climbs above `dir` on the way (`../x`): the shell may be
+ * deeper in the folder than `dir`, so only a path that never climbs above where it starts surely stays inside.
+ */
+function cdPlace(dir: string, w: RawWord): string | undefined {
+  if (w.expands || w.sign || !/^[\w./+@%,-]+$/.test(w.w) || /^[-+]/.test(w.w)) return undefined
+  if (w.w.startsWith('/')) return normalPath(w.w)
+  let depth = 0
+  for (const part of w.w.split('/')) {
+    if (part === '..') depth--
+    else if (part && part !== '.') depth++
+    if (depth < 0) return undefined
+  }
+  return normalPath(`${dir}/${w.w}`)
+}
+
+/**
+ * The folders shell command `command` (run from folder `dir`) may move the shell to, each inside `dir` as written (the
+ * caller then looks on disk where each really leads, see stayInside), or undefined when it may leave `dir` in a way
+ * that can't be told: a cd, pushd, popd, chdir or Set-Location (also after `builtin`, `command`, `x=1` and such) whose
+ * target is outside, can't be told, or missing (`cd` alone goes home); a cd after any other command of the line (that
+ * command could first turn its target into a link out, `ln -s / x && cd x`); text run again in this shell (`eval`,
+ * `trap`, `alias`) that holds a cd; `source` or `.` (the file read could cd); a command name from a variable; or a
+ * setting that makes a later cd go elsewhere (FOLDER_SETTINGS). A cd inside a subshell (`( cd x && ... )`, `$(cd x)`)
+ * changes nothing after it.
+ */
+export function folderMoves(dir: string, command: string, depth = 0): string[] | undefined {
+  if (depth > 4 || FOLDER_SETTINGS.test(command)) return undefined
+  const top = normalPath(dir)
+  const inside = (p: string) => p === top || p.startsWith(`${top}/`)
+  const subs: boolean[] = []
+  const out: string[] = []
+  // `ran`: a command other than a cd at the line's top came before
+  let ran = false
+  for (const piece of shellPieces(command)) {
+    if ('op' in piece) {
+      if (piece.op === '(') subs.push(piece.sub)
+      else if (piece.op === ')') subs.pop()
+      continue
+    }
+    const words = rawWords(piece.text)
+    if (!words.length) continue
+    if (piece.doc || subs.includes(true)) {
+      ran = true
+      continue
+    }
+    let i = 0
+    while (i < words.length && (/^[A-Za-z_]\w*=/.test(words[i]!.raw) || LEAD_WORDS.has(words[i]!.w) || (i > 0 && LEAD_WORDS.has(words[i - 1]!.w) && words[i]!.w.startsWith('-')))) i++
+    const name = words[i]
+    if (!name) {
+      ran = true
+      continue
+    }
+    if (name.expands) return undefined
+    const cmd = name.w.toLowerCase()
+    const rest = words.slice(i + 1)
+    if (FOLDER_CMDS.has(cmd)) {
+      if (ran || rest.length !== 1) return undefined
+      const to = cdPlace(top, rest[0]!)
+      if (to === undefined || !inside(to)) return undefined
+      out.push(to)
+      continue
+    }
+    ran = true
+    if (cmd === 'source' || cmd === '.') return undefined
+    if (cmd === 'eval' || cmd === 'trap' || cmd === 'alias') {
+      if (rest.some(w => w.expands)) return undefined
+      // alias x='cd /' gives the word "x=cd /": its text after "=" is what runs later
+      const text = rest.map(w => (cmd === 'alias' ? w.w.replace(/^[^=]*=/, '') : w.w)).join(cmd === 'eval' ? ' ' : '\n')
+      if (folderMoves(dir, text, depth + 1)?.length !== 0) return undefined
+    }
+  }
+  return out
+}
+
+/**
+ * Whether every folder in `moves` (folderMoves) is a folder on disk that really lies inside `dir`, links followed, so
+ * `cd up` with `up` a link to "/" is caught. A folder that can't be looked up (missing, or the host can't tell) fails.
+ */
+async function stayInside(host: Host, dir: string, moves: string[]): Promise<boolean> {
+  if (!moves.length) return true
+  const realOf = async (p: string) => {
+    const st = await Promise.resolve().then(() => host.fs.stat(p, { resolve: true })).catch(() => undefined)
+    return st ? { kind: st.kind, real: normalPath(st.realPath ?? p) } : undefined
+  }
+  const top = normalPath(dir)
+  const tops = [top, (await realOf(top))?.real ?? top]
+  for (const to of moves) {
+    const st = await realOf(to)
+    if (!st || st.kind !== 'dir' || !tops.some(t => st.real === t || st.real.startsWith(`${t}/`))) return false
+  }
+  return true
+}
+
 /** The refusal of an agent's apply_patch call whose files can't be found, so it can't be checked. */
 export const patchNoFilesText = "Refused: symcc couldn't find which files this patch changes; give each file a '*** Add File: ', '*** Update File: ' or '*** Delete File: ' line."
 
@@ -138,6 +247,10 @@ export async function preToolUse(host: Host, dir: string, agentId: string | unde
     if (call && 'deny' in call) return deny(call.deny)
     if (agentId && !knownTool(tool)) return deny(unknownToolText(tool))
     if (agentId && splitShell(tool, input?.toolArgs)) return deny(splitShellText)
+    if (agentId && SHELL_TOOLS.has(tool)) {
+      const moves = folderMoves(dir, commandOf(argsObject(input?.toolArgs).command))
+      if (!moves || !(await stayInside(host, dir, moves))) return deny(leaveFolderText)
+    }
     const touches = copilotTouches(dir, tool, input?.toolArgs)
     if (agentId && tool === 'apply_patch' && !touches.length) return deny(patchNoFilesText)
     for (const touch of touches) {
