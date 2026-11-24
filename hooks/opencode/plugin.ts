@@ -21,6 +21,7 @@
 // loaded again, still knows it; board updates sent before it was known go to it then.
 import { manifestVersion, type Host, type HostAgentKind } from '../host'
 import { sessionStarting, sessionStart, guardStart, sessionEnd, agentFinished, leadGuideText } from '../app/symcc'
+import { meanwhileForPrompt } from '../app/tell'
 import { useName, scoutRuns } from '../app/state'
 import { projectRoot, isWorkerFolder } from '../app/store'
 import { agentOnBoard } from '../app/workers'
@@ -175,12 +176,23 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
       // opened in a worker's folder) is never this project's lead
       let placed!: (v: { main: string; realMain: string; inMain: boolean }) => void
       const place = new Promise<{ main: string; realMain: string; inMain: boolean }>(r => (placed = r))
+      // T-968: the owner's board actions waiting as "Meanwhile" lines go beside the prompt the lead takes, as a quiet
+      // message in its chat (kept there once, not in the system prompt); a board update finds none left to repeat
+      const withMeanwhile = async (sessionID: string, delivery?: string) => {
+        const { text, back } = meanwhileForPrompt()
+        if (!text) return
+        // not in the chat: the lines wait (at the front, in order) for the next board update, and the failure is shown
+        await ctx.session.synthetic({ sessionID, text, description: 'board meanwhile', ...(delivery === 'steer' || delivery === 'queue' ? { delivery } : {}), resume: false }).catch((err: unknown) => {
+          back()
+          host.ui.log(`the owner's board actions could not go with their prompt (${err instanceof Error ? err.message : String(err)}); the next board update carries them`)
+        })
+      }
       regs.push(
         await ctx.session.hook('prompt', async e => {
           const id = e.sessionID
           if (!id || agents?.has(id)) return
           // the lead may already be known from another main copy's hook (copies share it): still send what this copy kept
-          if (id === lead()) return void (await leadApi?.known())
+          if (id === lead()) return (await withMeanwhile(id, e.delivery), void (await leadApi?.known()))
           // a child session (one of symcc's agents from an earlier copy, or OpenCode's own subagent) is never the lead
           const info = await ctx.session.get({ sessionID: id }).catch(() => undefined)
           if (!info || info.parentID || info.metadata?.symcc) return
@@ -190,6 +202,7 @@ export function symccServer(o: ServerOptions = {}): OcServerPlugin {
             ownLead = id
             if (leadKey) leads().set(leadKey, id)
           }
+          await withMeanwhile(id, e.delivery)
           await leadApi?.known()
         }),
       )

@@ -28,6 +28,8 @@ import { fileToolHits, scheduleScouts, scoutFinished, scoutTurnEnded } from './s
 import { S, toolName, heard, stopped, workers, scoutRuns, checkerRuns, isOwnAgent } from './state'
 import { load, isOn, now, findRoot, startingText } from './store'
 import { takeBoardUpdate } from './tell'
+// T-968: the host attaches this to the owner's prompt (see meanwhileForPrompt)
+export { meanwhileForPrompt } from './tell'
 import { TOOLS, leadGuide, runTool, type In } from './tools'
 import { debriefFinished } from './debrief'
 import { pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, type TurnEnd } from './workers'

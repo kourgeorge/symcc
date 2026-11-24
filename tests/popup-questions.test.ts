@@ -5,7 +5,7 @@ import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 import { pause } from './fakes'
 import { type Board, readBoard, openQuestions } from '../hooks/board'
-import { S } from '../hooks/app/state'
+import { S, leadQueue, meanwhile } from '../hooks/app/state'
 import { runTool, allowAskedFiles } from '../hooks/app/tools'
 import { answerOnBoard, boardAnswered, popupCall } from '../hooks/app/questions'
 import { change } from '../hooks/app/store'
@@ -177,7 +177,7 @@ test("a question about a task waiting for the owner is tied to that task's board
   expect(t.history.map(h => h.text).join('\n')).toContain('Red')
 })
 
-test("a file request answered Allow in the pop-up allows the files", async () => {
+test("a file request answered Allow in the pop-up allows the files; the lead hears it only in the pop-up's result, with no board update (T-968)", async () => {
   const w = world()
   await waitingTask(w.host as never, { asked_files: ['b.ts'], note: 'asks to change b.ts' })
   const d = dialog()
@@ -186,6 +186,8 @@ test("a file request answered Allow in the pop-up allows the files", async () =>
   d.answer({ 'T-1 wants to change b.ts. Allow?': 'Allow' })
   expect(((await r) as { context: string[] }).context[0]).toContain('files allowed (b.ts)')
   expect(w.board().tasks[0]!.files).toContain('b.ts')
+  expect(leadQueue).toEqual([])
+  expect(meanwhile).toEqual([])
 })
 
 test("a worker's call and a question with no options are passed on untouched", async () => {
@@ -509,10 +511,35 @@ test("a tied pop-up for a file request puts the lead's wording on the task: it s
   // the Allow button's action still works, and the lead's text goes with the question
   d.answer({})
   void r
-  await allowAskedFiles(w.host, 'T-1')
+  await allowAskedFiles(w.host, 'T-1', true)
   const after = w.board().tasks[0]!
   expect(after.files).toContain('b.ts')
   expect(after.ask).toBeUndefined()
+})
+
+test('T-968: Allow from the board with a tied pop-up open gives the answer to the pop-up and sends no separate board update', async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'T-1 needs to change files outside its list: b.ts. Allow them?', asked_files: ['b.ts'] })
+  const d = dialog()
+  const r = popupCall(w.host, undefined, { questions: [ask('May T-1 touch b.ts?', ['Allow', "Don't allow"], { header: 'T-1' })] }, d.open, w.notice)
+  await pause(0)
+  // what the board's Allow button (and OpenCode's panel) does
+  await allowAskedFiles(w.host, 'T-1', true)
+  const out = (await r) as { context: string[] }
+  expect(out.context[0]).toContain('The owner answered on the symcc board (T-1)')
+  expect(w.board().tasks[0]!.files).toContain('b.ts')
+  await pause(0)
+  await pause(0)
+  expect(w.toLead.filter(t => t.includes('allowed b.ts'))).toEqual([])
+})
+
+test('T-968: Allow from the board with no pop-up open sends the lead one board update', async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'T-1 needs to change files outside its list: b.ts. Allow them?', asked_files: ['b.ts'] })
+  await allowAskedFiles(w.host, 'T-1', true)
+  await pause(0)
+  await pause(0)
+  expect(w.toLead.filter(t => t.includes('allowed b.ts')).length).toBe(1)
 })
 
 test("a worker's question with options shows the lead's question and options, an answer is that option's text, and the lead's text goes when answered", async () => {
