@@ -552,12 +552,12 @@ test("T-968: a Meanwhile line goes with the owner's next prompt (not the lead's 
   takeBoardUpdate()
   noteForLead('The owner dropped T-6.')
   ownerTyped('create a task for the search')
-  const block = meanwhileForPrompt()
+  const block = meanwhileForPrompt().text
   expect(block).toContain('Meanwhile the owner (nothing to answer):\n- The owner dropped T-6.')
   // the guide (the system prompt) never carries it, so it stays the same
   expect(await leadGuideText(w.host)).not.toContain('The owner dropped T-6.')
   // the owner's next prompt gets nothing again
-  expect(meanwhileForPrompt()).toBe('')
+  expect(meanwhileForPrompt().text).toBe('')
   // a board update sent later doesn't carry it again
   tellLead(w.host, 'T-2 "x" merged.')
   const update = takeBoardUpdate() ?? ''
@@ -574,6 +574,6 @@ test('T-968: Meanwhile lines not yet given with a prompt still go at the top of 
   noteForLead('The owner paused T-3.')
   tellLead(w.host, 'T-2 "x" merged.')
   expect(takeBoardUpdate() ?? '').toContain('- The owner paused T-3.')
-  expect(meanwhileForPrompt()).toBe('')
+  expect(meanwhileForPrompt().text).toBe('')
   await sessionEnd(w.host)
 })
