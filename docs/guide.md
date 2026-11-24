@@ -1530,7 +1530,7 @@ unchanged.
 - **A scout's page**: the page header: `‹` and a `Scouts` button, and the pager; the name and its
   summary; when it runs, the next run, its model and the last run as plain words (no pills); buttons `Run now`
   (the main button; not while it runs), `Edit`, and `Pause` or `Resume` (`⏸ paused` beside it while paused);
-  then its **Instructions** as Markdown, its **File**, and its **Runs** (headings are plain bold text, one line per run); open a run to read its report.
+  then its **Instructions** as Markdown, its **Runs** (one line per run, its time a link that opens its report), its **Results**, and its **File** (headings are plain bold text).
 - **Settings**: every group is a heading (Work, Checks before merging, Workers, Scouts, Board
   and alerts) with its settings under it, each on its own row with its value. A setting with
   a fixed set of choices (mode, notify, checker, scout_findings, tests_with_changes,

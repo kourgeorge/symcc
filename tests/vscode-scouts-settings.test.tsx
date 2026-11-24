@@ -13,7 +13,7 @@ import type { On } from 'claude-code'
 import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
 import { reportStart, scoutRowEnd } from '../hooks/claude/ui/vscode-scouts'
 import { vsRowRoom } from '../hooks/claude/ui/vscode-list'
-import { scoutListRows } from '../hooks/board'
+import { scoutListRows, scoutRunsText } from '../hooks/board'
 import { mdLink, vsHref } from '../hooks/claude/ui/vscode'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -544,6 +544,8 @@ for (const bodyColumns of [40, 80]) {
   })
 }
 
+const RUN_ENDS = [new Date(T0 - 3 * 3600_000).toISOString(), new Date(T0 - 26 * 3600_000).toISOString()]
+
 // T-1007: the Scouts list and a scout's page in the shared plain style, at three widths
 for (const bodyColumns of [40, 64, 100])
   test(`T-1007: the Scouts list and a scout's page have no borders, pills, "← Tasks" or hint (${bodyColumns} columns)`, async ($, on) => {
@@ -557,18 +559,31 @@ for (const bodyColumns of [40, 64, 100])
       return tree
     }
     seedScouts(on, 'scouts')
+    on('fs.read', (_, e, next) => (String(e.path).endsWith(`/${SCOUTS[1]!.name}.runs.json`) ? { value: scoutRunsText(RUN_ENDS.map(ended => ({ started: null, ended, outcome: 'found' as const, findings: 2 }))) } : next(e)))
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
     // list: one row per scout
     const list = await plain(ui, 'list')
     const rows = elements(list).filter(n => SCOUTS.some(x => n.props?.key === `vs-scout-${x.name}`))
     expect(rows.length).toBe(SCOUTS.length)
     for (const r of rows) expect(vsRowText(r).length, String(r.props?.key)).toBeLessThanOrEqual(vsRowRoom(bodyColumns))
-    // a scout's page: Run now primary, Edit and Pause secondary
-    await ui.press({ key: `scout:${SCOUTS[0]!.name}`, link: { href: vsHref('scout', SCOUTS[0]!.name) } })
-    await plain(ui, 'page')
+    // a scout's page (not running, with two runs): Run now primary, Edit and Pause secondary, one line per run
+    const name = SCOUTS[1]!.name
+    await ui.press({ key: `scout:${name}`, link: { href: vsHref('scout', name) } })
+    const page = await plain(ui, 'page')
     const variants = Object.fromEntries((await ui.findAll({ type: 'Button' })).filter(b => String(b.key).startsWith('scout-')).map(b => [String(b.key), b.props.variant]))
     expect(variants['scout-edit']).toBe('secondary')
     expect(variants['scout-pause']).toBe('secondary')
-    if (variants['scout-run']) expect(variants['scout-run']).toBe('primary')
+    expect(variants['scout-run']).toBe('primary')
+    // the title in full at 64 columns and up
+    if (bodyColumns >= 64) expect(texts(page).join('\n')).toContain(name)
+    // each run: one row, its time a link, nothing wider than the panel (box widths are cells)
+    const runRows = elements(page).filter(n => /^vs-run-[^-]+-[^-]+-.*[^e]$/.test(String(n.props?.key)) && !String(n.props?.key).endsWith('-time') && !String(n.props?.key).endsWith('-info'))
+    expect(runRows.length).toBe(RUN_ENDS.length)
+    for (const r of runRows) {
+      const time = (r.children as Node[]).find(c => String(c.props?.key).endsWith('-time'))!
+      expect(Number(time.props?.minWidth) + 1, String(r.props?.key)).toBeLessThanOrEqual(bodyColumns)
+      expect(texts(time).join(''), String(r.props?.key)).toMatch(/^run \S/)
+    }
+    for (const n of elements(page)) if (typeof n.props?.width === 'number') expect(n.props.width / 8, String(n.props?.key)).toBeLessThanOrEqual(bodyColumns)
     await ui.unmount()
   })
