@@ -161,7 +161,7 @@ for (const surface of ['terminal', 'vscode'] as const)
     if (surface === 'terminal') {
       expect(all).not.toContain('[✎ prep]')
       expect(all).toContain('▶ doing · prep   change · general · try 1/3   ◆ lead')
-    } else expect(all).toContain(' ▶ doing · prep ')
+    } else expect(all).toContain('▶ doing · prep') // T-973: a padded Box pill, no space padding in the text
     // the Steps line: every step up to review done, then the approve's prep now
     expect(page).toMatch(/review ✓[\s\S]*● prep[\s\S]*merge/)
     await finish(ui, release)
