@@ -3,6 +3,7 @@
 // statusLine), with the branch from .git/HEAD, who drives from lead.json, and the off text when symcc is turned off.
 import { expect, test } from 'claude-code/testing'
 import { addTask, emptyBoard, statusLine, statusRoom, offStatusLine, type Board } from '../hooks/board'
+import { todayAt } from './day-clock'
 import { bandLine, bandOutput, bandStatusText, headBranch, projectRoot } from '../hooks/copilot/statusline'
 
 const NOW = Date.now()
@@ -46,4 +47,19 @@ test('the band finds the project above the folder it runs in', () => {
   expect(projectRoot({ cwd: '/elsewhere', readText })).toBe(null)
   expect(bandOutput({ cwd: '/w/proj/src', readText, nowMs: NOW })).toBe('symcc: ⏸ approve merge · drives here · dev · today ✓ 0')
   expect(bandOutput({ cwd: '/elsewhere', readText, nowMs: NOW })).toBe('')
+})
+
+test('a done task kept as a stub counts as merged today, with its cost, from its parts file (T-992)', () => {
+  const at = new Date(todayAt(9, 0, NOW)).toISOString()
+  const [b0] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'a change', files: ['src/a.ts'] }, AT)
+  const stub = { id: 'T-950', title: 'old', status: 'done', parts: 'tasks/T-950.json', created_at: at, updated_at: at }
+  const board = JSON.stringify({ ...b0, mode: 'review', tasks: [stub] })
+  const parts = JSON.stringify({ tasks: { 'T-950': { id: 'T-950', history: [{ kind: 'merged', at, text: 'merged' }], runs: [{ n: 1, started: at, ended: at, agents: [{ id: 'a1', kind: 'worker', started: at, ended: at, cost: 2.5 }] }] } } })
+  const files = new Map([
+    ['/p/.symcc/board.json', board],
+    ['/p/.symcc/tasks/T-950.json', parts],
+  ])
+  const line = bandOutput({ cwd: '/p', readText: q => files.get(q) ?? null, nowMs: Math.max(NOW, todayAt(9, 30, NOW)) })
+  expect(line.includes('today ✓ 1')).toBe(true)
+  expect(line.includes('$2.50')).toBe(true)
 })
