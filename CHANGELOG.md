@@ -2,7 +2,7 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
-## Unreleased
+## 0.5.37 (2026-11-24)
 
 ### Added
 - Stale tasks: a worker on an old or backlog task first checks that it still makes sense, with a "what changed since" part in its prompt. On hosts without symcc tools it writes its question in the report instead.
@@ -20,6 +20,10 @@ When a set of user-facing changes is ready to release, bump the version in both 
 - Claude Code: checkers get their own agent type without the scouts tool, like on OpenCode.
 - Guide: `/symcc-answer` is OpenCode only; it says how to answer a waiting task in Claude Code.
 - Code tidy-ups with no change in behavior.
+
+### Fixed
+- Live tab: a running scout's time counts from its current run (it could show "24h" right after starting).
+- Mark merged: a task whose branch has no commits of its own is marked done only when its recorded work is in the target branch.
 
 ## 0.5.36 (2026-11-23)
 
