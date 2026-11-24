@@ -4739,6 +4739,76 @@ test('an uncommitted change in a file the task changes: the task waits with a no
   }
 })
 
+test('T-951: a paused board does not merge a task waiting for files at the regular check, even once they are clear; back in auto it merges', async () => {
+  try {
+    const { w, spawned, t } = await finishedOnDirtyMain(' M src/a.ts\0')
+    expect((await t()).status).toBe('waiting')
+    await change(w.$, b => [{ ...b, mode: 'paused' as const }, null])
+    w.git.status = ''
+    await check(w.$)
+    expect((await t()).status).toBe('waiting')
+    expect(w.git.main).toBe(M1)
+    await change(w.$, b => [{ ...b, mode: 'auto' as const }, null])
+    await check(w.$)
+    expect((await t()).status).toBe('done')
+    expect(w.git.main).toBe(H1)
+    expect(spawned).toEqual([])
+  } finally {
+    cleanUp()
+  }
+})
+
+/** finishedOnDirtyMain(status), plus a second task T-2 waiting for the same files with its own folder and branch. */
+async function twoWaiting(status: string) {
+  const f = await finishedOnDirtyMain(status)
+  const t1 = await f.t()
+  expect(t1.status).toBe('waiting')
+  await change(f.w.$, b => {
+    const [b2, t2] = addTask(b, { origin: { why: 'a test' }, title: 'Do it too', files: ['src/'] }, ISO)
+    return [patchTask(b2, t2.id, { status: 'waiting', attempts: 1, branch: 'symcc/T-2', note: t1.note, live: { merge_wait: t1.live!.merge_wait }, runs: [{ started: ISO }] }, ISO), null]
+  })
+  f.w.put(`${ROOT}/.symcc/worktrees/T-2/.git`, 'gitdir: x')
+  return { ...f, t2: async () => find(await load(f.w.$), 'T-2')! as BoardTask }
+}
+
+test('T-951: when git status fails at the regular check, no task waiting for files is merged, both keep waiting, and the check does not throw', async () => {
+  try {
+    const { w, spawned, t, t2 } = await twoWaiting(' M src/a.ts\0')
+    expect((await t2()).status).toBe('waiting')
+    w.git.status = ''
+    w.git.answer = a => (a[0] === 'status' && a.includes('--porcelain') ? fail('fatal: index file corrupt', 1) : undefined)
+    const before = w.calls.length
+    await check(w.$)
+    expect((await t()).status).toBe('waiting')
+    expect((await t2()).status).toBe('waiting')
+    expect(w.git.main).toBe(M1)
+    expect(w.calls.slice(before).some(c => / git (read-tree|update-ref|merge) /.test(c))).toBe(false)
+    expect(spawned).toEqual([])
+  } finally {
+    cleanUp()
+  }
+})
+
+test('T-951: two tasks waiting for files both merge, one after the other, in one regular check once the files are clear', async () => {
+  try {
+    const { w, spawned, t, t2 } = await twoWaiting(' M src/a.ts\0')
+    w.git.status = ''
+    await check(w.$)
+    const [x1, x2] = [await t(), await t2()]
+    expect(x1.status).toBe('done')
+    expect(x2.status).toBe('done')
+    expect(x1.live?.merge_wait).toBeUndefined()
+    expect(x2.live?.merge_wait).toBeUndefined()
+    const merged = leadQueue.filter(m => /^✓ T-[12] "/.test(m)).map(m => m.slice(2, 5))
+    expect(merged).toEqual(['T-1', 'T-2'])
+    // git status is read again before the second merge (the first one may have changed the owner's files)
+    expect(w.calls.filter(c => c.startsWith('root: git status --porcelain -z')).length).toBeGreaterThanOrEqual(2)
+    expect(spawned).toEqual([])
+  } finally {
+    cleanUp()
+  }
+})
+
 test('a waiting merge whose main moved meanwhile is brought up to date and tested again, still with no worker', async () => {
   try {
     const { w, spawned, t } = await finishedOnDirtyMain(' M src/a.ts\0')
