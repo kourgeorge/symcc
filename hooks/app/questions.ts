@@ -217,7 +217,7 @@ export async function popupToTask(host: Host, id: string, answer: string): Promi
   try {
     if (asks) {
       if (asks.files.length && picks(answer, "Don't allow")) return `${n} put the owner's answer into ${id}: ${await refuseAskedFiles(host, id)}.`
-      if (asks.files.length && picks(answer, 'Allow')) return `${n} put the owner's answer into ${id}: ${await allowAskedFiles(host, id)}.`
+      if (asks.files.length && picks(answer, 'Allow')) return `${n} put the owner's answer into ${id}: ${await allowAskedFiles(host, id, false)}.`
       return `${n} put the owner's answer into ${id}: ${await runTool(host, 'change', { task: id, answer: answer.trim() })} Don't send it again with ${n} change.`
     }
     // in review: the merge runs for minutes, so it is started and not waited for (as the board's Approve does)

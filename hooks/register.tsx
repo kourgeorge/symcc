@@ -12,7 +12,7 @@ import { editTouch, fileTouch } from './claude/tools'
 import type { $ } from './claude/panel'
 import { usageTokens, turnEnd } from './claude/usage'
 import { noteBackground, stopSeen, takeBackground } from './claude/background'
-import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
+import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, meanwhileForPrompt, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
 import { S, useName } from './app/state'
 import { damOwnerPrompt } from './app/dam'
 import { hookFailed } from './app/ask'
@@ -124,7 +124,18 @@ export const register: Register = on => {
     const owners = kind === 'composer' || kind === 'bridge' || (kind === 'sdk' && !e.text.trimStart().startsWith(`[${S.N.name}] Board update`) && !/^\s*(Another Claude session sent a message:\s*)?<agent-message /.test(e.text))
     // T-837: the hidden starter's end ("OK") reaches the lead's chat as a message; dropped here so it wakes no turn
     if (!owners && !e.command && starterFrame(e.text)) return { drop: '▸ agent started' }
-    const r = await next(e)
+    // T-968: the owner's board actions waiting as "Meanwhile" lines go beside their prompt (its context, kept in the chat
+    // once, not in the system prompt); attached on the way down, as context added after next() is not
+    // (put back on the queue when the prompt never reaches the chat: a drop, or a later hook throws)
+    const meanwhile = owners && !e.command && !e.isMeta ? meanwhileForPrompt() : undefined
+    let r: Awaited<ReturnType<typeof next>>
+    try {
+      r = await next(meanwhile?.text ? { ...e, context: [...(e.context ?? []), meanwhile.text] } : e)
+    } catch (err) {
+      meanwhile?.back()
+      throw err
+    }
+    if (r && typeof r === 'object' && 'drop' in r) meanwhile?.back()
     if (owners && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') {
       // T-929: in a DAM image, an owner's sdk prompt means this is a Slack session (not a DAM terminal window)
       if (kind === 'sdk') damOwnerPrompt()

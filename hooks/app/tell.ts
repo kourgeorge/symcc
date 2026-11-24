@@ -8,7 +8,9 @@ import type { Host } from '../host'
 // reports close together go in one message, sent when the chat is idle (on a host that can't
 // wake the lead, kept until the host takes it on its next hook: takeBoardUpdate).
 // The owner's own actions (approve, drop, settings, ...) don't wake the lead: they wait
-// as short "Meanwhile the owner:" lines at the top of the next update sent for a real reason.
+// as short "Meanwhile the owner:" lines at the top of the next update sent for a real reason, or go with the owner's
+// next prompt if that comes first (meanwhileForPrompt). Actions the lead may be waiting on (git set up, files allowed or
+// not) are told at once with tellLead.
 
 /** The end of a start line (see wakeLine in starts.ts); an update of only such lines asks for no reply. */
 export const START_LINE_END = ' Nothing to do for it.'
@@ -101,4 +103,23 @@ export const brief = (text: string) => cutLine(text, 200)
 export function noteForLead(text: string) {
   if (!S.enabledNow) return
   meanwhile.push(text.trim())
+}
+
+/**
+ * T-968: the owner sent the lead a prompt: the "Meanwhile" lines waiting, as one block for the host to attach to that
+ * prompt (Claude Code's prompt context, a message beside it on OpenCode, Copilot's added context), so they stay in the
+ * chat once. They leave the queue, so no later board update repeats them; `back` puts them back at the front (in order)
+ * when that prompt never reaches the chat (dropped, or the host failed), so the next board update still carries them.
+ * `text` is '' when none wait or symcc is off.
+ */
+export function meanwhileForPrompt(): { text: string; back: () => void } {
+  const lines = meanwhile.splice(0)
+  if (!lines.length || !S.enabledNow) return { text: '', back: () => {} }
+  let put = false
+  const back = () => {
+    if (put) return
+    put = true
+    meanwhile.unshift(...lines)
+  }
+  return { text: `[${S.N.name}] ${meanwhileText(lines)}\n(Done on the board before this message from the owner; take it into account.)`, back }
 }

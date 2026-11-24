@@ -22,7 +22,7 @@ const ok = (stdout = ''): Res => ran({ stdout })
 
 /**
  * Files in memory (keyed from "/.symcc/" on, so the project folder does not matter), a small fake git and
- * agent list, and what reached the bottom: tool calls (`tools`), prompts (`prompts`), messages to agents (`sent`).
+ * agent list, and what reached the bottom: tool calls (`tools`), prompts (`prompts`, with the context beside each: `contexts`), messages to agents (`sent`).
  * `agents` are listed as running until a message reaches them (then completed). `state.gitFails` makes `git diff` fail.
  * `env` answers $.env.get (any other name is unset).
  */
@@ -31,11 +31,12 @@ function world(on: On, o: { agents?: { id: string; type: string }[]; env?: Recor
   const key = (p: string) => (p.includes('/.symcc/') ? p.slice(p.indexOf('/.symcc/')) : p)
   const tools: string[] = []
   const prompts: string[] = []
+  const contexts: (readonly string[] | undefined)[] = []
   const sent: string[] = []
   const ended = new Set<string>()
   const toasts: string[] = []
   const spawned: string[] = []
-  const state = { gitFails: false }
+  const state = { gitFails: false, dropPrompts: false }
 
   function git(args: string[]): Res {
     // a repo with a commit, so work can start
@@ -75,7 +76,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[]; env?: Recor
     return { value: ok() }
   })
   on('tool.call', (_, e) => (tools.push(e.tool), { result: 'ran' }))
-  on('prompt.submit', (_, e) => (prompts.push(e.text), { text: e.text }) as never)
+  on('prompt.submit', (_, e) => (state.dropPrompts ? { drop: 'blocked by a settings hook' } : (prompts.push(e.text), contexts.push(e.context), { text: e.text, context: e.context })) as never)
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('command.run', () => ({ text: 'not a symcc command' }))
   on('agent.list', () => ({ value: (o.agents ?? []).map(a => ({ ...a, status: ended.has(a.id) ? 'completed' : 'running' })) }) as never)
@@ -92,7 +93,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[]; env?: Recor
   on('session.id', () => ({ value: 'me' }) as never)
   on('env.get', (_, e) => ({ value: o.env?.[(e as unknown as { name: string }).name] }) as never)
   const clock = mock.clock(on, { now: T0 })
-  return { files, tools, prompts, sent, toasts, spawned, state, clock, board: () => JSON.parse(files.get(BOARD)!) as Board }
+  return { files, tools, prompts, contexts, sent, toasts, spawned, state, clock, board: () => JSON.parse(files.get(BOARD)!) as Board }
 }
 
 type Eng = Engine
@@ -215,6 +216,41 @@ test('/symcc-reject puts "The owner rejected T-1" in the lead\'s notes, sent wit
   await w.clock.advance(2000)
   const update = w.prompts.find(p => p.startsWith('[symcc] Board update:')) ?? ''
   expect(update).toContain('Meanwhile the owner (nothing to answer):\n- The owner rejected T-1 ("too big"): T-1 rejected: back to "todo"')
+})
+
+test("T-968: the owner's next prompt carries the Meanwhile line as its context, once; a later board update doesn't repeat it", async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(reviewBoard()))
+  await run($, 'symcc-reject', 'T-1 too big')
+  await $.prompt.submit({ text: 'what now?', origin: { kind: 'composer' } } as never)
+  const i = w.prompts.indexOf('what now?')
+  expect(i >= 0).toBe(true)
+  const context = (w.contexts[i] ?? []).join('\n')
+  expect(context).toContain('Meanwhile the owner (nothing to answer):\n- The owner rejected T-1 ("too big")')
+  await $.prompt.submit({ text: 'and then?', origin: { kind: 'composer' } } as never)
+  expect((w.contexts[w.prompts.indexOf('and then?')] ?? []).join('\n')).not.toContain('The owner rejected T-1')
+  // a board update sent for a real reason (a broken board.json) doesn't carry it again
+  w.files.set(BOARD, '{ not json')
+  await run($, 'symcc-diff', 'T-1')
+  await w.clock.advance(2000)
+  expect(w.prompts.some(p => p.startsWith('[symcc] Board update:'))).toBe(true)
+  expect(w.prompts.filter(p => p.includes('The owner rejected T-1')).length).toBe(0)
+})
+
+test("T-968: an owner's prompt that is dropped before the chat puts its Meanwhile lines back for the next board update", async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(reviewBoard()))
+  await run($, 'symcc-reject', 'T-1 too big')
+  w.state.dropPrompts = true
+  const r = (await $.prompt.submit({ text: 'what now?', origin: { kind: 'composer' } } as never)) as { drop?: string }
+  expect(r.drop).toBe('blocked by a settings hook')
+  expect(w.prompts).not.toContain('what now?')
+  // the lines were put back: the next prompt that does reach the chat carries them, once
+  w.state.dropPrompts = false
+  await $.prompt.submit({ text: 'and now?', origin: { kind: 'composer' } } as never)
+  expect((w.contexts[w.prompts.indexOf('and now?')] ?? []).join('\n')).toContain('The owner rejected T-1 ("too big")')
+  await $.prompt.submit({ text: 'and then?', origin: { kind: 'composer' } } as never)
+  expect((w.contexts[w.prompts.indexOf('and then?')] ?? []).join('\n')).not.toContain('The owner rejected T-1')
 })
 
 // ---------------- commands with a broken board.json ----------------
