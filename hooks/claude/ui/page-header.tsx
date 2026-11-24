@@ -111,13 +111,23 @@ export function pageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
 /** The status pill's color: its first part's color, a neutral grey for none or the plain text color. */
 const chipTone = (g: Seg[]) => (!g[0]?.color || g[0].color === 'text' ? 'inactive' : g[0].color)
 
+/** The status split into its mark (the first word, "▶") and the words after it (" doing · worker"). */
+function statusWords(g: Seg[]): { mark: string; words: string } {
+  const text = g.map(x => x.text).join('').trim()
+  const space = text.indexOf(' ')
+  return space < 0 ? { mark: text, words: '' } : { mark: text.slice(0, space), words: text.slice(space) }
+}
+
 export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
   const { Box, Text, Button, C } = pane
   const chip = (key: string, g: Seg[], first: boolean) =>
     <Box key={key} flexDirection="row">
       {first ? (
-        // T-1002: the status as plain bold words in its color (no pill)
-        <Text key={`${key}-status`} bold size="caption" color={C(chipTone(g))}>{g.map(x => x.text).join('').trim()}</Text>
+        // T-1006: the status as a colored mark, then dim words (no pill)
+        <Text key={`${key}-status`} size="caption" wrap="wrap">
+          <Text key={`${key}-mark`} bold color={C(chipTone(g))}>{statusWords(g).mark}</Text>
+          <Text key={`${key}-words`} color={C('inactive')}>{statusWords(g).words}</Text>
+        </Text>
       ) : (
         <Text size="caption" wrap="wrap">
           {g.map((x, i) => (

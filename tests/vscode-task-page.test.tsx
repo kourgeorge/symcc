@@ -97,9 +97,10 @@ for (const id of RICH_IDS) {
     const want = ['Details', 'What to do', 'runs' in t && t.runs.length ? `▸ Time and cost ${t.runs.length} tries · ${t.id === 'T-504' ? '25m · 4.6k tokens (0.4×' : '40m · 11.6k tokens (1×'} the usual task)` : '▸ Time and cost 0']
     if (t.history.length) want.push('History (2, newest first)')
     if (t.attempts) want.push(t.status === 'doing' ? 'Report (try 1)' : 'Report (try 2, 2 of 2)') // the running try has no report yet
-    if (t.status === 'failed') want.push('✗ Why it failed')
-    if (t.status === 'waiting') want.push('? Question for you')
     for (const h of want) expect(all, `${id} ${h}`).toContain(h)
+    // T-1006: what needs you is a heading with a mark (no box)
+    if (t.status === 'failed') expect((await ui.find({ key: 'vs-sec-why-failed' }))?.text, id).toMatch(/^✗ Why it failed/)
+    if (t.status === 'waiting') expect((await ui.find({ key: 'vs-sec-question' }))?.text, id).toMatch(/^\? (Question for you|Time is up)/)
     // the details and the report are Markdown, given whole (the report: its first part)
     const md = elements(tree).filter(n => n.type === 'Markdown').map(n => String(n.props?.text))
     expect(md, id).toContain(t.details.trimEnd())
@@ -266,8 +267,14 @@ for (const [id, want] of Object.entries(CARDS))
       const chip = (await ui.find({ key: 'vs-state-status' }))!
       expect(chip.props.borderStyle, at).toBeUndefined()
       const badge = elements(chip.children).find(n => n.type === 'Text')!
-      expect(badge.children, at).toEqual([want.badge])
-      expect(badge.props, at).toMatchObject({ bold: true, color: want.tone })
+      // T-1006: the mark in the status's color, then dim words
+      const [mark, ...words] = want.badge.split(' ')
+      expect(chip.text, at).toBe(want.badge)
+      expect(badge.children, at).toBeDefined()
+      const parts = elements(chip.children).filter(n => n.type === 'Text' && typeof n.children?.[0] === 'string')
+      expect(parts[0]!.children, at).toEqual([mark])
+      expect(parts[0]!.props, at).toMatchObject({ bold: true, color: want.tone })
+      if (words.length) expect(parts[1]!.props, at).toMatchObject({ color: 'inactive' })
       expect(elements(chip.children).some(n => n.type === 'Box' || n.props?.backgroundColor), at).toBe(false)
       expect((await ui.find({ key: 'vs-row-role' }))?.text, at).toMatch(/^Roleworker/)
       expect((await ui.find({ key: 'vs-row-tries' }))?.text, at).toMatch(/^Tries2/)
@@ -282,7 +289,8 @@ for (const [id, want] of Object.entries(CARDS))
       if (want.callout) {
         const [key, tone, button] = want.callout
         const box = await ui.find({ key })
-        expect(box?.props, at).toMatchObject({ borderStyle: 'round', borderColor: tone })
+        expect(box?.props.borderStyle, at).toBeUndefined()
+        expect(elements(box!.children).find(n => n.type === 'Text' && n.props?.color === tone && texts(n).join('').trim().length === 1), at).toBeDefined()
         if (button) expect(elements(box!.children).some(n => (n.type === 'Button' || n.type === 'Markdown') && n.props?.key === button), at).toBe(true)
         // right under the page header
         const top = (await ui.drawn()) as Node
@@ -305,6 +313,24 @@ for (const [id, want] of Object.entries(CARDS))
       await ui.press({ key: 'fold-time', link: { href: vsHref('fold', 'fold-time') } })
       expect(mdPlain(String((await ui.find({ key: 'fold-time' }))?.props.text)), at).toMatch(/^▾ Time and cost/)
       expect(await ui.find({ key: 'vs-sec-time-body' }), at).toBeDefined()
+      await ui.unmount()
+    })
+
+// T-1006: a task page with a question and one with a failure are drawn with no borders, pills or ide-colored rule, and the
+// label column is the shared VS_LABEL_W; at 40, 64 and 100 columns no Box is wider than the panel (a Box's width is in cells)
+for (const id of ['T-503', 'T-502'])
+  for (const bodyColumns of [40, 64, 100])
+    test(`T-1006: ${id}'s VS Code page at ${bodyColumns} columns has no border, pill, rule or hint, and fits the panel`, async ($, on) => {
+      seedRich(on, id)
+      const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+      const tree = await ui.drawn()
+      const all = elements(tree)
+      expect(all.filter(n => n.props?.borderStyle || n.props?.borderColor), id).toEqual([])
+      // no grey fill (a pill) and no rule line
+      expect(all.filter(n => n.type === 'Box' && n.props?.backgroundColor && n.props.key !== 'line'), id).toEqual([])
+      expect(texts(tree).filter(s => /^[─━-]{4,}$/.test(s) || s.startsWith('Click a')), id).toEqual([])
+      expect(await ui.find({ key: 'task-keys-footer' }), id).toBeUndefined()
+      for (const n of all) if (typeof n.props?.width === 'number') expect(n.props.width as number, `${id} ${n.props.key}`).toBeLessThanOrEqual(bodyColumns)
       await ui.unmount()
     })
 

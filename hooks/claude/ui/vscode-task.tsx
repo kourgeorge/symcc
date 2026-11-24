@@ -21,15 +21,13 @@ import { S } from '../../app/state'
 import type { PaneParts } from './parts'
 import { draftFor, dropDraft, fieldRows, keepDraftText } from './answer-box'
 import type { $ } from '../panel'
-import { vsCallout, vsChoices, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
+import { vsChoices, vsFold, vsHref, vsLink, mdLink, vsSection, VS_LABEL_W } from './vscode'
 import { type PageHeader, vsPageHeader } from './page-header'
 
 /** How many lines of a report VS Code's task page shows before its "Show all" button. */
 export const REPORT_FIRST_LINES = 12
 /** How many history events (the newest) VS Code's task page shows before its "Show all" button. */
 export const HISTORY_FIRST = 10
-/** The width of the Details grid's label column, in cells: the longest label ("Research") and a space. */
-export const VS_LABEL_WIDTH = 'Research'.length + 1
 
 /** The key of a Details row on VS Code's task page: "vs-row-status", "vs-row-stage"; a row with no label (one that
  *  goes on from the row above) gets the label above it and its place: "vs-row-after-1". */
@@ -163,6 +161,16 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {text}
     </Text>
   )
+  /** T-1006: what needs you: a heading (the mark in the tone's color, bold words) and its lines under it; no box. */
+  const note = (key: string, mark: string, label: string, tone: string, body: unknown[]) => (
+    <Box key={key} flexDirection="column" gap={1}>
+      <Text key={`${key}-head`} wrap="wrap" bold>
+        <Text key={`${key}-mark`} color={C(tone)}>{`${mark} `}</Text>
+        <Text key={`${key}-label`} color={C('text')}>{label}</Text>
+      </Text>
+      {body as never}
+    </Box>
+  )
   const section = (name: string, label: string, body: unknown[]) => (
     <Box key={`vs-sec-${name}`} flexDirection="column">
       {vsSection(vs, `vs-sec-${name}-head`, label)}
@@ -223,7 +231,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   }
   // the box that asks why, once Reject (or Ask more) was pressed
   const rejectBox = typingBox ? (
-    <Box key="vs-reject" flexDirection="column" borderStyle="round" borderColor={C(x.answered ? 'warning' : 'error')} paddingX={1}>
+    <Box key="vs-reject" flexDirection="column">
       <Input
         key="reject-reason"
         label={x.answered ? 'Your follow-up question' : 'Reason to reject'}
@@ -242,8 +250,8 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   // T-954: Run now's "Start anyway?" question (Cancel is the default)
   const runNowBox = x.runNowAsk ? (
-    <Box key="vs-run-now" flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
-      {plain('vs-run-now-ask', x.runNowAsk, 'warning')}
+    <Box key="vs-run-now" flexDirection="column">
+      {note('vs-run-now-head', '?', x.runNowAsk, 'warning', [])}
       <Box key="vs-run-now-buttons" flexDirection="row" gap={1}>
         <Button key="run-now-yes" label={RUN_NOW_YES} onPress={on.startAnyway} />
         <Button key="run-now-cancel" label={RUN_NOW_NO} variant="secondary" autoFocus onPress={on.cancelRunNow} />
@@ -253,7 +261,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   // the role pick list
   const roleBox = rolePicking ? (
-    <Box key="vs-role" flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
+    <Box key="vs-role" flexDirection="column">
       {plain('vs-role-head', `Pick a role for ${t.id}`, 'text', { bold: true })}
       {S.rolePick!.options.map(o => {
         const cur = o.toLowerCase() === x.nowRole
@@ -275,7 +283,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const answers = x.choices.slice(0, -1) // the last one is "Answer…": the box below is always there
   const askedFiles = !x.overtime ? (t.ask?.files ?? []) : []
   const question = x.answerable
-    ? vsCallout(vs, 'vs-sec-question', '?', x.overtime ? 'Time is up' : 'Question for you', 'warning', [
+    ? note('vs-sec-question', '?', x.overtime ? 'Time is up' : 'Question for you', 'warning', [
         plain('vs-question', x.askedQuestion ?? '', 'text', { bold: true }),
         ...askedFiles.map(f => plain(`vs-asked-${f}`, `  ${f}`, 'autoAccept')),
         answers.length ? vsChoices(vs, answers.map((c, i) => (askedFiles.length && i === 0 ? 'Allow files' : c)), pickChoice) : null,
@@ -285,11 +293,11 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     : null
 
   const fileWait = x.fileWait
-    ? vsCallout(vs, 'vs-sec-file-wait', '⧗', 'Waiting for your files', 'warning', [plain('vs-file-wait', x.fileWait), plain('vs-file-wait-note', 'Merge now merges it without waiting.', 'inactive')])
+    ? note('vs-sec-file-wait', '⧗', 'Waiting for your files', 'warning', [plain('vs-file-wait', x.fileWait), plain('vs-file-wait-note', 'Merge now merges it without waiting.', 'inactive')])
     : null
 
   const failed = x.why
-    ? vsCallout(vs, 'vs-sec-why-failed', '✗', 'Why it failed', 'error', [plain('vs-why-reason', x.why.reason), x.why.asks ? plain('vs-why-asks', x.why.asks, 'warning') : null, plain('vs-why-next', `Next: ${x.why.next}`, 'inactive')].filter(Boolean) as never[])
+    ? note('vs-sec-why-failed', '✗', 'Why it failed', 'error', [plain('vs-why-reason', x.why.reason), x.why.asks ? plain('vs-why-asks', x.why.asks, 'warning') : null, plain('vs-why-next', `Next: ${x.why.next}`, 'inactive')].filter(Boolean) as never[])
     : null
 
   // which of the shared sections show, and their headings, come from core's taskSections (as on the terminal)
@@ -324,7 +332,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     )
     return (
       <Box key={key} flexDirection="row">
-        <Box key={`${key}-label`} width={VS_LABEL_WIDTH} flexShrink={0}>
+        <Box key={`${key}-label`} width={VS_LABEL_W} flexShrink={0}>
           <Text key={`${key}-label-text`} color={C('inactive')}>{r.label}</Text>
         </Box>
         {value}
@@ -374,7 +382,6 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
             </Text>
           </Box>
         )),
-        x.changes.files.length ? plain('vs-changes-hint', 'Click a file to see its changes.', 'inactive') : null,
       ])
     : null
 
@@ -471,7 +478,6 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {history}
       {report}
       {time}
-      {vsFooter(vs, 'task-keys')}
     </Box>
   )
 }

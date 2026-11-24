@@ -8,7 +8,8 @@ import { PANE, T0, seedBoard } from './board-fixture'
 import { historyEntry, historyEvent, HISTORY_COLOR } from '../hooks/core/history'
 import { detailRows, type DetailRow } from '../hooks/core/details'
 import { when } from '../hooks/core/days'
-import { HISTORY_FIRST, VS_LABEL_WIDTH, vsRowKeys } from '../hooks/claude/ui/vscode-task'
+import { HISTORY_FIRST, vsRowKeys } from '../hooks/claude/ui/vscode-task'
+import { VS_LABEL_W } from '../hooks/claude/ui/vscode'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { RICH_TASKS, seedRich } from './task-page-fixture'
 
@@ -78,7 +79,7 @@ for (const [name, t] of [['a bug in doing with a role, tries and a checker step'
     // the same labels in the same order, each in a fixed label column
     expect(drawn.map(r => r.label)).toEqual(expected.map(r => r.label))
     expect(drawn.map(r => r.key)).toEqual(expected.map(r => r.key))
-    expect(new Set(drawn.map(r => r.labelWidth))).toEqual(new Set([VS_LABEL_WIDTH]))
+    expect(new Set(drawn.map(r => r.labelWidth))).toEqual(new Set([VS_LABEL_W]))
     for (const [i, r] of drawn.entries()) {
       const e = expected[i]!
       // the Role and Type rows: the page knows their descriptions (the roles and task types folders), the rows here don't
