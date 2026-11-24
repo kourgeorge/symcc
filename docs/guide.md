@@ -1202,12 +1202,12 @@ the open tasks with a branch, the 5 latest merged ones and the 5 latest dropped 
 ### Live tab
 
 The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run, or a task that waits for your review).
-Each lane shows the path that task really takes: a normal code task goes `work → check → queue → tests → merged` (`check` only
-when the checker setting is on); an investigation goes `work → answer` only (no check, queue, tests or merge) and leaves the lanes when
+Each lane shows the path that task really takes: a normal code task goes `work → check → queue → tests → done` (`check` only
+when the checker setting is on); an investigation goes `work → done` only (no check, queue, tests or merge) and leaves the lanes when
 it hands back, then waits under NEEDS YOU as "answer to read"; a docs-only change shows `check` as a dim `–` once it has handed
 back and symcc has seen that its commit changed only docs files (the checker skips it; the dash stays until it merges, also
 while it waits at `you`); a task that needs review (it has "needs review" on, or the board is in approve-merge mode) has a
-`you` station before `merged`, and its lane stays at `you` while it waits for you and goes on to `merged` when you approve. Lanes
+`you` station before `done`, and its lane stays at `you` while it waits for you and goes on to `done` when you approve. Lanes
 that skip stations are drawn as a plain line through those columns, so the station names over the lanes stay lined up.
 Under the tab row it has up to five sections, each starting with a heading line: three thin rule characters, a space,
 `❯`, a space, the name as a bold UPPERCASE word, then a thin rule (`─`) to the right edge, all in the same color (`─── ❯ TASKS ────…`;
@@ -1226,7 +1226,7 @@ words as bold headings with the same spacing):
 
 ─── ❯ TASKS ────────────────────────────────────────────────
 
-                       work✧    check✧   queue    tests    merged
+                       work✧    check✧   queue    tests    done
  ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
    change try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9× median) · <worker 812.4k · checker 287.6k> · ⌕ × 1
 ```
@@ -1243,7 +1243,7 @@ words as bold headings with the same spacing):
   with `…`, wider on a wider panel). The `▶ ` and the id are bold in the accent color and the
   title is normal text, so the running tasks stand out from the waiting ones below them (those
   are all dim).
-- The stations are work → check → queue → tests → merged; check is left out when the
+- The stations are work → check → queue → tests → done; check is left out when the
   `checker` setting is off (its prep step then counts as work). Passed stations are `●━━`, the
   ones ahead `──○`, and the current one blinks between `◉` and `◎` (Claude Code doesn't tell
   plugins about reduced motion, so it always blinks; the tab redraws itself every second while
@@ -1388,7 +1388,7 @@ words as bold headings with the same spacing):
       ◇ T-812  …
       … 36 more in the backlog
 
-                                           work✧    check✧   queue    tests    merged
+                                           work✧    check✧   queue    tests    done
     ✓ T-922 Under DAM: the lead posts bo…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓   merged 3m ago
     ```
 

@@ -3095,7 +3095,7 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
   }
 })
 
-test('T-846: the OpenCode Live tab draws an investigation as work → answer, a docs-only check as "–", and a needs-review task at "you"', () => {
+test('T-846: the OpenCode Live tab draws an investigation as work → done, a docs-only check as "–", and a needs-review task at "you"', () => {
   const f0 = viewFile()
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
   const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
@@ -3118,7 +3118,8 @@ test('T-846: the OpenCode Live tab draws an investigation as work → answer, a 
   expect(row('T-806')).not.toContain('–')
   expect(marks(row('T-806'))).toBe('●-●-●-◉-○')
   expect(marks(row('T-805'))).toBe('●-●-●-●-◉-○')
-  expect(texts.some(t => t.includes('you') && t.includes('answer'))).toBe(true)
+  expect(texts.some(t => t.includes('you') && t.includes('done'))).toBe(true)
+  expect(texts.some(t => /\b(merged|answer)\b/.test(t.split('▶')[0]!) && t.includes('queue'))).toBe(false)
 })
 
 test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, cost, the stacked bar with shares, the hour sparkline with its figures) from the slim view file; narrow drops parts, never wider', () => {
@@ -3289,8 +3290,8 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   expect(texts.some(idleLine)).toBe(false)
   expect(d.ids).toEqual(['need:T-601', 'T-630', 'om-all'])
   const lane = liveLanes({ ...f.view, tasks }, NOW)
-  // T-846: a task in review has a "you" station; once approved its lane sits past it, at merged
-  expect(lane.map(l => l.station)).toEqual(['merged'])
+  // T-846: a task in review has a "you" station; once approved its lane sits past it, at done
+  expect(lane.map(l => l.station)).toEqual(['done'])
   // its check step gone stale: it only waits for the owner (T-846), so its lane sits at "you"
   const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
   expect(liveLanes({ ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)) }, NOW).map(l => l.station)).toEqual(['you'])

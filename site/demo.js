@@ -88,7 +88,7 @@
   const ID_W = 5
   const TITLE_W = 12
   const GAP = 6
-  const LABELS = ['work✧', 'check✧', 'queue', 'tests', 'merged']
+  const LABELS = ['work✧', 'check✧', 'queue', 'tests', 'done']
   // T-767: the lines under a ▍heading start with 1 space; a running lane then "▶ " and its id in the accent ('run' tone), its title normal text
   const LEAD_W = 1 + 2 + ID_W + 1 + TITLE_W + 2
 

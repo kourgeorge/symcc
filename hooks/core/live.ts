@@ -1,5 +1,5 @@
 // The board panel's Live tab (T-690): one "railway lane" per task in doing, showing the station it is at on its way to
-// the merge (work → check → queue → tests → merged), its tokens, then what starts next and today's numbers. Everything
+// the merge (work → check → queue → tests → done), its tokens, then what starts next and today's numbers. Everything
 // a client needs is worked out here, the lane text included (cut titles, station marks, the blinking current station),
 // so each client (Claude Code's terminal panel now; VS Code and OpenCode later) only draws the segments.
 import type { SymccMode, SymccTask } from '../../types'
@@ -47,10 +47,10 @@ function sentBackOf(t: { history?: readonly { kind: string; at?: string; reason?
 }
 
 /** The stations of a lane, in the order a task passes them. */
-export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'you' | 'merged' | 'answer'
-/** T-846: every station, in the order the lanes' columns have them. 'you' (the owner reads and approves) sits before 'merged' on
- *  a task that needs review; 'answer' ends an investigation's lane (work → answer). */
-export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 'tests', 'you', 'merged', 'answer']
+export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'you' | 'done'
+/** T-846: every station, in the order the lanes' columns have them. 'you' (the owner reads and approves) sits before 'done' on
+ *  a task that needs review; 'done' ends every lane, an investigation's too (work → done). */
+export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 'tests', 'you', 'done']
 /** T-760: the mark after a station name where an agent works (work, check): those stations need an agent slot. */
 export const LIVE_AGENT_MARK = '✧'
 /** The line under the lanes that says what LIVE_AGENT_MARK after a station name means. */
@@ -173,11 +173,11 @@ export function liveIdleLine(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_d
   return textWidth(whole) <= w ? whole : whole.startsWith('Nothing running') ? (liveIdle(view, nowMs, w)[0] ?? '') : fitText(whole, w)
 }
 /** The stations of a normal code task that merges on its own: check only when the checker setting is on. */
-export const liveStations = (checker: boolean): LiveStation[] => LIVE_STATIONS.filter(s => s !== 'you' && s !== 'answer' && (s !== 'check' || checker))
-/** T-846: the stations of one task's real path: an investigation goes work → answer; a task that needs review has "you" before merged. */
+export const liveStations = (checker: boolean): LiveStation[] => LIVE_STATIONS.filter(s => s !== 'you' && (s !== 'check' || checker))
+/** T-846: the stations of one task's real path: an investigation goes work → done; a task that needs review has "you" before done. */
 export function laneStations(t: { kind?: unknown }, checker: boolean, review: boolean): LiveStation[] {
-  if (isInvestigation(t as SymccTask)) return ['work', 'answer']
-  return LIVE_STATIONS.filter(s => s !== 'answer' && (s !== 'check' || checker) && (s !== 'you' || review))
+  if (isInvestigation(t as SymccTask)) return ['work', 'done']
+  return LIVE_STATIONS.filter(s => (s !== 'check' || checker) && (s !== 'you' || review))
 }
 /** T-846: the columns the lanes share (the label line over them): every station any lane has, in order; the usual stations when no lane runs. */
 export function liveColumns(lanes: readonly Pick<LiveLane, 'stations'>[], checker: boolean): LiveStation[] {
@@ -282,7 +282,7 @@ function stationOf(stage: PhaseStage, checker: boolean): LiveStation {
     case 'test':
       return 'tests'
     case 'merge':
-      return 'merged'
+      return 'done'
   }
 }
 
@@ -359,9 +359,9 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
       const stations = laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
       let stage: PhaseStage = taskPhase(t, nowMs).stage ?? 'worker'
       if (stage === 'worker' && handedBack(t)) stage = 'prep'
-      const investigation = stations.includes('answer')
-      // an approve running on a task with a "you" station: the owner said yes, so it sits at merged, never back at tests
-      let station: LiveStation = waiting ? 'you' : investigation ? (stage === 'worker' ? 'work' : 'answer') : t.status !== 'doing' && stations.includes('you') ? 'merged' : stationOf(stage, checker)
+      const investigation = isInvestigation(t)
+      // an approve running on a task with a "you" station: the owner said yes, so it sits at done, never back at tests
+      let station: LiveStation = waiting ? 'you' : investigation ? (stage === 'worker' ? 'work' : 'done') : t.status !== 'doing' && stations.includes('you') ? 'done' : stationOf(stage, checker)
       const skipped = checker && !investigation && checkSkipped(t, stage, waiting)
       // a docs-only change has no check to sit at: in prep it is already waiting for the queue
       if (skipped && station === 'check') station = 'queue'
@@ -646,10 +646,10 @@ export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE
 export type LiveLayout = { width: number; idW: number; titleW: number; gap: number; labels: string[]; rightW: number; sep: number; stations: LiveStation[] }
 
 const LABELS: Record<LiveStation, string>[] = [
-  { work: 'work✧', check: 'check✧', queue: 'queue', tests: 'tests', you: 'you', merged: 'merged', answer: 'answer' },
-  { work: 'wrk✧', check: 'chk✧', queue: 'que', tests: 'tst', you: 'you', merged: 'mrg', answer: 'ans' },
-  { work: 'w✧', check: 'c✧', queue: 'q', tests: 't', you: 'y', merged: 'm', answer: 'a' },
-  { work: 'w', check: 'c', queue: 'q', tests: 't', you: 'y', merged: 'm', answer: 'a' },
+  { work: 'work✧', check: 'check✧', queue: 'queue', tests: 'tests', you: 'you', done: 'done' },
+  { work: 'wrk✧', check: 'chk✧', queue: 'que', tests: 'tst', you: 'you', done: 'done' },
+  { work: 'w✧', check: 'c✧', queue: 'q', tests: 't', you: 'y', done: 'd' },
+  { work: 'w', check: 'c', queue: 'q', tests: 't', you: 'y', done: 'd' },
 ]
 const MAX_GAP = 8
 const MIN_GAP = 2
@@ -809,7 +809,7 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
 
 // T-715: waiting trains. A todo task that still waits for an unfinished task hangs, as a "train" (└─◇), under the lane
 // of the running task it waits for, or under the train of the todo task it waits for (a chain), down to a lane:
-//                  work   check  queue  tests  merged
+//                  work   check  queue  tests  done
 // ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
 //   bug try 1/3 · ⏱ 2m · ⌀ 1.1M (0.3× median) · <worker 1.1M>
 //   └─◇ T-713 Task files: no si…  waits
