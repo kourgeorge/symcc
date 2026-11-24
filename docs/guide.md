@@ -239,6 +239,8 @@ OpenCode). In the chat: `/symcc-task T-5 run`, or tell the lead "run T-5 now" (i
   naming that task (their changes may clash at the merge).
 - **The board is paused**: only this task starts; everything else stays paused.
 - **From the backlog**: it moves to `todo` and starts. A failed or dropped one starts as a retry.
+- **In plan mode** (Claude Code): nothing starts, so Run now doesn't either. The task stays as
+  it is (a backlog task stays in the backlog); run it when plan mode ends.
 
 Its history says `try 1: started now by the owner` (with what it skipped), so the health check
 does not report older tasks as "pushed back" because of it. Everything after the start is as
