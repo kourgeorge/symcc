@@ -367,19 +367,86 @@ type XWord = { raw: string; expands: boolean }
 /** A word or a redirect operator (`>`, `>>`, `&>`, `<`, `<<`, ...) of a simple command, for unresolvedTarget. */
 type XToken = XWord | { redir: string }
 
-/** Where the `close` matching an `open` (already passed) is in `s`, from `from` on (single quotes and backslashes respected); s.length when none. */
+/**
+ * Where the `close` matching an `open` (already passed) is in `s`, from `from` on; s.length when none. Quotes,
+ * backslashes, backticks, nested `$(...)` / `${...}` and (inside `(...)`) comments are passed over, so a `)` in
+ * `"..."` or after `#` doesn't end it early (T-963).
+ */
 function closeAt(s: string, from: number, open: string, close: string): number {
   let depth = 1
   for (let i = from; i < s.length; i++) {
     const c = s[i]!
+    const n = s[i + 1]
     if (c === '\\') i++
     else if (c === "'") {
       const e = s.indexOf("'", i + 1)
+      i = e < 0 ? s.length : e
+    } else if (c === '"') i = dquoteEnd(s, i + 1)
+    else if (c === '`') i = tickEnd(s, i + 1)
+    else if (c === '$' && (n === '(' || n === '{')) i = closeAt(s, i + 2, n, n === '(' ? ')' : '}')
+    else if (c === '#' && open === '(' && (i === from || /[\s;&|()]/.test(s[i - 1]!))) {
+      const e = s.indexOf('\n', i)
       i = e < 0 ? s.length : e
     } else if (c === open) depth++
     else if (c === close && --depth === 0) return i
   }
   return s.length
+}
+
+/** Where the `"` closing one opened before `from` is (backslashes, backticks, `$(...)` and `${...}` passed over); s.length when none. */
+function dquoteEnd(s: string, from: number): number {
+  for (let i = from; i < s.length; i++) {
+    const c = s[i]!
+    const n = s[i + 1]
+    if (c === '\\') i++
+    else if (c === '"') return i
+    else if (c === '`') i = tickEnd(s, i + 1)
+    else if (c === '$' && (n === '(' || n === '{')) i = closeAt(s, i + 2, n, n === '(' ? ')' : '}')
+  }
+  return s.length
+}
+
+/** Where the `]]` ending a `[[ ... ]]` test (its text starting at `from`) is; s.length when none. */
+function testEnd(s: string, from: number): number {
+  for (let i = from; i < s.length; i++) {
+    const c = s[i]!
+    const n = s[i + 1]
+    if (c === '\\') i++
+    else if (c === "'") {
+      const e = s.indexOf("'", i + 1)
+      i = e < 0 ? s.length : e
+    } else if (c === '"') i = dquoteEnd(s, i + 1)
+    else if (c === '`') i = tickEnd(s, i + 1)
+    else if (c === '$' && (n === '(' || n === '{')) i = closeAt(s, i + 2, n, n === '(' ? ')' : '}')
+    else if (c === ']' && n === ']' && /\s/.test(s[i - 1]!) && !/[^\s;&|)]/.test(s[i + 2] ?? '')) return i
+  }
+  return s.length
+}
+
+/**
+ * The commands run inside text the shell only expands (arithmetic `((...))`, a `[[ ... ]]` test, `${...}`): those of its
+ * `$(...)` and backticks, added to `out`. Its `<` and `>` are comparisons, not redirects.
+ */
+function substCommands(s: string, out: XToken[][], bad: string[]): void {
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i]!
+    const n = s[i + 1]
+    if (c === '\\') i++
+    else if (c === "'") {
+      const e = s.indexOf("'", i + 1)
+      i = e < 0 ? s.length : e
+    } else if (c === '`') {
+      const e = tickEnd(s, i + 1)
+      expandCommands(s.slice(i + 1, e), out, bad)
+      i = e
+    } else if (c === '$' && (n === '(' || n === '{')) {
+      const e = closeAt(s, i + 2, n, n === '(' ? ')' : '}')
+      const inner = s.slice(i + 2, e)
+      if (n === '(' && s[i + 2] !== '(') expandCommands(inner, out, bad)
+      else substCommands(inner, out, bad)
+      i = e
+    }
+  }
 }
 
 /** Where the backtick closing one opened before `from` is (a backslash keeps the next character); s.length when none. */
@@ -491,6 +558,21 @@ function expandCommands(s: string, out: XToken[][] = [], bad: string[] = []): XT
         if (m[1] === '<<' || m[1] === '<<-') wantDelim = true
         continue
       }
+      // `(( ... ))` arithmetic and a `[[ ... ]]` test: their `<` and `>` compare, so only their `$(...)` are followed
+      if (c === '(' && n === '(' && !cur) {
+        const e = closeAt(s, i + 2, '(', ')')
+        if (s[e + 1] === ')') {
+          substCommands(s.slice(i + 2, e), out, bad)
+          i = e + 1
+          continue
+        }
+      }
+      if (c === '[' && n === '[' && !cur && /\s/.test(s[i + 2] ?? '')) {
+        const e = testEnd(s, i + 2)
+        substCommands(s.slice(i + 2, e), out, bad)
+        i = e + 1
+        continue
+      }
       if (';&|()'.includes(c)) {
         endCmd()
         continue
@@ -506,14 +588,17 @@ function expandCommands(s: string, out: XToken[][] = [], bad: string[] = []): XT
     if (c === '$') {
       if (n === '(') {
         const e = closeAt(s, i + 2, '(', ')')
-        // `$((...))` is arithmetic, no command
+        // `$((...))` is arithmetic: only its own `$(...)` and backticks run
         if (s[i + 2] !== '(') expandCommands(s.slice(i + 2, e), out, bad)
+        else substCommands(s.slice(i + 2, e), out, bad)
         add(s.slice(i, e + 1), true)
         i = e
         continue
       }
       if (n === '{') {
         const e = closeAt(s, i + 2, '{', '}')
+        // `${X:-$(cp a $D)}` runs the command inside
+        substCommands(s.slice(i + 2, e), out, bad)
         add(s.slice(i, e + 1), true)
         i = e
         continue
@@ -541,7 +626,7 @@ function expandCommands(s: string, out: XToken[][] = [], bad: string[] = []): XT
 const WRITE_REDIRECTS = new Set(['>', '>>', '>|', '>&', '&>', '&>>', '<>'])
 
 /** Words before a command's name that only run it (or are shell words), skipped to find the name. */
-const RUNNERS = new Set(['{', '}', '!', 'then', 'do', 'else', 'elif', 'if', 'while', 'until', 'time', 'command', 'builtin', 'exec', 'nohup', 'sudo', 'doas', 'env', 'nice', 'xargs', 'timeout', 'setsid', 'stdbuf'])
+const RUNNERS = new Set(['{', '}', '!', 'then', 'do', 'else', 'elif', 'if', 'while', 'until', 'time', 'command', 'builtin', 'exec', 'nohup', 'sudo', 'doas', 'env', 'nice', 'xargs', 'timeout', 'gtimeout', 'setsid', 'stdbuf', 'coproc', 'busybox', 'ionice', 'caffeinate', 'unbuffer', 'noglob', 'nocorrect'])
 
 /** For a runner, its options that take the next word as their value (`sudo -u me`, `nice -n 5`), so that word is no command name. */
 const RUNNER_VALUED: Record<string, RegExp> = {
@@ -550,6 +635,9 @@ const RUNNER_VALUED: Record<string, RegExp> = {
   env: /^(-[uCS]|--(unset|chdir|split-string))$/,
   nice: /^(-n|--adjustment)$/,
   timeout: /^(-[sk]|--(signal|kill-after))$/,
+  gtimeout: /^(-[sk]|--(signal|kill-after))$/,
+  ionice: /^-[cnp]$/,
+  caffeinate: /^-[tw]$/,
   xargs: /^(-[ILnPdEsa]|--(replace|max-lines|max-args|max-procs|delimiter|eof|max-chars|arg-file|process-slot-var))$/,
   exec: /^-a$/,
   time: /^(-[fo]|--(format|output))$/,
@@ -569,7 +657,7 @@ const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'mksh', 'fish'])
 const C_RUNNERS = new Set(['su', 'runuser', 'script', 'flock'])
 
 /** Commands whose words are a command line they run (like eval). */
-const EVALS = new Set(['eval', 'trap', 'watch'])
+const EVALS = new Set(['eval', 'trap', 'watch', 'parallel'])
 /** Whether shell word `raw` (as written) holds a `$` or a backtick. */
 const hasDollar = (raw: string) => /[$`]/.test(raw)
 
@@ -637,8 +725,10 @@ export function unresolvedTarget(command: string, depth = 0): string | undefined
       const w = words[i]!
       if (RUNNERS.has(w.raw)) {
         runner = w.raw
-        duration = runner === 'timeout'
+        duration = runner === 'timeout' || runner === 'gtimeout'
         i++
+        // `coproc NAME { ...; }`: NAME only names it
+        if (runner === 'coproc' && words[i + 1]?.raw === '{' && /^[A-Za-z_]\w*$/.test(words[i]?.raw ?? '')) i++
       } else if (/^[A-Za-z_]\w*=/.test(w.raw)) i++
       else if (runner && w.raw.startsWith('-') && w.raw !== '-') {
         const chdir = RUNNER_CHDIR[runner]

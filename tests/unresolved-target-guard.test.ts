@@ -77,6 +77,29 @@ const REFUSED: [string, string][] = [
   [`trap -- "cp a $X" EXIT`, `"cp a $X"`],
   [`su -c 'cp a $X'`, `'cp a $X'`],
   [`flock /tmp/l -c 'cp a $X'`, `'cp a $X'`],
+  // the checker's fourth-try probes: a `)` in quotes or a comment doesn't end `$(...)` early
+  ['X=/rep; y=$(echo ")"; echo x > "$X"o/f)', '"$X"o/f'],
+  ['y=$(echo ")"; cp a "$X"o/f)', '"$X"o/f'],
+  ["x=$(: #)'\necho x > \"$X\"o/f\n#'\n)", '"$X"o/f'],
+  ["y=$(echo ')'; cp a $D)", '$D'],
+  ['y="$(echo "a)b"; cp a $D)"', '$D'],
+  ['diff <(echo ")"; cp a $D) b', '$D'],
+  // coproc, busybox and parallel run the command after them
+  ['coproc cp a "$X"o/f', '"$X"o/f'],
+  ['coproc C { cp a $D; }', '$D'],
+  ['busybox cp a "$X"o/f', '"$X"o/f'],
+  ['parallel cp a "$X"o/f ::: 1', '"$X"o/f'],
+  ['gtimeout 5 cp a $D', '$D'],
+  // a command inside arithmetic, a [[ ]] test or ${...} still runs
+  ['(( $(cp a $D) ))', '$D'],
+  ['echo $(( $(cp a $D) + 1 ))', '$D'],
+  ['[[ $(cp a $D) ]] && echo y', '$D'],
+  ['echo ${X:-$(cp a $D)}', '$D'],
+  // a redirect after (( )) or [[ ]] writes
+  ['(( n > 1 )) > $F', '$F'],
+  ['[[ $a > $b ]] > $F', '$F'],
+  // `( (` with a space at the end is two subshells, not arithmetic
+  ['((echo x > $F) )', '$F'],
 ]
 
 /** Variables outside write targets, and plain write targets: not refused for that. */
@@ -112,6 +135,16 @@ const ALLOWED = [
   'source ./env.sh',
   '. scripts/x.sh',
   "trap 'rm -f out' EXIT",
+  // `<` and `>` inside (( )) and [[ ]] compare, they don't write
+  '(( n > $m )) && echo y',
+  '[[ $a > $b ]] && echo y',
+  '[[ $a < $b && -n $c ]] || echo n',
+  'for (( i = 0; i < $n; i++ )); do echo $i; done',
+  'if (( $# > 0 )); then echo $1; fi',
+  'y=$(echo ")") && echo $y',
+  'x=$(ls $D # list it)\n) && echo $x',
+  'coproc ls $D',
+  'parallel echo ::: a b',
 ]
 
 test('T-963: a write or cd target built from a variable or command output is refused, with a clear reason', () => {
