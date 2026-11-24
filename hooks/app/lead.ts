@@ -32,7 +32,15 @@ export const readLead = async (host: Host) => parseLead(await readLeadText(host)
  * steps down if another session drives. `fresh` = this copy of the plugin just loaded,
  * so any worker it had is gone. Returns whether this session drives now.
  */
+/** T-984: while this window still holds a made-up session id (the host could not answer at start), ask again; swap in the real one. */
+async function refreshMe(host: Host) {
+  if (!S.me.startsWith('session-')) return
+  const id = await host.session.id().catch(() => '')
+  if (id && id !== S.me) S.me = id
+}
+
 export async function claimLead(host: Host, fresh = false): Promise<boolean> {
+  await refreshMe(host)
   // T-793: a window turned off here never drives (nor takes driving back)
   if (S.offHere || S.fresh) {
     S.driving = false
@@ -339,6 +347,7 @@ export const GONE_GRACE_MS = 90_000
 
 /** The heartbeat of a window off here: it drives nothing; it looks whether the window with symcc on is gone and tells the owner once. */
 export async function offHereBeat(host: Host, nowMs = Date.now()) {
+  await refreshMe(host)
   // a hand-over that landed on this window (it asked with /drive before turning off): give the board straight back
   await locked(host, async () => {
     const l = await readLead(host)

@@ -491,3 +491,26 @@ test('T-984: /symcc-drive turns an off-here window on and drives, except after /
   expect(S.offHere).toBe(true)
   expect(JSON.stringify(r2)).toContain('disable here')
 })
+
+test('T-984: a made-up id is swapped for the real one on the next beat, so the window finds itself in lead.json', async () => {
+  S.root = ROOT
+  S.me = 'session-made-up'
+  const w = world('me')
+  await saveBoard(w.host, emptyBoard())
+  const t0 = Date.now()
+  w.files.set(w.lead, leadText('me', t0))
+  let up = false
+  w.host.session.id = async () => {
+    if (!up) throw new Error('not yet')
+    return 'me'
+  }
+  await startOffHere(w.host)
+  up = true
+  w.toasts.length = 0 // the host could not name this window at start, so the start notice cannot know it is itself
+  await offHereBeat(w.host, t0 + 1000)
+  await offHereBeat(w.host, t0 + LEAD_STALE_MS + 1000)
+  await offHereBeat(w.host, t0 + LEAD_STALE_MS + GONE_GRACE_MS + 2000)
+  expect(S.me).toBe('me')
+  expect(S.offHere).toBe(false)
+  expect(w.toasts.filter(t => t.includes('closed') || t.includes('another'))).toEqual([])
+})

@@ -160,5 +160,5 @@ test('T-952: /symcc-drive in a window that started off because another window dr
   await disableHere(b.host)
   const off = await runCommand(b.host, 'symcc-drive', '')
   expect(S.offHere).toBe(true)
-  expect(off?.text).toBe('symcc is off in this window. /symcc-enable turns it back on.')
+  expect(off?.text).toBe('symcc is off in this window because you ran /symcc-disable here, so /symcc-drive leaves it off. /symcc-enable turns it on here; then /symcc-drive can make this window drive.')
 })
