@@ -4,7 +4,7 @@
 //   Status        Mode (with "change" a link), Scouts, Branch, Tests: one row each
 //   Tasks  17 backlog   what needs you, then the lanes; when nothing runs why, and when all is done "All done", "Up next
 //                 from the backlog" and the one primary "Tell the lead" button
-//   Branches      (T-727: core's liveBranches drawn with real lines: see branchesVs; the next redesign task changes it)
+//   Branches      (T-1004: core's liveBranches, one line each: see branchesVs)
 //   Today         Results, Tokens (one color), Agent time, Per task, Hours, 7 days (core's liveTodayRows)
 //   Organizational memory  2 / 60   All notes   (one line)
 // A lane is two lines: ▶ T-684  the full title (cut only when the panel is too narrow), then under it the track and the time
@@ -13,7 +13,7 @@
 // up under them. The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code asks for
 // reduced motion. T-715: under a lane hang its waiting trains, one line each, indented by their level.
 import type { RenderChildren } from 'claude-code'
-import { liveInner, type BranchRow, type LiveBranches, liveBranches, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, LIVE_SECTIONS, type LiveLane, type LiveStation, type LiveLayout, type LiveSeg, LIVE_TONE, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
+import { liveInner, liveBranches, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, LIVE_SECTIONS, type LiveLane, type LiveStation, type LiveLayout, type LiveSeg, LIVE_TONE, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
 import { STATUS_MARK } from '../../core/details'
 import { textWidth } from '../../core/width'
 import { nextMode } from '../../board'
@@ -79,40 +79,6 @@ export function stationsSvg(l: LiveLayout): { source: string; width: number; hei
   return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">${text.join('')}</svg>`, width, height }
 }
 
-/** T-727: the pixels from one commit's dot to the next in the Branches drawings, and each drawing's height. */
-const BR_STEP = 22
-const BR_H = 18
-
-/** T-727: the Branches section's main line as an Svg: a dot per shown commit (oldest left), lines between them, and a
- *  line down from each commit a row hangs from. Every Branches drawing is as wide, so the rows' lines meet it. */
-export function branchMainSvg(b: Pick<LiveBranches, 'commits' | 'rows'>): { source: string; width: number; height: number } {
-  const k = b.commits.length
-  const x = (i: number) => 8 + i * BR_STEP
-  const width = x(k) + 8
-  const y = BR_H / 2
-  const parts: string[] = []
-  if (k > 1) parts.push(`<line x1="${x(0)}" y1="${y}" x2="${x(k - 1)}" y2="${y}" stroke="${INK.future}" stroke-width="1.5"/>`)
-  for (const c of new Set(b.rows.filter(r => r.kind !== 'more').map(r => r.col))) parts.push(`<line x1="${x(c)}" y1="${y}" x2="${x(c)}" y2="${BR_H}" stroke="${INK.future}" stroke-width="1.5"/>`)
-  b.commits.forEach((c, i) => parts.push(`<circle cx="${x(i)}" cy="${y}" r="4" fill="${INK.bar}"><title>${c.sha.slice(0, 7)}</title></circle>`))
-  return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${BR_H}" viewBox="0 0 ${width} ${BR_H}">${parts.join('')}</svg>`, width, height: BR_H }
-}
-
-/** T-727: a Branches row's lines as an Svg: the lines passing by to the rows under it, its own line from the commit it
- *  hangs from (a curve, or a tee when a row under it hangs there too) to its mark: a hollow dot, or (merged in the last 10 minutes, T-794) a dim arrow. */
-export function branchRowSvg(r: Pick<BranchRow, 'col' | 'lines' | 'tee' | 'kind'>, k: number): { source: string; width: number; height: number } {
-  const x = (i: number) => 8 + i * BR_STEP
-  const width = x(k) + 8
-  const y = BR_H / 2
-  const end = x(k)
-  const ink = INK.future
-  const parts: string[] = []
-  for (const c of new Set(r.lines)) parts.push(`<line x1="${x(c)}" y1="0" x2="${x(c)}" y2="${BR_H}" stroke="${INK.future}" stroke-width="1.5"/>`)
-  const at = x(r.col)
-  parts.push(r.tee ? `<path d="M${at} 0 L${at} ${y} L${end - 5} ${y}" fill="none" stroke="${ink}" stroke-width="1.5"/>` : `<path d="M${at} 0 L${at} ${y - 5} Q${at} ${y} ${at + 5} ${y} L${end - 5} ${y}" fill="none" stroke="${ink}" stroke-width="1.5"/>`)
-  parts.push(r.kind === 'merged' ? `<path d="M${end - 6} ${y} L${end + 2} ${y - 5} L${end + 2} ${y + 5} Z" fill="${INK.future}"/>` : `<circle cx="${end}" cy="${y}" r="4" fill="none" stroke="${INK.future}" stroke-width="1.5"${r.kind === 'new' ? ' stroke-dasharray="2 2"' : ''}/>`)
-  return { source: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${BR_H}" viewBox="0 0 ${width} ${BR_H}">${parts.join('')}</svg>`, width, height: BR_H }
-}
-
 /** T-973: the line over the backlog picks when all is done. */
 export const LIVE_UP_NEXT = 'Up next from the backlog'
 /** The Live tab's Status heading. */
@@ -133,36 +99,35 @@ function liveSection($: $, pane: PaneParts, key: string, name: string, body: () 
   )
 }
 
-/** T-727: the Live tab's Branches section in VS Code: core's liveBranches drawn with real lines (an Svg per line, each
- *  one's `alt` the terminal's text), each task's id a link that opens it, its figures after it. */
+/** T-1004: the Live tab's Branches section in VS Code: one line per branch, no graph. The id (a link that opens the
+ *  task) in a sized cell, then its figures (main: "sha · age"; a task: "+3 commits · 1 behind"; a merged one: "merged 3m ago"). */
 function branchesVs($: $, pane: PaneParts, open: (id: string) => () => void) {
   const { Box, Text, C, v, width, nowMs, vs } = pane
-  const { Svg } = vs
-  const br = liveBranches(v, nowMs, width)
+  // laid out wide so each row keeps its longest words; cutEnd below fits them to the panel
+  const br = liveBranches(v, nowMs, 200)
   if (!br) return null
-  const main = branchMainSvg(br)
-  const words = (xs: LiveSeg[]) => xs.map(s => <Text color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)
+  const inner = liveInner(width)
+  const idW = Math.max(4, textWidth(br.name), ...br.rows.map(r => textWidth(r.id ?? '')))
+  const room = Math.max(1, inner - idW - 1)
+  const figures = (key: string, text: string, color: string) => <Box key={key} flexDirection="row" flexGrow={1} flexShrink={1}><Text wrap="truncate" color={C(color)}>{cutEnd(text, room)}</Text></Box>
+  const rowText = (xs: LiveSeg[]) => segText(xs).replace(/\s+/g, ' ').trim()
   return liveSection($, pane, 'br', LIVE_SECTIONS.branches, () => [
-    <Box key="live-br-main" flexDirection="row" gap={1} alignItems="center">
-      <Svg key="live-br-main-svg" source={main.source} width={main.width} height={main.height} alt={segText(br.main).trim()} />
-      <Box key="live-br-main-text" flexDirection="column">
-        <Text color={C('inactive')}>
-          <Text bold color={C('text')}>{br.name}</Text>
-          {br.right ? `  ${br.right}` : ''}
-        </Text>
-      </Box>
+    <Box key="live-br-main" flexDirection="column">
+      {vsRow(vs, 'live-br-main-row', [
+        { key: 'id', width: idW, node: <Box key="live-br-main-name" flexDirection="row"><Text bold color={C('text')}>{br.name}</Text></Box> },
+        { key: 'figures', node: figures('live-br-main-text', br.right, 'inactive') },
+      ])}
     </Box>,
     ...br.rows.map(r => {
-      if (!r.id) return <Box key="live-br-more" flexDirection="column" paddingLeft={1}><Text color={C('inactive')}>{segText(r.label)}</Text></Box>
-      const svg = branchRowSvg(r, br.commits.length)
+      if (!r.id) return <Box key="live-br-more" flexDirection="column"><Text color={C('inactive')}>{rowText(r.label)}</Text></Box>
       const href = vsHref('task', r.id)
+      const id = r.id
       return (
-        <Box key={`live-br-row:${r.id}`} flexDirection="row" gap={1} alignItems="center" hover={{ backgroundColor: ROW_HOVER }}>
-          <Svg key={`live-br-svg:${r.id}`} source={svg.source} width={svg.width} height={svg.height} alt={segText(r.segs).trim()} />
-          {vsLink(vs, branchKey(r.id), mdLink(r.id, href), [[href, open(r.id)]])}
-          <Box key={`live-br-note:${r.id}`} flexDirection="column">
-            <Text>{words(r.label.slice(1).map((s, i) => (i ? s : { ...s, text: s.text.trimStart() })))}</Text>
-          </Box>
+        <Box key={`live-br-row:${id}`} flexDirection="column" hover={{ backgroundColor: ROW_HOVER }}>
+          {vsRow(vs, `live-br-line:${id}`, [
+            { key: 'id', width: idW, node: vsLink(vs, branchKey(id), mdLink(id, href), [[href, open(id)]], r.kind === 'merged') },
+            { key: 'figures', node: figures(`live-br-note:${id}`, rowText(r.label.slice(1)), 'inactive') },
+          ])}
         </Box>
       )
     }),

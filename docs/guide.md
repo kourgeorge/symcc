@@ -1469,7 +1469,10 @@ unchanged.
     from the backlog** with the first 3 backlog tasks (each opens its page) and "14 more in the
     backlog" (a link that opens the Tasks tab with Backlog open). The one main button, `Tell the
     lead what to do next`, puts "Next task: " in the prompt box.
-  - **Branches**: as in the terminal, drawn with real lines.
+  - **Branches**: one line each, no graph: the id (a link that opens the task) in a cell of a set
+    width, then its figures. `main` shows its newest commit and age (`c1c1c1c · 2 min ago`), a task
+    its state and `+3 commits · 1 behind`, a merged one `merged 3m ago`. A figure that does not fit
+    is cut with `…`, never wrapped onto a second line.
   - **Today**: label and value rows: Results (`✓ 0 merged · ↺ 0 sent back · ✗ 0 failed`, in
     green, yellow and red), Tokens (all of today's, then who spent them, all in one color),
     Agent time (and the cost when known), Per task, Hours (the day's token bars and the busiest

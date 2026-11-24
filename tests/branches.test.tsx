@@ -2,7 +2,7 @@
 // with git (here a fake git), and the terminal and VS Code Live tabs draw it (OpenCode's: hooks/opencode/tests).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { BRANCH_ROWS_MAX, LIVE_INDENT, LIVE_TONE, liveBranches, liveFinishedLanes, segText } from '../hooks/core/live'
+import { BRANCH_ROWS_MAX, LIVE_INDENT, liveInner, LIVE_TONE, liveBranches, liveFinishedLanes, segText } from '../hooks/core/live'
 import { LIST_TONE } from '../hooks/core/details'
 import { textWidth } from '../hooks/core/width'
 import { branchFacts, readBranches, BRANCH_CACHE_MS } from '../hooks/app/branches'
@@ -184,28 +184,32 @@ for (const bodyColumns of [100, 40])
     await ui.unmount()
   })
 
-test('T-727: the VS Code Live tab draws the Branches section with real lines, and a click on a row opens its task', async ($, on) => {
-  seedBoard(on, { view: liveView() })
-  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
-  await ui.press({ key: 'tab-live' })
-  expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('Branches')
-  // T-1003: no legend line; the lanes come before Branches; no divider lines
-  const keys = (await ui.findAll({})).map(n => String(n.key))
-  expect(keys.indexOf('live-legend')).toBe(-1)
-  expect(keys.indexOf('live-lanes')).toBeLessThan(keys.indexOf('live-br-head'))
-  expect(keys.indexOf('live-divider')).toBe(-1)
-  expect((await ui.find({ key: 'live-br-main-text' }))?.text).toBe('main  c1c1c1c · 2 min ago')
-  const svgs = await ui.findAll({ type: 'Svg' })
-  const main = svgs.find(x => x.props.alt === BRANCH_LINES_100[1]!.trim())
-  expect(String(main?.props.alt)).toBe(BRANCH_LINES_100[1]!.trim())
-  expect((String(main?.props.source).match(/<circle/g) ?? []).length).toBe(7)
-  for (const [i, id] of ['T-724', 'T-721', 'T-725', 'T-726'].entries()) {
-    const svg = svgs.find(x => x.props.alt === BRANCH_LINES_100[i + 2]!.trim())
-    expect(String(svg?.props.source)).toContain('<path')
-    expect((await ui.find({ key: branchKey(id) }))?.props.pressableLinks).toEqual([vsHref('task', id)])
-  }
-  expect((await ui.find({ key: 'live-br-note:T-721' }))?.text).toBe('▶ running · +3 commits · 1 behind')
-  expect((await ui.find({ key: 'live-br-note:T-726' }))?.text).toBe('not started')
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1004: the VS Code Live tab draws main and each branch on one line, no SVG, nothing wider than the panel (${bodyColumns} columns)`, async ($, on) => {
+    seedBoard(on, { view: liveView() })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.press({ key: 'tab-live' })
+    expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('Branches')
+    const keys = (await ui.findAll({})).map(n => String(n.key))
+    expect(keys.indexOf('live-lanes')).toBeLessThan(keys.indexOf('live-br-head'))
+    expect(keys.indexOf('live-divider')).toBe(-1)
+    // no graph pictures in the section
+    // (the only pictures left are the lanes' tracks and their station header)
+    expect((await ui.findAll({ type: 'Svg' })).filter(x => !/^T-\d+ at /.test(String(x.props.alt)) && !String(x.props.source).includes('<text')).map(x => x.props.alt)).toEqual([])
+    // one line each: main and the task branches, the id cell then the figures
+    const row = async (k: string) => (await ui.find({ key: k }))
+    for (const k of ['live-br-main-row', 'live-br-line:T-724', 'live-br-line:T-721', 'live-br-line:T-725', 'live-br-line:T-726']) expect([k, (await row(k))?.props.flexDirection ?? 'row']).toEqual([k, 'row'])
+    const inner = liveInner(bodyColumns)
+    const cell = Number((await row('live-br-main-row-id'))?.props.width)
+    expect(cell).toBeGreaterThanOrEqual(5)
+    const figs = [['live-br-main-text', 'c1c1c1c · 2 min ago'], ['live-br-note:T-721', '▶ running · +3 commits · 1 behind'], ['live-br-note:T-726', 'not started']] as const
+    for (const [k, want] of figs) {
+      const t = String((await row(k))?.text)
+      expect(t.length + cell + 1).toBeLessThanOrEqual(inner)
+      if (bodyColumns >= 64) expect(t).toBe(want)
+    }
+    expect(String((await row('live-br-note:T-724'))?.text)).toMatch(/^merged 3m ago/)
+    for (const id of ['T-724', 'T-721', 'T-725', 'T-726']) expect((await ui.find({ key: branchKey(id) }))?.props.pressableLinks).toEqual([vsHref('task', id)])
   await ui.press({ key: branchKey('T-721'), link: { href: vsHref('task', 'T-721') } })
   expect(await ui.find({ key: 'live-br-head' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Record which test failed/ })).toBeDefined()
