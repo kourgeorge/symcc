@@ -51,6 +51,9 @@ test('health: starving after 3 changes of its after list, or 2+ hours while newe
   expect(reasons(board([task('T-1', { created_at: iso(60), updated_at: iso(60) }), task('T-2', { status: 'doing' }), task('T-3', { status: 'done' })], full))).toEqual([])
   // a free slot: the pump starts it next, so it is not pushed back
   expect(reasons(board([old, task('T-2', { status: 'doing' }), task('T-3', { status: 'review' })], { max_parallel: 2 }))).toEqual([])
+  // put later on purpose (priority 5) behind newer priority-0 work: not starving
+  const late = task('T-1', { created_at: iso(300), updated_at: iso(300), priority: 5 })
+  expect(reasons(board([late, task('T-2', { status: 'doing' }), task('T-3', { status: 'review' }), task('T-4', { status: 'done' })], full))).toEqual([])
 })
 
 test('health: a task whose after task merged just now is not pushed back', () => {
