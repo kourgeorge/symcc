@@ -21,6 +21,7 @@ import { pageHeader, type PageHeader } from './page-header'
 import { claudeHost } from '../host'
 import { mergingNow, mergeOutcome } from '../../app/workers'
 import { boardAnswered } from '../../app/questions'
+import { canRunNow, runNowQuestion, runNowWaits, RUN_NOW_NO, RUN_NOW_YES } from '../../core/run-now'
 
 /** The line a task's page shows in place of its review buttons while it merges. */
 export const MERGING_LINE = 'Merging… (tests running)'
@@ -326,6 +327,29 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   const resumeIt = act(async () => (await runTool(claudeHost($), 'resume', { task: t.id }), noteForLead(`The owner resumed ${t.id}.`)))
   const mergeNow = startMerge(MERGING_LINE, `Merging ${t.id} now…`, () => runTool(claudeHost($), 'retry', { task: t.id }), () => noteForLead(`The owner asked to merge ${t.id} now (it waited for their files).`))
   const retryIt = act(async () => (await runTool(claudeHost($), 'retry', { task: t.id }), noteForLead(`The owner retried ${t.id}.`)))
+  // T-954: Run now starts its worker at once; when it waits on unfinished tasks, it asks "Start anyway?" first (Cancel is the default)
+  const waits = runNowWaits({ tasks: v.tasks, ...(v.archived_done ? { archived_done: v.archived_done } : {}) }, t)
+  if (S.runNowAsk && (S.runNowAsk !== t.id || !canRunNow(t) || !waits.length)) S.runNowAsk = null
+  const runNowGo = (anyway: boolean) =>
+    act(async () => {
+      S.runNowAsk = null
+      redraw()
+      const r = await runTool(claudeHost($), 'run', { task: t.id, ...(anyway ? { anyway: true } : {}) })
+      $.ui.toast(S.N.toast(r))
+      noteForLead(`The owner ran ${t.id} now${anyway ? ' (start anyway)' : ''}: ${brief(r)}`)
+    })
+  const runNowIt = waits.length ? () => ((S.runNowAsk = t.id), redraw()) : runNowGo(false)
+  const cancelRunNow = () => ((S.runNowAsk = null), redraw())
+  const runNowBox =
+    S.runNowAsk === t.id ? (
+      <Box key="run-now-box" flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
+        <Text color={C('warning')}>{runNowQuestion(t.id, waits)}</Text>
+        <Box flexDirection="row" gap={1}>
+          <Button key="run-now-yes" label={RUN_NOW_YES} onPress={runNowGo(true)} />
+          <Button key="run-now-cancel" label={RUN_NOW_NO} autoFocus onPress={cancelRunNow} />
+        </Box>
+      </Box>
+    ) : null
   const toTodo = act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: false }), noteForLead(`The owner moved ${t.id} from the backlog to todo.`)))
   const stashIt = act(async () => (await runTool(claudeHost($), 'change', { task: t.id, backlog: true }), noteForLead(`The owner moved ${t.id} to the backlog.`)))
   const dropIt = act(async () => (await runTool(claudeHost($), 'drop', { task: t.id, reason: 'dropped by the owner' }), noteForLead(`The owner dropped ${t.id}.`)))
@@ -352,7 +376,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   /** What each of the page's action buttons does here. */
   const press: Record<TaskActionId, () => void> = {
     done: approveIt, approve: approveIt, 'keep-note': keepNote, 'ask-more': askReason, reject: askReason,
-    'show-changes': showDiff(''), watch: watchIt, pause: pauseIt, resume: resumeIt, 'merge-now': mergeNow, retry: retryIt, 'to-todo': toTodo, stash: stashIt,
+    'show-changes': showDiff(''), watch: watchIt, pause: pauseIt, resume: resumeIt, 'merge-now': mergeNow, retry: retryIt, 'run-now': runNowIt, 'to-todo': toTodo, stash: stashIt,
     role: openRolePick, 'already-merged': markMergedIt, drop: dropIt, 'needs-review': toggleReview, copy: copyTask,
   }
   // the page header (T-751): where you are (the tab it was opened from, its place in that list), the title, the state,
@@ -364,7 +388,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
     state: taskStateGroups(t as BoardTask, { nowMs: pane.nowMs, merging: pageMerging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? S.driving, pane.nowMs) }),
     buttons: actions.map(x => ({ id: x.id, label: x.label, group: x.group, ...(x.key ? { key: x.key } : {}), onPress: press[x.id] })),
     onBack: goBack, onPrev: place ? openTask(place.prev) : () => undefined, onNext: place ? openTask(place.next) : () => undefined,
-    backFocus: !(answerable || rejectBox), nav: NAV_KEYS.claude, ...(rejectBox ? { noKeys: true } : {}),
+    backFocus: !(answerable || rejectBox || runNowBox), nav: NAV_KEYS.claude, ...(rejectBox ? { noKeys: true } : {}),
   }
   // T-761: the Branch section's git facts: the last ones read (the view's, or this page's own read); a stale read runs
   // in the background, never waited for here, and redraws the page once it is done
@@ -444,9 +468,9 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   // VS Code's side panel: its own wide page, with buttons and no key hints (see vscode-task.tsx)
   if (pane.vscode)
     return taskPageVs(pane, t, {
-      header, agentId, inReview, answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, sections, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
+      header, agentId, inReview, runNowAsk: S.runNowAsk === t.id ? runNowQuestion(t.id, waits) : '', answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, sections, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
       redraw: () => $.ui.invalidate('ui.render'),
-      on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, toTodo, stash: stashIt, markMerged: markMergedIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
+      on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, runNow: runNowIt, startAnyway: runNowGo(true), cancelRunNow, toTodo, stash: stashIt, markMerged: markMergedIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
     })
   return (
     <Box flexDirection="column" gap={1}>
@@ -456,6 +480,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
       {sectionEl('why')}
 
       {rejectBox}
+      {runNowBox}
       {roleBox}
 
       {sectionEl('answer')}

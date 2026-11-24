@@ -11,6 +11,7 @@
 // - T-774: the Runs heading sums the task's own tries
 // - T-775: every header button "[Label]" in one style, Back "‹ [Tasks]"; the try buttons "[Try 1]", their keys hidden (on desktop and mobile native Buttons "Try 1" and Back "Tasks", no brackets)
 // - T-914: the header's id always the board orange ("claude"), whatever the status
+// - T-954: the Run now button (key e) on to do, paused, failed, dropped and backlog tasks
 export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
   "mobile T-501": {
     "type": "Box",
@@ -866,19 +867,26 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-1","flexDirection":"row"},
             "children": [
+              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
             "type": "Box",
             "props": {"key":"hdr-buttons-2","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-3","flexDirection":"row"},
+            "children": [
               {"type":"Button","props":{"key":"needs-review","label":"☐ Needs review","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -892,6 +900,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
@@ -1451,6 +1460,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                   "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["r"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" retry"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
                 ]
               },
               {
@@ -2889,19 +2906,26 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-1","flexDirection":"row"},
             "children": [
+              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
             "type": "Box",
             "props": {"key":"hdr-buttons-2","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"hdr-buttons-3","flexDirection":"row"},
+            "children": [
               {"type":"Button","props":{"key":"needs-review","label":"☐ Needs review","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -2915,6 +2939,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"resume-key","label":"u","hotkey":"u"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
@@ -3444,6 +3469,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["z"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" stash to backlog"]}
                 ]
@@ -3635,17 +3668,19 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Button","props":{"key":"pause","label":"Pause","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
             "type": "Box",
             "props": {"key":"hdr-buttons-1","flexDirection":"row"},
             "children": [
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"needs-review","label":"☐ Needs review","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -3659,6 +3694,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"pause-key","label":"p","hotkey":"p"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
@@ -3902,6 +3938,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["z"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" stash to backlog"]}
                 ]
@@ -3912,14 +3956,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["l"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" role"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" drop"]}
                 ]
               }
             ]
@@ -3932,6 +3968,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" drop"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
                 ]
@@ -4071,6 +4115,8 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Button","props":{"key":"to-todo","label":"Move to todo","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -4093,6 +4139,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"to-todo-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
@@ -4335,6 +4382,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["l"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" role"]}
                 ]
@@ -4345,14 +4400,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" drop"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
                 ]
               }
             ]
@@ -4365,6 +4412,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
                 ]
@@ -4376,11 +4431,17 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
-              },
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
               {
                 "type": "Text",
                 "children": [
-                  " · ",
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -5176,6 +5237,8 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Button","props":{"key":"retry","label":"Retry","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -5189,6 +5252,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
             ]
@@ -5714,16 +5778,16 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["h"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" already merged"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["h"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" already merged"]}
                 ]
               }
             ]
@@ -5736,6 +5800,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
                 ]
@@ -5747,11 +5819,17 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
-              },
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
               {
                 "type": "Text",
                 "children": [
-                  " · ",
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]

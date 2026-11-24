@@ -24,7 +24,7 @@
 // problem is told once, and told again only when one of its tasks changes.
 import type { Board, BoardTask } from './board-file'
 import { asBlockers, blockerFiles, find, intoOf, isFinished, waitsForFiles } from './board-file'
-import { AFTER_CHANGED } from './history'
+import { AFTER_CHANGED, ranNow } from './history'
 import { fixWays } from './review'
 import { num } from './text'
 import { ready } from './task'
@@ -134,7 +134,9 @@ function aboutToStart(b: Board): Set<string> {
   return new Set(ready(b).slice(0, free).map(t => t.id))
 }
 
-const started = (t: BoardTask) => !!t.runs?.length || ['doing', 'review', 'done'].includes(t.status)
+/** A task that already started, for "newer tasks already started" (T-954: not one the owner started with Run now:
+ *  their choice pushed nothing back). */
+const started = (t: BoardTask) => !ranNow(t) && (!!t.runs?.length || ['doing', 'review', 'done'].includes(t.status))
 
 function starving(b: Board, nowMs: number): HealthFinding[] {
   const out: HealthFinding[] = []

@@ -179,6 +179,7 @@ function entryStage(e: SymccHistoryEntry): Stage | 'end' | null {
       return e.owner ? 'owner' : 'free'
     case 'answer':
     case 'resumed':
+    case 'run-now':
     case 'retried':
     case 'checker-problems':
     case 'failed':

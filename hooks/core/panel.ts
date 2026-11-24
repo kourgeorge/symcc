@@ -14,6 +14,7 @@ import { onDemand } from './scouts'
 import { fmtDuration, runMs, sumRuns } from './runs'
 import { ellipsis, num } from './text'
 import { whyFailed } from './failure'
+import { canRunNow, RUN_NOW_KEY, RUN_NOW_LABEL, RUN_NOW_WORD } from './run-now'
 import { statusMark, wrapSegs } from './details'
 import { type PhaseStage, type PhaseTask, stageStep, taskPhase } from './phase'
 
@@ -631,7 +632,7 @@ export const listKeys = (): KeyHint[] => [
  *  hotkey (none: a button without one), `word` the key hint's word, `main` the one action to press (at most one, none
  *  while the task asks something), `group` its group in the page header's button line (see core/page-header.ts):
  *  main (the next step), task, danger (throws work away: Drop, Reject) or page (needs review, copy). */
-export type TaskActionId = 'done' | 'keep-note' | 'ask-more' | 'approve' | 'reject' | 'show-changes' | 'watch' | 'pause' | 'resume' | 'merge-now' | 'retry' | 'to-todo' | 'stash' | 'role' | 'already-merged' | 'drop' | 'needs-review' | 'copy'
+export type TaskActionId = 'done' | 'keep-note' | 'ask-more' | 'approve' | 'reject' | 'show-changes' | 'watch' | 'pause' | 'resume' | 'merge-now' | 'retry' | 'run-now' | 'to-todo' | 'stash' | 'role' | 'already-merged' | 'drop' | 'needs-review' | 'copy'
 /** Which group of a page header's button line an action is in (in this order, T-751): the one next step, the other
  *  task actions, the ones that throw work away (set apart), and the page's settings and actions (at the end). All
  *  are drawn alike (T-775); the order and the gaps between groups tell them apart. */
@@ -694,6 +695,8 @@ export function taskActions(t: BoardTask, ctx: TaskActionCtx = {}): TaskAction[]
     fileWait && !ctx.merging && a('merge-now', 'Merge now', 'merge now', 'r', { main: true }),
     (s === 'failed' || s === 'dropped') && a('retry', 'Retry', 'retry', 'r', s === 'failed' ? { main: true } : {}),
     s === 'backlog' && a('to-todo', 'Move to todo', 'move to todo', 'o', { main: true }),
+    // T-954: start a worker at once (past the slots, a paused board and, once confirmed, its after list)
+    !ctx.merging && canRunNow(t) && a('run-now', RUN_NOW_LABEL, RUN_NOW_WORD, RUN_NOW_KEY),
     (s === 'todo' || s === 'paused' || s === 'failed') && a('stash', 'Stash to backlog', 'stash to backlog', 'z'),
     canPickRole(t) && a('role', 'Role', 'role', 'l'),
     canMarkMerged(t) && a('already-merged', 'Already merged', 'already merged', 'h'),

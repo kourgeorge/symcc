@@ -15,6 +15,7 @@
 import type { SymccTask } from '../../../types'
 import { type DetailRow, type DiffFile, type Seg, agentLines, findRole, fmtRun, fmtTotal, sumRuns, taskActions, type TaskAction, type TaskActionId, type BoardTask } from '../../board'
 import type { TaskSection } from '../../core/task-sections'
+import { RUN_NOW_NO, RUN_NOW_YES } from '../../core/run-now'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
 import type { PaneParts } from './parts'
@@ -87,6 +88,8 @@ export type VsTaskCtx = {
   choices: string[]
   why: { reason: string; next: string; asks: string } | null
   canPickRole: boolean
+  /** T-954: the "T-5 waits on T-3 (running). Start anyway?" question while Run now asks it, else '' */
+  runNowAsk: string
   /** whether "Already merged" fits (T-514): its work was merged by hand, outside the board */
   canMarkMerged?: boolean
   nowRole: string
@@ -104,6 +107,10 @@ export type VsTaskCtx = {
     resume: () => void
     mergeNow: () => void
     retry: () => void
+    /** T-954: Run now; when it waits on unfinished tasks it opens the "Start anyway?" box (runNowAsk) instead */
+    runNow: () => void
+    startAnyway: () => void
+    cancelRunNow: () => void
     toTodo: () => void
     stash: () => void
     markMerged: () => void
@@ -129,7 +136,7 @@ type Action = { key: string; label: string; onPress: (press?: Press) => void; ma
 export function vsActions(t: SymccTask, x: Pick<VsTaskCtx, 'agentId'> & Partial<Pick<VsTaskCtx, 'merging'>>, on: VsTaskCtx['on']): Action[] {
   const press: Record<TaskActionId, (press?: Press) => void> = {
     done: on.approve, approve: on.approve, 'keep-note': on.keepNote, 'ask-more': on.askReason, reject: on.askReason, 'show-changes': on.showDiff(''),
-    watch: on.watch, pause: on.pause, resume: on.resume, 'merge-now': on.mergeNow, retry: on.retry, 'to-todo': on.toTodo, stash: on.stash,
+    watch: on.watch, pause: on.pause, resume: on.resume, 'merge-now': on.mergeNow, retry: on.retry, 'run-now': on.runNow, 'to-todo': on.toTodo, stash: on.stash,
     role: on.openRolePick, 'already-merged': on.markMerged, drop: on.drop, 'needs-review': on.toggleReview, copy: (p?: Press) => on.copy(p),
   }
   return taskActions(t as BoardTask, { worker: !!x.agentId, merging: !!x.merging }).map(a => ({ key: a.id, label: a.label, onPress: press[a.id], main: !!a.main, group: a.group }))
@@ -230,6 +237,17 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       />
       {plain('vs-reject-note', x.answered ? 'Send starts a fresh try with your question.' : 'Send moves it back to todo with your reason.', 'inactive')}
       <Button key="reject-cancel" label="Cancel" variant="secondary" onPress={on.cancelReject} />
+    </Box>
+  ) : null
+
+  // T-954: Run now's "Start anyway?" question (Cancel is the default)
+  const runNowBox = x.runNowAsk ? (
+    <Box key="vs-run-now" flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
+      {plain('vs-run-now-ask', x.runNowAsk, 'warning')}
+      <Box key="vs-run-now-buttons" flexDirection="row" gap={1}>
+        <Button key="run-now-yes" label={RUN_NOW_YES} onPress={on.startAnyway} />
+        <Button key="run-now-cancel" label={RUN_NOW_NO} variant="secondary" autoFocus onPress={on.cancelRunNow} />
+      </Box>
     </Box>
   ) : null
 
@@ -443,6 +461,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {fileWait}
       {failed}
       {rejectBox}
+      {runNowBox}
       {roleBox}
       {detailGrid}
       {branch}

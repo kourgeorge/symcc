@@ -2,17 +2,17 @@ import type { SymccTask } from '../../types'
 import { isFinished, makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, PROSE_ROLE_TEXT, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
 import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
-import { removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
+import { gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
-import { S, heard, workers, toolName } from './state'
+import { S, heard, workers, starting, toolName } from './state'
 import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { statsHtml, openCommands } from '../core/stats-html'
 import { doctor } from './doctor'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable, playSample } from './voice'
-import { pump, approve, mergeWaiting, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, fullAnswer } from './workers'
+import { pump, startNow, approve, mergeWaiting, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, fullAnswer } from './workers'
 import { stopWorker, setBoardMode, setSymcc } from './board-mode'
 import { answerOvertime } from './cleanup'
 import { haltChecker } from './checker'
@@ -21,6 +21,7 @@ import { markMerged } from './merged'
 import { publish, enableHere } from './lead'
 import { orgMemTool } from './org-mem'
 import { ORG_MEM_MAX_LINES, TOPIC_MAX_CHARS } from '../core/org-mem'
+import { canRunNow, runNowLine, runNowQuestion, runNowRefusal, runNowShares, runNowWaits } from '../core/run-now'
 
 /** T-717: how the lead keeps org-mem's topics tidy (in the orgmem tool's description and the lead's guide). */
 const TOPIC_RULES = 'reuse an existing topic when it fits (a new one only when nothing fits); keep about 6-10 topics; split a topic past ~15 notes, and merge one with only 1-2 notes into a close one; a topic disappears when its last note goes.'
@@ -107,7 +108,9 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-task T-3 WORD       do one of its page's actions: pause, resume, retry,
                        drop [REASON], merged (already merged by hand), review on|off,
                        stash (to the backlog), todo (out of the backlog), role NAME,
-                       note (an answered investigation: keep it as a note)
+                       note (an answered investigation: keep it as a note),
+                       run (start it now, even over the agent limit or on a paused
+                       board; run anyway when it waits on unfinished tasks)
   /${S.N.name}-approve T-5         merge a task that is ready for review
   /${S.N.name}-reject T-5 REASON   send it back to "todo" with the reason
   /${S.N.name}-diff T-5 [FILE]     the files it changed (+/- lines), or one file's diff
@@ -259,6 +262,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   to do next: retry, change, split, ask you, or drop.`,
   workers: `Workers
   • Up to max_parallel run at once (3 by default), one per task.
+  • Run now (on a task's page, or /${S.N.name}-task T-5 run) starts one at once: even when
+    every slot is busy (one over; nothing else starts until back under) or the board is
+    paused (only that one starts). One that waits on unfinished tasks asks first.
   • A worker gets only its task, its folder, its allowed files and the test commands.
     It can't see the board or this chat, and must not commit, push or merge.
   • A resumed or retried task starts over with a fresh worker.
@@ -437,6 +443,7 @@ export const TOOLS = () => [
   { name: 'merged', description: `Mark a task done whose work is already merged outside the board (by hand), e.g. after its only failure was the merge tests timing out. ${S.N.name} checks it with git first: every commit on the task's branch must be in the branch it merges into (merged, fast-forwarded, or rebased as equal changes); if not, it is refused with the reason ("T-5's branch has 2 commits that aren't in main yet"). Works for a task that is to do, running (its worker is stopped first), failed, waiting, paused, in review or dropped. The task becomes done with the history line "merged outside the board (<commit>); marked done by the lead", its commits are recorded, its folder and branch are cleaned up like after a merge, and tasks waiting on it can start. Nothing is merged and no test runs. Only on the owner's word or a rule the owner set.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
+  { name: 'run', description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. For a task that is to do, paused, failed, dropped (as a retry) or in the backlog (it moves to todo). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its history says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, anyway: { type: 'boolean', description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
   {
     name: 'scouts',
     description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt, whole last report and its last few runs: when, outcome, findings, tasks made from it and its report file). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; optional findings: auto = you decide where its tasks go, backlog = every task from its findings goes to the backlog, default (or left out) = follow the board's scout_findings setting; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (a paused scout runs too, once, and stays paused; refused with the reason when it is already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
@@ -574,7 +581,7 @@ async function kindIn($: Host, a: In): Promise<string | undefined> {
 }
 
 /** The lead's tools that act on one task. */
-const TASK_TOOLS = ['change', 'approve', 'reject', 'retry', 'ask', 'drop', 'merged', 'pause', 'resume']
+const TASK_TOOLS = ['change', 'approve', 'reject', 'retry', 'ask', 'drop', 'merged', 'pause', 'resume', 'run']
 
 /** The roles or kinds tool answered `said`; any action but list may have changed one, so the view is published again. */
 async function defChanged($: Host, a: In, said: string): Promise<string> {
@@ -836,6 +843,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       void pump($)
       return `${t.id} resumed`
     }
+    case 'run':
+      return runNowTool($, id, a.anyway === true)
     case 'approve':
       return approve($, id, a.keep_note === true)
     case 'reject': {
@@ -879,6 +888,49 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       return doctor($, a.fix === undefined || a.fix === null || a.fix === '' ? '' : `fix ${Array.isArray(a.fix) ? a.fix.join(' ') : String(a.fix)}`)
   }
   throw new Error(`unknown tool ${name}`)
+}
+
+/**
+ * T-954: Run now (the lead's run tool, the task pages' Run now, /<name>-task T-5 run [anyway]): task `id` goes to todo
+ * (from paused, failed, dropped or the backlog) and its worker starts at once, past max_parallel and a paused board.
+ * A task that waits on unfinished tasks only starts with `anyway` (the owner's "Start anyway"); else the reply is the
+ * question and nothing changes. Only in the window that drives the board.
+ */
+export async function runNowTool($: Host, id: string, anyway: boolean): Promise<string> {
+  const t = await taskOrThrow($, id)
+  if (!canRunNow(t)) return runNowRefusal(t)
+  if (mergingNow(t.id)) return MERGING_TEXT(t.id)
+  if (checkingNow(t.id)) return `${CHECKING_TEXT(t.id)}; run it now again when that ends`
+  if (!S.driving) return `${t.id} didn't start: another window drives this board, so run it now from there`
+  const b = await load($)
+  const waits = runNowWaits(b, t)
+  if (waits.length && !anyway) return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`
+  if (S.gitState === 'no-git' || !(await gitReady($, b))) return `${t.id} didn't start: git isn't set up here yet`
+  const busy = workers.size + starting.size
+  const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : undefined
+  const paused = modeOf(b) === 'paused'
+  const from = t.status
+  // as retry: a failed or dropped task's automatic retries start over, and one that failed on a clash merges main in first
+  const again = from === 'failed' || from === 'dropped'
+  const clashed = failedOnClash(t) || (from !== 'failed' && !!t.merge_main)
+  await change($, x => {
+    const cur = find(x, t.id)
+    if (!cur || !canRunNow(cur)) return x
+    const y = cur.status === 'backlog' ? promoteTask(x, t.id, now()) : x
+    return patchTask(y, t.id, { status: 'todo', note: 'started now by the owner', ...(again ? { test_tries: 0 } : {}), merge_main: clashed || undefined }, now())
+  })
+  const line = runNowLine({ waits: anyway ? waits : [], ...(over ? { over } : {}), paused, from })
+  const started = (await startNow($, t.id, line)) || find(await load($), t.id)?.status === 'doing'
+  if (!started) return `${t.id} is to do now but couldn't start at once${paused ? ' (the board is paused)' : ''}; ${paused ? `${S.N.name} run ${t.id} again tries once more` : 'it starts when there is room'}`
+  const shares = runNowShares((await load($)).tasks, t)
+  return [
+    `${t.id} started now`,
+    from === 'backlog' ? ' (moved from the backlog to todo)' : '',
+    anyway && waits.length ? ` without waiting for ${waits.map(w => w.id).join(', ')}` : '',
+    over ? `; it runs one over the limit (${busy + 1}/${b.max_parallel} agents busy), and nothing else starts until the count is back under` : '',
+    paused ? '; the board stays paused: only this task runs' : '',
+    shares.length ? `; note: it shares files with ${shares.join(', ')} (running)` : '',
+  ].join('')
 }
 
 /** What a settings call with the old sound_set is told (T-695: the sound set is part of notify now). */

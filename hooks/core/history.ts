@@ -191,6 +191,8 @@ export const HISTORY_KINDS = {
   retried: 'other',
   /** resumed after a pause */
   resumed: 'other',
+  /** T-954: the owner's Run now started this try at once ("try 2: started now by the owner"), past the slots, a paused board or its after list */
+  'run-now': 'other',
   /** the branch it merges into changed */
   'merge-into': 'other',
   /** someone asked something: the worker asked the owner, the lead asked the owner */
@@ -239,6 +241,13 @@ export type HistoryEntry = SymccHistoryEntry
 
 /** One entry to add: its kind, its text and its facts (see HistoryFacts). */
 export type HistoryAdd = [kind: HistoryKind, text: string, facts?: HistoryFacts]
+
+/** T-954: whether task `t` was ever started by the owner's Run now (a 'run-now' line): the health check doesn't count
+ *  such a start as pushing older tasks back. */
+export const ranNow = (t: Pick<SymccTask, 'history'>): boolean => (t.history ?? []).some(e => e.kind === 'run-now')
+
+/** T-954: whether task `t`'s current try (its `attempts`) was started by the owner's Run now. */
+export const ranNowThisTry = (t: Pick<SymccTask, 'history' | 'attempts'>): boolean => (t.history ?? []).some(e => e.kind === 'run-now' && e.try === Number(t.attempts))
 
 /** Whether `k` is a kind symcc knows (see HISTORY_KINDS). */
 export const isHistoryKind = (k: unknown): k is HistoryKind => typeof k === 'string' && Object.prototype.hasOwnProperty.call(HISTORY_KINDS, k)

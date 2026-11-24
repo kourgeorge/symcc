@@ -11,6 +11,8 @@ import { squash } from './text'
 import { checkStepNow } from './lead'
 import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_NOTE, STEP_WORD } from './panel'
 import { stageStep, taskPhase } from './phase'
+import { ranNowThisTry } from './history'
+import { runNowShares, runNowShareText } from './run-now'
 
 /** A piece of text on the task page with its theme color name (see C() in claude/ui/parts.tsx). */
 export type Seg = { text: string; color: string; bold?: boolean; italic?: boolean }
@@ -203,6 +205,9 @@ export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'nam
     })
   })
   for (const n of crossBranchNotes(t, o.all)) R.push({ label: '', segs: [{ text: `⚠ ${n}`, color: 'warning' }] })
+  // T-954: a try the owner started with Run now while running tasks share its files: a warning naming them
+  const shares = t.status === 'doing' && ranNowThisTry(t) ? runNowShares(o.all, t) : []
+  if (shares.length) R.push({ label: '', segs: [{ text: `⚠ ${runNowShareText(shares)}`, color: 'warning' }] })
   // research notes the merged work added or changed (docs/research/…), one row each
   const notes = t.research_notes ?? []
   notes.forEach((f, i) => R.push({ label: i ? '' : 'Research', segs: [{ text: f, color: 'autoAccept' }] }))

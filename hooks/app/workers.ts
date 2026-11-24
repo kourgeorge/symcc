@@ -115,10 +115,7 @@ export async function pump(host: Host) {
   // Check again or a new session looks again, and Check again pumps when git is there.
   if (S.gitState === 'no-git') return
   if (!(await gitReady(host, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
-  const failed = (id: string) => async (err: Error) => {
-    await change(host, x => patchTask(x, id, { status: 'failed', note: `couldn't start: ${err.message.slice(0, 200)}`, ...endedBy(find(x, id), now(), 'stopped', "couldn't start") }, now()))
-    tellLead(host, `${id} couldn't start: ${err.message.slice(0, 300)}`)
-  }
+  const failed = (id: string) => (err: Error) => startFailed(host, id, err)
   // Each task is made ready and claimed in turn; their starts then wait in the queue together (see app/starts.ts),
   // so one wake-up starts them all. A worker still in the queue counts as running (it is in `starting`).
   const queued: Promise<void>[] = []
@@ -129,6 +126,29 @@ export async function pump(host: Host) {
     if (q) queued.push(q.started.catch(failed(t.id)))
   }
   await Promise.all(queued)
+}
+
+/** A worker's start on task `id` failed for good: the task fails with the reason and the lead is told. */
+async function startFailed(host: Host, id: string, err: Error) {
+  await change(host, x => patchTask(x, id, { status: 'failed', note: `couldn't start: ${err.message.slice(0, 200)}`, ...endedBy(find(x, id), now(), 'stopped', "couldn't start") }, now()))
+  tellLead(host, `${id} couldn't start: ${err.message.slice(0, 300)}`)
+}
+
+/**
+ * T-954: Run now: claims to-do task `id` and queues its worker at once, as the pump would, but past max_parallel, a
+ * paused board and its after list (the caller checked those and set it to todo). `line` is the history line written
+ * once it is claimed (the try's number goes in front). Its start goes on in the background (a failure fails the task,
+ * as in the pump). False when it was not claimed here (another start has it, or it can't start now).
+ */
+export async function startNow(host: Host, id: string, line: string): Promise<boolean> {
+  const q = await queueWorker(host, id).catch(async (err: Error) => (await startFailed(host, id, err), null))
+  if (!q) return false
+  await change(host, x => {
+    const cur = find(x, id)
+    return cur?.status === 'doing' ? patchTask(x, id, { history: withHistory(cur.history, now(), tryEntry(cur, 'run-now', line)) }, now()) : x
+  }).catch(() => undefined)
+  void q.started.catch((err: Error) => startFailed(host, id, err))
+  return true
 }
 
 /**
