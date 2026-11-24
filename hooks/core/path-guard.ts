@@ -382,7 +382,9 @@ function walkBash(command: string, wts: readonly string[], home: string | undefi
  * safe read from a write in a shell line is not reliable (`cat a > b`, `find -delete`, `git diff --output=`), and a
  * worker has its own copy of every file to read. Like editOutsideFolder, the project check ignores letter case. A best
  * effort, not a sandbox: a write or cd target built from a variable or command output is refused (unresolvedTarget,
- * T-963), but a path built at run time elsewhere (base64, code run by perl or bun) gets through; symbolic links elsewhere on disk
+ * T-963), and so is a command line run by eval, `sh -c` or a shell reading text, or an unquoted here-document's
+ * `$(...)`, when it holds a `$` or a backtick; but a path built at run time elsewhere (base64, a script file, code run
+ * by perl or bun) gets through; symbolic links elsewhere on disk
  * are followed by the caller (bashPathsToCheck). It checks paths only: git writes run from the worker's own folder
  * (a commit, `git update-ref refs/heads/main`, a push) are refused by the caller with gitWriteIn. The merge-time scope
  * check only looks at which files the task's commits change, so it catches files written through the shell inside the
@@ -392,9 +394,6 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
   const wts = folderList(worktree)
   const tops = folderList(root)
   if (typeof command !== 'string' || !wts.length || !tops.length) return undefined
-  // a write or cd target built from $X, ${X}, $(...) or backticks may land anywhere, so it is refused (T-963)
-  const unresolved = unresolvedTarget(command)
-  if (unresolved !== undefined) return BASH_UNRESOLVED + unresolved
   const check = (abs: string) => (insideAny(abs, wts, true) !== undefined ? undefined : insideAny(abs, tops, false))
   const found = walkBash(command, wts, home, cwd, check, { tops })
   if (found !== undefined) return found
@@ -415,6 +414,10 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
       }
     }
   }
+  // a write or cd target built from $X, ${X}, $(...) or backticks may land anywhere, so it is refused (T-963); checked
+  // last, so that a path named in the owner's copy keeps its own, clearer reason
+  const unresolved = unresolvedTarget(command)
+  if (unresolved !== undefined) return BASH_UNRESOLVED + unresolved
   return undefined
 }
 

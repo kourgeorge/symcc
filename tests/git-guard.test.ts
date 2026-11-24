@@ -4,7 +4,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { checkEdit } from '../hooks/app/ask'
-import { gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText } from '../hooks/board'
+import { gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, bashOutsideText, BASH_UNRESOLVED, unresolvedTarget } from '../hooks/board'
 import { S, scoutRuns, workers, checkerRuns } from '../hooks/app/state'
 import { fakeHost } from './fake-host'
 import { bestPairMsOf, growsSlowly } from './timing'
@@ -308,11 +308,21 @@ test('"git" as text and read-only git pass for a worker, a scout and a checker (
   }
 })
 
+/**
+ * What a worker in WT is told for `command` when the git guard gives `want`: a command line run by eval or `sh -c` with
+ * a `$` in it is refused first by the path guard, as it may write anywhere (T-963); both refuse it. A checker's git
+ * check comes first.
+ */
+const firstRefusal = (command: string, want: string) => {
+  const word = unresolvedTarget(command)
+  return word === undefined ? want : bashOutsideText(BASH_UNRESOLVED + word, WT)
+}
+
 test('git run as a command still refuses its writes, for a worker, a scout and a checker (T-439)', async () => {
   const $ = setup()
   for (const [command, what] of WRITES) {
     expect([command, gitWriteIn(command)]).toEqual([command, what])
-    expect(await checkEdit($, 'w1', { command }, WT)).toBe(workerGitWriteText(what))
+    expect(await checkEdit($, 'w1', { command }, WT)).toBe(firstRefusal(command, workerGitWriteText(what)))
     expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText(what))
     expect(await checkEdit($, 'c1', { command }, WT)).toBe(gitWriteText(what))
   }
@@ -395,7 +405,7 @@ test('braces in paths after `--` of a read-only git, and in echo, printf or `x=`
     'echo {-n,git} stash',
   ]) {
     expect([command, gitWriteIn(command)]).toEqual([command, 'git with {braces}'])
-    expect(await checkEdit($, 'w1', { command }, WT)).toBe(workerGitWriteText('git with {braces}'))
+    expect(await checkEdit($, 'w1', { command }, WT)).toBe(firstRefusal(command, workerGitWriteText('git with {braces}')))
     expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText('git with {braces}'))
     expect(await checkEdit($, 'c1', { command }, WT)).toBe(gitWriteText('git with {braces}'))
   }

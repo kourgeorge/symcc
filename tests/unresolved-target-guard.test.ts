@@ -38,6 +38,25 @@ const REFUSED: [string, string][] = [
   // a command inside $(...) or backticks is checked too
   ['echo "$(echo hi > $Y)"', '$Y'],
   ['x=`cp a $D`', '$D'],
+  // the checker's probes: an unquoted here-document runs its $(...) and backticks
+  ['X=/rep; cat <<EOF\n$(echo x > "$X"o/README.md)\nEOF', '$(echo x > "$X"o/README.md)'],
+  ['cat <<-EOF\n\t`echo x > "$X"o/f`\n\tEOF', '`echo x > "$X"o/f`'],
+  // a command line given to eval or a shell, with a $ or backtick in it
+  [`X=/rep; eval 'echo x > "$X"o/README.md'`, `'echo x > "$X"o/README.md'`],
+  [`X=/rep; sh -c 'echo x > "$X"o/README.md'`, `'echo x > "$X"o/README.md'`],
+  [`bash -lc 'cd $X'`, `'cd $X'`],
+  [`env -S 'cp a $D'`, `'cp a $D'`],
+  [`echo 'cd $X' | sh`, `$X'`],
+  // a runner's option values are skipped to find the command
+  ['sudo -u me cp a $D', '$D'],
+  ['env -u X cp a $D', '$D'],
+  ['nice -n 5 cp a $D', '$D'],
+  ['timeout -s KILL 10 cp a $D', '$D'],
+  ['xargs -I {} cp {} $D', '$D'],
+  ['time -o $F ls', '$F'],
+  // a command named by a variable, given a variable; find's -exec command
+  ['$CMD "$X"o/f', '$CMD'],
+  ['find . -exec cp {} $D \\;', '$D'],
 ]
 
 /** Variables outside write targets, and plain write targets: not refused for that. */
@@ -56,12 +75,25 @@ const ALLOWED = [
   `sed -i '' "s/$X/y/" file`,
   "cat > .scratch/p.ts <<'EOF'\nconst x = `${y}` > $z\nEOF\necho ok",
   'cd src && echo x > out.txt',
+  // a quoted here-document's text is not run, and an unquoted one with only $X runs nothing
+  "cat > f <<'EOF'\n$(rm x) `pwd` > $y\nEOF",
+  'cat > f <<"EOF"\n$(rm x)\nEOF',
+  'cat <<EOF\nhello $X\nEOF',
+  "eval 'echo x > out'",
+  "bash -c 'echo hi > out'",
+  'bash script.sh',
+  'sudo -u me ls $D',
+  'env X=1 ls $D',
+  '$EDITOR f',
+  "find . -name '*.ts' -exec grep -l x {} +",
 ]
 
 test('T-963: a write or cd target built from a variable or command output is refused, with a clear reason', () => {
   for (const [c, word] of REFUSED) {
     expect(unresolvedTarget(c)).toBe(word)
-    expect(no(c)).toBe(BASH_UNRESOLVED + word)
+    // refused; a path it also names in the owner's copy (`$(pwd)/../../f`) keeps that clearer reason
+    const got = no(c)
+    expect([c, got === BASH_UNRESOLVED + word || (got !== undefined && !got.startsWith(BASH_UNRESOLVED))]).toEqual([c, true])
   }
   expect(bashOutsideText(BASH_UNRESOLVED + '$X', WT)).toBe(
     "Refused: symcc can't check a path built from $X; write the path out in full (a variable or command output in where a command writes, or in cd, may lead outside your own folder).",
