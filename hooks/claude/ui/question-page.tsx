@@ -54,7 +54,7 @@ function questionPageVs(pane: PaneParts, q: OwnerQuestion, answers: string[], ba
   const backHref = vsHref('page', 'back/question-back')
   return (
     <Box flexDirection="column" gap={1}>
-      {vsLink(vs, 'question-back', mdLink('← Tasks', backHref), [[backHref, back]])}
+      {vsLink(vs, 'question-back', mdLink('‹ Tasks', backHref), [[backHref, back]])}
       <Box key="vs-question-head" flexDirection="column">
         <Text key="vs-question-title" wrap="wrap">
           <Text color={C('inactive')}>{q.id}</Text>

@@ -522,7 +522,7 @@ test("T-460 a scout's edit page in VS Code: one Save Button and a Cancel link, n
 // (T-651: now one numbered link line per answer)
 const QUESTION = { id: 'Q-3', text: 'Should the board open by itself?', options: ['Yes', 'No'], asked_at: new Date(T0 - 5 * 60_000).toISOString() }
 for (const bodyColumns of [40, 80]) {
-  test(`T-460 a question's page in VS Code at width ${bodyColumns}: answers as numbered link lines, "← Tasks" a link`, async ($, on) => {
+  test(`T-460 a question's page in VS Code at width ${bodyColumns}: answers as numbered link lines, "‹ Tasks" a link`, async ($, on) => {
     seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, questions: [QUESTION] } } })
     on('ui.toast', () => ({ value: undefined }))
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
@@ -542,6 +542,7 @@ for (const bodyColumns of [40, 80]) {
     expect(elements(tree).filter(n => n.props?.borderStyle)).toEqual([])
     expect(await ui.find({ key: 'vs-sec-question' })).toBeUndefined()
     expect(elements(tree).find(n => n.type === 'Text' && n.children?.join?.('') === 'Q-3')?.props?.color).toBe('inactive')
+    expect((await ui.find({ key: 'question-back' }))?.props.text).toContain('‹ Tasks')
     expect((await ui.find({ key: 'question-back' }))?.props.pressableLinks).toEqual([vsHref('page', 'back/question-back')])
     await follow(ui, 'question-back', vsHref('page', 'back/question-back'))
     expect(await ui.find({ key: 'vs-answers' })).toBeUndefined()
