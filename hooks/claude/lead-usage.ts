@@ -16,8 +16,28 @@ export const LEAD_LOGS = "Claude Code's session logs"
  */
 export function leadCalls(jsonl: string): LeadCall[] {
   const byId = new Map<string, LeadCall>()
-  let n = 0
-  for (const line of String(jsonl ?? '').split('\n')) {
+  addCalls(byId, String(jsonl ?? '').split('\n'), 0)
+  return [...byId.values()]
+}
+
+/** How many log lines are read before the event loop gets a turn (T-1024: a big log read in one go kept the hooks worker from answering its heartbeat). */
+export const LINES_PER_TURN = 500
+
+/** leadCalls for a big log: the same calls, but the event loop gets a turn after every LINES_PER_TURN lines. */
+export async function leadCallsYielding(jsonl: string, pause: () => Promise<unknown>): Promise<LeadCall[]> {
+  const byId = new Map<string, LeadCall>()
+  const lines = String(jsonl ?? '').split('\n')
+  for (let at = 0; at < lines.length; at += LINES_PER_TURN) {
+    addCalls(byId, lines.slice(at, at + LINES_PER_TURN), at)
+    await pause()
+  }
+  return [...byId.values()]
+}
+
+/** Adds the calls in `lines` (the log's lines from number `first` on) to `byId`. */
+function addCalls(byId: Map<string, LeadCall>, lines: string[], first: number) {
+  let n = first
+  for (const line of lines) {
     if (!line.includes('"usage"')) continue
     const o = jsonObj(line)
     if (!o || o.type !== 'assistant' || o.isSidechain === true) continue
@@ -31,7 +51,6 @@ export function leadCalls(jsonl: string): LeadCall[] {
     const old = byId.get(id)
     if (!old || tokenCount(tokens) > tokenCount(old.tokens)) byId.set(id, { id, atMs, tokens, from: LEAD_LOGS })
   }
-  return [...byId.values()]
 }
 
 /** Claude Code's folder name for a project path under ~/.claude/projects: every character not a letter or digit becomes "-". */
@@ -76,7 +95,7 @@ export async function bigLogUsageLines($: Pick<Host, 'run'>, path: string): Prom
  * to since the range began are skipped. A log over 4 MiB (too big for $.fs.read) is read in parts (bigLogUsageLines);
  * one that still can't be read is counted in `leadUnread`, so the stats say the figure is short.
  */
-export async function leadUsage($: Pick<Host, 'env' | 'fs' | 'run'>, root: string, range: StatsRange, nowMs: number): Promise<LeadUsage> {
+export async function leadUsage($: Pick<Host, 'env' | 'fs' | 'run'> & Partial<Pick<Host, 'clock'>>, root: string, range: StatsRange, nowMs: number): Promise<LeadUsage> {
   const home = (await $.env('HOME')) || (await $.env('USERPROFILE'))
   const base = (await $.env('CLAUDE_CONFIG_DIR')) || (home ? `${home}/.claude` : '')
   if (!base) return { leadProblem: "can't find Claude Code's folder (no HOME)" }
@@ -95,7 +114,7 @@ export async function leadUsage($: Pick<Host, 'env' | 'fs' | 'run'>, root: strin
     let text = f.size > READ_LIMIT ? null : await $.fs.read(path).catch(() => null)
     if (text === null) text = await bigLogUsageLines($, path)
     if (text === null) { unread++; continue }
-    const calls = leadCalls(String(text))
+    const calls = await leadCallsYielding(String(text), () => (typeof $.clock?.sleep === 'function' ? $.clock.sleep(0) : Promise.resolve()))
     if (calls.length) sessions++
     for (const c of calls) lead.set(c.id, c)
   }
