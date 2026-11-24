@@ -138,10 +138,12 @@
     const width = xs => 1 + xs.reduce((n, [t]) => n + t.length, 0)
     // (T-1010) the task type dim at the right edge of the row; dropped (never wrapped) when it does not fit
     const withKind = xs => {
-      const gap = PANEL_W - width(xs) - l.kind.length
-      return gap >= 2 ? [...xs, [' '.repeat(gap), 'text'], [l.kind, 'dim']] : xs
+      const gap = Math.max(2, firstW - width(xs) - l.kind.length)
+      return [...xs, [' '.repeat(gap), 'text'], [l.kind, 'dim']]
     }
-    const tries = [4, 3, 2, 1, 0].map(n => withKind(line(n)))
+    // the first row's width: it ends at the time; the kind lines up under it
+    const firstW = 1 + 2 + ID_W + 1 + TITLE_W + 2 + (LABELS.length + GAP * (LABELS.length - 1)) + 2 + 6
+    const tries = [4, 3, 2, 1, 0].flatMap(n => [withKind(line(n)), line(n)])
     const pick = tries.find(xs => width(xs) <= PANEL_W) || tries[tries.length - 1]
     const two = ' ' + pick.map(([t, k]) => sp(t, k)).join('')
     return [one, two]

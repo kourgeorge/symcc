@@ -315,9 +315,12 @@ test('T-867, T-931: a lane\'s second line has no bar: ⏱, ⌀, ×median, <worke
   const bare = (width: number) => at(width).replace(/ +change$/, '')
   const full = bare(120)
   const wFull = textWidth(full)
-  // the full meta text leaves less than 2 columns before the kind (first line: 87, meta: 80): the kind is dropped, never wrapped
+  // the full meta text leaves less than 2 columns before the kind (first line: 87, meta: 80): the kind follows after 2 spaces
   expect(firstW - wFull - 'change'.length).toBeLessThan(2)
-  expect(at(120)).toBe(full)
+  expect(at(120)).toBe(full + '  change')
+  // too narrow for both: the kind is dropped (never wrapped), the meta text stays whole
+  expect(at(wFull + 7)).toBe(full)
+  expect(at(wFull)).toBe(full)
   expect(full).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) · worker 5\.4M · checker 1\.9M · ⌕ × 2$/)
   // a shorter meta text leaves room: the kind ends exactly at the first line's width, dim
   const short = segText(laneLines({ ...lane, workerTokens: 0, checkerTokens: 0, sentBack: 0 }, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1])

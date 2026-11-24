@@ -803,10 +803,12 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   // T-1010: the kind at the right end of the line (dim), under the first line's right end (the time); the meta text keeps priority,
   // so the kind is dropped (never wrapped) when it does not fit with two spaces before it
   const withKind = (xs: LiveSeg[]): LiveSeg[] => {
-    const gap = Math.min(l.width, textWidth(segText(first))) - textWidth(segText(xs)) - textWidth(lane.kind)
-    return gap >= 2 ? [...xs, { text: ' '.repeat(gap), tone: 'text' as const }, { text: lane.kind, tone: 'dim' as const }] : xs
+    // ends under the first line's right end; a longer meta text pushes it right (two spaces after the text); `fits` drops it if too wide
+    const gap = Math.max(2, textWidth(segText(first)) - textWidth(segText(xs)) - textWidth(lane.kind))
+    return [...xs, { text: ' '.repeat(gap), tone: 'text' as const }, { text: lane.kind, tone: 'dim' as const }]
   }
-  const tries: LiveSeg[][] = [4, 3, 2, 1, 0].map(n => withKind(line(n)))
+  // each level with the kind, then without it, before a part of the meta text goes
+  const tries: LiveSeg[][] = [4, 3, 2, 1, 0].flatMap(n => [withKind(line(n)), line(n)])
   tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
   const second = tries.find(fits) ?? tries[tries.length - 1]!
   // T-771: a finished lane's second line is dim throughout
