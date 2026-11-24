@@ -754,8 +754,10 @@ for (const bodyColumns of [40, 64, 100])
     for (const [id, word] of [['T-712', 'bug'], ['T-690', 'feature']] as const) {
       const text = String((await ui.find({ key: `live-numbers-text:${id}` }))?.text ?? '')
       const kind = await ui.find({ key: `live-kind:${id}` })
-      expect([bodyColumns, id, String(kind?.text)]).toEqual([bodyColumns, id, word])
-      expect(textWidth(text) + 2 + textWidth(word)).toBeLessThanOrEqual(inner)
+      // at 40 columns T-690's tokens take the room, so its type goes first (like core)
+      const dropped = bodyColumns === 40 && id === 'T-690'
+      expect([bodyColumns, id, String(kind?.text)]).toEqual([bodyColumns, id, dropped ? 'undefined' : word])
+      expect(textWidth(text) + (dropped ? 0 : 2 + textWidth(word))).toBeLessThanOrEqual(inner)
       expect(text).not.toContain('⏱')
       expect(text).not.toContain(word)
       expect(text).toContain('try ')
@@ -769,6 +771,19 @@ for (const bodyColumns of [40, 64, 100])
     await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   })
+
+// T-1017: the task type goes before any numbers part (like core): a long type is dropped, the tokens stay
+test('T-1017: VS Code third line drops the task type before the tokens at 40 columns', async ($, on) => {
+  seedBoard(on, { view: liveView(TRAINS.map(x => (x.id === 'T-690' ? { ...x, kind: 'investigation-of-a-long-kind' } : x))) })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'vscode' })
+  await ui.press({ key: 'tab-live' })
+  const text = String((await ui.find({ key: 'live-numbers-text:T-690' }))?.text ?? '')
+  expect(text).toContain('⌀ 1.4M')
+  expect(await ui.find({ key: 'live-kind:T-690' })).toBeUndefined()
+  await ui.press({ key: 'tab-tasks' })
+  await ui.unmount()
+})
 
 // T-767: a running lane starts "▶ ", its mark, id and title bold in the accent color; a waiting train's row is all dim.
 for (const surface of ['terminal', 'desktop', 'mobile'] as const)

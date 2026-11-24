@@ -262,9 +262,11 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       return ys.some(s => s.text.trim()) && textWidth(segText(ys)) <= room ? ys : null
     }
     const full = inner - TRACK_INDENT
-    const withKind = kindW ? lineFor(full - kindW) : null
-    const xs = withKind ?? lineFor(full)
+    // like core: the type goes before any numbers part does (each level is tried with the type, then without it)
+    const xs = lineFor(full)
     if (!xs) return null
+    const narrow = kindW ? lineFor(full - kindW) : null
+    const withKind = narrow && segText(narrow) === segText(xs) ? narrow : null
     return (
       <Box key={`live-numbers:${lane.id}`} flexDirection="row" paddingLeft={TRACK_INDENT}>
         <Box key={`live-numbers-text:${lane.id}`} flexDirection="row" flexGrow={1} flexShrink={1}>
