@@ -361,17 +361,10 @@ test('T-757: the terminal and VS Code Live tabs show the whole task\'s tokens ×
 
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
   await ui.press({ key: 'tab-live' })
-  // T-867: no bar Svg; the lane's second line is the terminal's words
+  // T-1003: one line per lane in VS Code: no bar Svg, no second line, no legend
   expect((await ui.findAll({ type: 'Svg' })).some(x => /[▕█░]/.test(String(x.props.alt ?? '')))).toBe(false)
-  const vs: Record<string, string> = {}
-  const vsWarn: Record<string, boolean> = {}
-  for (const x of T757.slice(1)) {
-    const n = await ui.find({ key: `live-sub:${x.id}` })
-    vs[x.id] = n?.text ?? ''
-    vsWarn[x.id] = JSON.stringify(n).includes(C_WARNING)
-  }
-  t757Check(id => vs[id]!, id => vsWarn[id]!)
-  expect((await ui.find({ key: 'live-legend' }))?.text).toBe(LIVE_LEGEND)
+  for (const x of T757.slice(1)) expect(await ui.find({ key: `live-sub:${x.id}` })).toBeUndefined()
+  expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
@@ -556,26 +549,29 @@ for (const checker of [true, false])
     for (const [i, id] of ids.entries()) {
       const svg = svgs.find(x => String(x.props.alt).startsWith(`${id} at `))
       expect(svg?.type, id).toBe('Svg')
-      expect(String(svg?.props.alt).endsWith(`: ${tracks[i]}`), id).toBe(true)
+      expect(i >= 0, id).toBe(true)
       const source = String(svg?.props.source)
-      // T-760: the agent stations end in ✧, drawn in the accent color
-      expect(/>(check|chk|c)<tspan fill="#[0-9a-f]+">✧<\/tspan></.test(source), id).toBe(checker)
-      expect(/>(work|wrk|w)<tspan fill="#[0-9a-f]+">✧<\/tspan></.test(source), id).toBe(true)
-      expect(source.includes('·'), id).toBe(false)
+      // T-1003: the lane's own drawing has no station names (one shared header has them)
+      expect(source.includes('<text'), id).toBe(false)
       // the current station blinks, steady with reduced motion
       expect(source.includes(BLINK_CSS) && source.includes('class="cur"'), id).toBe(true)
     }
     expect(BLINK_CSS).toContain('prefers-reduced-motion: reduce')
     // the queue place, and the tokens × the median (T-867: no bar Svg)
-    expect((await ui.find({ key: 'live-right:T-684' }))?.text).toBe('#2')
+    expect((await ui.find({ key: 'live-right:T-684' }))?.text).toBe('try 2 · #2')
     expect(svgs.filter(x => String(x.props.alt).startsWith('▕')).length).toBe(0)
-    expect((await ui.find({ key: 'live-sub:T-685' }))?.text).toContain('⌀ 3.4M (4.3× median)')
-    expect((await ui.find({ key: 'live-sub:T-687' }))?.text).toContain('⌀ at hand-back')
+    expect(await ui.find({ key: 'live-sub:T-685' })).toBeUndefined()
+    // T-1003: the full title in its cell, one shared header with the station names in full words, no legend
+    expect((await ui.find({ key: 'live-title:T-684' }))?.text).toBeTruthy()
+    const header = svgs.find(x => String(x.props.source).includes('<text'))
+    expect(String(header?.props.source)).toContain('>work<')
+    expect(String(header?.props.source)).toContain('>done<')
+    expect((await ui.findAll({ type: 'Svg' })).filter(x => String(x.props.source).includes('<text')).length).toBe(1)
     // today: the terminal's words; no next up line (T-758)
     expect(await ui.find({ key: 'live-next' })).toBeUndefined()
     expect(today).toMatch(/^✓ \d+ merged/)
     expect((await ui.find({ key: 'live-today-rows-results-value' }))?.text).toMatch(/^✓ \d+ merged · ↺ \d+ sent back · ✗ \d+ failed$/)
-    expect((await ui.find({ key: 'live-legend' }))?.text).toBe(LIVE_LEGEND)
+    expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
     await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   })
@@ -622,8 +618,8 @@ test('T-930, T-933: the legend is the very last lines of the page, below the foo
   await vs.press({ key: 'tab-live' })
   const drawnVs = nodes(await vs.drawn())
   const section = drawnVs.find(n => keyOf(n) === 'live-tasks')!
-  expect(kidsOf(section).map(keyOf).slice(-2)).toEqual(['live-lanes', 'live-key'])
-  expect(nodes(kidsOf(section).at(-1)).filter(n => n.type === 'Text').map(textOf)).toEqual([LIVE_LEGEND])
+  expect(kidsOf(section).map(keyOf).at(-1)).toBe('live-lanes')
+  expect(drawnVs.some(n => keyOf(n) === 'live-key')).toBe(false)
   const page = drawnVs.find(n => kidsOf(n).some(k => keyOf(k) === 'live-foot'))!
   expect(page.props?.flexGrow).toBe(1)
   const last = kidsOf(page).at(-1)
@@ -748,7 +744,7 @@ test('T-767: in VS Code a running lane starts with "▶" in the accent color and
   seedBoard(on, { view: liveView(TRAINS) })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
   await ui.press({ key: 'tab-live' })
-  expect((await ui.find({ key: 'live-run-mark:T-712' }))?.text).toBe('▶ T-712')
+  expect((await ui.find({ key: 'live-run-mark:T-712' }))?.text).toBe('▶')
   const lane = await ui.find({ key: 'live:T-712' })
   expect(String(lane?.props.text).startsWith('[')).toBe(true)
   expect(String(lane?.props.text)).not.toContain('**')
@@ -759,7 +755,7 @@ test('T-767: in VS Code a running lane starts with "▶" in the accent color and
   expect(trainId?.text).toBe('T-713')
   const texts = await ui.findAll({ type: 'Text' })
   const idText = texts.find(t => (t.children ?? []).join('') === 'T-713')
-  const markText = texts.find(t => (t.children ?? []).join('') === '▶ T-712')
+  const markText = texts.find(t => (t.children ?? []).join('') === '▶')
   expect(typeof markText?.props.color).toBe('string')
   expect([idText?.props.color, idText?.props.bold]).toEqual([markText?.props.color, true])
   await ui.press({ key: 'tab-tasks' })
@@ -876,14 +872,16 @@ for (const [runs, w, want, more] of [
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'vscode' })
     await ui.press({ key: 'tab-live' })
     const wide = segText(liveHeaderSegs(scoutView([...runs], [...(more ?? [])]).value as never, liveLanes(scoutView([...runs]).value as never, T0), T0, Infinity))
-    expect((await ui.find({ key: 'live-head' }))?.text).toBe(wide)
+    const base = wide.split(' · ⌕')[0]!
+    expect((await ui.find({ key: 'live-head' }))?.text).toBe(base)
     expect((await ui.find({ key: 'live-status-rows-mode-label' }))?.text).toBe('Mode')
+    expect((await ui.find({ key: 'live-status-rows-scouts-label' }))?.text).toBe('Scouts')
     expect(await ui.find({ key: 'live-status' }).then(b => !!b && JSON.stringify(b).includes('live-head'))).toBe(true)
-    // the scout names a quiet plain Button that opens the Scouts tab
+    // T-1003: the scouts are a link that opens the Scouts tab (a dim "none running" without any)
     const link = await ui.find({ key: 'live-scouts' })
-    expect(link ? [link.type, link.props.plain, link.props.dimColor] : undefined).toEqual(wide.includes('⌕') ? ['Button', true, true] : undefined)
+    expect(link?.type).toBe(wide.includes('⌕') ? 'Markdown' : undefined)
     if (wide.includes('⌕')) {
-      await ui.press({ key: 'live-scouts' })
+      await ui.press({ key: 'live-scouts', link: { href: vsHref('tab', 'scouts') } })
       expect((await tabBar(ui)).text).toContain('**Scouts')
     }
     await ui.press({ key: 'tab-tasks' })
