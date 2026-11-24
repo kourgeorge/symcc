@@ -9,14 +9,14 @@
 // the Organizational memory page (orgmem.tsx; VS Code's: vscode-orgmem.tsx) filtered to it, Enter on a newest note
 // opens all notes with that note focused, the "[all]" button next to "newest" opens all notes (T-866: no key hint
 // line and no m key); the page's Back comes back here.
-// T-930, T-933: the legend (a short rule, then "✧ = an agent works here ...") is the very last lines of the page, below
+// T-930, T-933: the legend ("✧ = an agent works here ..."; T-962: no rule above it) is the very last lines of the page, below
 // the footer's key line: on a short page the empty room goes between the content and the footer.
 // T-715: under each lane hang its waiting trains (core's liveTrains and trainRows), each one a row Button that opens its task.
 // T-727: under the lanes, the Branches section (core's liveBranches): main's latest commits and a row per open task's
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747, T-789: each section (Tasks, Today, Branches, Organizational memory) starts with a bold UPPERCASE heading (core's
 // liveHeading; no bar, no rule), one empty line above it (none above the first) and one under it, its lines indented by LIVE_INDENT.
-import { LIVE_DIVIDER, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveNowSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
+import { liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveNowSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -226,7 +226,6 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
       {/* T-933: the legend is the very last lines of the page, below the footer's key line */}
       {lanes.length ? (
         <Box key="live-key" flexDirection="column">
-          <Text key="live-divider" color={C('inactive')}>{LIVE_INDENT + LIVE_DIVIDER}</Text>
           {liveLegend(inner).map((x, i) => <Text key={i ? `live-legend-${i}` : 'live-legend'} color={C('inactive')}>{LIVE_INDENT + x}</Text>)}
         </Box>
       ) : null}

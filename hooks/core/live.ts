@@ -57,8 +57,6 @@ export const LIVE_AGENT_MARK = '✧'
 export const LIVE_LEGEND = `${LIVE_AGENT_MARK} = an agent works here (needs an agent slot) · ${TOKEN_SIGN} = tokens`
 /** T-855: the dim note ending ▍Today when no lane shows the key line. */
 export const TOKENS_NOTE = `${TOKEN_SIGN} = tokens`
-/** T-836: the short dim divider line right above the key line (shown only when the key line is). */
-export const LIVE_DIVIDER = '─'.repeat(12)
 /** The legend under the lanes in `width` columns: LIVE_LEGEND, cut at spaces onto more lines when narrow (never wider).
  *  T-867: the lanes have no token bar any more, so nothing about a bar. */
 export function liveLegend(width: number): string[] {

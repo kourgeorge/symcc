@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveTaskLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, LIVE_DIVIDER, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, pastDays, pastLines } from '../hooks/core/live'
+import { liveLanes, liveTaskLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, pastDays, pastLines } from '../hooks/core/live'
 import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from './live-past-fixture'
 import { textWidth } from '../hooks/core/width'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
@@ -447,8 +447,9 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     expect(footAt).toBeGreaterThan(lines.findIndex(l => l.startsWith('─── ❯ ORGANIZATIONAL MEMORY')))
     expect(legendAt).toBeGreaterThan(lines.findIndex(l => l.includes('l t s c views')))
     expect(lines.slice(legendAt)).toEqual(liveLegend(liveInner(bodyColumns)).map(x => LIVE_INDENT + x))
-    // T-836: a short divider right above the key line
-    expect(lines[legendAt - 1]).toBe(LIVE_INDENT + LIVE_DIVIDER)
+    // T-962: no divider: the legend comes right under the keys line
+    expect(lines[legendAt - 1]).toContain('Esc close')
+    expect(lines.includes(LIVE_INDENT + '─'.repeat(12))).toBe(false)
     expect(lines.some(l => l.includes('l t s c views'))).toBe(true)
     // T-760: the lane header ends the agent stations in ✧ (over their marks, as liveLabelLine), each ✧ in the heading's color
     const tree = (await ui.drawn()) as Node
@@ -485,7 +486,7 @@ test('T-690, T-758: with no task in doing, the Live tab says so and shows no nex
   // T-903: why nothing runs: the open tasks that wait, and what each waits for
   expect([lines[0]!.replace(/ ─+$/, ''), lines[1]!.trim(), lines[2]]).toEqual(['─── ❯ TASKS', '', `${LIVE_INDENT}Nothing running · 3 waiting: T-690 ready`])
   expect(lines.some(l => l.includes('next up'))).toBe(false)
-  expect(lines.includes(LIVE_INDENT + LIVE_DIVIDER)).toBe(false)
+  expect(lines.includes(LIVE_INDENT + '─'.repeat(12))).toBe(false)
   expect(lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 3]?.startsWith(`${LIVE_INDENT}✓ `)).toBe(true)
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
@@ -602,13 +603,14 @@ test('T-930, T-933: the legend is the very last lines of the page, below the foo
     // the legend's Box is the page's last child, right after the footer's key line
     expect(at).toBe(kids.length - 1)
     expect(textOf(before)).toContain('l t s c views')
-    expect(nodes(key).filter(n => n.type === 'Text').map(textOf)).toEqual([LIVE_INDENT + LIVE_DIVIDER, LIVE_INDENT + LIVE_LEGEND])
+    expect(nodes(key).filter(n => n.type === 'Text').map(textOf)).toEqual([LIVE_INDENT + LIVE_LEGEND])
     // the room left goes above the footer: a growing Box right before the footer rule
     const rule = kids.findIndex(k => textOf(k) === '─'.repeat(80))
     expect([keyOf(kids[rule - 1]), kids[rule - 1]?.props?.flexGrow]).toEqual(['live-fill', 1])
     // the drawn page ends in the legend
     const lines = pageLines(await ui.drawn())
-    expect(lines.slice(-2)).toEqual([LIVE_INDENT + LIVE_DIVIDER, LIVE_INDENT + LIVE_LEGEND])
+    // T-962: the keys line, then the legend right under it (no divider)
+    expect([lines.at(-2)?.includes('Esc close'), lines.at(-1)]).toEqual([true, LIVE_INDENT + LIVE_LEGEND])
     await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   }

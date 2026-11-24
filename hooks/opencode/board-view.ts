@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage, groupLabel,
-  LIVE_TABS, LIVE_DIVIDER, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveNowSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveNowSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { notSetUpAnswer } from '../core/settings'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
@@ -964,7 +964,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   if (om.grid.length) b.add([{ text: LIVE_INDENT + om.topicsLabel, color: 'inactive' }])
   for (const r of om.grid) b.add(r.flatMap((c, j) => marked(c.segs, liveTopicId(c.topic), j === 0)), r.length === 1 ? { open: liveTopicId(r[0]!.topic) } : null)
   // T-930, T-933: the legend is the very last lines of the page, below the footer's key line (panelLines puts it there)
-  const bottom: Line[] = lanes.length ? [[{ text: LIVE_INDENT + LIVE_DIVIDER, color: 'inactive' }], ...liveLegend(inner).map((x): Line => [{ text: LIVE_INDENT + x, color: 'inactive' }])] : []
+  const bottom: Line[] = lanes.length ? [...liveLegend(inner).map((x): Line => [{ text: LIVE_INDENT + x, color: 'inactive' }])] : []
   return { ...b, ids, selected, bottom }
 }
 
