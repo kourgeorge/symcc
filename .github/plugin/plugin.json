@@ -1,0 +1,9 @@
+{
+  "name": "symcc",
+  "description": "A team lead for your coding agents in GitHub Copilot CLI: the main chat plans the work on a shared task board, workers build tasks in parallel in their own worktrees and merge what passes the tests, and scouts look for problems on a timer.",
+  "author": { "name": "George Kour", "url": "https://github.com/kourgeorge" },
+  "homepage": "https://github.com/kourgeorge/symcc",
+  "license": "MIT",
+  "extensions": "copilot/extensions",
+  "hooks": "copilot/hooks.json"
+}

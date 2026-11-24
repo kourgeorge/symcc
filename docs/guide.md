@@ -23,6 +23,7 @@ The full details. For the short version, see the [README](../README.md).
 - [For developers](#for-developers-where-the-code-is)
 - [Working on symcc](#working-on-symcc)
 - [Using symcc in OpenCode](#using-symcc-in-opencode)
+- [Using symcc in Copilot CLI](#using-symcc-in-copilot-cli)
 
 ---
 
@@ -2757,3 +2758,66 @@ The panel reads `.symcc/view.json` once a second; the board writes that file on 
 - **The panel** runs in OpenCode's TUI, apart from the server part, so it draws from `.symcc/view.json`. It takes Solid and OpenTUI from OpenCode: OpenCode 2.3 swaps the plain names `solid-js` and `@opentui/solid` in a plugin's files for its own copies, so `opencode/tui.ts` writes them out in its `import()` calls (a name kept in a variable isn't swapped and fails with "Cannot find package 'solid-js'"), and `loadTuiRuntime` in `hooks/opencode/tui.ts` gives an error naming the package when one is missing.
 
 The code is in `hooks/opencode/` and `opencode/`; `sh scripts/test-opencode-host.sh` runs its tests (with a stand-in for OpenCode; OpenCode itself is not needed).
+
+## Using symcc in Copilot CLI
+
+symcc also runs in [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/copilot-cli) as an extension (tried with Copilot CLI 1.0.114). This is a first version: the lead's tools, the `/symcc` commands, the board as text, workers, scouts and checkers work; there is no board panel yet. The Claude Code and OpenCode plugins are not changed by it.
+
+### Install in Copilot CLI
+
+Copilot extensions are still experimental, so start Copilot with `copilot --experimental` (or turn it on once inside Copilot with `/settings experimental on`). Without it, symcc is installed but doesn't load.
+
+Add symcc's repository as a marketplace, then install the plugin from it:
+
+```bash
+copilot plugin marketplace add kourgeorge/symcc
+copilot plugin install symcc@symcc
+```
+
+The marketplace file is `.github/plugin/marketplace.json`, and the plugin's manifest is `.github/plugin/plugin.json`. The plugin is the whole repository: its extension, `copilot/extensions/symcc/extension.mjs`, reads symcc's roles, kinds and example scouts from the folders beside it. Copilot can also install straight from the repository (`copilot plugin install kourgeorge/symcc`), but it warns that such direct installs will stop working in a later release, so use the marketplace. For a local copy (a clone you work in), `copilot plugin marketplace add <folder>` works too: Copilot then loads symcc live from that folder, with nothing copied.
+
+- **Check it:** `copilot plugin list` shows `symcc@symcc`. In a session, ask the lead to call `symcc_board`: in a folder with no board yet it answers "no symcc board in this folder · /symcc-init to create one here".
+- **The first start in a folder** asks you to trust it ("Confirm folder trust"). Say yes, or Copilot loads no extension there.
+- **Updates:** `copilot plugin marketplace update symcc`, then `copilot plugin update symcc@symcc`. Remove it with `copilot plugin uninstall symcc@symcc`.
+- **Keep the board local,** as in Claude Code: `echo ".symcc/" >> .gitignore`.
+
+### Show symcc's status line in Copilot's terminal
+
+Copilot CLI can draw a status line under its prompt from a command you name. symcc ships one, `hooks/copilot/band.ts`, that prints the same one line Claude Code shows (for example `symcc: ⏵ auto merge · ...`). It needs [bun](https://bun.sh); plain Node can't run it.
+
+Add this to `~/.copilot/settings.json`, with `<plugin folder>` being the folder symcc is in (your clone, or where Copilot installed it):
+
+```json
+"statusLine": { "type": "command", "command": "bun <plugin folder>/hooks/copilot/band.ts" }
+```
+
+The command looks for `.symcc/board.json` in the folder Copilot runs it from, then in each folder above. Outside a symcc project it prints nothing. Two optional environment variables change what it shows:
+
+- `SYMCC_ROOT=<project folder>`: use this project when Copilot runs the command from some other folder.
+- `SYMCC_SESSION=<session id>`: this window's session id. With it, a window that doesn't drive the lead shows who does. Without it, the line always says this window drives.
+
+For example: `"command": "SYMCC_ROOT=/path/to/project bun <plugin folder>/hooks/copilot/band.ts"`.
+
+Limits:
+
+- It never shows when the next scout starts ("next scout X in Nm"): those times live only inside the running symcc, not in files on disk.
+- The branch comes only from a plain `.git` folder (its `.git/HEAD` file). Where `.git` is a file, as in a git worktree, no branch is shown.
+- It shows in Copilot's terminal only, not in the Copilot desktop app.
+
+### Your own model provider (BYOK)
+
+- The `COPILOT_PROVIDER_*` and `COPILOT_MODEL` variables you start Copilot with reach symcc's workers, scouts and checkers too (each runs in a copilot process of its own, started with the extension's environment).
+- Copilot keeps secret variables away from extensions. When `COPILOT_PROVIDER_API_KEY` or `COPILOT_PROVIDER_BEARER_TOKEN` is set, Copilot asks once whether symcc may have them, so its agents can use your provider. If you say no, Copilot doesn't load symcc at all.
+- A role's or scout's `model:` line (`sonnet`, `haiku` ...) is passed to Copilot as it is. To map symcc's names to your own model ids, set `SYMCC_COPILOT_MODELS="sonnet=<id>,haiku=<id>"`. With no `model:` line, Copilot picks the model (or uses `COPILOT_MODEL`).
+
+### What works and what doesn't yet
+
+- **Works:** the lead's tools (`symcc_board`, `symcc_add` and the rest), board updates that wake the lead (a normal one when it is idle or at the end of its turn, an urgent one at its next tool call), workers, scouts and checkers as Copilot sessions of their own, each in its task's worktree with symcc's guard on its edits and shell commands.
+- **No board panel:** the status line is opt-in (see [Show symcc's status line in Copilot's terminal](#show-symccs-status-line-in-copilots-terminal)). `/symcc` prints the board as text in the chat, `/symcc-tasks` the short list and `/symcc-status` the Live tab.
+- **`copilot -p` needs `--allow-all`:** in `-p` mode there is nobody to approve an extension, so Copilot loads no extension at all, symcc included: no `symcc_*` tools and no `/symcc` commands. It prints "Denied, no one to approve extension permission (plugin:symcc:symcc)". Add `--allow-all` (or `--allow-all-tools`), for example `copilot --experimental --allow-all -p "Call the symcc_board tool"`; then the tools work. Even then, a `/symcc ...` prompt in `-p` goes to the model as plain text, so ask the lead in words ("show the board"). The interactive CLI needs neither.
+- **After `/clear`** Copilot restarts the extension; the board and the lead's lock are on disk, so symcc picks up where it was.
+- **Check that a worker's shell runs in its worktree:** symcc rewrites each of an agent's shell commands to run from the agent's own folder. A worker told to run `cd / ; pwd` should still print its worktree's path (`.symcc/worktrees/T-n`), not `/`.
+
+### Building the extension
+
+Copilot runs one JavaScript file per extension, so symcc's TypeScript is bundled: `sh scripts/build-copilot.sh` builds `copilot/entry.ts` (which gives the Node parts and the Copilot SDK to `hooks/copilot/`) into `copilot/extensions/symcc/extension.mjs`. The SDK (`@microsoft/copilot-sdk` and `@microsoft/copilot-sdk/extension`) is left out of the bundle: Copilot gives it to every extension. The built file is committed, since an install from GitHub copies the repository as it is and runs no build step. So rebuild it after engine changes, before a release: `sh scripts/build-copilot.sh --check` says whether the committed file is out of date. `sh tests/copilot-bundle.sh` builds it into a scratch folder, runs it against a stand-in SDK, and checks the manifest and the marketplace file. The manifest's `"hooks": "copilot/hooks.json"` points Copilot at an empty hooks file; without it Copilot would read Claude Code's `hooks/hooks.json` and log "Invalid hooks config" on every start. Paths in `.github/plugin/plugin.json` are read from the repository root.

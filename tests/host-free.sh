@@ -161,4 +161,23 @@ if [ -n "$cp_files" ]; then
   fi
 fi
 
+# The Copilot extension's entry (copilot/entry.ts, T-960) may use Node and the Copilot SDK, never Claude Code, and it
+# type-checks with its own settings (copilot/tsconfig.json: hosts/node/env.d.ts plus copilot/sdk.d.ts).
+ce_files=$(find copilot -maxdepth 1 -type f -name '*.ts' -not -name '*.d.ts' 2>/dev/null | sort)
+if [ -n "$ce_files" ]; then
+  q="['\"\`]"
+  nq="[^'\"\`]"
+  hits=$(grep -nHE "(^|[^[:alnum:]_\$.])(from|import)[[:space:]]*\(?[[:space:]]*$q(claude-code(/$nq*)?|$nq*/claude(/$nq*)?|$nq*/opencode(/$nq*)?|$nq*/register(\.tsx)?)$q" $ce_files)
+  if [ -n "$hits" ]; then
+    echo "$hits" | while IFS= read -r hit; do echo "host-free: the Copilot extension entry imports Claude Code or OpenCode: $hit" >&2; done
+    fails=$((fails + 1))
+  fi
+  if [ -f copilot/tsconfig.json ] && have_tsc; then
+    if ! out=$(tsc --noEmit --pretty false -p copilot/tsconfig.json 2>&1); then
+      echo "$out" | grep "error TS" | while IFS= read -r e; do echo "host-free: copilot/: $e" >&2; done
+      fails=$((fails + 1))
+    fi
+  fi
+fi
+
 if [ "$fails" -eq 0 ]; then echo "host-free: hooks/app/, hooks/core/, hooks/process/, hosts/node/, hooks/opencode/ and hooks/copilot/ need no Claude Code, and hooks/engine.ts is re-exports only"; else exit 1; fi
