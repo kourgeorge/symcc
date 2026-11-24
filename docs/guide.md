@@ -1524,12 +1524,12 @@ unchanged.
   its icon, its name (a link that opens it), how often it runs, its state (`running now`,
   `paused`, `next in 3h`, `on demand`), `last:` with the start of its last report
   (`last: found 2: …`, `last: nothing`) and its model. A row never wraps: its end is cut with
-  "…" to fit. Under the list: `+ New scout` and `← Tasks`. With no scouts yet, a short how-to
-  in a box and `+ New scout` as the main button.
+  "…" to fit. Under the list: `+ New scout`. With no scouts yet, a short how-to
+  as plain text (no box) and `+ New scout` as the main button.
 - **A scout's page**: the page header: `‹` and a `Scouts` button, and the pager; the name and its
-  summary; when it runs, the next run, its model and the last run as chips; buttons `Run now`
-  (not while it runs), `Edit`, and `Pause` or `Resume` (`⏸ paused` beside it while paused);
-  then its **Instructions** as Markdown, its **File**, and its **Runs**; open a run to read its report.
+  summary; when it runs, the next run, its model and the last run as plain words (no pills); buttons `Run now`
+  (the main button; not while it runs), `Edit`, and `Pause` or `Resume` (`⏸ paused` beside it while paused);
+  then its **Instructions** as Markdown, its **File**, and its **Runs** (headings are plain bold text, one line per run); open a run to read its report.
 - **Settings**: every group is a heading (Work, Checks before merging, Workers, Scouts, Board
   and alerts) with its settings under it, each on its own row with its value. A setting with
   a fixed set of choices (mode, notify, checker, scout_findings, tests_with_changes,
@@ -1740,7 +1740,7 @@ Under those, **Runs** lists the scout's recent runs, newest first, one line each
 - the tasks made from it. A task the lead adds from a finding is saved in the scout's latest run
   that reported something, so it stays listed after the task is archived.
 
-Open a run to read its whole report. In VS Code's side panel each run is a button, and
+Open a run to read its whole report. In VS Code's side panel each run is one line (its time is a link, then what it found), and
 "← <scout>" goes back. Esc goes back too. Leaving the scout's page any other way closes the run,
 so the scout opens on its own page next time.
 

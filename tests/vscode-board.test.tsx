@@ -212,7 +212,7 @@ test('in VS Code the other pages drop key marks from labels and print no key hin
   await ui.press({ key: 'tab-scouts' })
   await check('scouts')
   expect(await tabBar(ui)).toEqual(wantTabs('scouts', { tasks: 20, scouts: 1 }))
-  expect((await ui.find({ key: 'scouts-back' }))?.props.label).toBe('← Tasks')
+  expect(await ui.find({ key: 'scouts-back' })).toBeUndefined() // T-1007: the tabs are the way back
   await ui.press({ key: 'tab-settings' })
   await check('settings')
   expect(await tabBar(ui)).toEqual(wantTabs('settings', { tasks: 20, scouts: 1 }))

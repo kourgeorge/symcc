@@ -207,8 +207,8 @@ test('the Scouts list in VS Code with no scouts: the how-to text without termina
   expect(all).toContain('Or press "New scout" to write one right here.')
   expect(all).not.toContain('(n)')
   expect((await ui.find({ key: 'scout-new' }))?.type).toBe('Button')
-  // T-444: the how-to in a box, and "+ New scout" as the one primary button
-  expect((await ui.find({ key: 'vs-scouts-howto' }))?.props.borderStyle).toBe('round')
+  // T-444: "+ New scout" as the one primary button; T-1007: the how-to has no box
+  expect((await ui.find({ key: 'vs-scouts-howto' }))?.props.borderStyle).toBeUndefined()
   expect((await ui.find({ key: 'scout-new' }))?.props.variant).toBe('primary')
   expect(elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').length).toBe(1)
   await ui.unmount()
@@ -543,3 +543,32 @@ for (const bodyColumns of [40, 80]) {
     await ui.unmount()
   })
 }
+
+// T-1007: the Scouts list and a scout's page in the shared plain style, at three widths
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1007: the Scouts list and a scout's page have no borders, pills, "← Tasks" or hint (${bodyColumns} columns)`, async ($, on) => {
+    const plain = async (ui: { drawn: () => Promise<unknown> }, page: string) => {
+      const tree = await ui.drawn()
+      const all = elements(tree)
+      expect(all.filter(n => n.props?.borderStyle || n.props?.backgroundColor).map(n => n.props?.key), page).toEqual([])
+      expect(all.filter(n => n.props?.color === 'claude' || n.props?.color === 'orange').length, page).toBe(0)
+      expect(texts(tree).filter(t => /^Click a/.test(t) || t === '← Tasks'), page).toEqual([])
+      expect(all.filter(n => n.props?.key === 'scouts-back').length, page).toBe(0)
+      return tree
+    }
+    seedScouts(on, 'scouts')
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    // list: one row per scout
+    const list = await plain(ui, 'list')
+    const rows = elements(list).filter(n => SCOUTS.some(x => n.props?.key === `vs-scout-${x.name}`))
+    expect(rows.length).toBe(SCOUTS.length)
+    for (const r of rows) expect(vsRowText(r).length, String(r.props?.key)).toBeLessThanOrEqual(vsRowRoom(bodyColumns))
+    // a scout's page: Run now primary, Edit and Pause secondary
+    await ui.press({ key: `scout:${SCOUTS[0]!.name}`, link: { href: vsHref('scout', SCOUTS[0]!.name) } })
+    await plain(ui, 'page')
+    const variants = Object.fromEntries((await ui.findAll({ type: 'Button' })).filter(b => String(b.key).startsWith('scout-')).map(b => [String(b.key), b.props.variant]))
+    expect(variants['scout-edit']).toBe('secondary')
+    expect(variants['scout-pause']).toBe('secondary')
+    if (variants['scout-run']) expect(variants['scout-run']).toBe('primary')
+    await ui.unmount()
+  })
