@@ -1531,13 +1531,18 @@ unchanged.
   summary; when it runs, the next run, its model and the last run as plain words (no pills); buttons `Run now`
   (the main button; not while it runs), `Edit`, and `Pause` or `Resume` (`⏸ paused` beside it while paused);
   then its **Instructions** as Markdown, its **Runs** (one line per run, its time a link that opens its report), its **Results**, and its **File** (headings are plain bold text).
-- **Settings**: every group is a heading (Work, Checks before merging, Workers, Scouts, Board
-  and alerts) with its settings under it, each on its own row with its value. A setting with
-  a fixed set of choices (mode, notify, checker, scout_findings, tests_with_changes,
-  open_on_start, enabled) is a drop-down: pick a value and it is saved at once. Numbers and the
-  test commands are boxes: type and press `Save` (a wrong value says why and saves nothing; an
-  empty test commands box clears them). Under each row, a dim line says the default and what
-  the setting does. Roles and Task types are buttons that open their pages. No key hints.
+- **Settings**: every group is a plain bold heading (Work, Checks before merging, Workers, Scouts, Board
+  and alerts) with its settings under it, each on its own row. The setting names share one label
+  column, and the value sits beside it. A setting with a fixed set of choices (mode, notify, checker,
+  scout_findings, tests_with_changes, open_on_start, enabled) is a drop-down: pick a value and it is
+  saved at once. Numbers and the test commands are boxes: type and press `Save` (a wrong value says
+  why and saves nothing; an empty test commands box clears them). Under each row, one dim line says
+  what the setting does (no default or range). Roles and Task types are link rows with their count
+  beside them; they open their pages. No help sentence under the list, no key hints.
+- **Roles and Task types**: the page title is plain bold text (not blue), then the table. Where a
+  role or task type comes from (`built-in`, `replaced`, `added by you`) and `off` are plain dim words,
+  not pills. Remove asks inline, with no box: the question, a `Yes, remove` button and a `Cancel`
+  link on one line.
 
 ---
 

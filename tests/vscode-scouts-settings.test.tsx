@@ -258,7 +258,9 @@ test('Settings in VS Code at width 50: groups as headings, a Select for each cho
   for (const name of CHOICES) {
     const el = await ui.find({ key: `setting:${name}` })
     expect(el?.type, name).toBe('Select')
-    expect(el?.props.label, name).toBe(name)
+    // T-1008: the name sits in the shared label column, not in the Select's own label
+    expect(el?.props.label, name).toBeUndefined()
+    expect(texts(await ui.find({ key: `vs-setting-${name}-row-label` })), name).toEqual([name])
   }
   expect((await ui.find({ key: 'setting:mode' }))?.props.value).toBe('auto')
   expect((await ui.find({ key: 'setting:mode' }))?.props.options).toEqual([{ value: 'paused' }, { value: 'review', label: 'approve merge' }, { value: 'auto', label: 'auto merge' }])
@@ -587,3 +589,54 @@ for (const bodyColumns of [40, 64, 100])
     for (const n of elements(page)) if (typeof n.props?.width === 'number') expect(n.props.width / 8, String(n.props?.key)).toBeLessThanOrEqual(bodyColumns)
     await ui.unmount()
   })
+
+// T-1008: Settings and the Roles and Task types pages in the shared plain style, at three widths
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1008: Settings, Roles and Task types have no pills, borders or hint (${bodyColumns} columns)`, async ($, on) => {
+    const plain = async (ui: { drawn: () => Promise<unknown> }, page: string) => {
+      const tree = await ui.drawn()
+      const all = elements(tree)
+      expect(all.filter(n => n.props?.borderStyle || n.props?.backgroundColor).map(n => n.props?.key), page).toEqual([])
+      expect(texts(tree).filter(t => /^Click a/.test(t) || /A pick or Save/.test(t) || /^default /.test(t)), page).toEqual([])
+      // box widths are cells: nothing wider than the panel
+      for (const n of all) if (typeof n.props?.width === 'number') expect(n.props.width / (n.type === 'Svg' ? 8 : 1), String(n.props?.key)).toBeLessThanOrEqual(bodyColumns)
+      return tree
+    }
+    seedRolesKinds(on)
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const settings = await plain(ui, 'settings')
+    const all = texts(settings)
+    // one label column: every setting's name in a label Box of the same width; the meaning alone under it, no "default · range"
+    const widths = new Set(elements(settings).filter(n => /^vs-setting-.*-label$/.test(String(n.props?.key))).map(n => n.props?.width))
+    expect([...widths].length).toBe(1)
+    for (const x of SETTINGS.filter(x => x.name !== 'enabled')) expect(all, x.name).toContain(x.meaning)
+    expect(all.filter(t => t.includes('· ' + SETTINGS[0]!.range) || /^default /.test(t))).toEqual([])
+    // headings are plain words (no fold, no border: the borders check above)
+    for (const g of SETTING_GROUPS) expect(all, g.title).toContain(g.title)
+    // Roles and Task types are link rows in the label column
+    expect((await ui.find({ key: 'settings-roles' }))?.props.pressableLinks).toEqual([vsHref('page', 'roles')])
+    // Roles: the title is not blue, the source and "off" are plain dim words
+    await follow(ui, 'settings-roles', vsHref('page', 'roles'))
+    const list = await plain(ui, 'roles')
+    const title = elements(list).find(n => n.type === 'Text' && n.props?.bold && texts(n).join('') === 'Roles')
+    expect(title?.props?.color).not.toBe('suggestion')
+    await ui.unmount()
+  })
+
+test('T-1008: removing asks inline: a "Yes, remove" Button and a Cancel link, no bordered box', async ($, on) => {
+  seedRolesKinds(on)
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 64 }, surface: 'vscode' })
+  await follow(ui, 'settings-roles', vsHref('page', 'roles'))
+  const name = 'mobile-apps-and-tablets-everywhere'
+  await follow(ui, `roleRow:${name}`, vsHref('role', name))
+  const page = await ui.drawn()
+  // the source is a plain dim word, not a pill
+  const words = elements(page).filter(n => /^vs-role-badges-(source|off)$/.test(String(n.props?.key)))
+  for (const w of words) expect([w.props?.borderStyle, w.props?.backgroundColor, texts(w).length > 0]).toEqual([undefined, undefined, true])
+  await ui.press({ key: 'role-remove' })
+  const tree = await ui.drawn()
+  expect((await ui.find({ key: 'role-remove-yes' }))?.props.variant).toBe('primary')
+  expect((await ui.find({ key: 'role-remove-cancel' }))?.props.pressableLinks).toEqual([act('role-remove-cancel', 'cancel')])
+  expect(elements(tree).filter(n => n.props?.borderStyle).map(n => n.props?.key)).toEqual([])
+  await ui.unmount()
+})
