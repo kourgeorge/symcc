@@ -19,7 +19,8 @@ import { BRANCH_LINES_100, BRANCH_STATE_ROWS_100, branchFactsAt, branchStateFact
 import type { TaskBranchFacts } from '../../core/task-branch'
 import { TODAY_BAR_START, TODAY_LINE_3, todayTasks, todayTeamOf } from '../../../tests/live-today-fixture'
 import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from '../../../tests/live-past-fixture'
-import { localOffset } from '../../core/days'
+import { localOffset, dayOf, dayLabel } from '../../core/days'
+import { todayAt } from '../../../tests/day-clock'
 import { textWidth as textWidthOf } from '../../core/width'
 import { LIVE_INDENT, liveBranches, liveHeading, liveInner } from '../../core/live'
 import { LIST_TONE } from '../../core/details'
@@ -1291,11 +1292,18 @@ test('T-945: the backlog\'s "… N more (Enter to show all)" row is a cursor sto
 })
 
 test('T-946: the open Done group lists today\'s tasks, then a folded row per older day; Enter or a click opens a day', async () => {
+  // "now" is today's local noon, so the days are worked out the way the board does in any time zone (T-792 day-clock)
+  const now = todayAt(12)
+  const off = localOffset(now)
+  const today = dayOf(now, off)
+  const yesterday = dayOf(now - 86_400_000, off)
+  const fourAgo = dayOf(now - 4 * 86_400_000, off)
+  const fourLabel = dayLabel(fourAgo, today)
   const f0 = viewFile()
   let b: Board = emptyBoard()
   const days = [0, 0, 1, 1, 1, 4]
   for (let i = 0; i < days.length; i++) b = addTask(b, { origin: { why: 'a test' }, title: `work ${i}`, files: ['src/'] }, AT)[0]
-  const tasks = b.tasks.map((t, i) => ({ ...t, status: 'done' as const, updated_at: new Date(NOW - days[i]! * 86_400_000 - (i + 1) * 60_000).toISOString() }))
+  const tasks = b.tasks.map((t, i) => ({ ...t, status: 'done' as const, updated_at: new Date(now - days[i]! * 86_400_000 - (i + 1) * 60_000).toISOString() }))
   const f = { ...f0, view: { ...f0.view, tasks, working: [], questions: [] } }
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   for (const how of ['enter', 'click'] as const) {
@@ -1313,11 +1321,11 @@ test('T-946: the open Done group lists today\'s tasks, then a folded row per old
         slot: claim => (slots.push(claim as never), () => undefined),
       },
     }
-    const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+    const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => now })
     await board.refresh()
     const panel = slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 'ses_1', width: 100, focused: false, close: () => undefined, focus: () => undefined } as never) as El
     const texts = () => rowEls(panel).map(r => r.text)
-    const ids = () => panelLines(f, { opened: '', cursor: 0, groups: board.state().groups, openDays: board.state().openDays }, NOW, 98).ids
+    const ids = () => panelLines(f, { opened: '', cursor: 0, groups: board.state().groups, openDays: board.state().openDays }, now, 98).ids
     // open Done: today's two tasks first, then the folded days, newest first, with their counts
     const done = rowEls(panel).find(r => r.text.includes('▸ Done'))!
     ;(done.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
@@ -1326,12 +1334,12 @@ test('T-946: the open Done group lists today\'s tasks, then a folded row per old
     const from = texts().findIndex(t => t.includes('▾ Done'))
     const four = texts().slice(from + 1, from + 5).map(t => t.trim())
     expect(four.slice(0, 2).map(t => t.split(/\s+/)[0]).sort()).toEqual(['T-1', 'T-2'])
-    expect(four.slice(2)).toEqual(['▸ Yesterday · 3 done', '▸ Sun 15 Nov · 1 done'])
+    expect(four.slice(2)).toEqual(['▸ Yesterday · 3 done', `▸ ${fourLabel} · 1 done`])
     expect(texts().some(t => t.includes('T-5 '))).toBe(false)
-    expect(ids().filter(id => id.startsWith('day:'))).toEqual(['day:2026-11-18', 'day:2026-11-15'])
+    expect(ids().filter(id => id.startsWith('day:'))).toEqual([`day:${yesterday}`, `day:${fourAgo}`])
     // Yesterday opens: its three tasks show under it
     if (how === 'enter') {
-      while (ids()[board.state().cursor] !== 'day:2026-11-18') await board.press('down', 'ses_1')
+      while (ids()[board.state().cursor] !== `day:${yesterday}`) await board.press('down', 'ses_1')
       expect(texts().find(t => t.includes('Yesterday'))!.trim()).toBe('› ▸ Yesterday · 3 done')
       await board.press('open', 'ses_1')
     } else {
@@ -1339,11 +1347,11 @@ test('T-946: the open Done group lists today\'s tasks, then a folded row per old
       ;(row.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
       await Promise.resolve()
     }
-    expect(board.state().openDays).toEqual(['2026-11-18'])
+    expect(board.state().openDays).toEqual([yesterday])
     expect(board.state().opened).toBe('')
     const y = texts().findIndex(t => t.includes('▾ Yesterday · 3 done'))
     expect(texts().slice(y + 1, y + 4).map(t => t.trim().replace(/^› /, '').split(/\s+/)[0]).sort()).toEqual(['T-3', 'T-4', 'T-5'])
-    expect(texts()[y + 4]!.trim()).toBe('▸ Sun 15 Nov · 1 done')
+    expect(texts()[y + 4]!.trim()).toBe(`▸ ${fourLabel} · 1 done`)
     expect(texts().some(t => t.includes('T-6 '))).toBe(false)
     // and folds again
     if (how === 'enter') await board.press('open', 'ses_1')
