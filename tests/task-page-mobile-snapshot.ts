@@ -12,6 +12,7 @@
 // - T-775: every header button "[Label]" in one style, Back "‹ [Tasks]"; the try buttons "[Try 1]", their keys hidden (on desktop and mobile native Buttons "Try 1" and Back "Tasks", no brackets)
 // - T-914: the header's id always the board orange ("claude"), whatever the status
 // - T-954: the Run now button (key e) on to do, paused, failed, dropped and backlog tasks
+// - T-966: the Order row (the run order, and a to do task's place in line) after Added
 export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
   "mobile T-501": {
     "type": "Box",
@@ -182,6 +183,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {
@@ -975,6 +983,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -1716,6 +1731,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {
@@ -2467,6 +2489,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -2973,6 +3002,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {
@@ -3732,6 +3768,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · waits on T-498 first"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -4176,6 +4220,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -4608,6 +4659,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {
@@ -5282,6 +5340,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {
@@ -6193,6 +6258,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -6890,6 +6962,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {

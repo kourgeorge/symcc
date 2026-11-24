@@ -8,6 +8,7 @@
 // T-912: the Scouts page ("terminal scouts", ...) says "scout findings by default: auto" on top and each row its findings choice.
 // T-914: the task page header's id is always the board orange ("claude"), whatever the status.
 // T-954: the Run now button (key e) on to do, paused, failed, dropped and backlog tasks
+// T-966: the task page's Priority row after Added
 export const BEFORE: Record<string, unknown> = {
   "terminal 50": {
     "type": "Box",
@@ -1424,6 +1425,10 @@ export const BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
+          },
+          {
+            "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["general"]}
@@ -2089,6 +2094,13 @@ export const BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {
@@ -3417,6 +3429,13 @@ export const BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {

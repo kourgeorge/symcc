@@ -92,12 +92,16 @@ for (const [name, t] of [['a bug in doing with a role, tries and a checker step'
     expect(drawn[0]!.label).toBe(t.status === 'doing' ? 'Steps' : 'Added')
     expect((await ui.find({ key: 'vs-state-status' }))?.text).toMatch(t.status === 'doing' ? /^ ▶ doing · checker · ⏱ \d+m $/ : /^ ○ to do $/)
     if (t === BUG) {
-      expect(drawn.map(r => r.label)).toEqual(['Steps', 'Added', 'Role', 'Kind', 'From', 'Why', 'Request', 'Files', 'Into', 'After', 'Branch', 'Tries'])
+      expect(drawn.map(r => r.label)).toEqual(['Steps', 'Added', 'Priority', 'Role', 'Kind', 'From', 'Why', 'Request', 'Files', 'Into', 'After', 'Branch', 'Tries'])
       expect(drawn.find(r => r.label === 'Steps')!.text).toContain('● checker')
+      // T-966: a doing task's Priority row is only its number
+      expect(drawn.find(r => r.label === 'Priority')!.text).toBe('0')
       // the task it waits for opens by its link
       const link = (await ui.find({ key: 'after-T-690' })) as Node
       expect(link?.type).toBe('Markdown')
     }
+    // T-966: the only ready to do task is next to start
+    if (t === TODO) expect(drawn.find(r => r.label === 'Priority')!.text).toBe('0 · next to start')
     // no tags row, no second Status line, no "Why / where it came from" or "Files it may change" (now in the rows)
     for (const k of ['vs-tags-row', 'vs-tags', 'vs-status', 'vs-stage', 'vs-sec-origin', 'vs-sec-files', 'vs-sec-after']) expect(await ui.find({ key: k }), k).toBeUndefined()
     // the order on the page: the title block, the action buttons, then the Details, then What to do
