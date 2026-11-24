@@ -289,9 +289,7 @@ changed is kept.
 - **A question with choices.** A worker may give 2 to 6 choices with its question.
   Each choice is a button with its number key, plus **Answer…**
   for your own words. Picking one is your answer (history: the owner answered: “b”) and
-  sends the task back to work. In VS Code a question's page (a worker's or the lead's) has no box
-  around it: the id is dim, the question is bold, the choices are numbered links (keys 1-9 work
-  too) and a "Your answer" box follows. No hint line.
+  sends the task back to work.
 - **Any other question** has a text box: type the answer and press Enter.
 
 ### When the lead asks you something
@@ -303,7 +301,9 @@ board with its `question` tool, with 2 to 6 short choices, and asks it briefly i
 
 - The board list shows **Questions for you (2)** at the top, above the tasks. Enter on one
   opens its page: the question, one button per choice (also on the number keys) and
-  **Answer…** for your own words, the same as a waiting task.
+  **Answer…** for your own words, the same as a waiting task. In VS Code this page has no box
+  around it: the id is dim, the question is bold, the choices are numbered links (keys 1-9 work
+  too) and a "Your answer" box follows. No hint line.
 - The band above the prompt says **⚠ 2 questions for you: Q-1 …** (one row per question) while
   any is open. With `notify` on you hear "needs you"
   once per question.
