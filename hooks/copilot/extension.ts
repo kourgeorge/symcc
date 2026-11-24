@@ -79,7 +79,7 @@ export async function startCopilot(o: CopilotStartOptions): Promise<CopilotRun> 
   ref.session = await joinSession({
     tools: { definitions: copilotTools(host) },
     commands: copilotCommands(host, () => ref.session, remember),
-    hooks: { handlers: copilotHooks(host, ours, end) },
+    hooks: { handlers: copilotHooks(host, o.dir, ours, end) },
     ...(agents ? { requestedEnvironmentVariables: [...PROVIDER_SECRETS] } : {}),
   })
   useName(host)

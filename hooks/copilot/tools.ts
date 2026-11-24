@@ -17,8 +17,9 @@ import { ASK_TOOL } from '../core/ask'
 import { SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL } from '../core/scouts'
 import { COMMANDS, runCommand, toolCall, toolCallFailed, leadGuideText, ownerTyped, meanwhileForPrompt, type CommandAnswer } from '../app/symcc'
 import { S, useName, toolName } from '../app/state'
-import type { CpCommand, CpHooks, CpSession, CpTool } from './sdk'
+import type { CpCommand, CpHooks, CpPreToolUseOutput, CpSession, CpTool } from './sdk'
 import { SYMCC_SOURCE } from './lead'
+import { preToolUse } from './guard'
 
 /** The arguments a tool is given, as an object (anything else is none). */
 const argsOf = (args: unknown): Record<string, unknown> => (args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {})
@@ -120,10 +121,15 @@ export function copilotCommands(host: Host, session: () => CpSession | undefined
 /**
  * The session hooks: each prompt gets the lead's guide (none when symcc is off here or the project isn't known), and a
  * prompt that is none of symcc's own sends (`ours`) counts as the owner's typing (ownerTyped). `ended` runs once the
- * session ends.
+ * session ends. T-977: every tool call of the lead's session goes through symcc's guard (preToolUse, guard.ts) with no
+ * agent id, so the lead gets the rules it has in Claude Code and OpenCode (toolCall and toolCheck for the lead: no
+ * shell wrap, unknown tools allowed); `dir` is the folder the session runs in.
  */
-export function copilotHooks(host: Host, ours: (prompt: string) => boolean, ended: () => Promise<void>): CpHooks {
+export function copilotHooks(host: Host, dir: string, ours: (prompt: string) => boolean, ended: () => Promise<void>): CpHooks {
   return {
+    async onPreToolUse(input) {
+      return (await preToolUse(host, dir, undefined, input)) as CpPreToolUseOutput | undefined
+    },
     async onUserPromptSubmitted(input) {
       useName(host)
       const owners = !ours(input.prompt)

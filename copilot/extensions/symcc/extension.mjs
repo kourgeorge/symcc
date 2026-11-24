@@ -9059,7 +9059,7 @@ function laneLines(lane, l, o) {
   });
   const name = segs({ text: done ? `${LIVE_DONE_MARK} ` : LIVE_RUN_MARK, tone: done ? "dim" : "run" }, { text: padWidth(lane.id, l.idW), tone: "run" }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? "dim" : "text" });
   const first = [...name, { text: sep, tone: "text" }, ...track, { text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: "dim" }];
-  const back = lane.sentBack > 0 && { text: `⌕×${lane.sentBack}`, tone: "dim" };
+  const back = lane.sentBack > 0 && { text: `⌕ × ${lane.sentBack}`, tone: "dim" };
   const fits = (xs) => textWidth(segText(xs)) <= l.width;
   const times = lane.tokens !== undefined && lane.usual ? lane.tokens / lane.usual : undefined;
   const shown = times !== undefined && laneTimes(times);
@@ -11596,6 +11596,7 @@ async function deleteOrgMem(host, n, expect, key) {
     if (!removed)
       return { ok: false, text: `No note ${n} in ${file} (it may have changed): nothing deleted.` };
     await safeWrite(host, path(file), text, "the organizational memory (org-mem)");
+    noteForLead(`The owner deleted org-mem note ${n}: "${brief(removed.text)}"; numbers after it moved up.`);
     return { ok: true, text: `Deleted note ${n} from ${file}${removed.date ? ` (${removed.date})` : ""}.` };
   }).catch((err) => ({ ok: false, text: `Couldn't delete note ${n}: ${err?.message ?? err}` }));
 }
@@ -15562,7 +15563,7 @@ In an open task: b back · p pause · u resume · r retry · x drop · w watch t
   · l pick the worker role (a task to do, paused, failed or in the backlog).
   · h already merged: marks a failed, waiting, paused or dropped task done whose work was merged by hand (checked with git first; nothing is merged or tested).
 In a backlog task: o move to todo · x drop · l role.
-On the board list a task's kind shows at the right end of its row ("[bug]", "[docs]"); a plain change shows nothing, and the role is never there (the task page shows it). The list rows show no try number; the band above the prompt (in every client) shows a later try as "↺3" right after the step's time ("T-5 ⊛ 3m ↺3"; nothing on try 1), and the task page shows "try 3/4". On the Live tab's rows, "⌕×2" means the checker sent the task back twice. A task to do that waits on others shows "waits for T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
+On the board list a task's kind shows at the right end of its row ("[bug]", "[docs]"); a plain change shows nothing, and the role is never there (the task page shows it). The list rows show no try number; the band above the prompt (in every client) shows a later try as "↺3" right after the step's time ("T-5 ⊛ 3m ↺3"; nothing on try 1), and the task page shows "try 3/4". On the Live tab's rows, "⌕ × 2" means the checker sent the task back twice. A task to do that waits on others shows "waits for T-x"; a task in review shows "Enter to review"; a task that merges into another branch than the one you are on shows "→ that-branch".
 The board list goes top to bottom: NEEDS YOU (with its title); then the tasks doing and to do in one list without a title (running first, then to do, then paused); a blank line; then the folded rows "▸ Backlog  N", "▸ Done  N" and "▸ Dropped  N". Enter on a folded row opens it (the backlog shows 5 items, then "… N more").
 Backlog tasks are ideas and unclear work; they start only when you move them to todo (o).
 In a task ready for review: a approve · x reject (asks for a reason) · d show changes.
@@ -16344,6 +16345,7 @@ async function saveSettings($, a, who) {
   pump($);
   return { changes, mode };
 }
+var WORK_SETTINGS = new Set(["mode", "max_parallel", "test_commands", "docs_test_commands", "test_minutes", "checker", "scout_findings", "max_minutes", "auto_retries", "tests_with_changes"]);
 async function ownerSettings($, a, where) {
   if (typeof a.enabled === "boolean") {
     const { enabled, ...rest } = a;
@@ -16357,12 +16359,12 @@ async function ownerSettings($, a, where) {
   const set = n ? notifySet(n) : null;
   if (set)
     playSample($, set);
-  const parts = r.changes.map(settingSetText);
-  if (r.mode)
-    parts.push(`mode set to ${settingShown("mode", String(a.mode))}: ${r.mode}`);
+  const modeLine = r.mode ? [`mode set to ${settingShown("mode", String(a.mode))}: ${r.mode}`] : [];
+  const parts = [...r.changes.map(settingSetText), ...modeLine];
   const text = parts.join("; ") || "nothing changed";
-  if (parts.length)
-    noteForLead(`The owner changed the settings: ${brief(text)}`);
+  const told = [...r.changes.filter((c) => WORK_SETTINGS.has(c.name)).map(settingSetText), ...modeLine];
+  if (told.length)
+    noteForLead(`The owner changed the settings: ${brief(told.join("; "))}`);
   return text;
 }
 
@@ -19987,8 +19989,6 @@ ${skipped}` : "") };
       const input = cmd.kind === "def" ? { action: cmd.action, name: cmd.name } : cmd.kind === "def-add" ? { action: "add", name: cmd.name, ...cmd.def === "role" ? NEW_ROLE_TEMPLATE : NEW_KIND_TEMPLATE } : cmd.kind === "def-save" ? { action: "edit", name: cmd.name, ...cmd.fields } : { action: "edit", name: cmd.name, [cmd.field]: cmd.value };
       const r = await (cmd.def === "role" ? changeRole : changeKind)(host, input);
       if (r.ok) {
-        const what = cmd.kind === "def" ? cmd.action : cmd.kind === "def-add" ? "add" : cmd.kind === "def-save" ? `edit ${Object.keys(cmd.fields).join(", ")}` : `edit ${cmd.field}`;
-        noteForLead(`The owner changed ${cmd.def} ${cmd.name} (${what}): ${brief(r.text)}`);
         await publish(host, await load(host));
       }
       return say(r.text);
@@ -20280,113 +20280,6 @@ function copilotHost(o) {
   };
 }
 
-// hooks/copilot/tools.ts
-var argsOf = (args) => args && typeof args === "object" && !Array.isArray(args) ? args : {};
-function copilotTools(host) {
-  return TOOLS().map((t) => ({
-    name: toolName(t.name),
-    description: t.description,
-    parameters: { ...t.inputSchema },
-    skipPermission: true,
-    async handler(args, invocation) {
-      useName(host);
-      const name = toolName(t.name);
-      const agentId = invocation?.agentId || undefined;
-      const r = await toolCall(host, name, agentId, argsOf(args)).catch((err) => toolCallFailed(host, name, agentId, { kind: "error", message: err?.message ?? String(err) }));
-      if (!r)
-        return { textResultForLlm: `${S.N.name} has no tool ${name}`, resultType: "failure", error: `no tool ${name}` };
-      if ("deny" in r)
-        return { textResultForLlm: r.deny, resultType: "failure", error: r.deny };
-      return r.result;
-    }
-  }));
-}
-function agentToolNames(kind) {
-  if (kind === "worker")
-    return [ASK_TOOL];
-  return kind === "scout" ? [...SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL] : [...SCOUT_BOARD_TOOLS];
-}
-function copilotAgentTools(host, kind, agentId) {
-  useName(host);
-  const all = [...TOOLS(), ASK_TOOL_DEF()];
-  return agentToolNames(kind).flatMap((n) => all.filter((t) => t.name === n)).map((t) => ({
-    name: toolName(t.name),
-    description: t.description,
-    parameters: { ...t.inputSchema },
-    skipPermission: true,
-    async handler(args) {
-      useName(host);
-      const name = toolName(t.name);
-      const id = agentId();
-      if (!id)
-        return { textResultForLlm: `${S.N.name} has not started this agent yet`, resultType: "failure", error: "not started" };
-      const r = await toolCall(host, name, id, argsOf(args)).catch((err) => toolCallFailed(host, name, id, { kind: "error", message: err?.message ?? String(err) }));
-      if (!r)
-        return { textResultForLlm: `${S.N.name} has no tool ${name}`, resultType: "failure", error: `no tool ${name}` };
-      if ("deny" in r)
-        return { textResultForLlm: r.deny, resultType: "failure", error: r.deny };
-      return r.result;
-    }
-  }));
-}
-function copilotCommandList(host) {
-  const list2 = COMMANDS(host.features).map((c) => ({ name: c.name, description: c.description, runs: c.name }));
-  if (host.features.panel)
-    return list2;
-  const board = `${S.N.name}-board`;
-  const main = list2.find((c) => c.name === S.N.name);
-  if (main)
-    main.description = `Show the ${S.N.name} board as text in the chat: tasks and scouts`;
-  const at2 = list2.findIndex((c) => c.name === `${S.N.name}-status`);
-  if (!list2.some((c) => c.name === board))
-    list2.splice(at2 < 0 ? list2.length : at2 + 1, 0, { name: board, description: `Show the ${S.N.name} board as text in the chat (as /${S.N.name}; there is no board panel here)`, runs: S.N.name });
-  return list2;
-}
-function copilotCommands(host, session, sent = () => {
-  return;
-}) {
-  return copilotCommandList(host).map((c) => ({
-    name: c.name,
-    description: c.description,
-    async handler(ctx) {
-      useName(host);
-      const s = session();
-      if (!s)
-        return;
-      const answer = await runCommand(host, c.runs, (ctx.args ?? "").trim()).catch((err) => ({ text: `${S.N.name}: /${c.name} failed: ${err?.message ?? err}`, isTextDisplayOnly: true }));
-      if (!answer)
-        return;
-      if (answer.isTextDisplayOnly)
-        return void await s.log(answer.text).catch(() => {
-          return;
-        });
-      sent(answer.text);
-      await s.send({ prompt: answer.text, mode: "enqueue", source: SYMCC_SOURCE });
-    }
-  }));
-}
-function copilotHooks(host, ours, ended) {
-  return {
-    async onUserPromptSubmitted(input) {
-      useName(host);
-      const owners = !ours(input.prompt);
-      if (owners)
-        ownerTyped(input.prompt);
-      const guide = await leadGuideText(host).catch(() => {
-        return;
-      });
-      const meanwhile3 = owners && guide ? meanwhileForPrompt().text : "";
-      const context = [guide, meanwhile3].filter(Boolean).join(`
-
-`);
-      return context ? { additionalContext: context } : {};
-    },
-    async onSessionEnd() {
-      await ended();
-    }
-  };
-}
-
 // hooks/copilot/guard.ts
 var READ_ONLY_TOOLS = new Set([
   "view",
@@ -20559,6 +20452,116 @@ async function preToolUse(host, dir, agentId, input, kindOf3) {
     const why = toolCheckFailed(host, agentId, { kind: "error", message: err?.message ?? String(err) });
     return why ? deny(why) : undefined;
   }
+}
+
+// hooks/copilot/tools.ts
+var argsOf = (args) => args && typeof args === "object" && !Array.isArray(args) ? args : {};
+function copilotTools(host) {
+  return TOOLS().map((t) => ({
+    name: toolName(t.name),
+    description: t.description,
+    parameters: { ...t.inputSchema },
+    skipPermission: true,
+    async handler(args, invocation) {
+      useName(host);
+      const name = toolName(t.name);
+      const agentId = invocation?.agentId || undefined;
+      const r = await toolCall(host, name, agentId, argsOf(args)).catch((err) => toolCallFailed(host, name, agentId, { kind: "error", message: err?.message ?? String(err) }));
+      if (!r)
+        return { textResultForLlm: `${S.N.name} has no tool ${name}`, resultType: "failure", error: `no tool ${name}` };
+      if ("deny" in r)
+        return { textResultForLlm: r.deny, resultType: "failure", error: r.deny };
+      return r.result;
+    }
+  }));
+}
+function agentToolNames(kind) {
+  if (kind === "worker")
+    return [ASK_TOOL];
+  return kind === "scout" ? [...SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL] : [...SCOUT_BOARD_TOOLS];
+}
+function copilotAgentTools(host, kind, agentId) {
+  useName(host);
+  const all = [...TOOLS(), ASK_TOOL_DEF()];
+  return agentToolNames(kind).flatMap((n) => all.filter((t) => t.name === n)).map((t) => ({
+    name: toolName(t.name),
+    description: t.description,
+    parameters: { ...t.inputSchema },
+    skipPermission: true,
+    async handler(args) {
+      useName(host);
+      const name = toolName(t.name);
+      const id = agentId();
+      if (!id)
+        return { textResultForLlm: `${S.N.name} has not started this agent yet`, resultType: "failure", error: "not started" };
+      const r = await toolCall(host, name, id, argsOf(args)).catch((err) => toolCallFailed(host, name, id, { kind: "error", message: err?.message ?? String(err) }));
+      if (!r)
+        return { textResultForLlm: `${S.N.name} has no tool ${name}`, resultType: "failure", error: `no tool ${name}` };
+      if ("deny" in r)
+        return { textResultForLlm: r.deny, resultType: "failure", error: r.deny };
+      return r.result;
+    }
+  }));
+}
+function copilotCommandList(host) {
+  const list2 = COMMANDS(host.features).map((c) => ({ name: c.name, description: c.description, runs: c.name }));
+  if (host.features.panel)
+    return list2;
+  const board = `${S.N.name}-board`;
+  const main = list2.find((c) => c.name === S.N.name);
+  if (main)
+    main.description = `Show the ${S.N.name} board as text in the chat: tasks and scouts`;
+  const at2 = list2.findIndex((c) => c.name === `${S.N.name}-status`);
+  if (!list2.some((c) => c.name === board))
+    list2.splice(at2 < 0 ? list2.length : at2 + 1, 0, { name: board, description: `Show the ${S.N.name} board as text in the chat (as /${S.N.name}; there is no board panel here)`, runs: S.N.name });
+  return list2;
+}
+function copilotCommands(host, session, sent = () => {
+  return;
+}) {
+  return copilotCommandList(host).map((c) => ({
+    name: c.name,
+    description: c.description,
+    async handler(ctx) {
+      useName(host);
+      const s = session();
+      if (!s)
+        return;
+      const answer = await runCommand(host, c.runs, (ctx.args ?? "").trim()).catch((err) => ({ text: `${S.N.name}: /${c.name} failed: ${err?.message ?? err}`, isTextDisplayOnly: true }));
+      if (!answer)
+        return;
+      if (answer.isTextDisplayOnly)
+        return void await s.log(answer.text).catch(() => {
+          return;
+        });
+      sent(answer.text);
+      await s.send({ prompt: answer.text, mode: "enqueue", source: SYMCC_SOURCE });
+    }
+  }));
+}
+function copilotHooks(host, dir, ours, ended) {
+  return {
+    async onPreToolUse(input) {
+      return await preToolUse(host, dir, undefined, input);
+    },
+    async onUserPromptSubmitted(input) {
+      useName(host);
+      const owners = !ours(input.prompt);
+      if (owners)
+        ownerTyped(input.prompt);
+      const guide = await leadGuideText(host).catch(() => {
+        return;
+      });
+      const meanwhile3 = owners && guide ? meanwhileForPrompt().text : "";
+      const context = [guide, meanwhile3].filter(Boolean).join(`
+
+`);
+      return context ? { additionalContext: context } : {};
+    },
+    async onSessionEnd() {
+      await ended();
+    }
+  };
 }
 
 // hooks/copilot/agents.ts
@@ -20806,7 +20809,7 @@ async function startCopilot(o) {
   ref.session = await joinSession({
     tools: { definitions: copilotTools(host) },
     commands: copilotCommands(host, () => ref.session, remember2),
-    hooks: { handlers: copilotHooks(host, ours, end2) },
+    hooks: { handlers: copilotHooks(host, o.dir, ours, end2) },
     ...agents2 ? { requestedEnvironmentVariables: [...PROVIDER_SECRETS] } : {}
   });
   useName(host);
