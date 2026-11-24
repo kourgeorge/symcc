@@ -5,7 +5,7 @@
 import { expect } from 'claude-code/testing'
 import { emptyBoard, leadText, parseLead, parseCommand, offStatusLine, offHereAnswer, LEAD_STALE_MS, addTask, patchTask, find, type Board } from '../hooks/board'
 import { claimLead, disableHere, enableHere, offHereBeat, handOver, GONE_REMIND_MS, GONE_GRACE_MS, startOffHere, driveHere } from '../hooks/app/lead'
-import { S, sayQueue, toolName } from '../hooks/app/state'
+import { S, sayQueue, toolName, workers } from '../hooks/app/state'
 import { leadBeat, leadGuideText, sessionStart, toolCall, runCommand, COMMANDS } from '../hooks/app/symcc'
 import { saveBoard } from '../hooks/app/store'
 import { ownerSettings } from '../hooks/app/tools'
@@ -621,4 +621,51 @@ test('T-1016: session start under a new id in the driving window keeps driving (
   expect(parseLead(w.files.get(w.lead)!)?.session).toBe('b')
   const r = await toolCall(w.host, toolName('board'), undefined, {})
   expect(String((r as { result?: unknown })?.result ?? '')).not.toContain('off in this window')
+})
+
+/** T-1020: this window drives as 'a' with T-1 running under 'a'; `setId` switches the id the host gives. */
+async function drivingAsAWithRunningTask() {
+  S.root = ROOT
+  S.me = 'a'
+  let id = 'a'
+  const w = world('a')
+  ;(w.host.session as { id: () => Promise<string> }).id = async () => id
+  await saveBoard(w.host, emptyBoard())
+  expect(await claimLead(w.host)).toBe(true)
+  // the task is saved after the claim (a fresh claim sends doing tasks with no live worker back to todo)
+  const T = '2026-11-09T00:00:00.000Z'
+  let b = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'running' }, T)[0]
+  b = patchTask(b, 'T-1', { status: 'doing', live: { session: 'a' } }, T)
+  await saveBoard(w.host, b)
+  // its worker runs in this window (the same plugin copy), so the second session start keeps it
+  workers.set('ag1', { task: 'T-1', worktree: '/repo/.symcc/worktrees/T-1', branch: 'symcc/T-1', since: 0 })
+  expect(find(boardOf(w), 'T-1')?.live?.session).toBe('a')
+  return { w, setId: (v: string) => void (id = v) }
+}
+
+test('T-1020: session start under a new id in the driving window moves the running task to the new id', async () => {
+  const { w, setId } = await drivingAsAWithRunningTask()
+  setId('b')
+  await sessionStart(w.host)
+  const t1 = find(boardOf(w), 'T-1')
+  expect(t1?.status).toBe('doing')
+  expect(t1?.live?.session).toBe('b')
+  expect(parseLead(w.files.get(w.lead)!)?.session).toBe('b')
+})
+
+test('T-1020: session start under a new id leaves lead.json alone when another window drives now', async () => {
+  const { w, setId } = await drivingAsAWithRunningTask()
+  w.files.set(w.lead, leadText('other', Date.now()))
+  setId('b')
+  await sessionStart(w.host)
+  expect(parseLead(w.files.get(w.lead)!)?.session).toBe('other')
+  expect(S.driving).toBe(false)
+})
+
+test('T-1020: session start under a new id in a window turned off here leaves lead.json alone', async () => {
+  const { w, setId } = await drivingAsAWithRunningTask()
+  S.offHere = true
+  setId('b')
+  await sessionStart(w.host)
+  expect(parseLead(w.files.get(w.lead)!)?.session).toBe('a')
 })
