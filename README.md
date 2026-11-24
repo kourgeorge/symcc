@@ -154,7 +154,7 @@ copilot plugin marketplace add kourgeorge/symcc
 copilot plugin install symcc@symcc
 ```
 
-The lead's tools, workers, scouts and checkers work. There is no board panel yet (`/symcc` prints the board as text), and slash commands work only in the interactive CLI, not in `copilot -p`. The details, including your own model provider (BYOK), are in the [guide](docs/guide.md#using-symcc-in-copilot-cli).
+The lead's tools, workers, scouts and checkers work. There is no board panel yet (`/symcc` prints the board as text), and slash commands work only in the interactive CLI. In `copilot -p`, Copilot loads symcc only with `--allow-all` (or `--allow-all-tools`); without it none of symcc's tools are there. The details, including your own model provider (BYOK), are in the [guide](docs/guide.md#using-symcc-in-copilot-cli).
 
 ## All features
 

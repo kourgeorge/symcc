@@ -2791,7 +2791,7 @@ The marketplace file is `.github/plugin/marketplace.json`, and the plugin's mani
 
 - **Works:** the lead's tools (`symcc_board`, `symcc_add` and the rest), board updates that wake the lead (a normal one when it is idle or at the end of its turn, an urgent one at its next tool call), workers, scouts and checkers as Copilot sessions of their own, each in its task's worktree with symcc's guard on its edits and shell commands.
 - **No board panel and no band:** `/symcc` prints the board as text in the chat, `/symcc-tasks` the short list and `/symcc-status` the Live tab.
-- **Slash commands only in the interactive CLI:** in `copilot -p "..."`, a `/symcc ...` prompt goes to the model as plain text. Ask the lead in words instead ("show the board").
+- **`copilot -p` needs `--allow-all`:** in `-p` mode there is nobody to approve an extension, so Copilot loads no extension at all, symcc included: no `symcc_*` tools and no `/symcc` commands. It prints "Denied, no one to approve extension permission (plugin:symcc:symcc)". Add `--allow-all` (or `--allow-all-tools`), for example `copilot --experimental --allow-all -p "Call the symcc_board tool"`; then the tools work. Even then, a `/symcc ...` prompt in `-p` goes to the model as plain text, so ask the lead in words ("show the board"). The interactive CLI needs neither.
 - **After `/clear`** Copilot restarts the extension; the board and the lead's lock are on disk, so symcc picks up where it was.
 - **Check that a worker's shell runs in its worktree:** symcc rewrites each of an agent's shell commands to run from the agent's own folder. A worker told to run `cd / ; pwd` should still print its worktree's path (`.symcc/worktrees/T-n`), not `/`.
 
