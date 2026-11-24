@@ -10346,6 +10346,20 @@ function noteForLead(text) {
     return;
   meanwhile.push(text.trim());
 }
+function meanwhileForPrompt() {
+  const lines = meanwhile.splice(0);
+  if (!lines.length || !S.enabledNow)
+    return { text: "", back: () => {} };
+  let put = false;
+  const back = () => {
+    if (put)
+      return;
+    put = true;
+    meanwhile.unshift(...lines);
+  };
+  return { text: `[${S.N.name}] ${meanwhileText(lines)}
+(Done on the board before this message from the owner; take it into account.)`, back };
+}
 
 // hooks/app/health.ts
 function checkHealth($, b, nowMs = Date.now()) {
@@ -15726,7 +15740,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Keeping the board in order (triage): older tasks go first unless the owner says a task is urgent; bugs and safety fixes go before features. Use priority for urgency: lower runs first; every task starts at 0; give urgent work -1, -2…, later work 1, 2… (a whole number from -20 to 19; ties go to the older task). Use it, not only after. Chain tasks with after only when they really share files; tasks with different files should run side by side. Never leave a task waiting forever. When a new task shares files with an older task that is still waiting, the new one goes behind it (the new one gets after: the older one), not the other way round.
 - ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / priority, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged. Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
-- The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers to a task) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines at the top of the next board update. They need no reply; just take them into account.
+- The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers to a task) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines: at the top of the next board update, or beside the owner's next message if that comes first. They need no reply; just take them into account. Only the owner setting up git, or allowing or refusing a task's files on the board, wakes you at once with a board update.
 ${S.W.askPopup ? `- Ask every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") with ${S.W.askPopup} (2 to 4 short options). ${S.N.name} puts each such question on the board by itself as a Q-n, so don't also add a ${S.N.name} question for it. Whichever the owner answers first closes the other: a board answer comes back as the pop-up's answer, and a pop-up answer closes the Q-n (the tool result says so). If the owner closes the pop-up without answering, the Q-n stays on the board, and a later board answer wakes you with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it." (already closed: act on it and don't ask again). Only for a question with 5 or 6 options, first add it with ${S.N.name} question (action add), then ask it with ${S.W.askPopup} with the same question text and the first 3 options plus "the rest on the board": the pop-up is tied to that Q-n. Drop a question that no longer matters (${S.N.name} question action drop). A question about one task stays ${S.N.name} ask.
 - Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask in the chat with ${S.W.askPopup}, with the same options (where a line here says numbered plain chat text, use ${S.W.askPopup} with those options), with the question's header set to exactly the task id (T-5; an id only mentioned in the question text doesn't tie it). ${S.N.name} ties that pop-up to the task's own board question (no Q-n is added): whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into the task for you (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a note), and the tool result says what was done and what is left for you (e.g. a reject's reason: then ${S.N.name} reject yourself). ${S.W.askPopup} takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board" (or the owner types one under Other); when the owner picks "the rest on the board", the board question stays open and a board update brings their answer. Don't stack two questions under the same numbers: ask one at a time.` : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "or answer on the board". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
 - Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "or answer on the board". Don't stack two questions under the same numbers: ask one at a time.`}
@@ -15736,7 +15750,7 @@ ${S.W.askPopup ? `- Ask every question for the owner that isn't about one task (
 - Work merged by hand: when a task's branch was merged outside the board (by the owner, or by you on the owner's word, e.g. its only failure was the merge tests timing out), don't drop it and don't let a new worker redo it: ${S.N.name} merged T-5 marks it done. ${S.N.name} checks with git that all its commits are in the branch it merges into and refuses with the reason if not; nothing is merged or tested, its folder and branch are cleaned up, and tasks waiting on it start. It works for a task that is to do, running, failed, waiting, paused, in review or dropped. Use it only after the owner's word or a rule the owner set.
 - Investigation or change (kind in ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself.
 - An answered investigation ("T-5 is answered") waits in review for the owner to read its answer; it has nothing to merge. Tell the owner the answer in the chat, short and plain (read it with ${S.N.name} board task T-5), and offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "or answer on the board". On the owner's word: ${S.N.name} approve T-5 is Done (it ends done; its folder is removed, and its branch too unless it has commits from earlier tries, which are kept; the reply says so), ${S.N.name} approve T-5 with keep_note: true is Keep as a note (Done, plus a new docs task that writes docs/research/<topic>.md from the answer and merges as usual), and ${S.N.name} reject T-5 with their follow-up question is Ask more (a fresh try gets the question and the earlier answer).
-- A worker that tries to edit a file outside its task's files is refused (${S.N.name} records the path as a request) and stops; the task then waits for the owner, asking to allow those files. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you only hear of it in a "Meanwhile" line) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files another way (e.g. a shell command) fails its try at the merge's scope check.
+- A worker that tries to edit a file outside its task's files is refused (${S.N.name} records the path as a request) and stops; the task then waits for the owner, asking to allow those files. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you are told at once) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files another way (e.g. a shell command) fails its try at the merge's scope check.
 - A worker that needs the owner to decide something calls its own question tool, ${toolName("ask_owner")} (maybe with options, which the board shows as buttons), and stops; that tool is for workers only: you never call it (to make a task wait with your own question, use ${S.N.name} ask). The task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "symcc: T-5 needs you" (the project's name first) (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as numbered plain chat text, plus "or answer on the board". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
 - A worker whose run ended on an API error (retries used up, the context limit) or a refusal fails its try with that reason, and nothing is checked or merged; its work stays in its folder and branch, so ${S.N.name} retry continues from there. But when ${S.N.name} itself stopped that worker (a reload, a takeover, driving moved to another session), the try does not fail: a new worker goes on with the same try. What a worker writes in its hand-back is only its report: symcc never reads a question or a file request out of it.
 - A worker that runs past its time limit (max_minutes, plus any time the owner added) is not stopped: it keeps working, its task stays doing with the note "over time; asked the owner", and you are told "T-5 has run 45 min. Give it more time?" with the options +30 min | +60 min | Stop it (the owner hears "needs you" too, and the board shows them as buttons). Ask the owner in the chat, offering those choices as numbered plain chat text, plus "or answer on the board"; put their pick into the task with ${S.N.name} change and answer: "+30 min", "+60 min" (any "+N min" works) or "Stop it". More time moves that task's limit later and the worker goes on. Stop it (or no answer by the limit plus max_minutes again) tells the worker to write down what it has and hand back; a few minutes later it is stopped and the task fails, with its work kept in its folder, branch and report, so a retry continues from there.
@@ -18037,9 +18051,11 @@ async function gitReady($, b) {
     S.gitState = s;
     await publish($, b ?? await load($));
   }
-  if (s === "ok")
+  if (s === "ok") {
+    if (S.toldGit !== "ok" && S.driving && !S.settingUp)
+      tellLead($, gitFoundText());
     S.toldGit = "ok";
-  else if (S.driving && S.toldGit !== s) {
+  } else if (S.driving && S.toldGit !== s) {
     S.toldGit = s;
     tellLead($, s === "no-git" ? noGitText(S.N.name, S.gitInstall) : setupAskText(s, S.N.name));
   }
@@ -18090,13 +18106,15 @@ async function setupGit($, who) {
     await publish($, await load($));
     const out = setupDoneText({ init, branch, files, left, gitignore: old === null ? "made" : text === old ? "kept" : "added", name: S.N.name });
     if (who !== "the lead")
-      noteForLead(`The owner set up git: ${brief(out)}`);
+      tellLead($, ownerSetGitText(branch, await gitOk($, ["rev-parse", "--short", "HEAD"], top).catch(() => ""), out));
     pump($);
     return out;
   } finally {
     S.settingUp = false;
   }
 }
+var ownerSetGitText = (branch, sha, out) => `The owner set up git here (branch ${branch}${sha ? `, first commit ${sha}` : ""}): ${out} Tasks can start now; don't ask the owner about git again.`;
+var gitFoundText = () => "Git is ready here now: this folder is a git repo with commits (the owner set it up, or a check found it). Tasks can start now; don't ask the owner about git again.";
 async function initGitIn($, dir) {
   const ignoreFile = `${dir}/.gitignore`;
   const before = await $.fs.exists(ignoreFile) ? await $.fs.read(ignoreFile) : null;
@@ -19445,7 +19463,6 @@ function hookFailed($, hook, failure2, outcome) {
   }
   return reason;
 }
-
 // hooks/app/dam.ts
 var harness = false;
 async function isDamSession(host) {
@@ -20352,12 +20369,17 @@ function copilotHooks(host, ours, ended) {
   return {
     async onUserPromptSubmitted(input) {
       useName(host);
-      if (!ours(input.prompt))
+      const owners = !ours(input.prompt);
+      if (owners)
         ownerTyped(input.prompt);
       const guide = await leadGuideText(host).catch(() => {
         return;
       });
-      return guide ? { additionalContext: guide } : {};
+      const meanwhile3 = owners && guide ? meanwhileForPrompt().text : "";
+      const context = [guide, meanwhile3].filter(Boolean).join(`
+
+`);
+      return context ? { additionalContext: context } : {};
     },
     async onSessionEnd() {
       await ended();
