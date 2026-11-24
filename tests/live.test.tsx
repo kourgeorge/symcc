@@ -12,6 +12,7 @@ import { LIVE_TICK_MS } from '../hooks/claude/ui/live'
 import { BLINK_CSS } from '../hooks/claude/ui/vscode-live'
 import { mdLink, vsHref } from '../hooks/claude/ui/vscode'
 import { PANE, T0, seedBoard } from './board-fixture'
+import { tabBar, wantTabs } from './vscode-tabs'
 import { publish } from '../hooks/app/lead'
 import { S, scoutRuns, scoutState, type PaneView } from '../hooks/app/state'
 import { emptyBoard } from '../hooks/core/board-file'
@@ -359,7 +360,7 @@ test('T-757: the terminal and VS Code Live tabs show the whole task\'s tokens ×
   await t.unmount()
 
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  await ui.press({ key: 'tab-live' })
   // T-867: no bar Svg; the lane's second line is the terminal's words
   expect((await ui.findAll({ type: 'Svg' })).some(x => /[▕█░]/.test(String(x.props.alt ?? '')))).toBe(false)
   const vs: Record<string, string> = {}
@@ -371,7 +372,7 @@ test('T-757: the terminal and VS Code Live tabs show the whole task\'s tokens ×
   }
   t757Check(id => vs[id]!, id => vsWarn[id]!)
   expect((await ui.find({ key: 'live-legend' }))?.text).toBe(LIVE_LEGEND)
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
 
@@ -541,10 +542,10 @@ for (const checker of [true, false])
 
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
     // the Live tab first, before Tasks and Scouts
-    expect((await ui.find({ key: 'tabs' }))?.props.text).toContain(`${mdLink('Live', vsHref('tab', 'live'))}  ·  **Tasks 11**  ·  ${mdLink('Scouts 0', vsHref('tab', 'scouts'))}`)
-    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-    expect((await ui.find({ key: 'tabs' }))?.props.text).toContain('**Live**')
-    expect((await ui.find({ key: 'live-head' }))?.text).toBe(nowLine(lines)!.slice(LIVE_INDENT.length))
+    expect(await tabBar(ui)).toEqual(wantTabs('tasks', { tasks: 11, scouts: 0 }))
+    await ui.press({ key: 'tab-live' })
+    expect(await tabBar(ui)).toEqual(wantTabs('live', { tasks: 11, scouts: 0 }))
+    expect((await ui.find({ key: 'live-head' }))?.text).toBe(nowLine(lines)!.slice(LIVE_INDENT.length + 'Now: '.length))
     // the lanes: the same tasks in the same order, each a link that opens it
     const links = (await ui.findAll({ type: 'Markdown' })).filter(m => String(m.key).startsWith('live:'))
     expect(links.map(m => String(m.key).slice(5))).toEqual(ids)
@@ -572,13 +573,14 @@ for (const checker of [true, false])
     expect((await ui.find({ key: 'live-sub:T-687' }))?.text).toContain('⌀ at hand-back')
     // today: the terminal's words; no next up line (T-758)
     expect(await ui.find({ key: 'live-next' })).toBeUndefined()
-    expect((await ui.find({ key: 'live-today-0' }))?.text).toBe(today)
+    expect(today).toMatch(/^✓ \d+ merged/)
+    expect((await ui.find({ key: 'live-today-rows-results-value' }))?.text).toMatch(/^✓ \d+ merged · ↺ \d+ sent back · ✗ \d+ failed$/)
     expect((await ui.find({ key: 'live-legend' }))?.text).toBe(LIVE_LEGEND)
-    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+    await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   })
 
-test('T-930, T-933: the legend is the very last lines of the page, below the footer key line; the room left goes above the footer, in the terminal and in VS Code', async ($, on) => {
+test('T-930, T-933: the legend is the very last lines of the page, below the footer key line; the room left goes above the footer, in the terminal; in VS Code it ends the Tasks section (T-973)', async ($, on) => {
   seedBoard(on, { view: liveView(calm(TASKS)) })
   on('ui.toast', () => ({ value: undefined }))
   type Keyed = Node & { key?: unknown }
@@ -614,43 +616,48 @@ test('T-930, T-933: the legend is the very last lines of the page, below the foo
     await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   }
+  // T-973: in VS Code the legend ends the Tasks section (under the lanes); the footer's Box takes the room left and puts
+  // the footer at the page's bottom, as its last child
   const vs = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
-  await vs.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-  const { page, kids, at, before } = found(await vs.drawn())
+  await vs.press({ key: 'tab-live' })
+  const drawnVs = nodes(await vs.drawn())
+  const section = drawnVs.find(n => keyOf(n) === 'live-tasks')!
+  expect(kidsOf(section).map(keyOf).slice(-2)).toEqual(['live-lanes', 'live-key'])
+  expect(nodes(kidsOf(section).at(-1)).filter(n => n.type === 'Text').map(textOf)).toEqual([LIVE_LEGEND])
+  const page = drawnVs.find(n => kidsOf(n).some(k => keyOf(k) === 'live-foot'))!
   expect(page.props?.flexGrow).toBe(1)
-  // the footer's Box takes the room left and puts the footer at its bottom; the legend comes after it, last
-  expect([keyOf(before), before?.props?.flexGrow, before?.props?.justifyContent]).toEqual(['live-foot', 1, 'flex-end'])
-  expect(kidsOf(before).map(keyOf)).toEqual(['live-hint-footer'])
-  expect(at).toBe(kids.length - 1)
-  await vs.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  const last = kidsOf(page).at(-1)
+  expect([keyOf(last), last?.props?.flexGrow, last?.props?.justifyContent]).toEqual(['live-foot', 1, 'flex-end'])
+  expect(kidsOf(last).map(keyOf)).toEqual(['live-hint-footer'])
+  await vs.press({ key: 'tab-tasks' })
   await vs.unmount()
 })
 
 test('T-691: a click on a VS Code lane opens that task, and "‹ Live" comes back to the Live tab', async ($, on) => {
   seedBoard(on, { view: liveView(TASKS) })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  await ui.press({ key: 'tab-live' })
   await ui.press({ key: 'live:T-685', link: { href: vsHref('task', 'T-685') } })
   expect(await ui.find({ key: 'live-head' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /OpenCode: give every board screen buttons/ })).toBeDefined()
   expect((await ui.find({ key: 'back' }))?.props.label).toBe('Live')
   await ui.press({ key: 'back' })
   expect(await ui.find({ key: 'live-head' })).toBeDefined()
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
 
 test('T-691, T-758: with no task in doing, the VS Code Live tab says so and shows only the today figures under Today', async ($, on) => {
   seedBoard(on, { view: liveView(TASKS.filter(t => t.status !== 'doing')) })
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-  expect((await ui.find({ key: 'live-head' }))?.text).toBe('Now: ⏵ auto merge · agents 0/3 busy')
+  await ui.press({ key: 'tab-live' })
+  expect((await ui.find({ key: 'live-head' }))?.text).toBe('⏵ auto merge · agents 0/3 busy')
   expect((await ui.find({ key: 'live-empty' }))?.text).toBe('Nothing running · 4 waiting: T-601 needs you, T-690 ready, T-691 waits for T-690')
   expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
   expect(await ui.find({ key: 'live-divider' })).toBeUndefined()
   expect(await ui.find({ key: 'live-next' })).toBeUndefined()
-  expect((await ui.find({ key: 'live-today-0' }))?.text).toMatch(/^✓ \d+ merged/)
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  expect((await ui.find({ key: 'live-today-rows-results-value' }))?.text).toMatch(/^✓ \d+ merged/)
+  await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
 
@@ -678,7 +685,7 @@ for (const bodyColumns of [100, 40])
     await term.unmount()
 
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
-    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+    await ui.press({ key: 'tab-live' })
     const links = (await ui.findAll({ type: 'Markdown' })).filter(m => String(m.key).startsWith('live-train:'))
     expect(links.map(m => String(m.key).slice('live-train:'.length))).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
     for (const r of want.filter(x => x.id)) {
@@ -691,7 +698,7 @@ for (const bodyColumns of [100, 40])
       expect((await ui.find({ key: `live-train-note:${r.id}` }))?.text ?? '').toBe(note)
     }
     expect(await ui.find({ key: 'live-next' })).toBeUndefined()
-    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+    await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   })
 
@@ -740,7 +747,7 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
 test('T-767: in VS Code a running lane starts with "▶" in the accent color and its link is bold; a waiting train\'s link is dim', async ($, on) => {
   seedBoard(on, { view: liveView(TRAINS) })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  await ui.press({ key: 'tab-live' })
   expect((await ui.find({ key: 'live-run-mark:T-712' }))?.text).toBe('▶ T-712')
   const lane = await ui.find({ key: 'live:T-712' })
   expect(String(lane?.props.text).startsWith('[')).toBe(true)
@@ -755,7 +762,7 @@ test('T-767: in VS Code a running lane starts with "▶" in the accent color and
   const markText = texts.find(t => (t.children ?? []).join('') === '▶ T-712')
   expect(typeof markText?.props.color).toBe('string')
   expect([idText?.props.color, idText?.props.bold]).toEqual([markText?.props.color, true])
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
 
@@ -772,14 +779,14 @@ test('T-715: Enter on a train (terminal) or a click on it (VS Code) opens that t
   await term.unmount()
 
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  await ui.press({ key: 'tab-live' })
   await ui.press({ key: 'live-train:T-716', link: { href: vsHref('task', 'T-716') } })
   expect(await ui.find({ key: 'live-head' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Live deps drawn as trains/ })).toBeDefined()
   expect((await ui.find({ key: 'back' }))?.props.label).toBe('Live')
   await ui.press({ key: 'back' })
   expect(await ui.find({ key: 'live-head' })).toBeDefined()
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
 
@@ -865,19 +872,21 @@ for (const [runs, w, want, more] of [
     await t.press({ key: 'tab-tasks' })
     await t.unmount()
 
+    // T-973: in VS Code the mode line is the Status section's Mode row; the panel wraps, so it keeps every part at any width
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'vscode' })
-    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-    // (the names are a markdown link: its words only)
-    expect((await ui.find({ key: 'live-head' }))?.text.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')).toBe(`Now: ${want}`)
-    // inside ▍Today (T-938), its first row
-    expect(await ui.find({ key: 'live-bottom' }).then(b => b && JSON.stringify(b).includes('live-head'))).toBe(true)
+    await ui.press({ key: 'tab-live' })
+    const wide = segText(liveHeaderSegs(scoutView([...runs], [...(more ?? [])]).value as never, liveLanes(scoutView([...runs]).value as never, T0), T0, Infinity))
+    expect((await ui.find({ key: 'live-head' }))?.text).toBe(wide)
+    expect((await ui.find({ key: 'live-status-rows-mode-label' }))?.text).toBe('Mode')
+    expect(await ui.find({ key: 'live-status' }).then(b => !!b && JSON.stringify(b).includes('live-head'))).toBe(true)
+    // the scout names a quiet plain Button that opens the Scouts tab
     const link = await ui.find({ key: 'live-scouts' })
-    expect(link?.props.pressableLinks).toEqual(marked ? [vsHref('tab', 'scouts')] : undefined)
-    if (marked) {
-      await ui.press({ key: 'live-scouts', link: { href: vsHref('tab', 'scouts') } })
-      expect((await ui.find({ key: 'tabs' }))?.props.text).toContain('**Scouts')
+    expect(link ? [link.type, link.props.plain, link.props.dimColor] : undefined).toEqual(wide.includes('⌕') ? ['Button', true, true] : undefined)
+    if (wide.includes('⌕')) {
+      await ui.press({ key: 'live-scouts' })
+      expect((await tabBar(ui)).find(x => !x.dim)?.which).toBe('scouts')
     }
-    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+    await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   })
 

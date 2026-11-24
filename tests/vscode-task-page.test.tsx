@@ -47,6 +47,8 @@ const hints = (all: string[], re: RegExp) => all.filter(s => re.test(s) && !/^[â
 
 /** The action buttons each rich task shows in VS Code's page header (T-751), in order (the next step, the task's
  *  actions, Drop, copy; needs review, a Button too since T-775, between the last two), all secondary. */
+/** T-973: each rich task's one main action in VS Code (a primary Button); none for a task that asks something or is done. */
+const MAIN: Record<string, string> = { 'T-501': 'approve', 'T-502': 'retry', 'T-504': 'pause', 'T-505': 'resume', 'T-506': 'pause', 'T-507': 'to-todo', 'T-510': 'done' }
 const ACTIONS: Record<string, { keys: string[] }> = {
   'T-501': { keys: ['approve', 'show-changes', 'reject', 'drop', 'copy'] },
   'T-502': { keys: ['retry', 'run-now', 'stash', 'role', 'already-merged', 'drop', 'copy'] },
@@ -102,19 +104,20 @@ for (const id of RICH_IDS) {
     // the details and the report are Markdown, given whole (the report: its first part)
     const md = elements(tree).filter(n => n.type === 'Markdown').map(n => String(n.props?.text))
     expect(md, id).toContain(t.details.trimEnd())
-    // the action row: exactly the buttons that fit, all secondary in one style (T-775: no primary, no red)
+    // the action row: exactly the buttons that fit, secondary in one style (T-775: no red), the main action primary (T-973)
     const row = await ui.find({ key: 'vs-actions' })
     const open = t.status !== 'done' && t.status !== 'dropped'
     const buttons = elements(row!.children).filter(n => n.type === 'Button')
     expect(buttons.map(n => n.props?.key).filter(k => k !== 'needs-review'), id).toEqual(ACTIONS[id]!.keys)
     for (const b of buttons) {
-      expect(b.props?.variant, `${id} ${b.props?.key}`).toBe('secondary')
+      expect(b.props?.variant, `${id} ${b.props?.key}`).toBe(b.props?.key === MAIN[id] ? 'primary' : 'secondary')
       expect(b.children ?? [], `${id} ${b.props?.key}`).toEqual([])
     }
     // needs review is a Button like the others (T-775)
     if (open) expect((await ui.find({ key: 'needs-review' }))?.props.label, id).toBe('â˜ Needs review')
     const primary = elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').map(n => n.props?.key)
-    expect(primary, id).toEqual([])
+    // T-973: the page's one main action (core's 'main' group) is primary; none while the task asks something
+    expect(primary, id).toEqual(MAIN[id] ? [MAIN[id]] : [])
     // the tasks it waits for (the After rows of the Details) are links that open them; back to the list is a clear button; no key hints
     expect((await ui.find({ key: 'after-T-499' }))?.type).toBe('Markdown')
     expect((await ui.find({ key: 'vs-row-after-1' }))?.text).toContain('T-498')

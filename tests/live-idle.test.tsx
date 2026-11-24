@@ -5,7 +5,10 @@ import { test } from './reset'
 import { LIVE_INDENT, liveIdle, liveIdleLine } from '../hooks/core/live'
 import { liveStatusText } from '../hooks/core/live-text'
 import { vsHref } from '../hooks/claude/ui/vscode'
+import { LIVE_UP_NEXT } from '../hooks/claude/ui/vscode-live'
+import { ASK_LEAD } from '../hooks/claude/ui/vscode-list'
 import { PANE, T0, seedBoard } from './board-fixture'
+import { tabBar, wantTabs } from './vscode-tabs'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
 const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
@@ -84,16 +87,42 @@ for (const c of CASES) {
     await ui.unmount()
   })
 
-  test(`T-903: the VS Code Live tab shows the "${c.name}" idle lines`, async ($, on) => {
+  // T-973: VS Code draws the all done lines its own way: "✓ All done · last merged T-891 12m ago", then "Up next from
+  // the backlog" with the first 3 backlog rows (◇, the id in the mono face, the title) and "2 more in the backlog", a
+  // quiet button that opens the Tasks tab's Backlog; every idle case ends with the primary "Tell the lead" button
+  const VS_DONE: Record<string, { first: string; next: string[]; more?: string }> = {
+    'all done': { first: '✓ All done · last merged T-891 12m ago', next: ['T-893', 'T-894'] },
+    'big backlog': { first: '✓ All done · last merged T-891 3m ago', next: ['T-895', 'T-896', 'T-894'], more: '2 more in the backlog' },
+  }
+  test(`T-903, T-973: the VS Code Live tab shows the "${c.name}" idle lines`, async ($, on) => {
     seedBoard(on, { view: viewOf(c) })
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-    expect((await ui.find({ key: 'live-empty' }))?.text).toBe(c.lines[0])
-    expect((await ui.find({ key: 'live-empty-1' }))?.text).toBe(c.lines[1])
-    // T-924: the backlog lines too, and an empty line (the block's paddingBottom) before the merged trains
-    for (let i = 2; i < c.lines.length; i++) expect((await ui.find({ key: `live-empty-${i}` }))?.text).toBe(c.lines[i])
-    expect((await ui.find({ key: 'live-idle' }))?.props.paddingBottom).toBe(c.name === 'big backlog' ? 1 : undefined)
-    await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+    await ui.press({ key: 'tab-live' })
+    const done = VS_DONE[c.name]
+    if (!done) {
+      expect((await ui.find({ key: 'live-empty' }))?.text).toBe(c.lines[0])
+      expect(await ui.find({ key: 'live-next' })).toBeUndefined()
+    } else {
+      expect((await ui.find({ key: 'live-empty' }))?.text).toBe(done.first)
+      expect((await ui.find({ key: 'live-next-head' }))?.text).toBe(LIVE_UP_NEXT)
+      for (const id of done.next) {
+        const md = await ui.find({ key: `live-next:${id}` })
+        expect([md?.type, md?.props.text, md?.props.pressableLinks]).toEqual(['Markdown', `[\`${id}\`](${vsHref('task', id)}) Task ${id}`, [vsHref('task', id)]])
+        expect((await ui.find({ key: `live-next-row:${id}` }))?.text.startsWith('◇')).toBe(true)
+      }
+      const more = await ui.find({ key: 'live-backlog-more' })
+      expect(more ? [more.type, more.props.label, more.props.plain, more.props.dimColor] : undefined).toEqual(done.more ? ['Button', done.more, true, true] : undefined)
+    }
+    // the one main action while nothing runs: tell the lead what is next
+    const ask = await ui.find({ key: 'live-ask-lead' })
+    expect([ask?.type, ask?.props.variant, ask?.props.label]).toEqual(['Button', 'primary', ASK_LEAD])
+    expect((await ui.findAll({ type: 'Button' })).filter(b => b.props.variant === 'primary').length).toBe(1)
+    if (done?.more) {
+      await ui.press({ key: 'live-backlog-more' })
+      expect(await tabBar(ui)).toEqual(wantTabs('tasks', { tasks: c.tasks.length, scouts: 0 }))
+      expect(await ui.find({ key: `vs-task-${done.next[0]}` })).toBeDefined()
+    }
+    await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   })
 }

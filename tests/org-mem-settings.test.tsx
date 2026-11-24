@@ -158,7 +158,7 @@ async function headerWalk($: Engine, on: On, surface: 'terminal' | 'vscode') {
     vs ? (await ui.find({ key: 'vs-header' })) !== undefined
       : (await ui.find({ type: 'Text', text: /^\[t\]: Tasks/ })) !== undefined && (await ui.find({ type: 'Text', text: /^━+$/ })) !== undefined
   const check = async (page: BoardPage) => expect([page, await drawn()]).toEqual([page, showsHeader(page)])
-  const tab = (t: 'tasks' | 'live' | 'scouts' | 'settings') => (vs ? ui.press({ key: 'tabs', link: { href: vsHref('tab', t) } }) : ui.press({ key: `tab-key-${t}` }))
+  const tab = (t: 'tasks' | 'live' | 'scouts' | 'settings') => (vs ? ui.press({ key: `tab-${t}` }) : ui.press({ key: `tab-key-${t}` }))
   await check('tasks')
   await (vs ? ui.press({ key: 'T-1', link: { href: vsHref('task', 'T-1') } }) : ui.press({ key: 'T-1' }))
   expect(await ui.find({ key: 'back' })).toBeDefined()
@@ -171,7 +171,7 @@ async function headerWalk($: Engine, on: On, surface: 'terminal' | 'vscode') {
   await check('settings')
   await tab('live')
   await check('live')
-  await (vs ? ui.press({ key: 'live-orgmem', link: { href: vsHref('page', 'orgmem') } }) : ui.press({ key: 'live-om-all' }))
+  await (vs ? ui.press({ key: 'live-om-all' }) : ui.press({ key: 'live-om-all' }))
   expect(await pageText(ui as never)).toContain('Organizational memory (org-mem)')
   await check('orgmem')
   // T-704: the org-mem page is an opened page now (from Live), so no header on it
@@ -265,7 +265,7 @@ test('T-790: VS Code: the org-mem page has the same header (back button, count, 
   stateOf(on, VIEW)
   fakeOrgMem(on, NOTES)
   const ui = await settings($, 'vscode')
-  await ui.press({ key: 'live-orgmem', link: { href: vsHref('page', 'orgmem') } })
+  await ui.press({ key: 'live-om-all' })
   const text = await pageText(ui as never)
   for (const w of ['Organizational memory (org-mem)', 'Notes shared with workers, checkers and scouts', '3 / 60', '▍About', '▍Notes']) expect(text).toContain(w)
   expect((await ui.find({ key: 'vs-header-rule' }))?.text).toMatch(/^─+$/)
@@ -279,7 +279,7 @@ test('T-742: VS Code: the "← Live" link comes before the first note', async ($
   stateOf(on, VIEW)
   fakeOrgMem(on, NOTES)
   const ui = await settings($, 'vscode')
-  await ui.press({ key: 'live-orgmem', link: { href: vsHref('page', 'orgmem') } })
+  await ui.press({ key: 'live-om-all' })
   const keys = (await ui.findAll({})).map(n => String(n.key ?? ''))
   expect(keys.indexOf('orgmem-back')).toBeGreaterThanOrEqual(0)
   expect(keys.indexOf('orgmem-back')).toBeLessThan(keys.indexOf('orgmemRow:3'))
@@ -306,14 +306,16 @@ test('T-619, T-687: VS Code: the Live tab\'s Organizational memory link opens th
   stateOf(on, VIEW)
   const files = fakeOrgMem(on, NOTES)
   const ui = await settings($, 'vscode')
-  const row = await ui.find({ key: 'live-orgmem' })
-  expect(String(row?.props.text)).toContain('ORGANIZATIONAL MEMORY')
-  expect(await pageText(ui as never)).toContain('3 / 60')
+  // T-973: the section's heading (folded at first) with its count badge and a quiet "All notes" button
+  expect((await ui.find({ key: 'live-om-head' }))?.props.label).toBe('▸ ORGANIZATIONAL MEMORY')
+  expect((await ui.find({ key: 'live-om-head-count' }))?.text).toBe('3 / 60')
+  const allButton = await ui.find({ key: 'live-om-all' })
+  expect([allButton?.type, allButton?.props.label, allButton?.props.plain, allButton?.props.dimColor]).toEqual(['Button', 'All notes', true, true])
   // at the bottom of the Live tab, just above its footer
   const all = (await ui.findAll({})).map(n => String(n.key ?? ''))
-  expect(all.indexOf('live-orgmem')).toBeGreaterThan(all.indexOf('live-today-0'))
-  expect(all.indexOf('live-hint-footer')).toBeGreaterThan(all.indexOf('live-orgmem'))
-  await ui.press({ key: 'live-orgmem', link: { href: vsHref('page', 'orgmem') } })
+  expect(all.indexOf('live-om-all')).toBeGreaterThan(all.indexOf('live-today-rows'))
+  expect(all.indexOf('live-hint-footer')).toBeGreaterThan(all.indexOf('live-om-all'))
+  await ui.press({ key: 'live-om-all' })
   const text = await pageText(ui as never)
   expect(text).toContain('Organizational memory (org-mem)')
   // newest first: #3 before #2 before #1
@@ -335,7 +337,7 @@ test('T-619: VS Code with no notes says "No notes yet."', async ($, on) => {
   stateOf(on, VIEW)
   fakeOrgMem(on, '')
   const ui = await settings($, 'vscode')
-  await ui.press({ key: 'live-orgmem', link: { href: vsHref('page', 'orgmem') } })
+  await ui.press({ key: 'live-om-all' })
   expect(await pageText(ui as never)).toContain('No notes yet.')
   await ui.unmount()
 })
@@ -445,29 +447,33 @@ test('T-718: Enter on a topic opens the page of its notes only, Back returns to 
   await ui.unmount()
 })
 
-test('T-718: VS Code draws the org-mem section (title link, count and a thin rule but no bar, 3 newest, topic links with counts) at 40 and 100 columns; a topic link opens its page, delete there deletes the right note, "← Live" returns', async ($, on) => {
+test('T-718, T-973: VS Code draws the org-mem section (folded at first; open: 3 newest one row each, the topic links with counts; no rule, no bar, no blank rows) at 40 and 100 columns; a topic link opens its page, delete there deletes the right note, "← Live" returns', async ($, on) => {
   stateOf(on, VIEW)
   const files = fakeOrgMem(on, TOPIC_NOTES)
   await $.session.start({ cwd: '/proj' } as never)
   for (const bodyColumns of [40, 100]) {
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode', props: { ...PANE.props, bodyColumns } })
-    expect(shown(String((await ui.find({ key: 'live-orgmem' }))?.props.text))).toBe('ORGANIZATIONAL MEMORY')
-    expect(await pageText(ui as never)).toContain('8 / 60')
+    // folded by default (the first mount); the choice is kept for the next one
+    if (bodyColumns === 40) {
+      expect((await ui.find({ key: 'live-om-head' }))?.props.label).toBe('▸ ORGANIZATIONAL MEMORY')
+      expect(await ui.find({ key: 'live-om-note:8' })).toBeUndefined()
+      await ui.press({ key: 'live-om-head' })
+    }
+    expect((await ui.find({ key: 'live-om-head' }))?.props.label).toBe('▾ ORGANIZATIONAL MEMORY')
+    expect((await ui.find({ key: 'live-om-head-count' }))?.text).toBe('8 / 60')
     expect((await ui.findAll({ type: 'Svg' })).some(x => String(x.props.alt) === '8 notes of at most 60')).toBe(false)
-    expect((await ui.findAll({ type: 'Text' })).some(t => /^─+$/.test((t.children ?? []).join('')))).toBe(true)
+    // no rules and no blank rows in the section
+    const section = (await ui.find({ key: 'live-om' })) as unknown as Node
+    const words = (n: unknown): string[] => (typeof n === 'string' ? [n] : !n || typeof n !== 'object' ? [] : ((n as Node).children ?? []).flatMap(words))
+    const lines = ((section.children ?? []) as Node[]).map(c => words(c).join(''))
+    expect(lines.filter(l => !l.trim() || /─{3,}/.test(l))).toEqual([])
+    // the newest notes, one row each: the day, the text (a link, cut short), the topic dim
     for (const k of ['live-om-note:8', 'live-om-note:7', 'live-om-note:6']) expect(await ui.find({ key: k })).toBeDefined()
     expect(shown(String((await ui.find({ key: 'live-om-note:7' }))?.props.text))).toMatch(/^Use a plain path/)
+    const row = (await ui.find({ key: 'live-om-note-row:7' })) as unknown as Node
+    expect(((row.children ?? []) as Node[]).map(c => c.type)).toEqual(['Text', 'Markdown', 'Text'])
+    expect(((row.children ?? []) as Node[]).at(-1)?.props?.color).toBe('inactive')
     expect((await ui.findAll({ type: 'Markdown' })).filter(m => String(m.key ?? '').startsWith('live-om-topic:')).length).toBe(5)
-    // each grid row: its cells' words and the gaps between them fit the panel
-    let n = 0
-    for (let i = 0; ; i++) {
-      const r = (await ui.find({ key: `live-om-row-${i}` })) as unknown as Node | undefined
-      if (!r) break
-      const cells = ((r.children ?? []) as Node[]).map(c => shown(String(c.props?.text ?? ''))).filter(Boolean)
-      n += cells.length
-      expect([bodyColumns, cells, textWidth(cells.join('   ')) + 1 <= bodyColumns]).toEqual([bodyColumns, cells, true])
-    }
-    expect(n).toBe(5)
     expect(shown(String((await ui.find({ key: 'live-om-topic:tests' }))?.props.text))).toBe('tests 3')
     expect(shown(String((await ui.find({ key: 'live-om-topic:unsorted' }))?.props.text))).toBe('unsorted 1')
     await ui.unmount()
@@ -488,7 +494,7 @@ test('T-718: VS Code draws the org-mem section (title link, count and a thin rul
   expect(await pageText(ui as never)).not.toContain('m org-mem')
   expect((await ui.findAll({ type: 'Button' })).some(b => b.props.hotkey === 'm')).toBe(false)
   const allVs = await ui.find({ key: 'live-om-all' })
-  expect([allVs?.props.label, allVs?.props.variant]).toEqual(['all', 'secondary'])
+  expect([allVs?.props.label, allVs?.props.plain, allVs?.props.dimColor]).toEqual(['All notes', true, true])
   await ui.press({ key: 'live-om-all' })
   expect(await pageText(ui as never)).toContain('Organizational memory (org-mem)')
   await ui.press({ key: 'orgmem-back' })
@@ -526,15 +532,15 @@ test('T-772: the terminal Live tab draws the org-mem meter at 30 / 60 and 60 / 6
   expect(looks[0]).toBe(looks[1]!)
 })
 
-test('T-772: VS Code draws the org-mem meter at 30 / 60 and 60 / 60 in the same calm color: dim count, no bar (T-810), never the warning ink', async ($, on) => {
+test('T-772: VS Code draws the org-mem meter at 30 / 60 and 60 / 60 in the same calm color: a grey count badge (T-973), no bar (T-810), never the warning ink', async ($, on) => {
   stateOf(on, VIEW)
   const files = fakeOrgMem(on, manyNotes(30))
   await $.session.start({ cwd: '/proj' } as never)
   for (const n of [30, 60]) {
     files[FILE] = manyNotes(n)
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-    const count = (await ui.findAll({ type: 'Text' })).find(t => (t.children ?? []).join('') === `${n} / 60`)
-    expect([n, count?.props.color]).toEqual([n, 'inactive'])
+    const count = await ui.find({ key: 'live-om-head-count' })
+    expect([n, count?.type, count?.text, count?.props.backgroundColor, count?.props.borderColor]).toEqual([n, 'Box', `${n} / 60`, 'inactive', 'inactive'])
     expect((await ui.findAll({ type: 'Svg' })).some(x => String(x.props.alt).endsWith('of at most 60'))).toBe(false)
     await ui.unmount()
   }
@@ -552,8 +558,10 @@ test('T-819: the org-mem topic labels (the newest rows, and the topic grid on th
   expect(await textColors(term, 'tests')).toEqual(['ide', 'ide'])
   expect(await textColors(term, 'unsorted')).toEqual(['inactive', 'inactive'])
   await term.unmount()
+  // T-973: VS Code's newest rows end with the topic dim (the owner's pick: date, text, topic dim); the topics row is links
   const vs = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  expect(await textColors(vs, 'git')).toEqual(['ide'])
-  expect(await textColors(vs, 'tests')).toEqual(['ide'])
+  await vs.press({ key: 'live-om-head' })
+  expect(await textColors(vs, 'git')).toEqual(['inactive'])
+  expect(await textColors(vs, 'tests')).toEqual(['inactive'])
   await vs.unmount()
 })

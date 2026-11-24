@@ -257,25 +257,25 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
     await t.press({ key: 'tab-tasks' })
     await t.unmount()
   }
+  // T-973: VS Code shows the same figures as label/value rows (core's liveTodayRows), the labels in one column
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 140 }, surface: 'vscode' })
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-  expect((await ui.find({ key: 'live-today-0' }))?.text).toBe('✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ ⌀ 10M')
-  expect((await ui.find({ key: 'live-today-1' }))?.text).toBe('⌀ ░░████████▓▒▒▒▒▒ lead 10% · workers 57% · checkers 3% · scouts 30%')
-  expect((await ui.find({ key: 'live-today-2' }))?.text).toBe(TODAY_LINE_3)
-  expect(/^⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · ⌀ \S+   ⌀\/h 00▕[▁▂▃▄▅▆▇█]+·*▏24$/.test((await ui.find({ key: 'live-today-3' }))?.text ?? '')).toBe(true)
-  // T-855: no lane, so no key line: the dim note ends ▍Today instead
-  expect((await ui.find({ key: 'live-today-4' }))?.text).toBe('⌀ = tokens')
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.press({ key: 'tab-live' })
+  const row = async (k: string) => [(await ui.find({ key: `live-today-rows-${k}-label` }))?.text, (await ui.find({ key: `live-today-rows-${k}-value` }))?.text]
+  expect(await row('results')).toEqual(['Results', '✓ 3 merged · ↺ 0 sent back · ✗ 0 failed'])
+  expect(await row('tokens')).toEqual(['Tokens', '10M · lead 10% · workers 57% · checkers 3% · scouts 30%'])
+  expect(await row('time')).toEqual(['Agent time', '1h 15m · ≈ $12 this session'])
+  expect(await row('per-task')).toEqual(['Per task', '2M/task · 10m work · 30m start-to-merge · first try 67% · avg 1.3 tries/task'])
+  const [hl, hours] = await row('hours')
+  expect([hl, /^00▕[▁▂▃▄▅▆▇█]+·*▏24 {3}busiest \d\d:00 · \S+$/.test(hours ?? '')]).toEqual(['Hours', true])
+  // the colors: merged green, sent back amber, failed red; the label column one width for every row
+  const results = JSON.stringify(await ui.find({ key: 'live-today-rows-results-value' }))
+  for (const c of ['"success"', '"warning"', '"error"']) expect(results).toContain(c)
+  const widths = new Set(await Promise.all(['results', 'tokens', 'time', 'per-task', 'hours'].map(async k => (await ui.find({ key: `live-today-rows-${k}-label` }))?.props.width)))
+  expect(widths.size).toBe(1)
+  // no ⌀ sign under a "Tokens" label, so no "⌀ = tokens" note
+  expect(JSON.stringify(await ui.find({ key: 'live-today' }))).not.toContain('= tokens')
+  await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
-  // T-864: a narrow VS Code panel drops the busiest hour and cost first; the ⌀ label stays with the bordered sparkline
-  for (const bodyColumns of [80, 70, 60]) {
-    const v = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
-    await v.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-    const four = (await v.find({ key: 'live-today-3' }))?.text ?? ''
-    expect([bodyColumns, four, / ⌀(?:\/h)? 00▕[▁▂▃▄▅▆▇█]+·*▏24$/.test(four), four.includes('busiest')]).toEqual([bodyColumns, four, true, false])
-    await v.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
-    await v.unmount()
-  }
 })
 
 test('T-799: Σ is everyone\'s tokens (never below the busiest hour); without the lead and scouts it is the tries only, marked dim', () => {

@@ -12,6 +12,7 @@ import { mayMove } from '../hooks/core/logo'
 import { modeLabel, MODE_MEANING, panelSections, fitRow } from '../hooks/board'
 import { paneWidth, VS_WIDE } from '../hooks/claude/ui/parts'
 import { hist } from './history-fixture'
+import { tabBar, wantTabs } from './vscode-tabs'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
 
@@ -167,11 +168,11 @@ test('in VS Code the Tasks page shows whole titles, status colors on the marks, 
   for (const k of ['Doing', 'To do']) expect(await ui.find({ key: `vs-head-${k}` }), k).toBeUndefined()
   expect(all).toContain('▾ Backlog 3')
   expect(all).toContain('▾ Dropped 2')
-  // tabs without key labels, the one shown bold and not a link
-  expect((await ui.find({ key: 'tabs' }))?.props.text).toBe(`${mdLink('Live', vsHref('tab', 'live'))} \u00a0·\u00a0 **Tasks 20** \u00a0·\u00a0 ${mdLink('Scouts 1', vsHref('tab', 'scouts'))} \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
-  // the header on readable lines: the tests line short, the mode with its meaning
-  expect(await ui.find({ type: 'Text', text: 'tests: claude, typecheck' })).toBeDefined()
-  expect(all.join(' ')).toMatch(/⏵ auto merge/)
+  // T-973: the tab bar without key labels, the one shown marked, the counts as badges
+  expect(await tabBar(ui)).toEqual(wantTabs('tasks', { tasks: 20, scouts: 1 }))
+  // the header: the mode as a pill (the tests line is on the Live tab's Status section now)
+  expect((await ui.find({ key: 'vs-mode' }))?.text).toBe(modeLabel('auto'))
+  expect(await ui.find({ type: 'Text', text: 'tests: claude, typecheck' })).toBeUndefined()
   // no key hints; at most one primary button; the mode switch is a quiet link and the search an Input
   for (const re of KEY_HINTS) expect(all.filter(s => re.test(s)), String(re)).toEqual([])
   expect(elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').length).toBeLessThanOrEqual(1)
@@ -209,16 +210,15 @@ test('in VS Code the other pages drop key marks from labels and print no key hin
   await check('task')
   expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
   await ui.press({ key: 'back' })
-  // the tabs are links: the shown one is bold and no link, the others switch the page
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'scouts') } })
+  // T-973: the tabs are plain Buttons: the shown one marked, the others dim; a press switches the page
+  await ui.press({ key: 'tab-scouts' })
   await check('scouts')
-  expect((await ui.find({ key: 'tabs' }))?.props.text).toBe(`${mdLink('Live', vsHref('tab', 'live'))} \u00a0·\u00a0 ${mdLink('Tasks 20', vsHref('tab', 'tasks'))} \u00a0·\u00a0 **Scouts 1** \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
-  expect((await ui.find({ key: 'tabs' }))?.props.pressableLinks).toEqual([vsHref('tab', 'live'), vsHref('tab', 'tasks'), vsHref('tab', 'settings')])
+  expect(await tabBar(ui)).toEqual(wantTabs('scouts', { tasks: 20, scouts: 1 }))
   expect((await ui.find({ key: 'scouts-back' }))?.props.label).toBe('← Tasks')
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'settings') } })
+  await ui.press({ key: 'tab-settings' })
   await check('settings')
-  expect((await ui.find({ key: 'tabs' }))?.props.text).toMatch(/\*\*Settings\*\*$/)
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  expect(await tabBar(ui)).toEqual(wantTabs('settings', { tasks: 20, scouts: 1 }))
+  await ui.press({ key: 'tab-tasks' })
   expect(await ui.find({ key: 'vs-task-T-405' })).toBeDefined()
   await ui.unmount()
 })
@@ -248,18 +248,15 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
     const rows = elements(logoBox!.children).filter(n => n.type === 'Text')
     expect(rows.map(n => texts(n).join('')), at).toEqual(['\u{1D11E}'])
     expect([rows[0]!.props?.bold, rows[0]!.props?.size, rows[0]!.props?.color], at).toEqual([true, 'title', 'ide'])
-    // beside it four lines (one fewer than before, and no path line): name, version and folder; the mode pill and its
-    // meaning; branch and driver; tests and limits; each wraps, none is cut
+    // beside it (T-973) the title row: name, version and folder, then the mode as a pill (a Box with a background); the
+    // mode's meaning, the branch, the tests and the limits are on the Live tab's Status section
     const facts = await ui.find({ key: 'vs-facts' })
     const lines = (facts!.children as Node[]).filter(n => n && typeof n === 'object')
-    expect(lines.length, at).toBe(4)
-    for (const n of lines) expect([n.type, n.props?.wrap], at).toEqual(['Text', 'wrap'])
-    expect(texts(lines[0]).join(''), at).toMatch(/^symcc( v\S+)? · /)
-    expect(texts(lines[1]).join(''), at).toBe(` ${modeLabel('auto')}  ${MODE_MEANING.auto}`)
-    const pill = elements(lines[1]).find(n => n.type === 'Text' && n.props?.backgroundColor)
-    expect([pill?.props?.backgroundColor, pill?.props?.color], at).toEqual(['success', 'inverseText'])
-    expect(texts(lines[2]).join(''), at).toBe('branch main · this session drives')
-    expect(texts(lines[3]).join(''), at).toMatch(/^tests: claude, typecheck · \d+ at once · \d+ min · \d+ retr(y|ies)$/)
+    expect(lines.map(n => n.type), at).toEqual(['Box'])
+    expect(texts(await ui.find({ key: 'vs-title-row' })).join(''), at).toMatch(new RegExp(`^symcc( v\\S+)? · .*${modeLabel('auto')}$`))
+    const pill = await ui.find({ key: 'vs-mode' })
+    expect([pill?.type, pill?.text, pill?.props.backgroundColor, pill?.props.borderStyle], at).toEqual(['Box', modeLabel('auto'), 'success', 'round'])
+    expect(texts(facts!).join(' '), at).not.toContain(MODE_MEANING.auto)
     // the counts as badges: a colored dot, then the count, " · " between
     const counts = await ui.find({ key: 'vs-counts' })
     expect(counts?.props.flexWrap, at).toBe('wrap')
@@ -268,13 +265,11 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
     expect(elements(badges[0]).find(n => texts(n).join('') === '● ')?.props?.color, at).toBe('success')
     // no all-time total of the tries among the counts (T-630): /symcc-stats has it
     expect(texts(counts!).join(''), at).not.toMatch(/tokens|total:/)
-    // the tabs: one line of text that wraps (a Markdown, no Button and no bordered box): the shown tab bold and no link,
-    // the others links
-    const tabs = await ui.find({ key: 'tabs' })
-    expect(tabs?.type, at).toBe('Markdown')
-    expect(tabs?.props.text, at).toBe(`${mdLink('Live', vsHref('tab', 'live'))} \u00a0·\u00a0 **Tasks 20** \u00a0·\u00a0 ${mdLink('Scouts 1', vsHref('tab', 'scouts'))} \u00a0·\u00a0 ${mdLink('Settings', vsHref('tab', 'settings'))}`)
-    expect(tabs?.props.pressableLinks, at).toEqual([vsHref('tab', 'live'), vsHref('tab', 'scouts'), vsHref('tab', 'settings')])
-    expect(elements(await ui.find({ key: 'vs-header' })).filter(n => n.type === 'Button'), at).toEqual([])
+    // T-973: the tab bar: plain Buttons, the shown one marked, counts as badges; no Markdown link row, no "·"
+    expect(await tabBar(ui), at).toEqual(wantTabs('tasks', { tasks: 20, scouts: 1 }))
+    expect(await ui.find({ key: 'tabs' }), at).toBeUndefined()
+    expect(texts(await ui.find({ key: 'tabs-row' })).filter(s => s.includes('·')), at).toEqual([])
+    expect(elements(await ui.find({ key: 'vs-header' })).filter(n => n.type === 'Button').map(n => n.props?.key), at).toEqual(['tab-live', 'tab-tasks', 'tab-scouts', 'tab-settings'])
     // nothing cut, no key hints anywhere in the header
     const head = texts(await ui.find({ key: 'vs-header' }))
     expect(head.filter(s => s.includes('…')), at).toEqual([])
@@ -283,28 +278,33 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
   }
 })
 
-// T-643, T-694: a session that doesn't drive the board gets a short warning line in the warning color right under the
-// tests/limits line (inside the facts column), with how to take over, and
+// T-643, T-694, T-973: a session that doesn't drive the board gets one notice row under the header's title (a Box with a
+// warning-colored border), with how to take over (the command a quiet Button that drives from here), and
 // "it looks idle" when a task has waited more than 5 minutes for its worker to start in the driving session.
 const QUEUED_402 = { ...BOARD_TASKS.find(t => t.id === 'T-402')!, note: 'starting at the next turn', updated_at: new Date(T0 - 6 * 60_000).toISOString() }
 for (const [name, driving, tasks, want] of [
-  ['the driving session has no warning line', true, BOARD_TASKS, undefined],
-  ['another session drives: the warning line', false, BOARD_TASKS, '⚠ this window follows; /symcc-drive to drive from here'],
+  ['the driving session has no notice row', true, BOARD_TASKS, undefined],
+  ['another session drives: the notice row', false, BOARD_TASKS, '⚠ this window follows; /symcc-drive to drive from here'],
   ['another session drives and a task waits 6 min to start: "it looks idle"', false, [...BOARD_TASKS.filter(t => t.id !== 'T-402'), QUEUED_402], '⚠ this window follows (the driver looks idle); /symcc-drive to drive from here'],
 ] as const)
   test(`T-643: in VS Code ${name}`, async ($, on) => {
-    on('ui.toast', () => ({ value: undefined }))
+    const toasts: string[] = []
+    on('ui.toast', (_, e) => (toasts.push(String((e as { text?: string }).text ?? '')), { value: undefined }))
     seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks, driving } } })
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'vscode' })
-    // the line right under the tests/limits line, in the facts column, in the warning color, wrapped (never cut)
-    const warn = elements(await ui.find({ key: 'vs-header' })).find(n => n.type === 'Text' && texts(n).join('').startsWith('⚠'))
-    expect(warn ? texts(warn).join('') : undefined).toBe(want)
-    if (warn) expect([warn.props?.color, warn.props?.wrap]).toEqual(['warning', 'wrap'])
-    // inside the facts column, the last line there, right after the tests/limits line's text
-    const facts = texts(await ui.find({ key: 'vs-facts' }))
-    const limits = facts.findIndex(t => / at once · /.test(t))
-    expect(limits >= 0).toBe(true)
-    expect(facts.slice(limits + 1)).toEqual(want ? [want] : [])
+    const row = (await ui.find({ key: 'vs-drive' })) as Node | undefined
+    expect(row ? (row as { text?: string }).text : undefined).toBe(want)
+    if (!row) return void (await ui.unmount())
+    // a Box with a warning border and padding, in the header right after the title row; the command a plain Button
+    expect([row.type, row.props?.borderStyle, row.props?.borderColor, row.props?.paddingX, row.props?.flexWrap]).toEqual(['Box', 'single', 'warning', 1, 'wrap'])
+    const cmd = await ui.find({ key: 'vs-drive-cmd' })
+    expect([cmd?.type, cmd?.props.plain, cmd?.props.label]).toEqual(['Button', true, '/symcc-drive'])
+    const drawn = JSON.stringify(drawnData(await ui.find({ key: 'vs-header' })))
+    expect(drawn.indexOf('"vs-top"') < drawn.indexOf('"vs-drive"')).toBe(true)
+    // no setup facts in the header any more: they are on the Live tab's Status section
+    expect(texts(await ui.find({ key: 'vs-header' })).filter(t => / at once · |tests: /.test(t))).toEqual([])
+    await ui.press({ key: 'vs-drive-cmd' })
+    expect(toasts.length).toBe(1)
     await ui.unmount()
   })
 
@@ -350,9 +350,9 @@ test('in VS Code the Tasks list at widths 42 and 80: headings with counts, rows 
       expect([badge?.props?.backgroundColor, badge?.props?.color, badge?.props?.bold], `${at} ${k}`).toEqual([tone, 'inverseText', true])
     }
     for (const k of ['Doing', 'To do']) expect(await ui.find({ key: `vs-head-${k}` }), `${at} ${k}`).toBeUndefined()
-    // no Button anywhere on the busy Tasks page: rows, folds, tabs and the mode switch are links; nothing is cut to one
-    // line but the rules and a row's state part (already fitted to the width), so nothing runs off the right edge
-    expect(elements(tree).filter(n => n.type === 'Button').map(n => n.props?.key), at).toEqual([])
+    // no Button on the busy Tasks page but the tab bar's (T-973): rows, folds and the mode switch are links; nothing is
+    // cut to one line but the rules and a row's state part (already fitted to the width), so nothing runs off the right edge
+    expect(elements(tree).filter(n => n.type === 'Button').map(n => n.props?.key), at).toEqual(['tab-live', 'tab-tasks', 'tab-scouts', 'tab-settings'])
     expect(elements(tree).filter(n => n.type === 'Text' && n.props?.wrap === 'truncate' && !/^[─━]+$/.test(texts(n).join('')) && !texts(n).join('').startsWith(' · ')), at).toEqual([])
     // a line of space between the folded sections too (the open ones sit in the page's column, gap 1)
     expect((await ui.find({ key: 'vs-folded' }))?.props.gap, at).toBe(1)
@@ -868,20 +868,21 @@ test('T-644: in VS Code doing and to do are one list with no heading, in the ter
   await ui.unmount()
 })
 
-test('T-698: in VS Code a thin rule sits between the header and the tabs on the Tasks, Scouts and Settings tabs', async ($, on) => {
+test('T-973: in VS Code every board tab has the tab bar under the header: the shown tab marked, counts as badges, no "·" link row', async ($, on) => {
   seedBoard(on)
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 70 }, surface: 'vscode' })
-  for (const tab of ['tasks', 'scouts', 'settings'] as const) {
-    if (tab !== 'tasks') await ui.press({ key: 'tabs', link: { href: vsHref('tab', tab) } })
-    // the tabs row starts with the rule (the footer's look), then the tabs
-    const row = (await ui.find({ key: 'tabs-row' })) as Node
-    const [rule, links] = row.children!.filter(n => n && typeof n === 'object') as Node[]
-    expect(rule?.type, tab).toBe('Text')
-    expect([rule?.props?.color, rule?.props?.wrap], tab).toEqual(['subtle', 'truncate'])
-    expect(texts(rule).join(''), tab).toBe('─'.repeat(70))
-    expect(links?.type, tab).toBe('Markdown')
-    expect(String(links?.props?.text), tab).toContain('Settings')
+  for (const tab of ['tasks', 'scouts', 'settings', 'live'] as const) {
+    if (tab !== 'tasks') await ui.press({ key: `tab-${tab}` })
+    expect(await tabBar(ui), tab).toEqual(wantTabs(tab, { tasks: 20, scouts: 1 }))
+    // the old row of links is gone, and nothing in the bar is a "·" separator or a rule
+    expect(await ui.find({ key: 'tabs' }), tab).toBeUndefined()
+    const bar = texts(await ui.find({ key: 'tabs-row' }))
+    expect(bar.filter(s => s.includes('·') || /─{3,}/.test(s)), tab).toEqual([])
+    // the shown tab's mark is the accent bar, the others dim and brighten under the pointer
+    const mark = (await ui.find({ key: `tab-mark-${tab}` })) as Node | undefined
+    expect(elements(mark).find(n => n.type === 'Text')?.props?.color, tab).toBe('ide')
+    for (const t of ['live', 'tasks', 'scouts', 'settings'].filter(t => t !== tab)) expect((await ui.find({ key: `tab-${t}` }))?.props.dimColor, `${tab} ${t}`).toBe(true)
     // under the header (its counts), in the drawn order
     const drawn = JSON.stringify(drawnData(await ui.drawn()))
     expect(drawn.indexOf('"vs-counts"'), tab).toBeGreaterThan(-1)

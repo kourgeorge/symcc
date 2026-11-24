@@ -232,9 +232,9 @@ for (const s of SCOUTS) {
     const row = await ui.find({ key: 'vs-actions' })
     const keys = elements(row!.children).filter(n => n.type === 'Button').map(n => n.props?.key)
     expect(keys, s.name).toEqual([...(s.running ? [] : ['scout-run']), 'scout-edit', 'scout-pause'])
-    // T-775: every header button secondary, one style (Run now too)
-    if (!s.running) expect((await ui.find({ key: 'scout-run' }))?.props.variant, s.name).toBe('secondary')
-    for (const b of elements(await ui.find({ key: 'vs-actions' })).filter(n => n.type === 'Button')) expect(b.props?.variant, `${s.name} ${b.props?.key}`).toBe('secondary')
+    // T-775: every header button secondary, one style; T-973: but the main action, Run now, primary
+    if (!s.running) expect((await ui.find({ key: 'scout-run' }))?.props.variant, s.name).toBe('primary')
+    for (const b of elements(await ui.find({ key: 'vs-actions' })).filter(n => n.type === 'Button')) expect(b.props?.variant, `${s.name} ${b.props?.key}`).toBe(b.props?.key === 'scout-run' ? 'primary' : 'secondary')
     expect((await ui.find({ key: 'scout-pause' }))?.props.label).toBe(s.paused ? 'Resume' : 'Pause')
     // the instructions are Markdown, given whole; no report text on the page (T-516: a run's page shows its report)
     const md = elements(tree).filter(n => n.type === 'Markdown').map(n => String(n.props?.text))
@@ -374,7 +374,7 @@ for (const bodyColumns of [40, 80]) {
     await follow(ui, 'settings-roles', vsHref('page', 'roles'))
     const list = await ui.drawn()
     tidy(list, at('roles'))
-    expect(elements(list).filter(n => n.type === 'Button').map(n => n.props?.key), at('roles')).toEqual(['role-new'])
+    expect(elements(list).filter(n => n.type === 'Button').map(n => n.props?.key).filter(k => !String(k).startsWith('tab-')), at('roles')).toEqual(['role-new'])
     for (const name of ROLE_KIND_PAGES.roles) {
       const link = await ui.find({ key: `roleRow:${name}` })
       expect([link?.type, link?.props.pressableLinks], name).toEqual(['Markdown', [vsHref('role', name)]])
@@ -475,7 +475,7 @@ for (const bodyColumns of [40, 80]) {
     await follow(ui, 'settings-kinds', vsHref('page', 'kinds'))
     const list = await ui.drawn()
     tidy(list, at('kinds'))
-    expect(elements(list).filter(n => n.type === 'Button').map(n => n.props?.key), at('kinds')).toEqual(['kind-new'])
+    expect(elements(list).filter(n => n.type === 'Button').map(n => n.props?.key).filter(k => !String(k).startsWith('tab-')), at('kinds')).toEqual(['kind-new'])
     for (const name of ROLE_KIND_PAGES.kinds) expect((await ui.find({ key: `kindRow:${name}` }))?.props.pressableLinks, name).toEqual([vsHref('kind', name)])
     // T-918: the same table as the Roles page: NAME, FROM, WHAT IT'S FOR
     const cells = async (key: string) => (await ui.find({ key }))?.children?.map(c => texts(c).join('').replace(/\*\*|\[|\]\([^)]*\)/g, ''))

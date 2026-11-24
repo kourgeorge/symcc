@@ -19,6 +19,7 @@ import { resetClaudeSelf } from '../hooks/claude/host'
 import { resetDebriefs } from '../hooks/app/debrief'
 import { resetEvidence } from '../hooks/app/evidence'
 import { live, stopLiveTick } from '../hooks/claude/ui/live'
+import { resetLiveFolds } from '../hooks/claude/ui/vscode-live'
 import { resetBranches } from '../hooks/app/branches'
 import { resetTodayTeam } from '../hooks/app/lead'
 import { forgetSearchParts } from '../hooks/app/search-parts'
@@ -44,6 +45,7 @@ export function resetPlugin() {
   resetLogo()
   stopLiveTick()
   live.frame = 0
+  resetLiveFolds()
   resetBackground()
   resetClaudeSelf()
   resetDebriefs()

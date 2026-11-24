@@ -16,7 +16,7 @@ import { type PhaseStage, type TaskPhase, taskPhase } from './phase'
 import { whyFailed } from './failure'
 import { CLAIM_NOTES, sessionNote, shownNote, STATUS_MARK } from './details'
 import { newestFirst, offStatusParts, testsShort, type OffHere } from './settings'
-import { type DriverFacts, fitForm, followForms, noticeText } from './driver-notice'
+import { type DriverFacts, type NoticePart, fitForm, followForms, noticeText } from './driver-notice'
 import { type OwnerQuestion, askText, openQuestions, questionLine, questionsLabel } from './questions'
 import { needsYou } from './commands'
 import { fmtCost } from './runs'
@@ -234,7 +234,12 @@ export function driverLooksIdle(tasks: readonly DriveTask[], nowMs: number): boo
  */
 export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowMs: number, name: string = DEFAULT_NAME, width = Infinity, driver?: DriverFacts): string {
   if (driving) return ''
-  return `⚠ ${noticeText(fitForm(followForms(namesFor(name).name, driver, nowMs, driverLooksIdle(tasks, nowMs)), width, '⚠ '))}`
+  return `⚠ ${noticeText(driveNoticeParts(tasks, nowMs, name, width, driver))}`
+}
+/** T-973: driveWarning's words after its "⚠ " in parts (the slash command marked), for a client that makes the command
+ *  something to press (VS Code's notice row). */
+export function driveNoticeParts(tasks: readonly DriveTask[], nowMs: number, name: string = DEFAULT_NAME, width = Infinity, driver?: DriverFacts): NoticePart[] {
+  return fitForm(followForms(namesFor(name).name, driver, nowMs, driverLooksIdle(tasks, nowMs)), width, '⚠ ')
 }
 
 /**

@@ -61,19 +61,21 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     await ui.unmount()
   })
 
-test('T-786: the VS Code Live tab has a Needs you section first with a warning row and a link per item; a click opens it; none when nothing waits', async ($, on) => {
+test('T-786, T-973: the VS Code Live tab lists what needs you first in its Tasks section, a warning row and a link per item; a click opens it', async ($, on) => {
   seedBoard(on, { view: liveView(ALL, [QUESTION]) })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
-  expect((await ui.find({ key: 'live-needs-head' }))?.text).toMatch(/^─── ❯NEEDS YOU─+$/)
+  await ui.press({ key: 'tab-live' })
+  // T-973: no Needs you heading of its own: its rows open the Tasks section, before the lanes
+  expect(await ui.find({ key: 'live-needs-head' })).toBeUndefined()
   const drawn = JSON.stringify(await ui.drawn())
-  expect(drawn.indexOf('live-needs-head')).toBeLessThan(drawn.indexOf('live-tasks-head'))
+  expect(drawn.indexOf('"live-tasks-head"')).toBeLessThan(drawn.indexOf('"live-needs"'))
+  expect(drawn.indexOf('"live-needs"')).toBeLessThan(drawn.indexOf('"live-lanes"'))
   expect((await ui.find({ key: 'live-need-text:T-749' }))?.text).toMatch(/^ready for review: Website home page/)
   expect(JSON.stringify(await ui.find({ key: 'live-need-text:Q-88' }))).toContain('warning')
   await ui.press({ key: 'live-need:T-749', link: { href: vsHref('task', 'T-749') } })
   expect(await ui.find({ key: 'live-head' })).toBeUndefined()
   await ui.press({ key: 'back' })
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
 
@@ -89,7 +91,7 @@ test('T-786: the terminal Live tab has no Needs you heading or rows when nothing
 test('T-786: the VS Code Live tab has no Needs you section when nothing waits', async ($, on) => {
   seedBoard(on, { view: liveView([RUNNING]) })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  await ui.press({ key: 'tab-live' })
   expect(await ui.find({ key: 'live-needs-head' })).toBeUndefined()
   expect(await ui.find({ key: 'live-tasks-head' })).toBeDefined()
   await ui.unmount()

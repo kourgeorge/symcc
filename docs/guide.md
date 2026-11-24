@@ -1157,8 +1157,8 @@ at the end while it is paused.
 
 VS Code draws the same 4 lines with its own controls: `‹` and a `Tasks` back button, a
 `‹ 2 of 6 ›` pager, the title as a heading, the state as small chips (the status one filled in
-its color), the buttons (all in one style, as on the other boards: no main button, no red;
-needs review is a button too), then a divider.
+its color), the buttons (in one style, no red; the one main action, the first of line 4's
+first group, is VS Code's primary button; needs review is a button too), then a divider.
 
 #### The Branch section
 
@@ -1424,17 +1424,38 @@ In the Claude Code extension's side panel, letter keys and ↑↓ do nothing: yo
 (or Tab to it and press Enter). So the board there has its own layout; the terminal's is
 unchanged.
 
-- **Header**: the symcc logo (the clef, in the accent color; it sways now and then and turns
-  into a check mark, a robot or a note on a merge, a start or a scout finding, as in the
-  terminal) with four short lines beside it: the name, version and folder; the board mode as a
-  colored pill (`⏵ auto merge`) with what it means, dim; the branch and who drives; the tests, short
-  ("none set", one short command, short names up to 24 characters like "claude, typecheck",
-  or "5 commands") and the limits. Under it the counts as small badges
-  (`● 2 doing · ● 6 to do · ● 1 waiting for you`), each dot in its status color. Every line
-  wraps, never cut.
-- **Tabs**: a segmented row of small boxes, `Tasks 20`, `Scouts 1`, `Settings`. The one shown
-  has a bold border in the accent color, its name bold and its count in a filled badge; the
-  others have a dim border. Click a tab to switch.
+- **Header**: the symcc logo (the clef, in the accent color) with one line beside it: the
+  name, version and folder, then the board mode as a small colored pill (`⏵ auto merge`).
+  When another window drives the board, one notice row with a yellow border says so
+  ("⚠ this window follows; /symcc-drive to drive from here"); click `/symcc-drive` to drive
+  from this window. Under it the counts (`● 2 doing · ● 6 to do · ● 1 waiting for you`), each
+  dot in its status color. Every line wraps, never cut. The setup facts (what the mode
+  means, the branch, the tests and limits) are in the Live tab's **Status** section.
+- **Tabs**: a tab bar like VS Code's own panel tabs: `Live`, `Tasks [20]`, `Scouts [1]`,
+  `Settings`, the counts as small rounded badges. The tab shown is in the normal text color
+  with a short accent bar under it; the others are dim and brighten under the pointer. Click
+  a tab to switch.
+- **Live tab**: in sections like VS Code's side bar. Each section has a small bold UPPERCASE
+  heading with a chevron (`▾` open, `▸` folded); click it to fold or open the section (the
+  board remembers it while the session lasts). A count badge sits on the right where the
+  section has one. No divider lines and no blank rows.
+  - **Status**: Mode (`⏵ auto merge · agents 0/3 busy`, with what the mode means and a quiet
+    `Switch to …` button; running scouts are named at its end and open the Scouts tab),
+    Branch (and which window drives), Tests (short, then the time limit and retries).
+  - **Tasks** `[17 backlog]`: what needs you first, then the running lanes (as the terminal's,
+    drawn with real lines) and the key to their marks. When nothing runs it says why; when
+    all is done: "✓ All done · last merged T-93 20h ago", then **Up next from the backlog**
+    with the first 3 backlog tasks (each opens its page) and "14 more in the backlog" (opens
+    the Tasks tab with Backlog open). The main button, `Tell the lead what to do next`, puts
+    "Next task: " in the prompt box.
+  - **Branches**: as in the terminal, drawn with real lines.
+  - **Today**: label and value rows: Results (`✓ 0 merged · ↺ 0 sent back · ✗ 0 failed`, in
+    green, yellow and red), Tokens (all of today's, then who spent them), Agent time (and the
+    cost when known), Per task, Hours (the day's token bars and the busiest hour), Yesterday,
+    and 7 days.
+  - **Organizational memory** `[2 / 60]`: folded at first, with a quiet `All notes` button on
+    its heading. Open, it lists the newest notes one row each (the date, the text cut short,
+    the topic dim; click a note to open all notes on it), then the topics with their counts.
 - **Tasks**: grouped under headings (Questions for you, Waiting for you, Review, Failed, Doing,
   To do), each with its colored mark and its count in a badge (`▶ Doing  2 `), a blank line
   between them. Each task is one button: the ID dim and the title (up to two lines; a longer
@@ -1453,8 +1474,10 @@ unchanged.
   never cutting it with "…". From the top: the page header (see [the task page and the scout
   page](#the-task-page-and-the-scout-page)): `‹` and a `Tasks` button back to the list, the
   `‹ 2 of 6 ›` pager, the task ID and title as a heading, the state as small chips (`◆ answered:
-  read it`, in green, for an answered investigation), the action buttons in their groups (all
-  in one style: no main button, no red; needs review a button too), then a divider.
+  read it`, in green, for an answered investigation), the action buttons in their groups (one
+  style, no red; the one main action, such as `Approve`, `Retry` or `Pause`, is the primary
+  button; needs review a button too), then a divider. A scout's page does the same: `Run now`
+  is its primary button.
   What needs you comes next, in a box in its color: the **Question for you** (yellow) with its
   answers as buttons and a box for your own answer (a file request has `Allow files` and
   `Don't allow`); **Why it failed** (red); **Waiting for your files** (yellow).
@@ -2536,7 +2559,7 @@ test, a trap, where something is).
   memory** section shows the count (out of 60, with a fill bar), the 3 newest notes and every topic
   with its note count ([Live tab](#live-tab)). Enter (or a click) on a topic opens the
   "Organizational memory · tests" page with only that topic's notes; on a newest note, or on the
-  `[all]` button next to "newest" (Enter or a click; in VS Code the section's title is a link too), the
+  `[all]` button next to "newest" (Enter or a click; in VS Code the `All notes` button on the section's heading), the
   "Organizational memory (org-mem)" page with every note. The page starts with the same header
   as a task's page: `‹ [Live]` (Back; `b` too) with the note count on the right, the title, the line
   "Notes shared with workers, checkers and scouts", a `[Delete]` button (no key in it; the keys are in the

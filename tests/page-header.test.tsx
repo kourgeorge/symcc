@@ -208,7 +208,7 @@ test('T-751: a narrow terminal page wraps the state and the buttons between grou
   await ui.unmount()
 })
 
-test('T-751: in VS Code the same header: Back and a pager, the title, state chips, the buttons in groups (all secondary, one style, T-775), a divider', async ($, on) => {
+test('T-751: in VS Code the same header: Back and a pager, the title, state chips, the buttons in groups (secondary, one style, T-775; the main action primary, T-973), a divider', async ($, on) => {
   seedRich(on, 'T-501')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const h = await header(ui, true)
@@ -220,7 +220,7 @@ test('T-751: in VS Code the same header: Back and a pager, the title, state chip
   const actions = kids(await ui.find({ key: 'vs-actions' }))
   expect(actions.filter(n => n.type === 'Button' || n.type === 'Markdown').map(keyOf)).toEqual(['approve', 'show-changes', 'reject', 'drop', 'needs-review', 'copy'])
   for (const b of actions.filter(n => n.type === 'Button')) {
-    expect(b.props?.variant, keyOf(b)).toBe('secondary')
+    expect(b.props?.variant, keyOf(b)).toBe(keyOf(b) === 'approve' ? 'primary' : 'secondary')
     expect(kids(b).length, keyOf(b)).toBe(0)
   }
   expect(actions.find(n => keyOf(n) === 'needs-review')?.type).toBe('Button')
@@ -272,7 +272,7 @@ for (const surface of ['terminal', 'desktop', 'mobile', 'vscode'] as const)
     } else {
       expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions', 'vs-header-rule'])
       expect((await ui.find({ key: 'scout-back' }))?.props.label).toBe('Scouts')
-      for (const b of kids(await ui.find({ key: 'vs-actions' })).filter(n => n.type === 'Button')) expect(b.props?.variant, keyOf(b)).toBe('secondary')
+      for (const b of kids(await ui.find({ key: 'vs-actions' })).filter(n => n.type === 'Button')) expect(b.props?.variant, keyOf(b)).toBe(keyOf(b) === 'scout-run' ? 'primary' : 'secondary')
       await ui.press({ key: 'next' })
       await ui.redraw()
     }

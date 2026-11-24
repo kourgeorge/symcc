@@ -89,7 +89,7 @@ test('T-846: the terminal Live tab draws the investigation, docs-only and needs-
 test('T-846: the VS Code Live tab draws the same paths', async ($, on) => {
   seedBoard(on, { view: liveView(ALL) })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 120 }, surface: 'vscode' })
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'live') } })
+  await ui.press({ key: 'tab-live' })
   const tracks = (await ui.findAll({ type: 'Svg' })).filter(x => /^T-\d+ at /.test(String(x.props.alt ?? '')))
   const track = (id: string) => tracks.find(x => String(x.props.alt).startsWith(`${id} at `))!
   const svg = async (id: string) => String(track(id).props.source)
@@ -101,7 +101,7 @@ test('T-846: the VS Code Live tab draws the same paths', async ($, on) => {
   // the skipped check is no dot
   expect(dots(await svg('T-803'))).toBe(4)
   expect(String(track('T-805').props.alt)).toContain('T-805 at you')
-  await ui.press({ key: 'tabs', link: { href: vsHref('tab', 'tasks') } })
+  await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
 

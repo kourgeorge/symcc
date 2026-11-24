@@ -126,12 +126,7 @@ export function liveIdle(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'
     }
     return [fitText(text, w)]
   }
-  const last = tasks
-    .filter(t => t.status === 'done')
-    .map(t => ({ t, at: finishedAt(t)?.atMs }))
-    .filter((x): x is { t: BoardTask; at: number } => x.at !== undefined)
-    .sort((a, b) => b.at - a.at || num(b.t.id) - num(a.t.id))[0]
-  const items = tasks.filter(t => t.status === 'backlog').sort(byRunOrder)
+  const { last, items } = idleDone(tasks)
   const backlog = items.length
   const first = last ? `${LIVE_IDLE.done} · last merged ${last.t.id}, ${idleAgo(nowMs - last.at)} ago` : LIVE_IDLE.done
   const second = `${LIVE_IDLE.next}${backlog ? `, or move ${backlog === 1 ? 'the backlog item' : `one of ${backlog} backlog items`} to todo` : ''}.`
@@ -140,6 +135,35 @@ export function liveIdle(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'
   const more = backlog - next.length
   return [fitText(first, w), ...wrap(second), ...next, ...(more > 0 ? [fitText(`  … ${more} more in the backlog`, w)] : [])]
 }
+/** The last merged task (when it is known) and the backlog items in run order: what the "All done" lines name. */
+function idleDone(tasks: readonly BoardTask[]): { last?: { t: BoardTask; at: number }; items: BoardTask[] } {
+  const last = tasks
+    .filter(t => t.status === 'done')
+    .map(t => ({ t, at: finishedAt(t)?.atMs }))
+    .filter((x): x is { t: BoardTask; at: number } => x.at !== undefined)
+    .sort((a, b) => b.at - a.at || num(b.t.id) - num(a.t.id))[0]
+  return { ...(last ? { last } : {}), items: tasks.filter(t => t.status === 'backlog').sort(byRunOrder) }
+}
+
+/**
+ * T-973: what nothing running means, in parts, for a client that draws the idle lines its own way (VS Code's Live tab):
+ * `kind` (a new board, the paused mode, open tasks that wait, or all done), `text` the first line liveIdle says (whole),
+ * and for all done the last merge (its id and how long ago, "20h") and the first IDLE_BACKLOG backlog items, with how
+ * many more there are.
+ */
+export type LiveIdleFacts = { kind: 'fresh' | 'paused' | 'waiting' | 'done'; text: string; last?: { id: string; ago: string }; next: { id: string; title: string }[]; more: number; backlog: number }
+export function liveIdleFacts(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'>, nowMs: number): LiveIdleFacts {
+  const tasks = view.tasks as BoardTask[]
+  const text = liveIdle(view, nowMs, Infinity)[0] ?? ''
+  const none = { next: [], more: 0, backlog: 0 }
+  if (!tasks.length && !(view.archived_done ?? []).length) return { kind: 'fresh', text, ...none }
+  if (modeOf(view) === 'paused') return { kind: 'paused', text, ...none }
+  if (tasks.some(t => t.status !== 'done' && t.status !== 'dropped' && t.status !== 'backlog')) return { kind: 'waiting', text, ...none }
+  const { last, items } = idleDone(tasks)
+  const next = items.slice(0, IDLE_BACKLOG).map(t => ({ id: t.id, title: t.title }))
+  return { kind: 'done', text, ...(last ? { last: { id: last.t.id, ago: idleAgo(nowMs - last.at) } } : {}), next, more: items.length - next.length, backlog: items.length }
+}
+
 /** T-903: the one idle line the band shows: liveIdle's first line, but a sentence that does not fit is cut with "…"
  *  (never broken at a space, which would read like a broken line). */
 export function liveIdleLine(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'>, nowMs: number, width = 80): string {
@@ -1338,6 +1362,56 @@ export function liveTodayLines(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs:
   // T-889: then the dim yesterday and last 7 days lines
   const past = pastLines(pastDays(v.tasks, nowMs, 1, offsetMin), pastDays(v.tasks, nowMs, 7, offsetMin), width)
   return [...first, ...todayMoreLines(more, width), ...past, ...(note ? wrapLine(TOKENS_NOTE, width).map((text): LiveSeg[] => [{ text, tone: 'dim' }]) : [])]
+}
+
+/** T-973: one label/value row of a section (VS Code's Live tab): its key, its label ("Tokens") and its value in parts. */
+export type LiveRow = { key: string; label: string; segs: LiveSeg[] }
+/** T-973: the labels of the Today rows. */
+export const TODAY_ROW = { results: 'Results', tokens: 'Tokens', time: 'Agent time', perTask: 'Per task', hours: 'Hours', yesterday: 'Yesterday', week: '7 days' } as const
+
+/**
+ * T-973: ▍Today's figures as label/value rows (VS Code's Live tab draws them as a block, the labels in one column), the
+ * same numbers as liveTodayLines: Results (✓ merged · ↺ sent back · ✗ failed), Tokens (everyone's, then who spent them),
+ * Agent time (and the cost when known), Per task (the medians, first try, tries, the checker's send-backs; only when
+ * there are some), Hours (the day's sparkline and the busiest hour; only once tokens were spent), Yesterday and 7 days
+ * (merged · tokens · time; only when not all 0). Nothing is cut: the client wraps.
+ */
+export function liveTodayRows(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs: number, offsetMin: number = localOffset(nowMs)): LiveRow[] {
+  const more = todayMore(v.tasks, v.today_team, nowMs, offsetMin)
+  const d = liveToday(v.tasks, nowMs, offsetMin)
+  const tokens = Math.max(more.who.reduce((s, x) => s + x.tokens, 0), d.tokens, ...more.hours)
+  const dot: LiveSeg = { text: ' · ', tone: 'dim' }
+  const rows: LiveRow[] = [
+    { key: 'results', label: TODAY_ROW.results, segs: [{ text: `✓ ${d.merged} merged`, tone: 'passed' }, dot, { text: `↺ ${d.sentBack} sent back`, tone: 'warning' }, dot, { text: `✗ ${d.failed} failed`, tone: 'failed' }] },
+  ]
+  const sh = shares(more.who)
+  rows.push({
+    key: 'tokens',
+    label: TODAY_ROW.tokens,
+    segs: [{ text: fmtTokens(tokens), tone: 'text' }, ...more.who.flatMap((x, i): LiveSeg[] => [dot, { text: `${x.who} ${sh[i]}`, tone: x.who }]), ...(more.teamKnown ? [] : [{ text: TRIES_ONLY, tone: 'dim' as const }])],
+  })
+  rows.push({ key: 'time', label: TODAY_ROW.time, segs: [{ text: fmtDuration(more.workMs), tone: 'text' }, ...(more.usd !== undefined ? [dot, { text: todayCostText(more.usd), tone: 'dim' as const }] : [])] })
+  const per = more.perTask
+  const perParts = [
+    ...(per?.tokens !== undefined ? [`${fmtTokens(per.tokens)}/task`] : []),
+    ...(per?.workMs !== undefined ? [`${fmtDuration(per.workMs)} work`] : []),
+    ...(per?.mergeMs !== undefined ? [`${fmtDuration(per.mergeMs)} start-to-merge`] : []),
+    ...(more.firstTry !== undefined ? [`first try ${Math.round(more.firstTry)}%`] : []),
+    ...(more.avgTries !== undefined ? [`avg ${more.avgTries.toFixed(1)} tries/task`] : []),
+    ...(more.sentBack !== undefined ? [`⌕ ${more.sentBack} sent back by the checker`] : []),
+  ]
+  if (perParts.length) rows.push({ key: 'per-task', label: TODAY_ROW.perTask, segs: perParts.flatMap((x, i): LiveSeg[] => [...(i ? [dot] : []), { text: x, tone: 'text' }]) })
+  if (more.hours.length) {
+    const busiest = more.hours.indexOf(Math.max(...more.hours))
+    rows.push({ key: 'hours', label: TODAY_ROW.hours, segs: [{ text: '00', tone: 'dim' }, ...sparkSegs(more.hours, 1), { text: '24', tone: 'dim' }, { text: `   busiest ${hh(busiest)}:00 · ${fmtTokens(more.hours[busiest]!)}`, tone: 'dim' }] })
+  }
+  const past = (key: string, label: string, p: PastDays) => {
+    const parts = [p.merged > 0 && `${p.merged} merged`, p.tokens > 0 && fmtTokens(p.tokens), p.workMs >= 1000 && pastTime(p.workMs)].filter((x): x is string => !!x)
+    if (parts.length) rows.push({ key, label, segs: [{ text: parts.join(' · '), tone: 'text' }] })
+  }
+  past('yesterday', TODAY_ROW.yesterday, pastDays(v.tasks, nowMs, 1, offsetMin))
+  past('week', TODAY_ROW.week, pastDays(v.tasks, nowMs, 7, offsetMin))
+  return rows
 }
 
 // ---------------- T-718: the Organizational memory section at the bottom of the Live tab ----------------

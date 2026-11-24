@@ -9,6 +9,7 @@ import { type PaneView, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { noteForLead, brief } from '../../app/tell'
 import { setBoardMode } from '../../app/board-mode'
+import { driveHere } from '../../app/lead'
 import { arrows, saysArrowsMove } from './arrows'
 import { type PaneTab, resetPane } from '../../app/open'
 import { claudeHost } from '../host'
@@ -80,7 +81,8 @@ export async function paneParts($: $, e: PaneEvent) {
   const vs: VsKit = { Box: Box as never, Text: Text as never, Button: Button as never, Input: Input as never, Markdown: els.Markdown as never, Select: (els as { Select?: unknown }).Select as never, Svg: (els as { Svg?: unknown }).Svg as never, C, width, nowMs, surface: e.surface }
   /** The banner at the top: the drawing and the board's facts (the board mode is in the Tasks page's footer). */
   const banner = () => {
-    if (vscode) return vsBanner(vs, v, mode, gitRow())
+    // T-973: the notice row's /<name>-drive does what the command does
+    if (vscode) return vsBanner(vs, v, mode, gitRow(), act(async () => $.ui.toast(S.N.toast(await driveHere(claudeHost($))))))
     const d = emptyBoard()
     const facts = { ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
     // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out

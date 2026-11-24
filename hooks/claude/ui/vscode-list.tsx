@@ -58,7 +58,8 @@ export function vsFit(lead: number, title: string, end: string, room: number, cu
   return { title: fit.title, rest: fit.extra }
 }
 
-async function askLead($: $) {
+/** What the "Tell the lead" button does (the empty Tasks page's, and the Live tab's when nothing runs). */
+export async function askLead($: $) {
   const box = await $.prompt.read().catch(() => ({ text: '' }))
   if (!box.text.trim()) await $.prompt.fill({ text: ASK_LEAD_DRAFT }).catch(() => undefined)
 }

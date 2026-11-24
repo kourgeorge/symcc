@@ -107,7 +107,7 @@ export function pageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
 }
 
 /** The header in VS Code's side panel: "‹" and a Tasks back button, a "‹ 2 of 6 ›" pager, the title as a heading,
- *  the state as small chips, the buttons (all secondary, one style, T-775), then a divider. */
+ *  the state as small chips, the buttons (secondary, one style, T-775; T-973: the main action primary), then a divider. */
 export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
   const { Box, Text, Button, C } = pane
   const chip = (key: string, g: Seg[], first: boolean) =>
@@ -123,9 +123,11 @@ export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
       )}
     </Box>
   const status = hd.state[0] ?? []
+  // T-973: the page's one main action (the first button of the 'main' group: Approve, Retry, Run now …) is primary
+  const main = hd.buttons.find(b => !b.fact && b.group === 'main')?.id
   const button = (b: PageHeader['buttons'][number]) => {
     if (b.fact) return <Text key={b.id} color={C('inactive')}>{b.label}</Text>
-    return <Button key={b.id} label={b.label} variant="secondary" onPress={b.onPress} />
+    return <Button key={b.id} label={b.label} variant={b.id === main ? 'primary' : 'secondary'} onPress={b.onPress} />
   }
   return (
     <Box key="vs-page-header" flexDirection="column" gap={1}>
