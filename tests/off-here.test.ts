@@ -627,6 +627,8 @@ test('T-1016: session start under a new id in the driving window keeps driving (
 async function drivingAsAWithRunningTask() {
   S.root = ROOT
   S.me = 'a'
+  S.offHere = false
+  workers.clear()
   let id = 'a'
   const w = world('a')
   ;(w.host.session as { id: () => Promise<string> }).id = async () => id
