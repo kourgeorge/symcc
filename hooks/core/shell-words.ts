@@ -558,10 +558,12 @@ function expandCommands(s: string, out: XToken[][] = [], bad: string[] = []): XT
         if (m[1] === '<<' || m[1] === '<<-') wantDelim = true
         continue
       }
-      // `(( ... ))` arithmetic and a `[[ ... ]]` test: their `<` and `>` compare, so only their `$(...)` are followed
-      if (c === '(' && n === '(' && !cur) {
+      // `(( ... ))` arithmetic and a `[[ ... ]]` test: their `<` and `>` compare, so only their `$(...)` are followed;
+      // `((` right after a word (`if((`, `while((`) is arithmetic too, never a here-document start (T-963)
+      if (c === '(' && n === '(') {
         const e = closeAt(s, i + 2, '(', ')')
         if (s[e + 1] === ')') {
+          endWord()
           substCommands(s.slice(i + 2, e), out, bad)
           i = e + 1
           continue
@@ -591,6 +593,14 @@ function expandCommands(s: string, out: XToken[][] = [], bad: string[] = []): XT
         // `$((...))` is arithmetic: only its own `$(...)` and backticks run
         if (s[i + 2] !== '(') expandCommands(s.slice(i + 2, e), out, bad)
         else substCommands(s.slice(i + 2, e), out, bad)
+        add(s.slice(i, e + 1), true)
+        i = e
+        continue
+      }
+      if (n === '[') {
+        // `$[...]` is old-style arithmetic: its `<<` shifts, so only its own `$(...)` and backticks run (T-963)
+        const e = closeAt(s, i + 2, '[', ']')
+        substCommands(s.slice(i + 2, e), out, bad)
         add(s.slice(i, e + 1), true)
         i = e
         continue

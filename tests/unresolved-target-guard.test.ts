@@ -100,6 +100,12 @@ const REFUSED: [string, string][] = [
   ['[[ $a > $b ]] > $F', '$F'],
   // `( (` with a space at the end is two subshells, not arithmetic
   ['((echo x > $F) )', '$F'],
+  // the checker's sixth-try probes: a `<<` in `$[...]` or in `((` right after a word shifts, it starts no here-document
+  ['x=$[1<<2]\necho x > $HOME/f', '$HOME/f'],
+  ['echo $[1<<2]\necho x > $HOME/f', '$HOME/f'],
+  ['x=$[1<<2]\ncp a ${D}/b', '${D}/b'],
+  ['if((1<<2)); then :; fi\necho x > $HOME/f', '$HOME/f'],
+  ['while((0<<1)); do :; done\ncd $X', '$X'],
 ]
 
 /** Variables outside write targets, and plain write targets: not refused for that. */
@@ -145,6 +151,8 @@ const ALLOWED = [
   'x=$(ls $D # list it)\n) && echo $x',
   'coproc ls $D',
   'parallel echo ::: a b',
+  'x=$[1<<2]\necho $x',
+  'if((1<<2)); then echo $X; fi',
 ]
 
 test('T-963: a write or cd target built from a variable or command output is refused, with a clear reason', () => {

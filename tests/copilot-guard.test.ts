@@ -129,7 +129,7 @@ test("an agent's shell call is wrapped to run in a new shell from its own folder
   const wrapped = (tool: string, command: string | string[], extra: Record<string, unknown> = {}) => ({ modifiedArgs: { ...extra, command: shellWrap(WT, tool, command) } })
   // the checkers' ways out of the folder over two calls: each call now starts from the folder again (real bash, in the
   // hand-back's probe, prints the folder after each of these), so they pass, wrapped
-  for (const command of ['cd /', 'cd ~', 'cd', 'cd -', 'cd $HOME', 'cd src', 'cd ./src && ls', 'exec bash -c "cd /; exec bash"', 'f() { cd /; }; alias ls="cd /"', 'shopt -s autocd']) {
+  for (const command of ['cd /', 'cd ~', 'cd', 'cd -', 'cd src', 'cd ./src && ls', 'exec bash -c "cd /; exec bash"', 'f() { cd /; }; alias ls="cd /"', 'shopt -s autocd']) {
     expect([command, await preToolUse(host, WT, 'ag1', { toolName: 'bash', toolArgs: { command } })]).toEqual([command, wrapped('bash', command)])
   }
   // a cd to a path built from a variable can't be checked, so it is refused (T-963)
