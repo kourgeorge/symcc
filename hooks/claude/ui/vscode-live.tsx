@@ -188,7 +188,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   const running = lanes.filter(l => !l.done)
   // the shared columns, as wide as the terminal's widest layout, with the stations in full words
   const stations = liveColumns(lanes, v.checker === true)
-  const layout = { ...liveLayout(lanes, stations, 200), labels: stations.map(s => FULL_LABELS[s]) }
+  const layout = { ...liveLayout(lanes, stations, liveInner(width)), labels: stations.map(s => FULL_LABELS[s]) }
   const trains = liveTrains(v, nowMs, lanes)
   const open = (id: string) => act(() => panelValues($).updateOpened(() => id))
   /** A line of text in a Box of its own: VS Code keeps a Box's key (a Text's it drops), so each line can be found by it. */
@@ -276,7 +276,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
               </Box>
             ),
           },
-          { key: 'track', width: track.width, node: <Svg key={`live-track:${lane.id}`} source={track.source} width={track.width} height={track.height} alt={`${lane.id} at ${layout.labels[layout.stations.indexOf(lane.station)] ?? lane.station}`} /> },
+          { key: 'track', width: Math.ceil(track.width / COL_PX), node: <Svg key={`live-track:${lane.id}`} source={track.source} width={track.width} height={track.height} alt={`${lane.id} at ${layout.labels[layout.stations.indexOf(lane.station)] ?? lane.station}`} /> },
           { key: 'time', width: TIME_W, node: line(`live-right:${lane.id}`, when, 'inactive') },
         ])}
         {trainRows(trains.lanes[lane.id] ?? [], liveInner(width)).map(r => {
@@ -305,7 +305,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         { key: 'mark', width: 1, node: <Box key="live-stations-mark" /> },
         { key: 'id', width: idW, node: <Box key="live-stations-id" /> },
         { key: 'title', node: <Box key="live-stations-title" flexGrow={1} flexShrink={1} /> },
-        { key: 'track', width: head.width, node: <Svg key="live-stations-svg" source={head.source} width={head.width} height={head.height} alt={layout.labels.join(' ')} /> },
+        { key: 'track', width: Math.ceil(head.width / COL_PX), node: <Svg key="live-stations-svg" source={head.source} width={head.width} height={head.height} alt={layout.labels.join(' ')} /> },
         { key: 'time', width: TIME_W, node: <Box key="live-stations-time" /> },
       ])
     : null
