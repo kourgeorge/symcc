@@ -180,6 +180,8 @@ export const claimNote = (host: Host) => (host.features.startQueue ? QUEUED_NOTE
 /** The lead's turn started (`busy`) or ended: while it runs, a queued start needs no wake-up (the turn's end starts it). */
 export function leadTurn(busy: boolean) {
   leadBusy = busy
+  // T-952: the lead's turn end counts as this window being active (lead.json's `active` while it drives)
+  if (!busy) S.activeAt = Date.now()
 }
 
 /** Empties the queue (its waiting starts never settle) and the lead's turn state, as a reload does; for the tests' resetPlugin() only. */

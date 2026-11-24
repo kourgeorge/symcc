@@ -102,7 +102,7 @@ test('T-643: a session that does not drive: a warning line under the banner and 
   const warnLines = (g: ViewFile, w = 120) => panelLines(g, { opened: '', cursor: 0 }, NOW, w).lines.filter(l => l.some(s => s.color === 'warning' && s.text.startsWith('⚠')))
   // T-694: the line sits right under the tests/limits line, beside the drawing's last row when wide; its text from the ⚠ on
   const warnText = (l: Parameters<typeof lineText>[0]) => lineText(l).slice(lineText(l).indexOf('⚠'))
-  const full = '⚠ Another session drives. /symcc-drive to drive it from here.'
+  const full = '⚠ this window follows; /symcc-drive to drive from here'
   expect(warnLines(view(false)).map(warnText)).toEqual([full])
   // narrow: a shorter form that fits
   const narrow = warnLines(view(false), 40).map(lineText)
@@ -111,11 +111,22 @@ test('T-643: a session that does not drive: a warning line under the banner and 
   expect(narrow[0]).toContain('/symcc-drive')
   // the band: the mark right after the brand, in the warning color; T-1's row says where it runs
   const band = bandDraw(view(false), NOW, 120).lines
-  expect(band[0]![1]).toEqual({ text: ' ⚠ driven by another session', color: 'warning' })
+  expect(band[0]![1]).toEqual({ text: ' ⚠ this window follows; /symcc-drive to drive from here', color: 'warning' })
   expect(band.map(lineText).find(l => l.startsWith('T-1'))).toMatch(/ — runs in the other session$/)
   // claimed an hour ago and still not started there: it looks idle
-  expect(warnLines(view(false, AT), 140).map(warnText)).toEqual(['⚠ Another session drives, but looks idle. /symcc-drive to drive it from here.'])
-  expect(bandDraw(view(false, AT), NOW, 120).lines[0]![1]!.text).toBe(' ⚠ driven by another session (it looks idle)')
+  expect(warnLines(view(false, AT), 140).map(warnText)).toEqual(['⚠ this window follows (the driver looks idle); /symcc-drive to drive from here'])
+  expect(bandDraw(view(false, AT), NOW, 120).lines[0]![1]!.text).toBe(' ⚠ this window follows (the driver looks idle); /symcc-drive to drive from here')
+  // T-952: the view names the driver (lead.json's since and active): the same words as in Claude Code, shorter when narrow
+  const driver = { heartbeat: NOW - 10_000, since: NOW - 9 * 3_600_000, active: NOW - 3 * 60_000 }
+  const led: ViewFile = { ...view(false), view: { ...view(false).view, driver } }
+  expect(warnLines(led, 160).map(warnText)[0]).toMatch(/^⚠ this window follows \(driver started \w{3} \d+ \d\d:\d\d, active 3 min ago\); \/symcc-drive to drive from here$/)
+  expect(bandDraw(led, NOW, 140).lines[0]![1]!.text).toBe(' ⚠ this window follows (driver active 3 min ago); /symcc-drive to drive from here')
+  expect(bandDraw(led, NOW, 120).lines[0]![1]!.text).toBe(' ⚠ this window follows (driver active 3 min ago) · /symcc-drive')
+  expect(bandDraw(led, NOW, 100).lines[0]![1]!.text).toBe(' ⚠ follows (driver active 3 min ago) · /symcc-drive')
+  expect(bandDraw(led, NOW, 70).lines[0]![1]!.text).toBe(' ⚠ this window follows · /symcc-drive')
+  // off here (another window drives): the banner's first line names it too
+  const off: ViewFile = { ...led, view: { ...led.view, on_here: false, off_here: 'other' } }
+  expect(panelLines(off, { opened: '', cursor: 0 }, NOW, 200).lines.map(lineText).join('\n')).toContain('another window drives this board (')
   // the driving session: neither, and the row keeps its own note
   expect(warnLines(view(true))).toEqual([])
   const own = bandDraw(view(true), NOW, 120).lines

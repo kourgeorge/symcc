@@ -71,6 +71,8 @@ export function leadUpdate(): string | undefined {
  */
 export function ownerTyped(text: string) {
   if (text.trim()) heard.owner = { text: text.trim().slice(0, 2000), at: now() }
+  // T-952: the owner's prompt counts as this window being active (lead.json's `active` while it drives)
+  S.activeAt = Date.now()
 }
 
 // ---------------- tools ----------------
@@ -133,7 +135,7 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
   // session; if it still isn't known, answer and write nothing (never a board or lock path from "/").
   if (!(await findRoot(host))) return { result: startingText() }
   if (S.guardOnly) return { result: guardOnlyText() }
-  if (!(await isOn(host))) return { result: S.fresh ? notSetUpAnswer(S.N.name) : S.offHere ? offHereAnswer(S.N.name) : offAnswer(S.N.name) }
+  if (!(await isOn(host))) return { result: S.fresh ? notSetUpAnswer(S.N.name) : S.offHere ? offHereAnswer(S.N.name, S.offWhy, S.driver) : offAnswer(S.N.name) }
   try {
     return { result: await runTool(host, name, input as In) }
   } catch (err) {

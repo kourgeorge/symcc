@@ -21,9 +21,12 @@ export const LEAD_STALE_MS = 3 * 60_000
  * lead.json: the driving `session` and its `heartbeat`. A hand-over the owner asked for (/<name>-drive, T-430) adds
  * `handTo` (the session that asked to drive) and `handAt` (when it asked); the old driver answers on its next
  * heartbeat by writing lead.json for `handTo` with `handFrom` (itself), and the new session then claims it.
+ * T-952: `since` is when the driving session claimed the board (kept across its heartbeats), `active` when its owner
+ * last typed a prompt or its turn last ended; the other windows show both (see core/driver-notice.ts). An older
+ * lead.json has neither.
  */
-export type Lead = { session: string; heartbeat: number; handTo?: string; handAt?: number; handFrom?: string }
-type HandFields = Pick<Lead, 'handTo' | 'handAt' | 'handFrom'>
+export type Lead = { session: string; heartbeat: number; handTo?: string; handAt?: number; handFrom?: string; since?: number; active?: number }
+type HandFields = Pick<Lead, 'handTo' | 'handAt' | 'handFrom' | 'since' | 'active'>
 
 export const leadText = (session: string, heartbeat: number, hand: HandFields = {}) => JSON.stringify({ session, heartbeat, ...hand }) + '\n'
 
@@ -32,10 +35,30 @@ export function parseLead(text: string | null): Lead | null {
   if (!l) return null
   const raw = JSON.parse(text!) as Record<string, unknown>
   const str = (v: unknown) => (typeof v === 'string' && v ? v : undefined)
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
   const handTo = str(raw.handTo)
   const handFrom = str(raw.handFrom)
-  const handAt = typeof raw.handAt === 'number' && Number.isFinite(raw.handAt) ? raw.handAt : undefined
-  return { ...l, ...(handTo ? { handTo, ...(handAt !== undefined ? { handAt } : {}) } : {}), ...(handFrom ? { handFrom } : {}) }
+  const handAt = num(raw.handAt)
+  const since = num(raw.since)
+  const active = num(raw.active)
+  return { ...l, ...(handTo ? { handTo, ...(handAt !== undefined ? { handAt } : {}) } : {}), ...(handFrom ? { handFrom } : {}), ...(since !== undefined ? { since } : {}), ...(active !== undefined ? { active } : {}) }
+}
+
+/** T-952: the driver's own times (`since`, `active`) of lead `l`, to write back unchanged. */
+export const driverTimes = (l: Pick<Lead, 'since' | 'active'> | null | undefined): Pick<Lead, 'since' | 'active'> => ({ ...(l?.since !== undefined ? { since: l.since } : {}), ...(l?.active !== undefined ? { active: l.active } : {}) })
+
+/**
+ * T-952: lead.json written by session `me` on its heartbeat at `nowMs` (it drives): `since` kept from `before` when
+ * `me` already drove (else now: it claims the board now), `active` the newer of what `before` saved for `me` and
+ * `activeAt` (this session's last owner prompt or turn end, as it knows it).
+ */
+export function beatText(before: string | null, me: string, nowMs: number, activeAt?: number | null): string {
+  const l = parseLead(before)
+  const mine = l?.session === me && !l.handFrom ? l : null
+  const since = mine?.since ?? nowMs
+  const kept = l?.session === me ? l.active : undefined
+  const act = [kept, activeAt ?? undefined].filter((x): x is number => typeof x === 'number').reduce<number | undefined>((a, x) => (a === undefined || x > a ? x : a), undefined)
+  return leadText(me, nowMs, { since, ...(act !== undefined ? { active: act } : {}) })
 }
 
 /** Whether a heartbeat is no more than `staleMs` old (and not dated more than that in the future, a broken clock). */
@@ -95,13 +118,13 @@ export function handRequest(text: string | null, me: string, nowMs: number): str
   const l = parseLead(text)
   if (!l) return leadText(me, nowMs)
   const at = l.handTo === me && l.handAt !== undefined ? l.handAt : nowMs
-  return leadText(l.session, l.heartbeat, { handTo: me, handAt: at })
+  return leadText(l.session, l.heartbeat, { ...driverTimes(l), handTo: me, handAt: at })
 }
 
 /** lead.json `text` with any hand-over request dropped (the driver and its heartbeat unchanged). */
 export function noHandRequest(text: string | null): string | null {
   const l = parseLead(text)
-  return l ? leadText(l.session, l.heartbeat) : text
+  return l ? leadText(l.session, l.heartbeat, driverTimes(l)) : text
 }
 
 /** lead.json written by driver `from` when it hands the board to `to` (see whoDrives 'claim'). */

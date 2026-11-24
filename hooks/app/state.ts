@@ -4,6 +4,7 @@
 import type { SymccView, SymccScout, SymccTokens } from '../../types'
 import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type OwnerQuestion, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, useAssistantWord, type OffHere } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
+import type { DriverFacts } from '../core/driver-notice'
 import type { Players } from './voice'
 import type { BranchFacts, TodayTeam } from '../core/live'
 import type { TaskBranchFacts } from '../core/task-branch'
@@ -109,6 +110,10 @@ export const startS = () => ({
   takeoverTold: false,
   /** T-793: when the window with symcc on was first missed (ms), so the take-over line waits out a grace; null while seen */
   missingSince: null as number | null,
+  /** T-952: what lead.json said of the driving window at this window's last look, while another window drives (see seeDriver) */
+  driver: undefined as DriverFacts | undefined,
+  /** T-952: when the owner last typed a prompt here or the lead's turn last ended (saved in lead.json as `active` while this window drives) */
+  activeAt: null as number | null,
   /** the worker roles: the plugin's roles/ with the project's .<name>/roles/ over them (see loadRoles) */
   roles: [] as RoleDef[],
   /** the task kinds: the plugin's kinds/ with the project's .<name>/kinds/ over them (see loadKinds) */
@@ -231,7 +236,7 @@ export async function loadVersion(host: Pick<Host, 'plugin' | 'fs'>) {
 export const toolName = (tool: string): string => S.W.tool(S.N.name, tool)
 
 /** The view as published: SymccView plus the facts the panel's banner shows. */
-export type PaneView = SymccView & Partial<Pick<Board, 'docs_test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'test_minutes' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'scout_findings' | 'tests_with_changes' | 'checker'> & { /** T-808: the board is on and this window is not turned off (not the board's own `enabled`) */ on_here: boolean; /** T-808: the notify choice in use now (not the saved one) */ notify_now: Notify; /** T-793: this window is turned off with /<name>-disable here (enabled is false too) */ off_here: OffHere; /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** the branch checked out now: new tasks merge into it (see homeBranch); T-808: not a task's work branch */ home_branch: string; notify_choices: Notify[]; branch_note: string; /** T-675: the data files close to the 4 MB read limit, in words (also in branch_note) */ size_note: string; git_state: GitState; /** the install step while git is missing */ git_install: string; plan_mode: boolean; /** T-727: the Live tab's Branches figures (app/branches.ts); absent until read, or with no git or no task branch */ branches: BranchFacts; /** T-769: ▍Today's lead, scout and cost figures (app/lead.ts todayTeam); absent until read or when there are none */ today_team: TodayTeam; /** T-761: the task pages' Branch section facts by task id (app/branches.ts's taskBranchesView): the open tasks with a branch and the latest merged ones */ task_branches: Record<string, TaskBranchFacts>; }>
+export type PaneView = SymccView & Partial<Pick<Board, 'docs_test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries' | 'test_minutes' | 'archive_days' | 'archived' | 'archived_done' | 'open_on_start' | 'scout_findings' | 'tests_with_changes' | 'checker'> & { /** T-808: the board is on and this window is not turned off (not the board's own `enabled`) */ on_here: boolean; /** T-808: the notify choice in use now (not the saved one) */ notify_now: Notify; /** T-793: this window is turned off with /<name>-disable here (enabled is false too) */ off_here: OffHere; /** the lead's open questions for the owner (see core/questions.ts), oldest first; absent when none */ questions: OwnerQuestion[]; driving: boolean; /** T-952: what lead.json says of the driving window, while another window drives */ driver: DriverFacts; /** the branch checked out now: new tasks merge into it (see homeBranch); T-808: not a task's work branch */ home_branch: string; notify_choices: Notify[]; branch_note: string; /** T-675: the data files close to the 4 MB read limit, in words (also in branch_note) */ size_note: string; git_state: GitState; /** the install step while git is missing */ git_install: string; plan_mode: boolean; /** T-727: the Live tab's Branches figures (app/branches.ts); absent until read, or with no git or no task branch */ branches: BranchFacts; /** T-769: ▍Today's lead, scout and cost figures (app/lead.ts todayTeam); absent until read or when there are none */ today_team: TodayTeam; /** T-761: the task pages' Branch section facts by task id (app/branches.ts's taskBranchesView): the open tasks with a branch and the latest merged ones */ task_branches: Record<string, TaskBranchFacts>; }>
 
 /** the role files already reported as skipped (file → reason), so the owner and the lead hear it once */
 export const skippedRoles = new Map<string, string>()

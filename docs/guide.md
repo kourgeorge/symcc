@@ -684,8 +684,8 @@ You can also do it yourself:
   (that file's full diff), and `/symcc-mode [paused|review|auto]` (with no word it switches
   between `review` and `auto`; from `paused` it goes to `review`).
 - The status line (the `symcc` line under the prompt) has the board's facts, as plain text:
-  the mode (`⏸ paused`, `⏸ approve merge` or `⏵ auto merge`), who drives (`drives here` or
-  `driven by another session`), the branch, the next scout and when, today's merged tasks
+  the mode (`⏸ paused`, `⏸ approve merge` or `⏵ auto merge`), who drives (`drives here`, or
+  in a window that follows `follows (driver active 3 min ago) · /symcc-drive`), the branch, the next scout and when, today's merged tasks
   and today's cost, e.g.
   `⏵ auto merge · drives here · main · next scout bugs in 38m · today ✓ 58 · $312`.
   It has no task counts and no task ids: the band above the prompt shows the work. It is kept
@@ -806,7 +806,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   stage's icon in color, the id in the accent (orange) color, the stage's name and the time in that stage and the try from
   try 2 on in green, then the title in the normal text color), the next task to start (`○ next up`), then the questions for you
   and the tasks that need you, in the warning color. A session that doesn't drive the board
-  shows `⚠ driven by another session` here too. With nothing running and nothing waiting on
+  shows `⚠ this window follows (driver active 3 min ago); /symcc-drive to drive from here` here too. With nothing running and nothing waiting on
   you, a dim line under the first line says why and what to do next: the first line of the Live
   tab's TASKS section when nothing runs (see the Live tab below). When the band is narrow, the
   summary drops its parts from the end (the mode stays), and a task line cuts its title, then
@@ -2076,12 +2076,20 @@ A stopped worker can't do anything more: symcc refuses every tool it tries to us
 **Several Claude Code windows on the same project?** Only one of them *drives* the
 board (starts workers, merges, runs scouts). The others can see and change the board but
 start nothing. If the driving window closes, another one takes over within a few minutes.
-A window that doesn't drive shows a yellow warning in the board's banner, right under its
-tests/limits line ("⚠ Another session drives. /symcc-drive to drive it from here.", shorter on a
-narrow panel), and "⚠ driven by another session" in the band above the prompt. Like the rest of
-the banner, the warning shows on the list pages only (see the header rule under
-[Live status](#live-status-seeing-the-board)). Its doing tasks say "runs in the other session", and the warning adds
-"it looks idle" when a task has waited over 5 minutes for the driving window to start it.
+A window that doesn't drive (it *follows*) shows a yellow warning in the board's banner, right under its
+tests/limits line, and the same words in the band above the prompt, naming the window that drives:
+
+    ⚠ this window follows (driver started Nov 23 09:26, active 3 min ago); /symcc-drive to drive from here
+
+"started" is when that window began driving; "active" is when its owner last typed a prompt or its
+turn last ended. When that isn't known (an older symcc drives, or OpenCode), it says when the
+driving window last checked in instead ("driver checked in 10 s ago"). It is a live window, not
+stale state: a window that stops checking in loses driving within 3 minutes. On a narrow panel
+"started …" goes first, then the line shortens to `this window follows (driver active 3 min ago) ·
+/symcc-drive`; the status line under the prompt says `follows (driver active 3 min ago) ·
+/symcc-drive`. Like the rest of the banner, the warning shows on the list pages only (see the
+header rule under [Live status](#live-status-seeing-the-board)). Its doing tasks say "runs in the other session", and the warning adds
+"looks idle" when a task has waited over 5 minutes for the driving window to start it.
 To move driving to the window you are in, type `/symcc-drive` there. If another window
 drives, symcc asks it to hand over: within 30 s it stops its workers (the answer says which
 ones), steps down, and your window starts driving and restarts those tasks from their kept
@@ -2090,9 +2098,14 @@ folders and branches. A task stopped this way does not use up a try; its history
 once. If the other window doesn't answer within 3 minutes, yours takes over anyway.
 
 **Only one window with symcc.** A window you open while another live window already has symcc
-on starts with symcc off *here*: it works as plain Claude, the panel does not open, and the band
-says `symcc runs in another window · /symcc-enable`. Type `/symcc-enable` to make it
-a second lead on purpose (driving still follows the one-driver rules above). A window that
+on starts with symcc off *here*: it works as plain Claude, the panel does not open, and the board
+and status line name the window that drives:
+
+    another window drives this board (started Nov 23 09:26, active 3 min ago) · /symcc-drive to drive from here · /symcc-enable to follow it
+
+(on the narrow status line: `another window drives this board (active 3 min ago) · /symcc-drive`).
+The symcc tools answer the same line. Type `/symcc-enable` to make it a second lead on purpose
+that follows the driver (driving still follows the one-driver rules above), or `/symcc-drive` to drive from it. A window that
 crashed and left an old marker does not count: "live" uses the same stale rule as the hand-over.
 If the symcc window closes and only off-here windows remain, none takes over by itself: each says
 once `the symcc window closed · /symcc-enable to take over`, and no worker runs until you do.

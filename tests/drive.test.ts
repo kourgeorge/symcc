@@ -171,7 +171,7 @@ test('/symcc-drive asks the driving session to hand over; it stops its workers o
   S.me = 'b'
   S.driving = false
   expect(await claimLead(w.host)).toBe(true)
-  expect(parseLead(w.files.get(w.lead)!)).toEqual({ session: 'b', heartbeat: parseLead(w.files.get(w.lead)!)!.heartbeat })
+  expect(parseLead(w.files.get(w.lead)!)).toEqual({ session: 'b', heartbeat: parseLead(w.files.get(w.lead)!)!.heartbeat, since: parseLead(w.files.get(w.lead)!)!.heartbeat })
   // the stopped task is not counted again on the claim
   const after = (JSON.parse(w.files.get(`${ROOT}/${S.N.boardFile}`)!) as Board).tasks[0]!
   expect(after.status).toBe('todo')
@@ -187,7 +187,7 @@ test('/symcc-drive in the gap after the old driver handed over (before this hear
   w.files.set(w.lead, handedText('b', 'a', Date.now()))
   expect(await driveHere(w.host)).toBe('This session drives the board now.')
   expect(S.driving).toBe(true)
-  expect(parseLead(w.files.get(w.lead)!)).toEqual({ session: 'b', heartbeat: parseLead(w.files.get(w.lead)!)!.heartbeat })
+  expect(parseLead(w.files.get(w.lead)!)).toEqual({ session: 'b', heartbeat: parseLead(w.files.get(w.lead)!)!.heartbeat, since: parseLead(w.files.get(w.lead)!)!.heartbeat })
 })
 
 test('a hand-over request follows its session after /clear: the new id gets the board', async () => {

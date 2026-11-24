@@ -278,7 +278,8 @@ export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows 
   // "𝄞 symcc", then " · <project>" only when it isn't called symcc too (see bandBrand), then the state
   const brand = bandBrand(f.name)
   // T-643: another session drives: a warning mark right after the brand, so it is never cut off
-  const drive = driveWarning(v.driving ?? false, tasks, nowMs, f.name, 'band')
+  // T-952: it names the driver when there is room; the band's facts keep about 32 columns beside it
+  const drive = driveWarning(v.driving ?? false, tasks, nowMs, f.name, Math.max(24, width - brand.length - 33), v.driver)
   const mark = drive ? ` ${drive}` : ''
   const head = { brand, facts: facts(width - brand.length - mark.length - 1) }
   const headLen = head.brand.length + mark.length + head.facts.length

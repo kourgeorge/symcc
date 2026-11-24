@@ -83,12 +83,12 @@ test('T-643: the terminal panel shows the yellow "another session drives" line w
   const warn = async () => {
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 140 }, surface: 'terminal' })
     // the line's colored part (the outer Text of the line matches too, with no color of its own)
-    const t = (await ui.findAll({ type: 'Text', text: /^⚠ Another session drives/ })).find(x => x.props.color)
+    const t = (await ui.findAll({ type: 'Text', text: /^⚠ this window follows/ })).find(x => x.props.color)
     await ui.unmount()
     return t
   }
   const t = await warn()
-  expect(t?.text).toBe('⚠ Another session drives. /symcc-drive to drive it from here.')
+  expect(t?.text).toBe('⚠ this window follows; /symcc-drive to drive from here')
   expect(t?.props.color).toBe('warning')
   driving = true
   expect(await warn()).toBeUndefined()
@@ -202,7 +202,7 @@ test('T-776: running scouts show on the band\'s first line, and a narrow band dr
     // the needs-you rows come after the work: the question, the review task, then the drive warning
     expect(lines.findIndex(l => /^ ⚠ 1 question for you/.test(l))).toBeGreaterThan(1)
     expect(lines.findIndex(l => /^ ◆ T-6/.test(l))).toBeGreaterThan(lines.findIndex(l => /^ ⚠ 1 question/.test(l)))
-    expect(lines.at(-1)).toMatch(/^ ⚠ driven by another session/)
+    expect(lines.at(-1)).toMatch(/^ ⚠ this window follows/)
     await ui.unmount()
   }
   const tight = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 56 }, surface: 'terminal' })
@@ -244,7 +244,7 @@ test('T-748: the band lists the questions for you and the NEEDS YOU tasks in the
 
 // T-643: a session that doesn't drive: a yellow warning row in the band, and a claimed doing task's row says it runs
 // in the other session (not "starting at the next turn", which never comes here); "it looks idle" after 5 minutes.
-test('T-643: the band of a session that does not drive has a yellow "driven by another session" mark and "runs in the other session" rows', async ($, on) => {
+test('T-643, T-952: the band of a session that does not drive has a yellow "this window follows" mark and "runs in the other session" rows', async ($, on) => {
   const T0 = Date.parse('2026-03-02T10:00:00Z')
   mock.clock(on, { now: T0 })
   const iso = (ms: number) => new Date(ms).toISOString()
@@ -258,9 +258,9 @@ test('T-643: the band of a session that does not drive has a yellow "driven by a
     await ui.unmount()
     return all
   }
-  const mark = (all: Awaited<ReturnType<typeof band>>) => all.find(t => /^ ⚠ driven by another session/.test(String(t.text)))
+  const mark = (all: Awaited<ReturnType<typeof band>>) => all.find(t => /^ ⚠ (this window )?follows/.test(String(t.text)))
   let all = await band()
-  expect(mark(all)?.text).toBe(' ⚠ driven by another session')
+  expect(mark(all)?.text).toBe(' ⚠ this window follows; /symcc-drive to drive from here')
   expect(mark(all)?.props.color).toBe('warning')
   expect(all.some(t => t.text === ' — runs in the other session')).toBe(true)
   expect(all.some(t => /starting at the next turn/.test(String(t.text)))).toBe(false)
@@ -268,7 +268,14 @@ test('T-643: the band of a session that does not drive has a yellow "driven by a
   expect(mark(await band(50))).toBeDefined()
   // claimed 6 minutes ago and still not started there: it looks idle
   v = view(false, 6 * 60_000)
-  expect(mark(await band())?.text).toBe(' ⚠ driven by another session (it looks idle)')
+  expect(mark(await band(120))?.text).toBe(' ⚠ this window follows (the driver looks idle); /symcc-drive to drive from here')
+  // T-952: the view names the driver (from lead.json): when it started and when it was last active; narrow: shorter
+  v = { ...view(false, 60_000), driver: { heartbeat: T0 - 10_000, since: T0 - 9 * 3_600_000, active: T0 - 3 * 60_000 } } as typeof v
+  expect(String(mark(await band(140))?.text)).toMatch(/^ ⚠ this window follows \(driver started \w{3} \d+ \d\d:\d\d, active 3 min ago\); \/symcc-drive to drive from here$/)
+  expect(mark(await band(90))?.text).toBe(' ⚠ this window follows (driver active 3 min ago); /symcc-drive to drive from here')
+  expect(mark(await band(70))?.text).toBe(' ⚠ this window follows (driver active 3 min ago) · /symcc-drive')
+  expect(mark(await band(56))?.text).toBe(' ⚠ follows (driver active 3 min ago) · /symcc-drive')
+  expect(mark(await band(45))?.text).toBe(' ⚠ this window follows · /symcc-drive')
   // the driving session: no mark, and the row keeps its own note
   v = view(true, 60_000)
   all = await band()

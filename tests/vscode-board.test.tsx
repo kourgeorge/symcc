@@ -289,8 +289,8 @@ test('in VS Code the header shows the logo, a short banner and a tab strip with 
 const QUEUED_402 = { ...BOARD_TASKS.find(t => t.id === 'T-402')!, note: 'starting at the next turn', updated_at: new Date(T0 - 6 * 60_000).toISOString() }
 for (const [name, driving, tasks, want] of [
   ['the driving session has no warning line', true, BOARD_TASKS, undefined],
-  ['another session drives: the warning line', false, BOARD_TASKS, '⚠ Another session drives. /symcc-drive to drive it from here.'],
-  ['another session drives and a task waits 6 min to start: "it looks idle"', false, [...BOARD_TASKS.filter(t => t.id !== 'T-402'), QUEUED_402], '⚠ Another session drives, but looks idle. /symcc-drive to drive it from here.'],
+  ['another session drives: the warning line', false, BOARD_TASKS, '⚠ this window follows; /symcc-drive to drive from here'],
+  ['another session drives and a task waits 6 min to start: "it looks idle"', false, [...BOARD_TASKS.filter(t => t.id !== 'T-402'), QUEUED_402], '⚠ this window follows (the driver looks idle); /symcc-drive to drive from here'],
 ] as const)
   test(`T-643: in VS Code ${name}`, async ($, on) => {
     on('ui.toast', () => ({ value: undefined }))

@@ -112,13 +112,13 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
   const d = emptyBoard()
   const name = namesFor(S.N.name)
   const folder = folderName(S.root)
-  const off = v.on_here === false ? offStatusParts(S.N.name, true, v.off_here) : []
+  const off = v.on_here === false ? offStatusParts(S.N.name, true, v.off_here, v.driver, k.nowMs) : []
   const driving = v.driving ?? S.driving
   const cmds = v.test_commands ?? []
   const retries = v.auto_retries ?? d.auto_retries
   const limits = `${v.max_parallel ?? d.max_parallel} at once · ${v.max_minutes ?? d.max_minutes} min · ${retries} ${retries === 1 ? 'retry' : 'retries'}`
   const counts = bannerCounts({ ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: retries, mode }, k.nowMs)
-  const warn = driveWarning(driving, v.tasks ?? [], k.nowMs, S.N.name, 'board')
+  const warn = driveWarning(driving, v.tasks ?? [], k.nowMs, S.N.name, Infinity, v.driver)
   const dot = (key: string) => <Text key={key} color={C('subtle')}> · </Text>
   return [
     <Box key="vs-top" flexDirection="row" gap={1}>

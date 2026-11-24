@@ -232,8 +232,16 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       // T-875: /<name>-enable means "on, in this window"; only disable has a one-window form
       if (cmd.kind === 'enable') return say(await enableHere(host, t => tellLead(host, t)))
       return say(cmd.here ? await disableHere(host) : await setSymcc(host, false))
-    case 'drive':
+    case 'drive': {
+      // T-952: a window that is off only because another window drives (its notice offers /<name>-drive) turns on here
+      // first, then asks to drive; one turned off on purpose (/<name>-disable here) stays off
+      if (S.offHere && S.offWhy !== 'off') {
+        const on = await enableHere(host, t => tellLead(host, t))
+        if (S.offHere) return say(on)
+        return say(`${on}\n\n${await driveHere(host)}`)
+      }
       return say(await driveHere(host))
+    }
     case 'mode': {
       const r = await setBoardMode(host, cmd.mode, 'you')
       noteForLead(`The owner set the board mode to ${cmd.mode}: ${brief(r)}`)

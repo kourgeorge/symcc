@@ -52,7 +52,7 @@ export async function renderAbovePrompt($: $, e: Parameters<AbovePromptHook>[1],
   const summary = bandSummary(v as unknown as BandSummaryView, nowMs, summaryRoom)
   // T-643: another session drives: the warning stays in the band, in the warning color
   const driving = v?.driving ?? S.driving
-  const drive = driveWarning(driving, tasks, nowMs, S.N.name, 'band')
+  const drive = driveWarning(driving, tasks, nowMs, S.N.name, Math.max(1, columns - 1), v?.driver)
   // plan mode: nothing new starts; workers already running keep going (said so)
   const plan = v?.plan_mode ? planBandText(tasks.filter(t => t.status === 'doing').length) : ''
   const since = (id: string) => v?.working?.find(w => w.task === id)?.since

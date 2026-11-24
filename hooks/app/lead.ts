@@ -1,4 +1,4 @@
-import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
+import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, beatText, driverTimes, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
 import { homeBranch } from './git'
 import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, fitView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
@@ -11,6 +11,7 @@ import { haltAll, haltWorkers, dropLeadUpdates, setSymcc } from './board-mode'
 import { stopOrphans } from './cleanup'
 import { branchFacts, taskBranchesView } from './branches'
 import type { StatusView } from '../core/live-text'
+import { type DriverFacts, driverFacts } from '../core/driver-notice'
 
 // ---------------- who drives the board ----------------
 // Only one session (the driver) starts workers, merges, runs scouts and the regular check.
@@ -41,7 +42,8 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
   const [move, leadBefore] = await locked(host, async () => {
     const text = await readLeadText(host)
     const m = whoDrives(text, S.me, Date.now())
-    if (drivesAfter(m)) await writeLead(host, leadText(S.me, Date.now()))
+    // T-952: the heartbeat keeps `since` (when this window claimed the board) and saves `active` (its owner's last prompt or turn end)
+    if (drivesAfter(m)) await writeLead(host, beatText(text, S.me, Date.now(), S.activeAt))
     return [m, text] as const
   })
   // the owner asked another session to drive (/<name>-drive): stop the workers here, then hand lead.json over
@@ -83,8 +85,13 @@ export async function claimLead(host: Host, fresh = false): Promise<boolean> {
     const b = await load(host)
     await haltWorkers(host, 'the task was changed on the board', w => find(b, w.task)?.status !== 'doing')
   }
+  if (!S.driving) seeDriver(leadBefore)
+  else S.driver = undefined
   if (was !== S.driving || fresh) await publish(host, await load(host))
-  else if (!S.driving) await followBoard(host)
+  else if (!S.driving) {
+    await followBoard(host)
+    await showDriver(host)
+  }
   // the heartbeat (every 30 s) also looks whether the banner logo's idle sway is due
   void logoIdle(host).catch(() => undefined)
   return S.driving
@@ -166,7 +173,7 @@ const shortSession = (id: string) => id.slice(0, 8)
  * after that. Answers plainly what happened, with the workers that will be stopped and restarted.
  */
 export async function driveHere(host: Host): Promise<string> {
-  if (S.offHere) return offHereAnswer(S.N.name)
+  if (S.offHere) return offHereAnswer(S.N.name, S.offWhy, S.driver)
   if (handing) return 'This session is handing the board over to another session right now; type it again in a minute.'
   const [ask, text] = await locked(host, async () => {
     const t = await readLeadText(host)
@@ -216,13 +223,15 @@ export async function startOffHere(host: Host) {
   S.missingSince = null
   const b = await load(host).catch(() => null)
   if (!b || b.enabled === false) return
-  const live = liveDriver(await readLeadText(host), Date.now())
+  const text = await readLeadText(host)
+  const live = liveDriver(text, Date.now())
   if (!live || live === S.me) return
   S.offHere = true
   S.offWhy = 'other'
   S.enabledNow = false
   S.sawOther = true
-  host.ui.toast(S.N.toast(`${S.N.name} runs in another window · /${S.N.name}-enable to use it here too`))
+  seeDriver(text)
+  host.ui.toast(S.N.toast(offStatusLine(S.N.name, false, 'other', S.driver, Date.now())))
 }
 
 /** /<name>-disable here: this window works as plain ${S.W.app}; if it drove the board it hands driving over. Answers what happened. */
@@ -331,7 +340,9 @@ export async function offHereBeat(host: Host, nowMs = Date.now()) {
     const l = await readLead(host)
     if (l && l.session === S.me && l.handFrom) await host.run(['rm', '-f', path(S.N.leadFile)])
   }).catch(() => undefined)
-  const live = liveDriver(await readLeadText(host), nowMs)
+  const text = await readLeadText(host)
+  const live = liveDriver(text, nowMs)
+  seeDriver(text)
   const was = S.offWhy
   if (live && live !== S.me) {
     S.sawOther = true
@@ -344,6 +355,7 @@ export async function offHereBeat(host: Host, nowMs = Date.now()) {
     host.ui.toast(S.N.toast(takeoverText()))
   }
   if (S.offWhy !== was) await publish(host, await load(host)).catch(() => undefined)
+  else await showDriver(host)
   // nobody took over: 15 minutes after the take-over line first showed, ONE window (the first to see the time up,
   // under the board lock) plays "needs you"; a live window drops the note
   const other = !!live && live !== S.me
@@ -386,12 +398,12 @@ export async function handOver(host: Host) {
     await locked(host, async () => {
       const l = await readLead(host)
       if (S.driving) {
-        if (!l || l.session === old) await writeLead(host, leadText(S.me, Date.now(), l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}))
+        if (!l || l.session === old) await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...(l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}) }))
         return
       }
       if (!l) return
       // a hand-over this session asked for (/<name>-drive) follows it to the new id, keeping its time
-      if (l.handTo === old) await writeLead(host, leadText(l.session, l.heartbeat, { handTo: S.me, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) }))
+      if (l.handTo === old) await writeLead(host, leadText(l.session, l.heartbeat, { ...driverTimes(l), handTo: S.me, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) }))
       // the board was handed to this session and its heartbeat hasn't claimed it yet: the new id gets it
       else if (l.session === old && l.handFrom) await writeLead(host, handedText(S.me, l.handFrom, l.heartbeat))
     })
@@ -510,7 +522,7 @@ export async function publish(host: Host, b: Board) {
   const team = todayTeam(host, [...scoutState.keys()]).team
   // T-761: each task page's Branch section, read the same way (OpenCode's panel draws only what the view holds)
   const task_branches = taskBranchesView(host, b).facts
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s)), mode: modeOf(b), test_commands: b.test_commands, ...(b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}), home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify_now: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...(S.offHere ? { off_here: S.offWhy } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, ...(S.gitInstall ? { git_install: S.gitInstall } : {}), plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s)), mode: modeOf(b), test_commands: b.test_commands, ...(b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}), home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify_now: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...(!S.driving && S.driver ? { driver: S.driver } : {}), ...(S.offHere ? { off_here: S.offWhy } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, ...(S.gitInstall ? { git_install: S.gitInstall } : {}), plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
   // T-891: the view as it is stored (trimmed by slimView), worked out once here and written as it is: the owner is
   // told when trimming had to leave tasks out of the panel
   const fit = fitView(host, v)
@@ -526,6 +538,7 @@ export async function publish(host: Host, b: Board) {
     }
   }
   await updateView(host, () => fit.view, fit.fitted)
+  shownDriver = v.driver
   // the banner logo plays a move when something happened (a merge, a worker start, a scout finding, all done)
   void logoOnPublish(host, v).catch(() => undefined)
   // the status line under the prompt: the board's facts (mode, who drives, branch, next scout, today's merged and cost),
@@ -533,7 +546,7 @@ export async function publish(host: Host, b: Board) {
   // Disabled: "disabled · /symcc-enable to turn it back on" without the name, as Claude Code puts "symcc: " in front; its status line
   // takes plain text only (no colors), so the command can't stand out there.
   const facts = { tasks: b.tasks, questions: b.questions, scouts: v.scouts, home_branch: branch, branch_note, mode: modeOf(b) }
-  showStatus(host, () => (onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name) }) : offStatusLine(S.N.name, false, S.offHere ? S.offWhy : S.fresh ? 'new' : false)))
+  showStatus(host, () => (onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name), ...(!S.driving && S.driver ? { driver: S.driver } : {}) }) : offStatusLine(S.N.name, false, S.offHere ? S.offWhy : S.fresh ? 'new' : false, S.driver, Date.now(), statusRoom(S.N.name))))
 }
 
 /** T-902: what /<name>-status draws for board `b`: the Live tab's fields of the view publish() writes, from the same
@@ -553,6 +566,34 @@ function showStatus(host: Host, text: () => string | undefined) {
   statusText = text
   if (host.features.band) host.ui.status(text())
 }
+// ---------------- the driving window, as other windows show it (T-952) ----------------
+
+/** S.driver from lead.json `text`: the driving window's facts (heartbeat, since, active), undefined when this window drives or nobody does. */
+function seeDriver(text: string | null) {
+  const l = parseLead(text)
+  S.driver = l && l.session !== S.me && !S.driving ? driverFacts(l) : undefined
+}
+
+/** The driver facts in the view as last written (publish or showDriver). */
+let shownDriver: DriverFacts | undefined
+/** With no `active` saved, the view's heartbeat is written again once it is this much older than lead.json's, so "checked in … ago" stays near the truth. */
+const BEAT_SHOWN_MS = 60_000
+
+/** On a heartbeat of a window that doesn't drive: the status line is drawn again (its "active … ago" counts on), and the
+ *  view's driver facts are written again when they changed (a new driver, a new `active`, or an old heartbeat age). */
+async function showDriver(host: Host) {
+  refreshStatus(host)
+  const d = S.driver
+  const old = shownDriver
+  const same = d?.since === old?.since && d?.active === old?.active && (d?.active !== undefined || !d || !old || d.heartbeat - old.heartbeat < BEAT_SHOWN_MS)
+  if (same && !!d === !!old) return
+  shownDriver = d
+  await updateView(host, v => {
+    const { driver: _, ...rest } = v as PaneView
+    return (d ? { ...rest, driver: d } : rest) as typeof v
+  })
+}
+
 /** Draws the line above the prompt again, so "next: x in 38m" counts down (scouts.ts calls it every minute). */
 export function refreshStatus(host: Host) {
   if (statusText && host.features.band) host.ui.status(statusText())

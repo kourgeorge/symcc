@@ -481,10 +481,10 @@ test('the banner: the clef drawing beside the name, where, who drives and the se
     `${a0}symcc board · symcc · ⏸ paused: nothing starts`,
     `${a1}~/repositories/symcc · main · driven by another session`,
     `${a2}no test command · 3 at once · 45 min · 1 retry`,
-    `${a3}⚠ Another session drives. /symcc-drive to drive it from here.`,
+    `${a3}⚠ this window follows; /symcc-drive to drive from here`,
     '2 doing · 1 to do · 1 done',
   ])
-  expect(more[3]!.parts).toEqual([{ text: '⚠ Another session drives. /symcc-drive to drive it from here.', tone: 'warning' }])
+  expect(more[3]!.parts).toEqual([{ text: '⚠ this window follows; /symcc-drive to drive from here', tone: 'warning' }])
   // no all-time total of the tries on the counts line (T-630): /symcc-stats has it
   expect(more.map(bannerText).join('\n')).not.toMatch(/tokens|8m/)
   expect(more[2]!.parts[0]).toEqual({ text: 'no test command', tone: 'warning' })
@@ -920,7 +920,7 @@ test('T-748: the status line says the mode, who drives, the branch, the next sco
   const line = statusLine(b, true, { nowMs: now })!
   for (const gone of [/T-\d/, /doing/, /to do/, /\d+ done/, /scouts/, /workers/, /try/]) expect(line).not.toMatch(gone)
   // another session drives; a scout running now; a small cost to the cent
-  expect(statusLine({ ...b, scouts: [{ ...scouts[0]!, running: true }], tasks: [merged('T-1')].map(t => ({ ...t, runs: [usedRun({ started: t.runs[0]!.started, ended: t.runs[0]!.ended }, undefined, 4.2)] })) }, false, { nowMs: now })).toBe('⏵ auto merge · driven by another session · main · scout bugs running · today ✓ 1 · $4.20')
+  expect(statusLine({ ...b, scouts: [{ ...scouts[0]!, running: true }], tasks: [merged('T-1')].map(t => ({ ...t, runs: [usedRun({ started: t.runs[0]!.started, ended: t.runs[0]!.ended }, undefined, 4.2)] })) }, false, { nowMs: now })).toBe('⏵ auto merge · this window follows; /symcc-drive to drive from here · main · scout bugs running · today ✓ 1 · $4.20')
   // a branch warning goes where the branch is
   expect(statusLine({ ...b, branch_note: 'on dev, not main' }, true, { nowMs: now })).toBe('⏵ auto merge · on dev, not main · drives here · main · next scout bugs in 38m · today ✓ 2 · $312')
   // paused and plan mode: no next scout (none starts)
@@ -931,7 +931,7 @@ test('T-748: the status line says the mode, who drives, the branch, the next sco
   // a fresh project (empty board, auto, no scouts) stays quiet; any other mode says it
   expect(statusLine({ tasks: [], home_branch: 'main' }, true, { nowMs: now })).toBeUndefined()
   expect(statusLine({ tasks: [], home_branch: 'main', mode: 'review' }, true, { nowMs: now })).toBe('⏸ approve merge · drives here · main')
-  expect(statusLine({ tasks: [], home_branch: 'main' }, false, { nowMs: now })).toBe('⏵ auto merge · driven by another session · main')
+  expect(statusLine({ tasks: [], home_branch: 'main' }, false, { nowMs: now })).toBe('⏵ auto merge · this window follows; /symcc-drive to drive from here · main')
   // no "<name> board" and no folder name
   expect(line).not.toContain(namesFor(DEFAULT_NAME).boardName)
   expect(line).not.toContain(DEFAULT_NAME)

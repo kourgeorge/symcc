@@ -16,6 +16,7 @@ import { type PhaseStage, type TaskPhase, taskPhase } from './phase'
 import { whyFailed } from './failure'
 import { CLAIM_NOTES, sessionNote, shownNote, STATUS_MARK } from './details'
 import { newestFirst, offStatusParts, testsShort, type OffHere } from './settings'
+import { type DriverFacts, fitForm, followForms, noticeText } from './driver-notice'
 import { type OwnerQuestion, askText, openQuestions, questionLine, questionsLabel } from './questions'
 import { needsYou } from './commands'
 import { fmtCost } from './runs'
@@ -225,24 +226,15 @@ export function driverLooksIdle(tasks: readonly DriveTask[], nowMs: number): boo
 }
 
 /**
- * The warning a session that doesn't drive the board shows, '' when it drives. `where` 'board': the line under the
- * board's banner, right under its tests/limits line, the longest form that fits in `width` ("⚠ Another session drives.
- * /symcc-drive to drive it from here."); 'band': the short mark at the start of the band above the prompt
- * ("⚠ driven by another session"). Both add that the driver looks idle when driverLooksIdle says so.
+ * The warning a window that follows (symcc on here, another window drives the board) shows, '' when it drives: the
+ * line under the board's banner (right under its tests/limits line) and the band's warning row (T-952, the same words
+ * on both, see core/driver-notice.ts followForms): "⚠ this window follows (driver started Nov 23 09:26, active 3 min
+ * ago); /symcc-drive to drive from here", the longest form that fits in `width`. `driver`: what lead.json says of the
+ * driving window (none known: no brackets). Says that the driver looks idle when driverLooksIdle says so.
  */
-export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowMs: number, name: string = DEFAULT_NAME, where: 'board' | 'band' = 'board', width = Infinity): string {
+export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowMs: number, name: string = DEFAULT_NAME, width = Infinity, driver?: DriverFacts): string {
   if (driving) return ''
-  const idle = driverLooksIdle(tasks, nowMs)
-  if (where === 'band') return `⚠ driven by another session${idle ? ' (it looks idle)' : ''}`
-  const cmd = `/${namesFor(name).name}-drive`
-  const who = `Another session drives${idle ? ', but looks idle' : ''}`
-  const forms = [
-    `⚠ ${who}. ${cmd} to drive it from here.`,
-    `⚠ ${who}. ${cmd} to take over.`,
-    `⚠ Other session drives${idle ? ' (idle?)' : ''} · ${cmd}`,
-    `⚠ ${cmd} to drive here`,
-  ]
-  return forms.find(f => f.length <= width) ?? forms[forms.length - 1]!
+  return `⚠ ${noticeText(fitForm(followForms(namesFor(name).name, driver, nowMs, driverLooksIdle(tasks, nowMs)), width, '⚠ '))}`
 }
 
 /**
@@ -292,7 +284,7 @@ export type StatusBoard = {
 /**
  * The status line Claude Code shows under the prompt after "symcc" (T-748): the board's facts, plain text (Claude
  * Code's status line can't show colors), never the task counts or ids (the band above the prompt shows the work):
- * the mode ("⏵ auto merge", "⏸ approve merge", "⏸ paused"), who drives ("drives here" / "driven by another session"), the
+ * the mode ("⏵ auto merge", "⏸ approve merge", "⏸ paused"), who drives ("drives here" / the follow notice naming the driver, T-952), the
  * branch, the next scout and when ("next scout bugs in 38m"), today's merged count ("today ✓ 58") and today's cost
  * ("$312"), e.g. "⏵ auto merge · drives here · main · next scout bugs in 38m · today ✓ 58 · $312". In plan mode
  * PLAN_NOTE comes first. A `branch_note` warning (git, or the T-675 file-size warning) comes right after the mode and
@@ -302,15 +294,17 @@ export type StatusBoard = {
  * branch); the mode, the branch note and who drives always stay. undefined for a fresh project: an empty board this session drives, in mode auto, with
  * no scouts, no question and no branch note.
  */
-export function statusLine(b: StatusBoard, driving: boolean, o: { plan?: boolean; nowMs?: number; width?: number; offsetMin?: number } = {}): string | undefined {
+export function statusLine(b: StatusBoard, driving: boolean, o: { plan?: boolean; nowMs?: number; width?: number; offsetMin?: number; driver?: DriverFacts } = {}): string | undefined {
   const nowMs = o.nowMs ?? Date.now()
   const width = o.width ?? Infinity
   const m = modeOf({ mode: b.mode })
   const scouts = b.scouts ?? []
   const needs = openQuestions(b).length > 0 || b.tasks.some(t => needsYou(t as Parameters<typeof needsYou>[0], nowMs))
   if (!b.tasks.length && !scouts.length && !needs && m === 'auto' && driving && !o.plan && !b.branch_note) return undefined
-  const drive = driving ? 'drives here' : driveWarning(false, b.tasks, nowMs, DEFAULT_NAME, 'band').replace(/^⚠ /, '')
   const head = [o.plan ? PLAN_NOTE : '', modeLabel(m)].filter(Boolean)
+  // T-952: a following window names the driver, in the longest form that fits beside the mode (and the branch note's short form)
+  const before = [...head, b.branch_note ? shortSizeWarns(b.branch_note) : ''].filter(Boolean).join(' · ')
+  const drive = driving ? 'drives here' : noticeText(fitForm(followForms(DEFAULT_NAME, o.driver, nowMs, driverLooksIdle(b.tasks, nowMs)), width, before ? `${before} · ` : ''))
   const fits = (note: string) => [...head, note, drive].join(' · ').length <= width
   let note = b.branch_note ? (fits(b.branch_note) ? b.branch_note : shortSizeWarns(b.branch_note)) : ''
   // safety net: a note still too wide is cut to fit with "…", so the line never goes past the width (statusRoom);
@@ -347,7 +341,7 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
 /** `branch`: the branch checked out in the project now (new tasks merge into it); `branch_note`: a warning (e.g. no git), shown in place of it.
  *  `enabled` false (symcc disabled) or `mode` 'paused' puts a warning on the first line, after the name. */
-export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; home_branch?: string; branch_note?: string; mode?: SymccMode; on_here?: boolean; off_here?: OffHere }
+export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; home_branch?: string; branch_note?: string; mode?: SymccMode; on_here?: boolean; off_here?: OffHere; /** T-952: the driving window (from lead.json) when this one doesn't drive */ driver?: DriverFacts }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask, 'live'>)[], order: SymccStatus[], nowMs: number = Date.now()): string[] {
@@ -406,7 +400,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   // disabled: "symcc is disabled · /symcc-enable to turn it back on", the command in the accent color (bold) so it stands out
   const off: BannerPart[] =
     b.on_here === false
-      ? offStatusParts(name, true, b.off_here).map(p => (p.command ? { text: p.text, tone: 'accent' as const, bold: true } : { text: p.text, tone: 'warning' as const }))
+      ? offStatusParts(name, true, b.off_here, b.driver, nowMs ?? Date.now(), Math.max(20, width - textWidth(`${namesFor(name).name}${versionMark(version)} · ${folder} · `) - (width >= BANNER_NARROW && logo[0] !== undefined ? logo[0].length + 1 : 0))).map(p => (p.command ? { text: p.text, tone: 'accent' as const, bold: true } : { text: p.text, tone: 'warning' as const }))
       : b.mode && modeOf({ mode: b.mode }) === 'paused'
         ? [{ text: `${modeLabel('paused')}: nothing starts`, tone: 'warning' }]
         : []
@@ -438,7 +432,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   const wide = w >= BANNER_NARROW
   // T-643/T-694: a session that doesn't drive says so in the warning color right under the tests/limits line, with how to take over
   const room4 = w - (wide && logo[3] !== undefined ? logo[3].length + 1 : 0)
-  const warn = driveWarning(driving, b.tasks, nowMs ?? Date.now(), name, 'board', room4)
+  const warn = driveWarning(driving, b.tasks, nowMs ?? Date.now(), name, room4, b.driver)
   if (warn) texts.push([{ text: warn, tone: 'warning' }])
   // The fixed lines sit beside the drawing; the drawing's lower lines (the clef's hook) stand alone when nothing
   // is beside them, and the counts line goes under the drawing, from the left edge, so it keeps the full width.
