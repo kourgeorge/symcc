@@ -749,7 +749,7 @@ export const segText = (xs: readonly LiveSeg[]): string => xs.map(x => x.text).j
  *    "× median", then the kind, then ⌀, then ⏱ (never before the tokens); never cut. A running worker's tokens are known
  *    only at its hand-back: until then the earlier tries' sum with " + …", or "⌀ at hand-back".
  */
-export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; frame: number; steady?: boolean }): [LiveSeg[], LiveSeg[]] {
+export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; frame: number; steady?: boolean; noTime?: boolean }): [LiveSeg[], LiveSeg[]] {
   const sep = ' '.repeat(l.sep)
   const track: LiveSeg[] = []
   const done = !!lane.done
@@ -789,7 +789,7 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
     lane.tokens === undefined
       ? done ? [] : [{ text: `${TOKEN_SIGN} at hand-back`, tone: 'dim' }]
       : segs({ text: fmtTok(lane.tokens), tone: 'text' }, lane.more && { text: ' + …', tone: 'dim' }, withMedian && median)
-  const time: LiveSeg[] = lane.activeMs ? [{ text: `⏱ ${rowDuration(lane.activeMs)}`, tone: 'dim' }] : []
+  const time: LiveSeg[] = lane.activeMs && !o.noTime ? [{ text: `⏱ ${rowDuration(lane.activeMs)}`, tone: 'dim' }] : []
   // T-931: the tokens by agent kind together in ‹ ›, without ⌀ ("<worker 2.1M · checker 380.9k>"); none when no split
   const agents = [lane.workerTokens && `worker ${fmtTokens(lane.workerTokens)}`, lane.checkerTokens && `checker ${fmtTokens(lane.checkerTokens)}`].filter((x): x is string => !!x)
   const split: LiveSeg[] = agents.length ? [{ text: agents.join(' · '), tone: 'dim' }] : []

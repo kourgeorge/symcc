@@ -745,18 +745,26 @@ for (const bodyColumns of [40, 64, 100])
 // T-1017: a running VS Code lane has a third dim line, core's numbers line with the task type at the right end
 for (const bodyColumns of [40, 64, 100])
   test(`T-1017: VS Code lanes have a third line with the tokens and the task type, never wider than the panel (${bodyColumns} columns)`, async ($, on) => {
-    seedBoard(on, { view: liveView(TRAINS) })
+    seedBoard(on, { view: liveView(TRAINS.map(x => (x.id === 'T-712' ? { ...x, kind: 'bug' } : x.id === 'T-690' ? { ...x, kind: 'feature' } : x))) })
     on('ui.toast', () => ({ value: undefined }))
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
     await ui.press({ key: 'tab-live' })
     const inner = liveInner(bodyColumns)
-    const row = await ui.find({ key: 'live-numbers:T-712' })
-    const text = String(row?.text ?? '')
-    expect(text).toContain('⌀')
-    if (bodyColumns >= 64) expect(text).toContain('try 1/')
-    expect(textWidth(text) + 2).toBeLessThanOrEqual(inner)
-    // the type at the right end (when the row has room), and no Text of only spaces
-    if (bodyColumns >= 64) expect(text.trimEnd()).toMatch(/\S+$/)
+    // T-690 has real tokens (worker 1.4M); the type word ends every row, at the same right edge, with no " · " before it
+    const rows = []
+    for (const id of ['T-712', 'T-690']) rows.push(String((await ui.find({ key: `live-numbers:${id}` }))?.text ?? ''))
+    for (const [i, text] of rows.entries()) {
+      const word = i ? 'feature' : 'bug'
+      // the long line of T-690 has no room for its type at 40 columns (the meta text keeps priority)
+      if (i && bodyColumns < 64) continue
+      expect([bodyColumns, text]).toEqual([bodyColumns, text.endsWith(word) ? text : word])
+      expect(text).not.toMatch(/ · +\S+$/)
+      expect(textWidth(text) + 2).toBeLessThanOrEqual(inner)
+    }
+    if (bodyColumns >= 64) expect(textWidth(rows[0]!)).toBe(textWidth(rows[1]!))
+    expect(rows[1]).toContain('1.4M')
+    expect(rows[1]).not.toContain('⏱')
+    if (bodyColumns >= 64) expect(rows[1]).toContain('try 2/')
     const pieces = (await ui.findAll({ type: 'Text' })).filter(t => String(t.text ?? '').length > 0 && !String(t.text).trim())
     expect(pieces).toEqual([])
     await ui.press({ key: 'tab-tasks' })

@@ -249,16 +249,11 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
     )
   })
   // T-1017: a running lane's third line: core's numbers line (laneLines' second line, with the task type at the right end)
-  // worked out for the room under the title; dim, indented like line 2; the ⏱ time is dropped when line 2 shows it
+  // worked out for the room under the title; dim, indented like line 2; built without the ⏱ time (line 2 shows the time)
   const numbersLayout = liveLayout(lanes, stations, inner - TRACK_INDENT)
   const numbersLine = (lane: LiveLane) => {
-    const [, second] = laneLines(lane, numbersLayout, { nowMs, frame: 0, steady: true })
-    const when = laneRight(lane, nowMs, TIME_W).trim()
+    const [, second] = laneLines(lane, numbersLayout, { nowMs, frame: 0, steady: true, noTime: true })
     let xs = second.map(s => ({ ...s }))
-    const at = xs.findIndex(s => s.text.trim() === `⏱ ${when}`)
-    if (at >= 0) xs.splice(at, 1)
-    // a separator left at the start or doubled by the removal
-    xs = xs.filter((s, i) => !(s.text === ' · ' && (i === 0 || xs[i - 1]!.text === ' · ' || i === xs.length - 1)))
     const first = xs.findIndex(s => s.text.trim())
     xs = xs.map((s, i) => (i === first ? { ...s, text: s.text.replace(/^\s+/, '') } : s)).filter(s => s.text)
     if (!xs.some(s => s.text.trim())) return null
