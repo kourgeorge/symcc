@@ -2,15 +2,19 @@
 // registers (hooks/claude/registration.ts): the lead's tools (TOOLS, hooks/app/tools.ts) as Copilot tools named as the
 // host's words say ("symcc_board", skipPermission: they only touch symcc's board), run through symcc's toolCall; the
 // slash commands (COMMANDS, hooks/app/symcc.ts) run through runCommand. Nothing is decided here that Claude Code's
-// wiring doesn't decide too. The workers' question tool (ask_owner) comes with the agents, in a later task.
+// wiring doesn't decide too. symcc's agents (agents.ts, T-959) get their own few tools in their own sessions
+// (copilotAgentTools: a worker ask_owner, a scout or checker board and stats), bound to their agent id.
 // A call from one of Copilot's own sub-agents (invocation.agentId) is passed on with that id, so toolCall refuses it
 // the lead's tools (T-525), as for OpenCode's own subagents.
 // A command's answer only for the owner (the text board, the help) is a line in the chat timeline (session.log); any
 // other is sent to the lead as a prompt it answers (enqueue), as Claude Code does with a command's text.
 // The lead's guide comes with each prompt (onUserPromptSubmitted's additionalContext), read every time, so
 // /symcc-disable counts from the next message, as Claude Code's prompt.compose does.
-import type { Host } from '../host'
+import type { Host, HostAgentKind } from '../host'
 import { TOOLS } from '../app/tools'
+import { ASK_TOOL_DEF } from '../app/ask'
+import { ASK_TOOL } from '../core/ask'
+import { SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL } from '../core/scouts'
 import { COMMANDS, runCommand, toolCall, toolCallFailed, leadGuideText, ownerTyped, type CommandAnswer } from '../app/symcc'
 import { S, useName, toolName } from '../app/state'
 import type { CpCommand, CpHooks, CpSession, CpTool } from './sdk'
@@ -37,6 +41,41 @@ export function copilotTools(host: Host): CpTool[] {
       return r.result
     },
   }))
+}
+
+/** The symcc tools (plain names) an agent of `kind` is offered, as in Claude Code: a worker ask_owner, a checker board and stats, a scout those and scouts. */
+export function agentToolNames(kind: HostAgentKind): string[] {
+  if (kind === 'worker') return [ASK_TOOL]
+  return kind === 'scout' ? [...SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL] : [...SCOUT_BOARD_TOOLS]
+}
+
+/**
+ * T-959: the symcc tools of agent session `agentId()` (an agent of `kind`): only those agentToolNames gives. Each runs
+ * symcc's toolCall with the agent's id, so a stopped agent is refused, a scout's or checker's call that changes the
+ * board is refused, and a worker's question goes on the board as its own; a lead tool is refused anyway (T-525).
+ * `agentId` answers undefined until the session's id is known: a call before that is refused.
+ */
+export function copilotAgentTools(host: Host, kind: HostAgentKind, agentId: () => string | undefined): CpTool[] {
+  useName(host)
+  const all = [...TOOLS(), ASK_TOOL_DEF()]
+  return agentToolNames(kind)
+    .flatMap(n => all.filter(t => t.name === n))
+    .map(t => ({
+      name: toolName(t.name),
+      description: t.description,
+      parameters: { ...t.inputSchema },
+      skipPermission: true,
+      async handler(args) {
+        useName(host)
+        const name = toolName(t.name)
+        const id = agentId()
+        if (!id) return { textResultForLlm: `${S.N.name} has not started this agent yet`, resultType: 'failure' as const, error: 'not started' }
+        const r = await toolCall(host, name, id, argsOf(args)).catch((err: Error) => toolCallFailed(host, name, id, { kind: 'error', message: err?.message ?? String(err) }))
+        if (!r) return { textResultForLlm: `${S.N.name} has no tool ${name}`, resultType: 'failure' as const, error: `no tool ${name}` }
+        if ('deny' in r) return { textResultForLlm: r.deny, resultType: 'failure' as const, error: r.deny }
+        return r.result
+      },
+    }))
 }
 
 /**
