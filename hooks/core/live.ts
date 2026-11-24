@@ -749,7 +749,7 @@ export const segText = (xs: readonly LiveSeg[]): string => xs.map(x => x.text).j
  *    "× median", then the kind, then ⌀, then ⏱ (never before the tokens); never cut. A running worker's tokens are known
  *    only at its hand-back: until then the earlier tries' sum with " + …", or "⌀ at hand-back".
  */
-export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; frame: number; steady?: boolean; noTime?: boolean }): [LiveSeg[], LiveSeg[]] {
+export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; frame: number; steady?: boolean; noTime?: boolean; noKind?: boolean }): [LiveSeg[], LiveSeg[]] {
   const sep = ' '.repeat(l.sep)
   const track: LiveSeg[] = []
   const done = !!lane.done
@@ -809,7 +809,7 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
     return [...xs, { text: ' '.repeat(gap) + lane.kind, tone: 'dim' as const }]
   }
   // each level with the kind, then without it, before a part of the meta text goes
-  const tries: LiveSeg[][] = [4, 3, 2, 1, 0].flatMap(n => [withKind(line(n)), line(n)])
+  const tries: LiveSeg[][] = [4, 3, 2, 1, 0].flatMap(n => (o.noKind ? [line(n)] : [withKind(line(n)), line(n)]))
   tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
   const second = tries.find(fits) ?? tries[tries.length - 1]!
   // T-771: a finished lane's second line is dim throughout

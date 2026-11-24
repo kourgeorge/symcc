@@ -248,18 +248,29 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       </Box>
     )
   })
-  // T-1017: a running lane's third line: core's numbers line (laneLines' second line, with the task type at the right end)
-  // worked out for the room under the title; dim, indented like line 2; built without the ⏱ time (line 2 shows the time)
+  // T-1017: a running lane's third line: core's numbers line (laneLines' second line, built without the time and the kind),
+  // dim, indented like line 2; the task type is its own cell at the right end, under line 2's time. The kind keeps its room;
+  // it is dropped only when even "try 1/3" does not fit beside it.
   const numbersLayout = liveLayout(lanes, stations, inner - TRACK_INDENT)
   const numbersLine = (lane: LiveLane) => {
-    const [, second] = laneLines(lane, numbersLayout, { nowMs, frame: 0, steady: true, noTime: true })
-    let xs = second.map(s => ({ ...s }))
-    const first = xs.findIndex(s => s.text.trim())
-    xs = xs.map((s, i) => (i === first ? { ...s, text: s.text.replace(/^\s+/, '') } : s)).filter(s => s.text)
-    if (!xs.some(s => s.text.trim())) return null
+    const kindW = lane.kind ? textWidth(lane.kind) + 1 : 0
+    const lineFor = (room: number) => {
+      const [, second] = laneLines(lane, { ...numbersLayout, width: room + 2 }, { nowMs, frame: 0, steady: true, noTime: true, noKind: true })
+      const xs = second.map(s => ({ ...s }))
+      const first = xs.findIndex(s => s.text.trim())
+      const ys = xs.map((s, i) => (i === first ? { ...s, text: s.text.replace(/^\s+/, '') } : s)).filter(s => s.text)
+      return ys.some(s => s.text.trim()) && textWidth(segText(ys)) <= room ? ys : null
+    }
+    const full = inner - TRACK_INDENT
+    const withKind = kindW ? lineFor(full - kindW) : null
+    const xs = withKind ?? lineFor(full)
+    if (!xs) return null
     return (
       <Box key={`live-numbers:${lane.id}`} flexDirection="row" paddingLeft={TRACK_INDENT}>
-        {xs.map(s => <Text tabular wrap="truncate" color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}
+        <Box key={`live-numbers-text:${lane.id}`} flexDirection="row" flexGrow={1} flexShrink={1}>
+          {xs.map(s => <Text tabular wrap="truncate" color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}
+        </Box>
+        {withKind ? <Box key={`live-kind:${lane.id}`} flexDirection="row" justifyContent="flex-end"><Text tabular color={C('inactive')}>{lane.kind}</Text></Box> : null}
       </Box>
     )
   }

@@ -750,21 +750,20 @@ for (const bodyColumns of [40, 64, 100])
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
     await ui.press({ key: 'tab-live' })
     const inner = liveInner(bodyColumns)
-    // T-690 has real tokens (worker 1.4M); the type word ends every row, at the same right edge, with no " · " before it
-    const rows = []
-    for (const id of ['T-712', 'T-690']) rows.push(String((await ui.find({ key: `live-numbers:${id}` }))?.text ?? ''))
-    for (const [i, text] of rows.entries()) {
-      const word = i ? 'feature' : 'bug'
-      // the long line of T-690 has no room for its type at 40 columns (the meta text keeps priority)
-      if (i && bodyColumns < 64) continue
-      expect([bodyColumns, text]).toEqual([bodyColumns, text.endsWith(word) ? text : word])
-      expect(text).not.toMatch(/ · +\S+$/)
-      expect(textWidth(text) + 2).toBeLessThanOrEqual(inner)
+    // T-690 has real tokens (worker 1.4M); the type word is its own right-hand cell (the numbers text has no kind, no time)
+    for (const [id, word] of [['T-712', 'bug'], ['T-690', 'feature']] as const) {
+      const text = String((await ui.find({ key: `live-numbers-text:${id}` }))?.text ?? '')
+      const kind = await ui.find({ key: `live-kind:${id}` })
+      expect([bodyColumns, id, String(kind?.text)]).toEqual([bodyColumns, id, word])
+      expect(textWidth(text) + 2 + textWidth(word)).toBeLessThanOrEqual(inner)
+      expect(text).not.toContain('⏱')
+      expect(text).not.toContain(word)
+      expect(text).toContain('try ')
+      if (id === 'T-690') {
+        expect(text).toContain('1.4M')
+        if (bodyColumns >= 64) expect(text).toContain('worker 1.4M')
+      }
     }
-    if (bodyColumns >= 64) expect(textWidth(rows[0]!)).toBe(textWidth(rows[1]!))
-    expect(rows[1]).toContain('1.4M')
-    expect(rows[1]).not.toContain('⏱')
-    if (bodyColumns >= 64) expect(rows[1]).toContain('try 2/')
     const pieces = (await ui.findAll({ type: 'Text' })).filter(t => String(t.text ?? '').length > 0 && !String(t.text).trim())
     expect(pieces).toEqual([])
     await ui.press({ key: 'tab-tasks' })

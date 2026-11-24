@@ -1459,11 +1459,11 @@ unchanged.
   - **Status**: one row each. Mode (`⏵ auto merge · agents 0/3 busy`, with `change` as a link
     that switches the mode), Scouts (the running ones, a link to the Scouts tab; "none running"
     otherwise), Branch (and which window drives), Tests (short, then the time limit and retries).
-  - **Tasks**: what needs you first, then the running lanes, **two lines each**: the mark
+  - **Tasks**: what needs you first, then the running lanes, **three lines each**: the mark
     (`▶`, or `✓` for a just-merged one), the id (a link that opens the task) and the whole title
     (cut with `…` only when the panel is too narrow), then, indented under the title, the train
     drawn with real lines and the time at the right (`3m`, `#2` in the queue, `merged 3m ago`). `try 2 · 3m` shows the try
-    only when it is above 1. The station names ("work check queue tests done", with "you" when
+    only when it is above 1. Under it a dim numbers line (`try 1/3 · ⌀ 2.7M (1.4×median) · worker 2.7M`, as in the terminal, without the time) with the task type at the right end, lined up with the time; the type is dropped when the row is too narrow. The station names ("work check queue tests done", with "you" when
     a task waits for you) are drawn once above all the lanes, so every train lines up under
     them. There is no legend line. A waiting task hangs under its lane as one line. When nothing
     runs it says why; when all is done: "✓ All done · last merged T-93 20h ago", then **Up next
