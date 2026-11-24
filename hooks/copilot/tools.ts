@@ -40,18 +40,36 @@ export function copilotTools(host: Host): CpTool[] {
 }
 
 /**
+ * The commands Copilot registers: COMMANDS for the host's features, plus /<name>-board, which runs /<name> (the board
+ * as text) where there is no panel. Without a panel COMMANDS leaves /<name>-board out (OpenCode's terminal part adds its
+ * own), but symcc's texts point at it (the /<name>-tasks and /<name>-status answers), so Copilot has it too; and
+ * /<name>'s description doesn't send the owner to a panel Copilot doesn't have. `runs`: the command runCommand runs.
+ */
+export function copilotCommandList(host: Host): { name: string; description: string; runs: string }[] {
+  const list = COMMANDS(host.features).map(c => ({ name: c.name, description: c.description, runs: c.name }))
+  if (host.features.panel) return list
+  const board = `${S.N.name}-board`
+  const main = list.find(c => c.name === S.N.name)
+  if (main) main.description = `Show the ${S.N.name} board as text in the chat: tasks and scouts`
+  // in COMMANDS' place for it: after /<name>-status
+  const at = list.findIndex(c => c.name === `${S.N.name}-status`)
+  if (!list.some(c => c.name === board)) list.splice(at < 0 ? list.length : at + 1, 0, { name: board, description: `Show the ${S.N.name} board as text in the chat (as /${S.N.name}; there is no board panel here)`, runs: S.N.name })
+  return list
+}
+
+/**
  * The slash commands: each runs symcc's runCommand with the text after it. An answer for the owner goes to the
  * timeline (session.log); any other is a prompt for the lead (enqueue, told to `sent` so it isn't taken for the owner's).
  */
 export function copilotCommands(host: Host, session: () => CpSession | undefined, sent: (prompt: string) => void = () => undefined): CpCommand[] {
-  return COMMANDS(host.features).map(c => ({
+  return copilotCommandList(host).map(c => ({
     name: c.name,
     description: c.description,
     async handler(ctx) {
       useName(host)
       const s = session()
       if (!s) return
-      const answer: CommandAnswer | null = await runCommand(host, c.name, (ctx.args ?? '').trim()).catch((err: Error) => ({ text: `${S.N.name}: /${c.name} failed: ${err?.message ?? err}`, isTextDisplayOnly: true as const }))
+      const answer: CommandAnswer | null = await runCommand(host, c.runs, (ctx.args ?? '').trim()).catch((err: Error) => ({ text: `${S.N.name}: /${c.name} failed: ${err?.message ?? err}`, isTextDisplayOnly: true as const }))
       if (!answer) return
       if (answer.isTextDisplayOnly) return void (await s.log(answer.text).catch(() => undefined))
       sent(answer.text)

@@ -100,8 +100,13 @@ test('the Copilot extension joins with every lead tool (symcc_<name>, its schema
   }
   // no workers yet, so no ask_owner
   expect(defs.some(t => t.name === 'symcc_ask_owner')).toBe(false)
-  expect(w.opts.commands!.map(c => c.name)).toEqual(COMMANDS(COPILOT_FEATURES).map(c => c.name))
+  // every one of COMMANDS, plus /symcc-board (symcc's texts point at it) right after /symcc-status
+  const names = COMMANDS(COPILOT_FEATURES).map(c => c.name)
+  names.splice(names.indexOf('symcc-status') + 1, 0, 'symcc-board')
+  expect(w.opts.commands!.map(c => c.name)).toEqual(names)
   expect(w.opts.commands!.map(c => c.name)).toContain('symcc')
+  // no command's description sends the owner to a panel Copilot doesn't have
+  expect((w.command('symcc').description ?? '').includes('panel')).toBe(false)
   expect(typeof w.opts.hooks?.handlers?.onUserPromptSubmitted).toBe('function')
   expect(w.run.host.features).toEqual(COPILOT_FEATURES)
   expect(await w.run.host.session.id()).toBe('copilot-cp-1')
@@ -132,6 +137,12 @@ test('/symcc writes the text board to the Copilot timeline (session.log) and sen
   expect(text).toContain('Add search')
   expect(text).toBe(boardText(await load(w.run.host), Date.now(), shortHome(S.root, S.home), S.N.name, undefined, {}, S.version))
   expect(w.sends.length).toBe(0)
+  // /symcc-tasks points at /symcc-board, and Copilot has it: it shows the same text board
+  await w.command('symcc-tasks').handler({ sessionId: 'cp-1', command: '/symcc-tasks', commandName: 'symcc-tasks', args: '' })
+  expect(w.logs.at(-1)!.includes('/symcc-board')).toBe(true)
+  expect(w.opts.commands!.some(c => c.name === 'symcc-board')).toBe(true)
+  await w.command('symcc-board').handler({ sessionId: 'cp-1', command: '/symcc-board', commandName: 'symcc-board', args: '' })
+  expect(w.logs.at(-1)!).toBe(text)
   // a task's command takes its args
   await w.command('symcc-task').handler({ sessionId: 'cp-1', command: '/symcc-task T-1', commandName: 'symcc-task', args: ' T-1 ' })
   expect(w.logs.at(-1)!).toContain('Add search')
