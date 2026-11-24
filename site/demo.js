@@ -130,12 +130,12 @@
         : [['⌀ ' + tok(total), tone('text')], ...(l.tokens === null ? [[' + …', 'dim']] : []), ...(withMedian ? [[` (${timesText}× median)`, tone(times >= 2 ? 'warning' : 'dim')]] : [])]
     const agents = [l.worker && `worker ${tok(l.worker)}`, l.checker && `checker ${tok(l.checker)}`].filter(Boolean)
     const split = agents.length ? [[[`<${agents.join(' · ')}>`, 'dim']]] : []
-    // (T-982) the send-backs "⌕ sent back ×1", the short "⌕ ×1" only when nothing else is left to drop
-    const line = (level, withKind, short = false) => {
-      const parts = [...(level >= 1 ? [[[`⏱ ${dur(mins)}`, 'dim']]] : []), ...(level >= 2 ? [tokens(level >= 3)] : []), ...(level >= 4 ? split : []), ...(l.back ? [[[`⌕${short ? '' : ' sent back'} ×${l.back}`, 'dim']]] : [])]
+    // (T-982) the send-backs "⌕ × 1", spaces around ×
+    const line = (level, withKind) => {
+      const parts = [...(level >= 1 ? [[[`⏱ ${dur(mins)}`, 'dim']]] : []), ...(level >= 2 ? [tokens(level >= 3)] : []), ...(level >= 4 ? split : []), ...(l.back ? [[[`⌕ × ${l.back}`, 'dim']]] : [])]
       return [[`  ${withKind ? l.kind + ' ' : ''}try ${l.tryNo}/${l.tries}`, 'dim'], ...parts.flatMap(x => [[' · ', 'dim'], ...x])]
     }
-    const tries = [line(4, true), line(3, true), line(2, true), line(2, false), line(1, false), line(0, false), line(0, false, true)]
+    const tries = [line(4, true), line(3, true), line(2, true), line(2, false), line(1, false), line(0, false)]
     const width = xs => 1 + xs.reduce((n, [t]) => n + t.length, 0)
     const pick = tries.find(xs => width(xs) <= PANEL_W) || tries[tries.length - 1]
     const two = ' ' + pick.map(([t, k]) => sp(t, k)).join('')

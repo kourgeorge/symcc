@@ -33,7 +33,7 @@ if (/<link\b[^>]*href="(https?:)?\/\//.test(page)) bad('home page: an outside st
 const view = name => new RegExp(`data-view="${name}" data-still>([\\s\\S]*?)(data-view=|</section>)`).exec(page)?.[1] ?? ''
 const text = html => html.replace(/<[^>]*>/g, '').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')
 const board = text(view('board'))
-for (const w of ['TASKS', 'BRANCHES', 'TODAY', 'work✧', 'check✧', 'queue', 'tests', 'merged', 'T-740', 'try 2/3', '⌕ sent back ×1'])
+for (const w of ['TASKS', 'BRANCHES', 'TODAY', 'work✧', 'check✧', 'queue', 'tests', 'merged', 'T-740', 'try 2/3', '⌕ × 1'])
   if (!board.includes(w)) bad(`still frame: the board has no "${w}"`)
 // (T-760) the agent mark is ✧ (in the accent color), not ·, and the legend says what it means
 if (/work·|check·/.test(board)) bad('still frame: the board still marks the agent stations with ·')
@@ -88,15 +88,13 @@ for (const w of ['16:28', '16:50', 'try 1: 22m · 4.0M tokens in all'])
 if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts view has no gaps-bot')
 // (T-757, T-867) T-740 on try 2: its lane shows the whole task's tokens (try 1's 4.0M, more coming) against the median
 // tokens per merged task (268.6M / 56 = 4.8M, so 0.8×) and its time, no bar; the key line has no bar text
-// (T-931) the clock first; (T-982) the send-backs in words, so at the demo's 64 columns "(0.8× median)" makes room:
-// "bug try 2/3 · ⏱ 25m · ⌀ 4.0M + … · ⌕ sent back ×1"
-if (!/bug try 2\/3 · ⏱ \d+m · ⌀ 4\.0M \+ … · ⌕ sent back ×1/.test(board)) bad('still frame: T-740\'s lane does not show "bug try 2/3 · ⏱ … · ⌀ 4.0M + … · ⌕ sent back ×1"')
-if (!/\(\d+(\.\d)?× median\)/.test(board)) bad('still frame: no lane shows "(× median)"')
+// (T-931) the clock first: "bug try 2/3 · ⏱ 25m · ⌀ 4.0M + … (0.8× median)"
+if (!/bug try 2\/3 · ⏱ \d+m · ⌀ 4\.0M \+ … \(0\.8× median\)/.test(board)) bad('still frame: T-740\'s lane does not show "bug try 2/3 · ⏱ … · ⌀ 4.0M + … (0.8× median)"')
 if (/▕[█░]+▏ ⌀/.test(board) || /▕[█░]+▏ ⌀/.test(page)) bad('still frame: a lane still has a token bar')
 if (board.includes('usual per task')) bad('still frame: the key line still explains the bar')
 // (T-757, T-867) the hand-drawn Live tab card tells the same story: whole-task tokens × the median, time, who spent them
 if (/tokens of each try|T-740[\s\S]{0,80}tokens at hand-back/.test(page)) bad('home page: the Live tab card still shows tokens per try ("tokens at hand-back" on T-740\'s try 2)')
-if (!page.includes('bug try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8× median) · &lt;worker 2.6M · checker 1.4M&gt; · ⌕ sent back ×1')) bad('home page: the Live tab card\'s T-740 lane does not show "⏱ 22m · ⌀ 4.0M + … (0.8× median) · <worker … · checker …>"')
+if (!page.includes('bug try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8× median) · &lt;worker 2.6M · checker 1.4M&gt; · ⌕ × 1')) bad('home page: the Live tab card\'s T-740 lane does not show "⏱ 22m · ⌀ 4.0M + … (0.8× median) · <worker … · checker …>"')
 if (page.includes('usual per task')) bad('home page: the Live tab card still explains the bar')
 // (T-767) the lines under a ▍heading start with 1 space; a running lane with "▶ ", its id in the accent color, its title normal text
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
