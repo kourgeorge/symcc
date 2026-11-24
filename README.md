@@ -145,6 +145,17 @@ What you need: OpenCode 2.3 or newer, and nothing else (no `npm install` in symc
 
 The details are in the [guide](docs/guide.md#using-symcc-in-opencode).
 
+## Using symcc in Copilot CLI
+
+symcc also runs in GitHub Copilot CLI as an extension. This is a first version. Extensions are still experimental there, so start Copilot with `copilot --experimental` (or `/settings experimental on`). Install from symcc's marketplace:
+
+```bash
+copilot plugin marketplace add kourgeorge/symcc
+copilot plugin install symcc@symcc
+```
+
+The lead's tools, workers, scouts and checkers work. There is no board panel yet (`/symcc` prints the board as text), and slash commands work only in the interactive CLI, not in `copilot -p`. The details, including your own model provider (BYOK), are in the [guide](docs/guide.md#using-symcc-in-copilot-cli).
+
 ## All features
 
 | Feature | What it does |
