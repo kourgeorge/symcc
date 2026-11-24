@@ -638,6 +638,11 @@ test('T-1008: removing asks inline: a "Yes, remove" Button and a Cancel link, no
   const roleTitle = elements(page).find(n => n.type === 'Text' && n.props?.bold && texts(n).join('') === name)
   expect(roleTitle?.props?.color).toBe('text')
   expect(elements(page).filter(n => n.props?.borderStyle || n.props?.backgroundColor).map(n => n.props?.key)).toEqual([])
+  // the source ("added") is a plain dim word, not a colored bold mark
+  const state = elements(page).find(n => n.props?.key === 'vs-state')
+  const stateTexts = elements(state).filter(n => n.type === 'Text' && n.props?.color)
+  expect(stateTexts.length).toBeGreaterThan(0)
+  expect(stateTexts.map(n => n.props?.color)).toEqual(stateTexts.map(() => 'inactive'))
   await ui.press({ key: 'role-remove' })
   const tree = await ui.drawn()
   expect((await ui.find({ key: 'role-remove-yes' }))?.props.variant).toBe('primary')

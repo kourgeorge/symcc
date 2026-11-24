@@ -193,7 +193,12 @@ export function rolePageVs($: $, pane: PaneParts, r: RoleDef, source: DefSource,
   const cancel = set(() => ((roleView.confirmRemove = false), (roleView.confirmReset = false)))
   return (
     <Box key="vs-role-page" flexDirection="column" gap={1}>
-      {vsPageHeader(pane, { ...header, color: header.color === 'inactive' ? 'inactive' : 'text' })}
+      {vsPageHeader(pane, {
+        ...header,
+        color: header.color === 'inactive' ? 'inactive' : 'text',
+        // T-1008: the source and "off" are plain dim words, not colored marks
+        state: header.state.map(g => g.map(x => ({ ...x, color: 'inactive' as const, bold: false }))),
+      })}
       <Box key="vs-role-notes" flexDirection="column">
         {/* T-918: always says what the role writes */}
         {k.plain('role-writes', roleWritesLine(r), 'text')}
