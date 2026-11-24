@@ -194,7 +194,7 @@ test('each prompt gets the lead\'s guide as additionalContext; the owner\'s prom
   // T-968: an owner's board action waiting as a "Meanwhile" line goes with their next prompt, once
   noteForLead('The owner dropped T-6.')
   const next = await hook({ prompt: 'what now?', sessionId: 'cp-1', workingDirectory: ROOT }, { sessionId: 'cp-1' })
-  expect((next as { additionalContext?: string }).additionalContext ?? '').toContain('Meanwhile the owner (nothing to answer):\n- The owner dropped T-6.')
+  expect((next as { additionalContext?: string }).additionalContext ?? '').toContain('Meanwhile (nothing to answer):\n- The owner dropped T-6.')
   const after = await hook({ prompt: 'and then?', sessionId: 'cp-1', workingDirectory: ROOT }, { sessionId: 'cp-1' })
   expect((after as { additionalContext?: string }).additionalContext ?? '').not.toContain('The owner dropped T-6.')
   await w.run.end()

@@ -1070,7 +1070,7 @@ test('the plugin\'s lead: the owner\'s session (no child, none of symcc\'s agent
     await until(() => f.prompts.length === 1)
     expect(f.prompts[0]!.sessionID).toBe(owner)
     expect(f.prompts[0]!.delivery).toBe('queue')
-    expect(f.prompts[0]!.text).toContain('Meanwhile the owner (nothing to answer):\n- approved T-9')
+    expect(f.prompts[0]!.text).toContain('Meanwhile (nothing to answer):\n- approved T-9')
     expect(f.prompts[0]!.text).toContain('T-1 "a change in src" merged')
     // a worker needs the owner: the update steers, even with a plain line in the same batch
     tellLead(host!, 'T-4 "x": something plain.')

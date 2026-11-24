@@ -59,7 +59,7 @@ test('a board update whose send fails goes back in the queue, still urgent, and 
   await w.tick()
   expect(w.sent.length).toBe(1)
   expect(w.sent[0]!.urgent).toBe(true)
-  expect(w.sent[0]!.text).toContain('Meanwhile the owner (nothing to answer):\n- The owner approved T-1\n\nT-5 needs you.\n\nT-6 was merged.')
+  expect(w.sent[0]!.text).toContain('Meanwhile (nothing to answer):\n- The owner approved T-1\n\nT-5 needs you.\n\nT-6 was merged.')
   expect(w.sent[0]!.text.split('T-5 needs you.').length).toBe(2)
   expect(w.sent[0]!.text.split('Board update:').length).toBe(2)
   expect(leadQueue).toEqual([])

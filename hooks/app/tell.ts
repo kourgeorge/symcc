@@ -8,7 +8,7 @@ import type { Host } from '../host'
 // reports close together go in one message, sent when the chat is idle (on a host that can't
 // wake the lead, kept until the host takes it on its next hook: takeBoardUpdate).
 // The owner's own actions (approve, drop, settings, ...) don't wake the lead: they wait
-// as short "Meanwhile the owner:" lines at the top of the next update sent for a real reason, or go with the owner's
+// as short "Meanwhile": lines at the top of the next update sent for a real reason, or go with the owner's
 // next prompt if that comes first (meanwhileForPrompt). Actions the lead may be waiting on (git set up, files allowed or
 // not) are told at once with tellLead.
 
@@ -18,11 +18,11 @@ export const START_LINE_END = ' Nothing to do for it.'
 /** At most this many "Meanwhile" lines are shown; the rest are counted ("+N more"). */
 export const MEANWHILE_SHOWN = 10
 
-/** The "Meanwhile the owner:" block for `lines` ('' when there are none). */
+/** The "Meanwhile": block for `lines` ('' when there are none). */
 export function meanwhileText(lines: readonly string[], shown = MEANWHILE_SHOWN): string {
   if (!lines.length) return ''
   const more = lines.length - shown
-  return ['Meanwhile the owner (nothing to answer):', ...lines.slice(0, shown).map(l => `- ${l}`), ...(more > 0 ? [`- +${more} more`] : [])].join('\n')
+  return ['Meanwhile (nothing to answer):', ...lines.slice(0, shown).map(l => `- ${l}`), ...(more > 0 ? [`- +${more} more`] : [])].join('\n')
 }
 
 /**
@@ -31,9 +31,10 @@ export function meanwhileText(lines: readonly string[], shown = MEANWHILE_SHOWN)
  * it (takeBoardUpdate) on its next hook that can carry text. `urgent`: the owner must act on it now (a worker needs
  * them, a worker's time is up); the update it goes in is sent as urgent (LeadSend: OpenCode gives it mid-turn).
  */
-export function tellLead(host: Host, text: string, how?: { urgent?: boolean }) {
+export function tellLead(host: Host, text: string, how?: { urgent?: boolean; ids?: string[] }) {
   if (!S.enabledNow) return // the plugin is disabled: no "[name] Board update" messages
   leadQueue.push(text)
+  about(text, how?.ids)
   if (how?.urgent) S.leadUrgent = true
   if (host.features.wakeLead !== 'now') return
   // an update that failed to send goes out with this one, in a moment, not after the retry wait
@@ -75,7 +76,7 @@ function sendBoardUpdate(host: Host) {
 }
 
 /**
- * The board update waiting for the lead, taken from the queue (with the "Meanwhile the owner:" lines at its top);
+ * The board update waiting for the lead, taken from the queue (with the "Meanwhile": lines at its top);
  * undefined when nothing waits (only "Meanwhile" lines don't make one) or the plugin is disabled.
  */
 export function takeBoardUpdate(): string | undefined {
@@ -96,27 +97,40 @@ export function takeBoardUpdate(): string | undefined {
  */
 const damEnding = () => (S.dam ? `\n\n${damGuideCore(S.N.name)}\n\n${DAM_POST_LINE}` : '')
 
+/** T-995: line text → the task ids it is about that have not moved on yet (only lines queued with ids are here). */
+const waitingOn = new Map<string, string[]>()
+const about = (text: string, ids?: string[]) => {
+  if (ids?.length) waitingOn.set(text, [...ids])
+}
+
 /**
- * T-995: task `id` has moved on (answered, merged, dropped): the lines still waiting for the lead that start with its id
- * (retry, restart, earlier update) are stale and leave both queues. Call it before telling the new line.
+ * T-995: task `id` has moved on (answered, merged, dropped): the waiting lines about it (queued with its id) are stale and
+ * leave both queues; a line about several tasks goes when all of them have moved on. Call it before telling the new line.
  */
 export function moveOn(id: string) {
-  const about = (l: string) => {
-    const s = l.replace(/^[✓✗↺▶⌕◐] /, '')
-    return s.startsWith(`${id} "`)
-  }
   for (const q of [leadQueue, meanwhile]) {
-    for (let i = q.length - 1; i >= 0; i--) if (about(q[i] ?? '')) q.splice(i, 1)
+    for (let i = q.length - 1; i >= 0; i--) {
+      const left = waitingOn.get(q[i] ?? '')
+      if (!left?.includes(id)) continue
+      const rest = left.filter(x => x !== id)
+      if (rest.length) waitingOn.set(q[i]!, rest)
+      else {
+        waitingOn.delete(q[i]!)
+        q.splice(i, 1)
+      }
+    }
   }
+  for (const k of waitingOn.keys()) if (!leadQueue.includes(k) && !meanwhile.includes(k)) waitingOn.delete(k)
 }
 
 /** An answer cut to one short line, for a "Meanwhile" line. */
 export const brief = (text: string) => cutLine(text, 200)
 
 /** The owner's own action (or a merge they approved): no message now; one short line in the next board update. */
-export function noteForLead(text: string) {
+export function noteForLead(text: string, ids?: string[]) {
   if (!S.enabledNow) return
   meanwhile.push(text.trim())
+  about(text.trim(), ids)
 }
 
 /**
@@ -135,5 +149,5 @@ export function meanwhileForPrompt(): { text: string; back: () => void } {
     put = true
     meanwhile.unshift(...lines)
   }
-  return { text: `[${S.N.name}] ${meanwhileText(lines)}\n(Done on the board before this message from the owner; take it into account.)`, back }
+  return { text: `[${S.N.name}] ${meanwhileText(lines)}\n(Happened since your last message; take it into account.)`, back }
 }

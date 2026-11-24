@@ -613,7 +613,7 @@ tests passed") and doesn't repeat it. A scout that answers `NOTHING` sends nothi
 
 What you do yourself on the board (approve, reject, drop, move to todo, stash, mode and
 settings changes, answering a task) and merges you approved don't wake the lead. They are
-kept as short lines ("The owner approved T-5: …") and put under "Meanwhile the owner:" at the
+kept as short lines ("The owner approved T-5: …"), like quiet retries, reload restarts and plain merges, and put under "Meanwhile" at the
 top of the next board update (at most 10, then "+N more"). They are still in each task's history.
 
 ### How the lead talks to you

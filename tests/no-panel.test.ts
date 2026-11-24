@@ -88,7 +88,7 @@ test("wakeLead 'next-turn': a note for the lead is queued, not sent, and goes ou
   expect(w.toLead).toEqual([])
   expect(w.timers).toEqual([])
   const update = leadUpdate()
-  expect(update).toBe(`[${S.N.name}] Board update:\n\nMeanwhile the owner (nothing to answer):\n- The owner approved T-1\n\nT-2 "Add search" was merged.\n\nT-3 failed its tests.\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.\nReply shape: one line per task ("✓ T-5  merged   what it means"); a routine update with no news is one short line at most.`)
+  expect(update).toBe(`[${S.N.name}] Board update:\n\nMeanwhile (nothing to answer):\n- The owner approved T-1\n\nT-2 "Add search" was merged.\n\nT-3 failed its tests.\n\nLead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.\nReply shape: one line per task ("✓ T-5  merged   what it means"); a routine update with no news is one short line at most.`)
   // taken once: nothing waits now
   expect(leadUpdate()).toBeUndefined()
   // a host that wakes the lead at once sends it in a moment instead (on its timer)
