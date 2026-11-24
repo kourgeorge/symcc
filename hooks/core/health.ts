@@ -128,7 +128,7 @@ function readyAt(b: Board, t: BoardTask): number {
   return times.length ? Math.max(...times) : NaN
 }
 
-/** The ready tasks the pump starts next: the first ones (by its order) that fit in the free worker slots. */
+/** The ready tasks the pump starts next: the first ones (by priority, then id) that fit in the free worker slots. */
 function aboutToStart(b: Board): Set<string> {
   const free = Math.max(0, (b.max_parallel ?? 0) - b.tasks.filter(t => t.status === 'doing').length)
   return new Set(ready(b).slice(0, free).map(t => t.id))
@@ -154,7 +154,7 @@ function starving(b: Board, nowMs: number): HealthFinding[] {
     const why = changes >= STARVE_AFTER_CHANGES ? `its after list was changed ${changes} times` : age > STARVE_MS && newer >= STARVE_NEWER ? `it has waited ${Math.floor(age / 3_600_000)}+ hours while ${newer} newer tasks already started` : ''
     if (!why) continue
     const on = blockers.length ? `waits only on newer tasks (${blockers.map(d => d.id).join(', ')})` : 'could start but has not'
-    out.push(finding(b, 'starving', [t.id], `${t.id} ${on}, and ${why} — it keeps getting pushed back`, `let ${t.id} go first: give it a lower order, and make newer tasks that share its files wait on it`))
+    out.push(finding(b, 'starving', [t.id], `${t.id} ${on}, and ${why} — it keeps getting pushed back`, `let ${t.id} go first: give it a lower priority (e.g. -1), and make newer tasks that share its files wait on it`))
   }
   return out
 }
@@ -219,5 +219,5 @@ export function newFindings(found: readonly HealthFinding[], told: ReadonlySet<s
 
 /** The one "triage needed" message for the lead. */
 export function healthText(found: readonly HealthFinding[]): string {
-  return [`Triage needed: the board health check found ${found.length === 1 ? 'a problem' : `${found.length} problems`}:`, ...found.map(f => `- ${f.text}. Consider: ${f.consider}.`), 'Older tasks first unless the owner said one is urgent; bugs and safety fixes before features. Fix it with the board tools (change after / order, retry, drop), or ask the owner if it is their call.'].join('\n')
+  return [`Triage needed: the board health check found ${found.length === 1 ? 'a problem' : `${found.length} problems`}:`, ...found.map(f => `- ${f.text}. Consider: ${f.consider}.`), 'Older tasks first unless the owner said one is urgent; bugs and safety fixes before features. Fix it with the board tools (change after / priority, retry, drop), or ask the owner if it is their call.'].join('\n')
 }

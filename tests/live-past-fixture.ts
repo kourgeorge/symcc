@@ -12,7 +12,7 @@ const HOUR = 3_600_000
 export function pastTasks(nowMs: number) {
   const y = dayStartOf(nowMs) // today's midnight: yesterday is the day before it
   const iso = (at: number) => new Date(at).toISOString()
-  const task = (id: string, x: Record<string, unknown>) => ({ id, title: id, details: '', files: [], status: 'done', note: '', order: 1, after: [], attempts: 1, history: [], branch: null, created_at: iso(y - 10 * 24 * HOUR), updated_at: iso(nowMs), ...x })
+  const task = (id: string, x: Record<string, unknown>) => ({ id, title: id, details: '', files: [], status: 'done', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: iso(y - 10 * 24 * HOUR), updated_at: iso(nowMs), ...x })
   const run = (from: number, to: number, tokens: number) => ({ started: iso(from), ended: iso(to), agents: [{ kind: 'worker' as const, started: iso(from), ended: iso(to), tokens: { input: tokens } }] })
   const merged = (at: number) => [{ kind: 'merged', at: iso(at), text: 'try 1 → merged into main' }]
   const t0 = inToday(nowMs, 0.2)

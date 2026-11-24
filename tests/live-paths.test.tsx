@@ -9,7 +9,7 @@ import { PANE, T0, seedBoard } from './board-fixture'
 import { vsHref } from '../hooks/claude/ui/vscode'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
-const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', order: Number(id.slice(2)), after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
+const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
 const worker = { kind: 'worker' as const, started: iso(20), ended: iso(2), tokens: { input: 300_000 } }
 const handed = { runs: [{ started: iso(20), ended: iso(2), agents: [worker] }] }
 

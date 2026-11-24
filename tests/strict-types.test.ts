@@ -7,7 +7,7 @@ import type { SymccTask } from '../types'
 // T-359 made these pass the strict type check; they must still work the same way.
 
 test('waitOrder puts each task after the tasks it waits for, ties by the given order', () => {
-  const t = (id: string, after: string[] = []): SymccTask => ({ id, title: id, details: '', files: [], status: 'todo', note: '', order: 0, after, attempts: 0, history: [], branch: null, created_at: '', updated_at: '' })
+  const t = (id: string, after: string[] = []): SymccTask => ({ id, title: id, details: '', files: [], status: 'todo', note: '', priority: 0, after, attempts: 0, history: [], branch: null, created_at: '', updated_at: '' })
   const byId = (x: SymccTask, y: SymccTask) => x.id.localeCompare(y.id)
   expect(waitOrder([t('A', ['C']), t('B'), t('C')], byId).map(x => x.id)).toEqual(['B', 'C', 'A'])
   expect(waitOrder([], byId)).toEqual([])

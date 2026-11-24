@@ -61,7 +61,7 @@ const ask = (question: string, labels: string[], more: Record<string, unknown> =
 async function waitingTask(host: never, extra: Record<string, unknown>) {
   const { question, options, asked_files, ...rest } = extra as { question?: string; options?: string[]; asked_files?: string[] }
   const ask = question !== undefined || asked_files ? { by: asked_files ? 'symcc' : 'worker', text: question ?? 'files?', asked_at: ISO, ...(options ? { options } : {}), ...(asked_files ? { files: asked_files } : {}) } : undefined
-  const t = { id: 'T-1', title: 'Pick the color', details: '', files: ['a.ts'], status: 'waiting', note: '', order: 1, after: [], attempts: 1, history: [], branch: null, created_at: ISO, updated_at: ISO, ...rest, ...(ask ? { ask } : {}) }
+  const t = { id: 'T-1', title: 'Pick the color', details: '', files: ['a.ts'], status: 'waiting', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: ISO, updated_at: ISO, ...rest, ...(ask ? { ask } : {}) }
   await change(host, x => ({ ...x, tasks: [...x.tasks, t as never], next_id: 2 }))
 }
 
@@ -517,6 +517,31 @@ test("a tied pop-up for a file request puts the lead's wording on the task: it s
   expect(after.ask).toBeUndefined()
 })
 
+test('T-968: Allow from the board with a tied pop-up open gives the answer to the pop-up and sends no separate board update', async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'T-1 needs to change files outside its list: b.ts. Allow them?', asked_files: ['b.ts'] })
+  const d = dialog()
+  const r = popupCall(w.host, undefined, { questions: [ask('May T-1 touch b.ts?', ['Allow', "Don't allow"], { header: 'T-1' })] }, d.open, w.notice)
+  await pause(0)
+  // what the board's Allow button (and OpenCode's panel) does
+  await allowAskedFiles(w.host, 'T-1', true)
+  const out = (await r) as { context: string[] }
+  expect(out.context[0]).toContain('The owner answered on the symcc board (T-1)')
+  expect(w.board().tasks[0]!.files).toContain('b.ts')
+  await pause(0)
+  await pause(0)
+  expect(w.toLead.filter(t => t.includes('allowed b.ts'))).toEqual([])
+})
+
+test('T-968: Allow from the board with no pop-up open sends the lead one board update', async () => {
+  const w = world()
+  await waitingTask(w.host as never, { question: 'T-1 needs to change files outside its list: b.ts. Allow them?', asked_files: ['b.ts'] })
+  await allowAskedFiles(w.host, 'T-1', true)
+  await pause(0)
+  await pause(0)
+  expect(w.toLead.filter(t => t.includes('allowed b.ts')).length).toBe(1)
+})
+
 test("a worker's question with options shows the lead's question and options, an answer is that option's text, and the lead's text goes when answered", async () => {
   const w = world()
   await waitingTask(w.host as never, { question: 'Red or blue?', options: ['Red', 'Blue'] })
@@ -560,7 +585,7 @@ test("the NEEDS YOU row for a more-time task shows the lead's text whole", () =>
 
 /** An answered investigation in review (T-1), put on the board. */
 async function answeredTask(host: never) {
-  const t = { id: 'T-1', title: 'Why is the cache slow', details: 'Find out why.', files: [], status: 'review', kind: 'investigation', note: 'answered; waiting for you to read it', answer: 'It is never cleared.', order: 1, after: [], attempts: 1, history: [{ at: ISO, text: 'try 1: answered: It is never cleared.' }], branch: 'symcc/T-1', created_at: ISO, updated_at: ISO }
+  const t = { id: 'T-1', title: 'Why is the cache slow', details: 'Find out why.', files: [], status: 'review', kind: 'investigation', note: 'answered; waiting for you to read it', answer: 'It is never cleared.', priority: 1, after: [], attempts: 1, history: [{ at: ISO, text: 'try 1: answered: It is never cleared.' }], branch: 'symcc/T-1', created_at: ISO, updated_at: ISO }
   await change(host, x => ({ ...x, tasks: [...x.tasks, t as never], next_id: 2 }))
 }
 

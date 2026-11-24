@@ -93,7 +93,7 @@ test('an old line converted once: a try\'s result is read from the words symcc w
 })
 
 const TASK = {
-  id: 'T-504', title: 'The scouts keep stopping', details: '', files: ['tests/'], status: 'todo', note: '', order: 504, after: ['T-500'],
+  id: 'T-504', title: 'The scouts keep stopping', details: '', files: ['tests/'], status: 'todo', note: '', priority: 0, after: ['T-500'],
   attempts: 2, history: hist(...HISTORY), branch: null, created_at: iso(T0 - 86_400_000), updated_at: iso(T0 - 60_000), role: 'worker',
 }
 const seed = (on: Parameters<typeof seedBoard>[0]) => {

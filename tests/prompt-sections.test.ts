@@ -14,7 +14,7 @@ import { addDetailsText } from '../hooks/core/history'
 import { hist } from './history-fixture'
 
 const task = (over: Partial<SymccTask> = {}): SymccTask =>
-  ({ id: 'T-7', title: 'Do it', details: 'Make it work.', files: ['src/a.ts', 'src/b.ts'], status: 'doing', note: '', order: 1, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '', origin: { by: 'owner', why: 'the owner wants it', request: 'please make it work\nand fast', at: '' }, ...over }) as SymccTask
+  ({ id: 'T-7', title: 'Do it', details: 'Make it work.', files: ['src/a.ts', 'src/b.ts'], status: 'doing', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '', origin: { by: 'owner', why: 'the owner wants it', request: 'please make it work\nand fast', at: '' }, ...over }) as SymccTask
 
 const values = (t: SymccTask): Record<string, string> => ({ name: 'symcc', task_id: t.id, title: t.title, details: t.details, branch: 'symcc/T-7', folder: '/w/T-7', kind: '\nKind of task: change.\n', kind_name: 'change', role_name: 'general', role: '', org_mem: '', learned: '', ask: 'ASK', files: 'F', test_command: 'TESTS', file_tools: 'Edit' })
 
@@ -111,13 +111,13 @@ test('(e) {{task.<path>}} fills any task field in a prompt and in a role checkli
 
 test('(f) a section added to the registry shows up in its place', () => {
   const t = task({ history: [] })
-  const extra: PromptSection = { name: 'priority', kinds: ['change'], heading: 'How urgent', about: 'urgency', template: () => '{{task.order}}', text: c => `order ${c.task?.order}` }
+  const extra: PromptSection = { name: 'priority', kinds: ['change'], heading: 'How urgent', about: 'urgency', template: () => '{{task.priority}}', text: c => `priority ${c.task?.priority}` }
   const order = { ...PROMPT_ORDER, change: PROMPT_ORDER.change.flatMap(n => (n === 'files' ? ['priority', n] : [n])) }
   const p = buildPrompt({ kind: 'change', values: values(t), task: t }, [...PROMPT_SECTIONS, extra], order)
   const hs = headings(p)
   expect(hs.indexOf('How urgent')).toBe(hs.indexOf('Files you may change') - 1)
-  expect(p).toContain('## How urgent\n\norder 1')
-  expect(promptTemplate('change', [...PROMPT_SECTIONS, extra], order)).toContain('## How urgent\n\n{{task.order}}')
+  expect(p).toContain('## How urgent\n\npriority 1')
+  expect(promptTemplate('change', [...PROMPT_SECTIONS, extra], order)).toContain('## How urgent\n\n{{task.priority}}')
   // without a place in the order it is not in the prompt
   expect(buildPrompt({ kind: 'change', values: values(t), task: t }, [...PROMPT_SECTIONS, extra])).not.toContain('How urgent')
 })

@@ -142,10 +142,13 @@ test('git writes aimed at the project, .symcc/, the worktree, or a folder that c
   for (const command of REFUSED) {
     const what = gitWriteIn(command)!
     expect([command, typeof what]).toEqual([command, 'string'])
-    // a worker's command that names the owner's copy is refused for that first (bashOutsideText)
+    // a worker's command that names the owner's copy, or cds to a folder built from a variable (T-963), is refused
+    // for that first (bashOutsideText)
+    const unresolved = (r: string | undefined) => r?.startsWith("Refused: symcc can't check a path built from") === true
     const w = await checkEdit($, 'w1', { command }, WT)
-    expect([command, w === workerGitWriteText(what) || w?.includes("in the owner's copy of the project")]).toEqual([command, true])
-    expect([command, await checkEdit($, 'c1', { command }, WT)]).toEqual([command, gitWriteText(what)])
+    expect([command, w === workerGitWriteText(what) || w?.includes("in the owner's copy of the project") || unresolved(w)]).toEqual([command, true])
+    const c = await checkEdit($, 'c1', { command }, WT)
+    expect([command, c === gitWriteText(what) || unresolved(c)]).toEqual([command, true])
   }
 })
 
