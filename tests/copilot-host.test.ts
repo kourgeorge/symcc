@@ -10,7 +10,7 @@ import { memoryFs, done } from './fake-host'
 import { addTask, emptyBoard, boardText, shortHome, type Board } from '../hooks/board'
 import { S, heard, toolName } from '../hooks/app/state'
 import { TOOLS } from '../hooks/app/tools'
-import { COMMANDS, toolCall, leadGuideText, notLeadText } from '../hooks/app/symcc'
+import { COMMANDS, toolCall, toolCheck, leadGuideText, notLeadText } from '../hooks/app/symcc'
 import { tellLead, noteForLead } from '../hooks/app/tell'
 import { load } from '../hooks/app/store'
 import { notReadyYet } from '../hooks/host'
@@ -126,6 +126,35 @@ test('a Copilot tool call reaches symcc\'s toolCall and answers its text; add ch
   expect((await load(w.run.host)).tasks.map(t => t.title)).toContain('From Copilot')
   // one of Copilot's own sub-agents (the built-in task tool) is not the lead
   expect(await w.tool('symcc_board').handler({}, inv('task-agent-1'))).toEqual({ textResultForLlm: notLeadText('board'), resultType: 'failure', error: notLeadText('board') })
+  await w.run.end()
+})
+
+test('T-977: the lead\'s joined session has onPreToolUse, and it judges the lead as Claude Code and OpenCode do (toolCall and toolCheck with no agent id)', async () => {
+  const w = await started()
+  const hook = w.opts.hooks?.handlers?.onPreToolUse
+  expect(typeof hook).toBe('function')
+  const calls: { toolName: string; toolArgs: unknown }[] = [
+    // ordinary lead calls
+    { toolName: 'view', toolArgs: { path: 'README.md' } },
+    { toolName: 'edit', toolArgs: { path: 'src/a.ts', old_str: 'a', new_str: 'b' } },
+    // calls an agent is refused or has rewritten; the lead's rules (as in the other hosts) let them go on unchanged
+    { toolName: 'bash', toolArgs: { command: 'cd / && ls' } },
+    { toolName: 'write_bash', toolArgs: { shellId: 's1', input: 'ls\n' } },
+    { toolName: 'mcp_fs_write', toolArgs: { path: '/repo/README.md' } },
+    { toolName: 'apply_patch', toolArgs: '*** Begin Patch\n*** Update File: README.md\r\n*** End Patch' },
+  ]
+  for (const c of calls) {
+    const out = await hook!({ ...c, sessionId: 'cp-1', workingDirectory: ROOT }, { sessionId: 'cp-1' })
+    // what the other hosts' lead hooks run: toolCall (here "copilot:<tool>") and toolCheck, both with no agent id
+    const call = await toolCall(w.run.host, `copilot:${c.toolName}`, undefined, {})
+    const check = await toolCheck(w.run.host, undefined, { path: `${ROOT}/README.md` }, ROOT)
+    const other = call && 'deny' in call ? { permissionDecision: 'deny', permissionDecisionReason: call.deny } : check ? { permissionDecision: 'deny', permissionDecisionReason: check } : undefined
+    expect(out).toEqual(other)
+    // and no shell wrap: the lead's command is never rewritten
+    expect(JSON.stringify(out ?? null).includes('modifiedArgs')).toBe(false)
+  }
+  // one of Copilot's own sub-agents in the lead's session still gets the lead's rules here (no worker shell wrap)
+  expect(await hook!({ toolName: 'bash', toolArgs: { command: 'ls' }, agentId: 'task-agent-1' }, { sessionId: 'cp-1' })).toBe(undefined)
   await w.run.end()
 })
 
