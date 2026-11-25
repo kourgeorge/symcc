@@ -3,8 +3,13 @@
 // extension handles itself. What else passes between the board's webview and serve goes through the extension unread
 // (./protocol.ts, internal: serve and the webview ship together).
 //
-// A change an extension speaking the old PROTOCOL couldn't follow raises PROTOCOL. tests/editor-bundle.sh fails when
-// this file changes while contract.sha256 still holds the old hash: reconsider the number, then record the new hash.
+// A change an extension speaking the old PROTOCOL couldn't follow raises PROTOCOL. tests/editor-contract.sh (run by
+// scripts/typecheck.sh) fails when this file changes while contract.sha256 still holds the old hash: reconsider the
+// number, then record the new hash.
+//
+// Files, in the symcc folder: editor/serve.mjs, and the webview's editor/webview/webview.js, webview.css and
+// codicons/codicon.css (with the font beside it). The extension writes the page: those three linked in, a
+// <body data-surface="panel|side"> holding <div id="root">, and acquireVsCodeApi for the messages.
 //
 // Command line: node serve.mjs --root <project> [--agents <name>] [--lead-model <id>] [--worker-model <id>]
 //               [--state-dir <folder>] [--plugin-root <symcc>]
