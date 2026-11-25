@@ -29,8 +29,8 @@ export type { ActionGroup }
 export { GROUP_ORDER }
 
 /** The tab a page was opened from: its Back button names it ("‹ [Tasks]", "‹ [Live]", "‹ [Scouts]"). */
-export type PageFrom = 'tasks' | 'live' | 'scouts' | 'roles'
-export const FROM_WORD: Record<PageFrom, string> = { tasks: 'Tasks', live: 'Live', scouts: 'Scouts', roles: 'Roles' }
+export type PageFrom = 'tasks' | 'live' | 'scouts' | 'roles' | 'settings'
+export const FROM_WORD: Record<PageFrom, string> = { tasks: 'Tasks', live: 'Live', scouts: 'Scouts', roles: 'Roles', settings: 'Settings' }
 /** The Back button's words, the tab's name: "Tasks" (drawn "[Tasks]" after the arrow, see whereLine). */
 export const backText = (from: PageFrom): string => FROM_WORD[from]
 /** The arrow before the Back button: "‹ " (not part of the button, T-775). */

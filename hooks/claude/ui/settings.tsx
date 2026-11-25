@@ -8,7 +8,7 @@ import { ownerSettings } from '../../app/tools'
 import { roleLists, roleView, roleDraftOf, newRoleFile, changeRole, roleFileDay } from '../../app/roles'
 import { type RolePageFacts, CHANGED_HEADING, changeLines, changesOfRole, roleStateGroups } from '../../core/role-changes'
 import { NAV_KEYS, defActions, placeIn, roleButtons } from '../../core/page-header'
-import { type PageHeader, pageHeader } from './page-header'
+import { type PageHeader, pageHeader, simplePageHeader } from './page-header'
 import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../../app/kinds'
 import type { PaneParts } from './parts'
 import { arrows, headingFocused, row } from './arrows'
@@ -295,10 +295,7 @@ function defTable($: $, pane: PaneParts, o: { noun: 'role' | 'kind'; rows: (DefR
   return (
     <Box flexDirection="column">
       {header(page)}
-      <Text key={`${page}-heading`} wrap="truncate">
-        <Text bold color={C('suggestion')}>{`▍${noun === 'role' ? 'Roles' : 'Task types'}`}</Text>
-        <Text color={C('inactive')}>{`  ${defsCountText(noun, rows)}`}</Text>
-      </Text>
+      {simplePageHeader(pane, { from: 'settings', right: '', title: noun === 'role' ? 'Roles' : 'Task types', subtitle: defsCountText(noun, rows), buttons: [], onBack: o.back, backKey: `${page}-back` })}
       <Text key={`${page}-cols`} wrap="truncate" color={C('inactive')}>{defLineText(layout, 'head')}</Text>
       {rows.map((r, i) => (
         <Button key={row(keys[i]!)} plain label={r.broken ? `${r.name} — ${r.broken}` : `${r.name}: ${r.cells.from ?? ''}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !o.naming ? true : undefined} onPress={o.open(r.name)}>
@@ -314,7 +311,6 @@ function defTable($: $, pane: PaneParts, o: { noun: 'role' | 'kind'; rows: (DefR
       {o.newBox as never}
       <Box key={`${page}-hidden-keys`} display="none">
         {o.naming ? null : <Button key={`${noun}-new-key`} label="n" hotkey="n" onPress={o.startNew} />}
-        <Button key={`${page}-back`} label="Back" hotkey="b" onPress={o.back} />
       </Box>
       {footer(o.keys, `${page}-keys`)}
     </Box>
