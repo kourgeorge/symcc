@@ -64,8 +64,9 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   // T-1068: a checker that kept running over a plugin reload is waited for again instead of started again
   const adopted = adoptedCheckers.get(t.id)
   adoptedCheckers.delete(t.id)
+  const held = adopted ? checkerRuns.get(adopted.id)?.held : undefined
   try {
-    if (adopted) agentId = adopted
+    if (adopted) agentId = adopted.id
     else {
       // queued: it starts at the next turn's start or end, where Claude Code keeps symcc's hooks (see starts.ts)
       const spawned = await startAgent($, { kind: 'checker', prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
@@ -90,7 +91,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
       timer?.cancel()
       resolve(e)
     }
-    checkerRuns.set(agentId, { task: t.id, worktree: dir, end: done })
+    checkerRuns.set(agentId, { task: t.id, worktree: dir, end: done, ...(held ? { held } : {}) })
     const min = b.max_minutes
     try {
       timer = $.clock.after(min * 60_000, () => {
@@ -101,6 +102,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     } catch {
       timer = null
     }
+    // its hand-back came before this step waited for it (see stopOrphans): that verdict is used now
+    if (adopted?.early) done(adopted.early)
     const late = stop()
     if (late) {
       void halt($, agentId, `the task was ${late}`)

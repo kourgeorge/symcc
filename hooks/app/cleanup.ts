@@ -4,7 +4,7 @@
 import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, ownedHere, leftoverTmpFiles, withHistory, tryEntry, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onTask, restartedAgent, workerIdOf, withAgentStart, workerSince } from '../board'
 import { worktreeDir, taskBranch } from './git'
 import { alreadyMerged } from './review'
-import { S, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned, checkerRuns, adoptedCheckers } from './state'
+import { S, type CheckerEnd, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned, checkerRuns, adoptedCheckers } from './state'
 import { checkerName } from './checker'
 import { debriefs } from './debrief'
 import { type Host, type HostAgent, ENDED_STATUSES, agentState } from '../host'
@@ -36,10 +36,18 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
   const live = liveDriver(lead, Date.now())
   // A board that can't be read (being fixed, or a read failing now) says nothing about whose
   // worker is whose: then no worker is stopped (the next check looks again), only scouts are.
-  const b = agents.some(a => a.kind === 'worker' || (a.kind === 'scout' && a.name?.endsWith('-checker') && !ENDED_STATUSES.includes(a.status))) ? await load(host).catch(() => null) : emptyBoard()
+  const b = adoptedCheckers.size || agents.some(a => a.kind === 'worker' || (a.kind === 'scout' && a.name?.endsWith('-checker') && !ENDED_STATUSES.includes(a.status))) ? await load(host).catch(() => null) : emptyBoard()
+  const onStep = (t: BoardTask | undefined) => t?.status === 'doing' && t.live?.phase === 'checker' && handedBack(t) && ownedHere(t, S.me, live)
   const out: string[] = [...leftovers]
   for (const a of agents) {
     if (a.kind === 'other') continue
+    // T-1068: an adopted checker whose task left its checker step before the step took it over is no longer wanted: forgotten and stopped below
+    const adopted = [...adoptedCheckers].find(([, v]) => v.id === a.id)
+    if (adopted) {
+      if (!b || onStep(find(b, adopted[0]))) continue
+      adoptedCheckers.delete(adopted[0])
+      checkerRuns.delete(a.id)
+    }
     // Already tracked, or already told to stop: not taken back, and not messaged again (a message would wake it up).
     if (isOwnAgent(a.id)) continue
     // T-656: an agent answering its debrief (a follow-up after its hand-back) is no orphan; its time limit stops it
@@ -49,11 +57,13 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
     // T-1068: a checker still running after a reload is adopted, not stopped: the task's checker step waits for it again
     // (restartCheckers starts that step; see runChecker). A checker with no such task, or one symcc ended, is stopped as before.
     const chk = a.kind === 'scout' && b ? b.tasks.find(t => checkerName(S.N.name, t.id) === a.name) : undefined
-    if (chk?.status === 'doing' && chk.live?.phase === 'checker' && handedBack(chk) && ownedHere(chk, S.me, live) && ![...checkerRuns.values()].some(r => r.task === chk.id) && !adoptedCheckers.has(chk.id)) {
-      adoptedCheckers.set(chk.id, a.id)
+    if (onStep(chk) && ![...checkerRuns.values()].some(r => r.task === chk!.id) && !adoptedCheckers.has(chk!.id)) {
+      // known to symcc from now on (so its hand-back is kept even before the step waits for it: runChecker takes it over)
+      const mark: { id: string; early?: CheckerEnd } = { id: a.id }
+      adoptedCheckers.set(chk!.id, mark)
+      checkerRuns.set(a.id, { task: chk!.id, worktree: worktreeDir(chk!.id), end: e => { mark.early = e } })
       continue
     }
-    if ([...adoptedCheckers.values()].includes(a.id)) continue
     if (a.kind === 'worker' && b) {
       // A worker of this session that was running when the plugin reloaded keeps working:
       // track it again instead of stopping it (see orphanMove for when).

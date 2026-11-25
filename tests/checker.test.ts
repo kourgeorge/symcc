@@ -5,7 +5,7 @@ import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
 import { notProse } from '../hooks/core/checker'
-import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
+import { S, leadQueue, meanwhile, workers, checkerRuns, stopped, adoptedCheckers } from '../hooks/app/state'
 import { workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
 import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
 import { stopOrphans } from '../hooks/app/cleanup'
@@ -963,7 +963,8 @@ test('T-1068: a checker still running after a reload is adopted, not stopped; it
   const sha = w.git.head
   await check(w.$)
   // the checker (unknown to this copy) is not told to stop and no new one starts; this copy waits for it
-  await until(() => checkerRuns.has('chk1'))
+  for (let i = 0; i < 200; i++) await turn()
+  expect(checkerRuns.has('chk1')).toBe(true)
   expect(w.sends).toEqual([])
   expect(w.spawns.length).toBe(1)
   const mid = find(await load(w.$), 'T-1')!
@@ -995,6 +996,34 @@ test('T-1068: an adopted checker that finds problems: its verdict is used (the t
   expect(t.history.some(h => h.text.includes('the checker found problems') || h.text.includes('checker: problems') || h.text.includes('PROBLEMS'))).toBe(true)
   expect(t.status).not.toBe('done')
   expect(w.spawns.length).toBe(1)
+})
+
+test('T-1068: an adopted checker that hands back before the step waits for it: its verdict is kept and used, no new checker', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await stopOrphans(w.$)
+  expect(checkerRuns.has('chk1')).toBe(true)
+  checkerFinished('chk1', 'PROBLEMS: src/a.ts breaks on empty input')
+  await check(w.$)
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.history.some(h => h.text.includes('PROBLEMS') || h.text.includes('found problems'))).toBe(true)
+  expect(t.status).not.toBe('done')
+  expect(w.spawns.length).toBe(1)
+  expect(w.sends).toEqual([])
+})
+
+test('T-1068: an adopted checker whose task left the checker step is stopped at the next look, and forgotten', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await stopOrphans(w.$)
+  expect(w.sends).toEqual([])
+  const b = await load(w.$)
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'todo' }, '2026-01-01T00:00:00Z'))
+  await stopOrphans(w.$)
+  expect(w.sends.map(m => m.to)).toEqual(['chk1'])
+  expect(adoptedCheckers.size).toBe(0)
+  expect(checkerRuns.has('chk1')).toBe(false)
 })
 
 test('T-386: a checker symcc stopped over the reload (its agent is in stopped) gets a new checker at the next check, no retry counted, the lead told once', async () => {

@@ -1101,7 +1101,8 @@ export async function restartCheckers(host: Host, agents: HostAgent[]) {
   const b = await load(host).catch(() => null)
   if (!b || !onHere(b)) return
   const live = liveDriver(await readLeadText(host), Date.now())
-  const running = new Set([...checkerRuns.values()].map(r => r.task))
+  const adoptedIds = new Set([...adoptedCheckers.values()].map(v => v.id))
+  const running = new Set([...checkerRuns].filter(([id]) => !adoptedIds.has(id)).map(([, r]) => r.task))
   const checkerAlive = (id: string) => agents.some(a => a.name === checkerName(S.N.name, id) && !stopped.has(a.id) && !ENDED_STATUSES.includes(a.status))
   const lost = b.tasks.filter(t => t.status === 'doing' && t.live?.phase === 'checker' && handedBack(t) && ownedHere(t, S.me, live) && !finishing.has(t.id) && !approving.has(t.id) && !starting.has(t.id) && !running.has(t.id) && !onPurpose.has(t.id) && ![...workers.values()].some(w => w.task === t.id) && (!checkerAlive(t.id) || adoptedCheckers.has(t.id)))
   for (const t of lost) void checkAgain(host, t).catch(() => undefined)
