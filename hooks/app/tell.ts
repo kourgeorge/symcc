@@ -87,7 +87,9 @@ export function takeBoardUpdate(): string | undefined {
   const ending = startOnly
     ? 'No reply needed; end the turn without a message.'
     : `Lead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.\nReply shape: one line per task ("✓ T-5  merged   what it means"); a routine update with no news is one short line at most.`
-  return `[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\n${ending}${startOnly ? '' : damEnding()}`
+  // an update with only the health check's text opens with that label, not with "Board update:" (the text carries its own)
+  const label = !before && body.split('\n\n').every(l => l.startsWith(`[${S.N.name} health check]`)) ? '' : `[${S.N.name}] Board update:\n\n`
+  return `${label}${before ? `${before}\n\n` : ''}${body}\n\n${ending}${startOnly ? '' : damEnding()}`
 }
 
 /**

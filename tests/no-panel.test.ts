@@ -97,6 +97,21 @@ test("wakeLead 'next-turn': a note for the lead is queued, not sent, and goes ou
   expect(c.timers).toEqual([1500])
 })
 
+test('a health-check-only update opens with its own label; a mixed one keeps both labels once', () => {
+  const w = world()
+  const health = `[${S.N.name} health check] Triage needed: found a problem:\n- T-1 waits.`
+  tellLead(w.host, health)
+  const only = leadUpdate() ?? ''
+  expect(only.startsWith(`[${S.N.name} health check]`)).toBe(true)
+  expect(only).not.toContain('Board update:')
+  tellLead(w.host, 'T-2 was merged.')
+  tellLead(w.host, health)
+  const mixed = leadUpdate() ?? ''
+  expect(mixed.startsWith(`[${S.N.name}] Board update:`)).toBe(true)
+  expect(mixed.split('Board update:').length).toBe(2)
+  expect(mixed.split('health check]').length).toBe(2)
+})
+
 test('no plan mode: plan signals are ignored (never "in plan"), and the lead guide leaves the plan mode paragraph out', async () => {
   const w = world()
   await seePlan(w.host, true)
