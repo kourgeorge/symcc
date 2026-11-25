@@ -27,7 +27,7 @@ import {
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, fileWaitText, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutFindingsOf, findingsLine, findingsDefaultLine, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
-  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingShown, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
+  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingRowValue, settingsHelpOf, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
   searchTasks, showsHeader, type BoardPage, groupLabel,
@@ -1365,60 +1365,67 @@ function orgMemBody(f: ViewFile, cursor: number, w: number, topic = ''): Body {
   return { ...b, ids, selected, head: headLines }
 }
 
-/** The Settings tab: each group (Work, Checks before merging, ...) as a heading that opens or closes, like the
- *  Claude Code board's (T-585): "▸ Work · auto · 3 at once" closed (its values in short, core's groupSummaryParts),
- *  "▾ Work" open with its settings under it: name, value, default and range, and what it does on the line under it;
- *  the Roles and Task types rows open their pages. */
+/** The Settings tab: each group (Work, Checks before merging, ...) as a heading that opens or closes, as the Claude Code
+ *  board's (T-585, T-1047): closed, "▸ Work   auto · 3 at once" (the title padded, its values in short, core's
+ *  groupSummaryParts; on a narrow panel "▸ Work · auto · 3 at once"); open, "▾ Work" with a row per setting, "Label ..... value"
+ *  (units and the mode as core's settingRowValue). Under a thin rule the selected row's help (core's settingsHelpOf): its label,
+ *  what it does, then "name · default X · range"; a heading shows its hint. The Roles and Task types rows open their pages. */
 function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: number): Body {
   const b = bodyMaker()
   const v = f.view
-  const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
+  const labelWidth = Math.max(...SETTINGS.map(x => x.label.length), 'Task types'.length)
+  const dots = (label: string) => ` ${'.'.repeat(Math.max(2, labelWidth - label.length + 2))} `
   const ids = settingRows(open)
   const selected = ids[Math.min(Math.max(0, cursor), ids.length - 1)]!
   const pages = { roles: defsCount(f, 'roles'), kinds: defsCount(f, 'kinds') }
+  const padWidth = Math.max(...SETTING_GROUPS.map(g => g.title.length)) + 3
+  const stacked = w - 4 - padWidth < 12
   for (const g of SETTING_GROUPS) {
     b.blank()
     const isOpen = open.includes(g.title)
     const front = { text: settingGroupId(g.title) === selected ? '› ' : '  ', color: 'ide', bold: true }
     const hit = { settingGroup: g.title }
     if (!isOpen) {
-      const sum = groupSummaryParts(g, viewAsBoard(v), Math.max(20, w - 4), pages)
-      b.add([front, { text: `▸ ${sum.title}`, color: 'text', bold: true }, ...(sum.values ? [{ text: sum.values, color: 'inactive' }] : [])], hit)
+      const sum = groupSummaryParts(g, viewAsBoard(v), stacked ? w - 4 : w - 4 - padWidth + g.title.length + 3, pages)
+      const short = stacked ? '' : sum.values.replace(/^ · /, '')
+      b.add([front, { text: `▸ ${stacked ? sum.title + sum.values : sum.title.padEnd(padWidth)}`, color: 'text', bold: true }, ...(short ? [{ text: short, color: 'inactive' }] : [])], hit)
       continue
     }
     b.add([front, { text: `▾ ${g.title}`, color: 'text', bold: true }], hit)
     for (const item of g.items) {
       if (isSettingPage(item)) {
         const label = item === 'roles' ? 'Roles' : 'Task types'
-        const hit = { page: item }
         b.add(
           [
             { text: item === selected ? '› ' : '  ', color: 'ide', bold: true },
-            { text: label.padEnd(nameWidth), color: 'claude', bold: true },
-            { text: ` ${defsCount(f, item)}`, color: 'text', bold: true },
+            { text: label, color: 'text' },
+            { text: dots(label), color: 'inactive' },
+            { text: `${defsCount(f, item)}`, color: 'claude', bold: true },
           ],
-          hit,
+          { page: item },
         )
-        b.add([{ text: `    Enter opens the ${label} page: the ${item === 'roles' ? 'worker roles' : 'task types'}, to open, turn off or reset`, color: 'inactive' }], hit)
         continue
       }
       const x = settingInfo(item)!
-      const hit = { setting: x.name }
-      const sel = x.name === selected
       const unplayable = x.name === 'notify' && cantPlayNotify(v)
       b.add(
         [
-          { text: sel ? '› ' : '  ', color: 'ide', bold: true },
-          { text: x.name.padEnd(nameWidth), color: 'claude', bold: true },
-          { text: ` ${settingShown(x.name, settingValue(viewAsBoard(v), x.name))}`, color: 'text', bold: true },
+          { text: x.name === selected ? '› ' : '  ', color: 'ide', bold: true },
+          { text: x.label, color: 'text' },
+          { text: dots(x.label), color: 'inactive' },
+          { text: settingRowValue(x.name, settingValue(viewAsBoard(v), x.name)), color: 'claude', bold: true },
           ...(unplayable ? [{ text: " (can't play here: nothing plays)", color: 'warning' }] : []),
-          { text: ` · default ${x.default} · ${x.range}`, color: 'inactive' },
         ],
-        hit,
+        { setting: x.name },
       )
-      for (const l of wrapSegs([{ text: x.meaning, color: 'inactive' }], w - 4)) b.add([{ text: '    ', color: 'inactive' }, ...l], hit)
     }
   }
+  const sel = isSettingPage(selected) ? { page: selected } : settingInfo(selected) ? { setting: selected } : { group: SETTING_GROUPS.find(g => settingGroupId(g.title) === selected)?.title ?? SETTING_GROUPS[0]!.title }
+  const help = settingsHelpOf(sel)
+  b.blank()
+  b.add([{ text: '─'.repeat(Math.max(10, Math.min(60, w - 2))), color: 'inactive' }])
+  if (help.name) b.add([{ text: help.name, color: 'text', bold: true }])
+  for (const l of help.lines) for (const wl of wrapSegs([{ text: l, color: 'inactive' }], w)) b.add(wl)
   b.blank()
   b.add([{ text: `Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
   b.blank()

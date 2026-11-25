@@ -365,6 +365,17 @@ export const settingHelp = (name: string): { meaning: string; facts: string } =>
   return s ? { meaning: s.meaning, facts: `${s.name} · default ${s.default} · ${s.range}` } : { meaning: '', facts: '' }
 }
 
+/** The help area under the Settings list for the focused row (T-1042): a setting's label, meaning, then "name · default X · range"; a page row's or a heading's hint. Both the Claude Code and OpenCode boards draw it. */
+export function settingsHelpOf(f: { setting: string } | { group: string } | { page: SettingPage }): { name: string; lines: string[] } {
+  if ('setting' in f) {
+    const x = settingInfo(f.setting)
+    return x ? { name: x.label, lines: [x.meaning, settingHelp(x.name).facts] } : { name: '', lines: [] }
+  }
+  if ('page' in f) return f.page === 'roles' ? { name: 'Roles', lines: ['The worker roles: open, edit, turn off or add one.'] } : { name: 'Task types', lines: ['The kinds of task: open, edit, turn off or add one.'] }
+  const g = SETTING_GROUPS.find(x => x.title === f.group)
+  return { name: g?.title ?? '', lines: g ? [groupHint(g.title)] : [] }
+}
+
 export const settingInfo = (name: string): SettingInfo | undefined => SETTINGS.find(s => s.name === name)
 
 /** T-800: a setting's value as the owner reads it: the mode "review" / "auto" shows as "approve merge" / "auto merge"; the stored value is unchanged. */
