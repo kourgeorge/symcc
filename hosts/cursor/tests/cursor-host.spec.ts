@@ -3,6 +3,8 @@
 // wakes at once for an update. Run with `npx -y bun test ./tests/` in hosts/cursor/ (or `npm test` there).
 import { test, expect } from 'bun:test'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { runCommand } from '../../node/host'
 import type { AgentRunEnd } from '../../../hooks/app/symcc'
 import { agentToolDefs, disallowedFor, runEnd, sdkAgents, withCursorPrompt } from '../agents'
@@ -17,7 +19,7 @@ import { skillOf } from '../skills'
 import { parseLog, parseNumstat, parseWorktreeList } from '../worktrees'
 import { fakeSdk, until, type Turn } from './fake-sdk'
 
-const PLUGIN_ROOT = new URL('../../..', import.meta.url).pathname.replace(/\/$/, '')
+const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 
 const git = (repo: string, ...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: repo })
 

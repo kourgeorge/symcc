@@ -9,12 +9,15 @@ import { CopilotClient, RuntimeConnection, approveAll } from '@microsoft/copilot
 import type { CpJoinSession, CpSdk } from '../hooks/copilot/sdk'
 import { startCopilot } from '../hooks/copilot/extension'
 import { nodeFs, runCommand, nodeClock, nodeProcesses } from '../hosts/node/host'
+import { basename, dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 /**
  * symcc's own folder (roles/, kinds/, examples/, .claude-plugin/plugin.json): the repo root, three folders above the
  * built copilot/extensions/symcc/extension.mjs (one above this file when run unbundled).
  */
-export const PLUGIN_ROOT = decodeURIComponent(import.meta.url.replace(/^file:\/\//, '')).replace(/\/copilot\/(extensions\/[^/]+\/)?[^/]+$/, '')
+const HERE = dirname(fileURLToPath(import.meta.url))
+export const PLUGIN_ROOT = resolve(HERE, basename(dirname(HERE)) === 'extensions' ? '../../..' : '..')
 
 // process.execPath is the copilot binary itself: the agents' own copilot processes are started from it (agents.ts)
 const execPath = (process as typeof process & { execPath: string }).execPath
