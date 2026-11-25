@@ -1367,9 +1367,9 @@ export function liveTodayLines(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs:
   const first = todayLines({ ...d, tokens }, width, triesOnly).map((text): LiveSeg[] =>
     text.endsWith(TRIES_ONLY) ? [{ text: text.slice(0, -TRIES_ONLY.length), tone: 'text' }, { text: TRIES_ONLY, tone: 'dim' }] : [{ text, tone: 'text' }])
   // T-855: with no lane there is no key line, so the dim note that ⌀ means tokens ends the section
-  // T-889: then the dim yesterday and last 7 days lines
+  // T-889: then the dim yesterday and last 7 days lines (T-1043: after one blank line)
   const past = pastLines(pastDays(v.tasks, nowMs, 1, offsetMin), pastDays(v.tasks, nowMs, 7, offsetMin), width)
-  return [...first, ...todayMoreLines(more, width), ...past, ...(note ? wrapLine(TOKENS_NOTE, width).map((text): LiveSeg[] => [{ text, tone: 'dim' }]) : [])]
+  return [...first, ...todayMoreLines(more, width), ...(past.length ? [[] as LiveSeg[]] : []), ...past, ...(note ? wrapLine(TOKENS_NOTE, width).map((text): LiveSeg[] => [{ text, tone: 'dim' }]) : [])]
 }
 
 /** T-973: one label/value row of a section (VS Code's Live tab): its key, its label ("Tokens") and its value in parts. */

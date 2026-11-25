@@ -1016,7 +1016,9 @@ test('T-889: Today ends with dim yesterday and last 7 days lines, without today\
   const lines = liveTodayLines({ tasks, today_team: undefined }, now, 140)
   const texts = lines.map(l => segText(l))
   // the section's last two lines, dim; today's T-3 (5M) and the 9-day-old T-4 are in neither
-  expect(texts.slice(-2)).toEqual([PAST_YESTERDAY, PAST_WEEK])
+  expect(texts.slice(-3)).toEqual(['', PAST_YESTERDAY, PAST_WEEK])
+  // T-1043: one blank line before them, and none when no past line shows
+  expect(segText(liveTodayLines({ tasks: [], today_team: undefined }, now, 140).at(-1) ?? [])).not.toBe('')
   expect(lines.slice(-2).every(l => l.every(s => s.tone === 'dim'))).toBe(true)
   expect(texts[0]!.startsWith('✓ 1 merged')).toBe(true)
   // narrow: ⏱ goes first, then ⌀

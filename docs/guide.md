@@ -1361,6 +1361,7 @@ words as bold headings with the same spacing):
    ⌀ ████████████████ lead 3% · workers 84% · checkers 8% · scouts 5%
    avg ⌀ 2.8M/task · 9m work · 23m start-to-merge   first try 34% · avg 2.4 tries/task   ⌕ 68 sent back by the checker
    ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · ⌀ 42M   ⌀/h 00▕▁▁▁▁▁▁▁▁▁▂▃▅▆▅█·········▏24
+
    yesterday:   ✓ 77 merged · ⌀ 355M · ⏱ 34h
    last 7 days: ✓ 176 merged · ⌀ 854M · ⏱ 53h
   ```
@@ -1378,7 +1379,7 @@ words as bold headings with the same spacing):
   scouts' and cost figures are read in the background at most every two minutes. On a narrow panel
   parts drop from the ends: line 3 loses the checker send-backs first, then the tries, the first try and the per-task figures;
   line 4 loses the busiest hour first, then the cost, then `⌀/h` shrinks to `⌀`; the label and the sparkline stay together, last, after the agent work time:
-  when the sparkline itself is too wide, neighbouring hours are merged (2, 3 or 4 to a bar) so the whole day still fits. The two dim lines under them compare with earlier days, counted the same way: `yesterday` is the calendar day before today, `last 7 days` the seven days before today added up (today left out). Each says the tasks merged, the tries' tokens (`⌀`) and the worker time (`⏱`, closed-app time left out); a part that is 0 is left out, and so is a line with nothing. On a narrow panel `⏱` goes first, then `⌀`. Nothing goes past the panel's width. The task that starts next shows in the band above the
+  when the sparkline itself is too wide, neighbouring hours are merged (2, 3 or 4 to a bar) so the whole day still fits. After one blank line, the two dim lines compare with earlier days, counted the same way: `yesterday` is the calendar day before today, `last 7 days` the seven days before today added up (today left out). Each says the tasks merged, the tries' tokens (`⌀`) and the worker time (`⏱`, closed-app time left out); a part that is 0 is left out, and so is a line with nothing. On a narrow panel `⏱` goes first, then `⌀`. Nothing goes past the panel's width. The task that starts next shows in the band above the
   prompt (`○ next up`), and the tasks that wait hang under their lanes. With nothing running,
   TASKS says in one or two dim lines why, and what to do next (the band above the prompt and
   `/symcc-status` show the same):
