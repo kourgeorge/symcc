@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveTaskLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, pastDays, pastLines } from '../hooks/core/live'
+import { liveLanes, liveTaskLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, liveTodayRows, pastDays, pastLines } from '../hooks/core/live'
 import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from './live-past-fixture'
 import { textWidth } from '../hooks/core/width'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
@@ -1017,6 +1017,9 @@ test('T-889: Today ends with dim yesterday and last 7 days lines, without today\
   const texts = lines.map(l => segText(l))
   // the section's last two lines, dim; today's T-3 (5M) and the 9-day-old T-4 are in neither
   expect(texts.slice(-3)).toEqual(['', PAST_YESTERDAY, PAST_WEEK])
+  // T-1043: VS Code rows get one blank row between today's rows and the past rows, and none without past rows
+  expect(liveTodayRows({ tasks, today_team: undefined }, now).map(r => r.key).slice(-3)).toEqual(['gap', 'yesterday', 'week'])
+  expect(liveTodayRows({ tasks: [], today_team: undefined }, now).some(r => r.key === 'gap')).toBe(false)
   // T-1043: one blank line before them, and none when no past line shows
   expect(segText(liveTodayLines({ tasks: [], today_team: undefined }, now, 140).at(-1) ?? [])).not.toBe('')
   expect(lines.slice(-2).every(l => l.every(s => s.tone === 'dim'))).toBe(true)

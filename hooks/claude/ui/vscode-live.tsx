@@ -389,7 +389,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   ]
 
   // ---- Today: the day's figures as label/value rows (core's liveTodayRows); Tokens in one color
-  const today = () => [vsFacts(vs, 'live-today-rows', liveTodayRows(v, nowMs).map(r => ({ key: r.key, label: r.label, value: [<Text key="v" wrap="wrap">{segsText(r.segs, r.key === 'tokens' ? 'text' : undefined)}</Text>] })))]
+  const today = () => [vsFacts(vs, 'live-today-rows', liveTodayRows(v, nowMs).map(r => ({ key: r.key, label: r.key === 'gap' ? ' ' : r.label, value: [<Text key="v" wrap="wrap">{r.key === 'gap' ? ' ' : segsText(r.segs, r.key === 'tokens' ? 'text' : undefined)}</Text>] })))]
 
   // T-1037: one thin dim line between each pair of shown sections (none above the first or below the last)
   const sections = [
