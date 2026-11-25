@@ -47,6 +47,10 @@ export function parseLead(text: string | null): Lead | null {
 /** T-952: the driver's own times (`since`, `active`) of lead `l`, to write back unchanged. */
 export const driverTimes = (l: Pick<Lead, 'since' | 'active'> | null | undefined): Pick<Lead, 'since' | 'active'> => ({ ...(l?.since !== undefined ? { since: l.since } : {}), ...(l?.active !== undefined ? { active: l.active } : {}) })
 
+/** lead.json `l` moved to the driving window's new session id `to`: its driver times and a pending hand-over request (handTo/handAt) are kept. */
+export const carriedText = (l: Lead | null | undefined, to: string, nowMs: number) =>
+  leadText(to, nowMs, { ...driverTimes(l), ...(l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}) })
+
 /**
  * T-952: lead.json written by session `me` on its heartbeat at `nowMs` (it drives): `since` kept from `before` when
  * `me` already drove (else now: it claims the board now), `active` the newer of what `before` saved for `me` and

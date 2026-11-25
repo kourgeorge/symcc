@@ -2,8 +2,8 @@
 // an orderly way (a request in lead.json, answered on its next heartbeat), never leaving two drivers, and the
 // workers it stops for that go back to "todo" without using up a try.
 import { expect } from 'claude-code/testing'
-import { addTask, emptyBoard, leadText, parseLead, patchTask, startRun, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, LEAD_STALE_MS, find, parseCommand, commandNames, type Board, type LeadMove } from '../hooks/board'
-import { claimLead, driveHere, handOver, releaseLead } from '../hooks/app/lead'
+import { addTask, carriedText, emptyBoard, leadText, parseLead, patchTask, startRun, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, LEAD_STALE_MS, find, parseCommand, commandNames, type Board, type LeadMove } from '../hooks/board'
+import { carryDriver, claimLead, driveHere, handOver, releaseLead } from '../hooks/app/lead'
 import { S, workers } from '../hooks/app/state'
 import { COMMANDS } from '../hooks/app/symcc'
 import { saveBoard } from '../hooks/app/store'
@@ -228,6 +228,29 @@ test('/clear in the gap after the board was handed over: the new id still gets i
   await handOver(w.host)
   expect(parseLead(w.files.get(w.lead)!)).toMatchObject({ session: 'b2', handFrom: 'a' })
   expect(await claimLead(w.host)).toBe(true)
+})
+
+test('T-1025: carriedText moves lead.json to the new id, keeping driver times and a pending handTo/handAt', () => {
+  expect(parseLead(carriedText(parseLead(handRequest(leadText('a', t0, { since: t0 - 5, active: t0 - 1 }), 'b', t0 + 10))!, 'a2', t0 + 20))).toEqual({ session: 'a2', heartbeat: t0 + 20, since: t0 - 5, active: t0 - 1, handTo: 'b', handAt: t0 + 10 })
+  expect(parseLead(carriedText(parseLead(leadText('a', t0))!, 'a2', t0 + 20))).toEqual({ session: 'a2', heartbeat: t0 + 20 })
+  expect(parseLead(carriedText(null, 'a2', t0 + 20))).toEqual({ session: 'a2', heartbeat: t0 + 20 })
+})
+
+test('T-1025: a pending hand-over request survives when the driving window moves to a new session id (/clear and session start again)', async () => {
+  S.root = ROOT
+  const w = world('a2')
+  await saveBoard(w.host, emptyBoard())
+  S.me = 'a'
+  S.driving = true
+  w.files.set(w.lead, handRequest(leadText('a', Date.now()), 'b', t0))
+  // /clear in the driving window: lead.json moves to a2 and b's request stays
+  await handOver(w.host)
+  expect(S.me).toBe('a2')
+  expect(parseLead(w.files.get(w.lead)!)).toMatchObject({ session: 'a2', handTo: 'b', handAt: t0 })
+  // session start again with another new id: carryDriver keeps the request too
+  S.me = 'a3'
+  expect(await carryDriver(w.host, 'a2')).toBe(true)
+  expect(parseLead(w.files.get(w.lead)!)).toMatchObject({ session: 'a3', handTo: 'b', handAt: t0 })
 })
 
 test('when the session that asked for the board ends, its request is dropped and the driver keeps driving', async () => {
