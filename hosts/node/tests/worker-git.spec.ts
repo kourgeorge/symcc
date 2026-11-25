@@ -187,3 +187,20 @@ for (const [name, fakeGit] of [
     }
   }, 600_000)
 }
+
+// A merge or cherry-pick the worker left stopped on a conflict: prep aborts it, so the conflict markers are never
+// committed; the worker's own commit before it merges as usual.
+for (const [name, op] of [['merge', 'merge -q --no-edit side'], ['cherry-pick', 'cherry-pick side']] as const) {
+  test(`T-1053: a ${name} the worker left on a conflict is aborted in prep; no conflict markers reach main`, async () => {
+    const r = await scratchRepo(`wconflict-${name}`, 'hello.txt', 'test -f hello.txt\n')
+    try {
+      expect((await r.cli({}, 'add', 'Say hello', 'Write hello.txt', '--files', 'hello.txt')).stdout).toContain('added T-1')
+      const fakeGit = `git add -A && ${W} commit -qm "worker: hello" && { ${W} ${op} >/dev/null 2>&1; test -n "$(git ls-files -u)"; }`
+      const tick = await r.cli({ FAKE_GIT: fakeGit }, 'tick')
+      expect(tick.stdout).toMatch(/T-1 "Say hello" merged into main/)
+      expect((await r.git('show', 'main:hello.txt')).stdout).toBe('hello from the fake worker\n')
+    } finally {
+      await rm(r.repo, { recursive: true, force: true })
+    }
+  }, 600_000)
+}
