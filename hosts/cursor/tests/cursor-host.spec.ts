@@ -292,7 +292,7 @@ test("the Worktrees page: a worker's folder against the branch it merges into, t
     expect((await s.worktrees.base(t7.path, 'a.txt')).text).toBe('')
     expect(await s.worktrees.diff('/tmp').then(() => '', (e: Error) => e.message)).toContain("not one of this project's worktrees")
 
-    expect(await s.worktrees.remove(other)).toContain("isn't a worker's folder")
+    expect(await s.worktrees.remove(list.find(w => w.kind === 'other')!.path)).toContain("isn't a worker's folder")
     expect(await s.worktrees.remove(list[0]!.path)).toBe('T-1 is still todo, so its folder stays.')
     expect(await s.worktrees.remove(t7.path)).toBe('Removed .symcc/worktrees/T-7. Its branch symcc/T-7 is kept.')
     expect((await s.worktrees.list()).map(w => w.task ?? w.branch)).toEqual(['T-1', 'main', 'mine'])
