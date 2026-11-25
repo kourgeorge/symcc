@@ -69,10 +69,7 @@ test('T-1029: a second load reads no parts file that did not change, and reads o
   expect(w.reads).toContain(BOARD)
   // a parts file written by someone else (its mtime moves) is read again
   const p = parts[0]!
-  w.files.set(p, w.files.get(p)!.replace('merged', 'merged!'))
-  w.writes.push('other')
-  const m = new Map<string, number>()
-  m.set(p, 99_999)
+  // same text and size, only the mtime moves
   w.host.fs.stat = async f => ({ kind: 'file', size: w.files.get(f)!.length, mtimeMs: f === p ? 99_999 : 1, isLink: false })
   w.reads.length = 0
   await load(w.host)
@@ -113,14 +110,14 @@ test('T-1029: a step of the hand-back that throws still draws the view once', as
   await saveBoard(w.host, board())
   workers.set('w1', { task: 'T-2', worktree: `${ROOT}/.symcc/worktrees/T-2`, branch: 'symcc/T-2', since: Date.now() })
   const before = w.views()
-  // every board write from the second one on fails, so the error leaves workerFinished
+  // the first two board writes work, every one from the third on fails: two changes finish, then the error leaves workerFinished
   const write = w.host.fs.write
   let n = 0
   w.host.fs.write = async (p, t) => {
-    if (p.startsWith(`${BOARD}.`) && ++n >= 2) throw new Error('disk full')
+    if (p.startsWith(`${BOARD}.`) && ++n >= 3) throw new Error('disk full')
     return write(p, t)
   }
   await expect(workerFinished(w.host, 'w1', 'Done, but which one?')).rejects.toThrow('disk full')
-  expect(n).toBeGreaterThan(1)
+  expect(n).toBeGreaterThan(2)
   expect(w.views() - before).toBe(1)
 })
