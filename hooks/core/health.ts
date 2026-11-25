@@ -21,7 +21,8 @@
 //    more than OWNER_IDLE_MS. Said once, and again only after the task changes.
 //
 // Each finding has a key made of its reason, its tasks and their updated_at, so the same
-// problem is told once, and told again only when one of its tasks changes.
+// problem is told once, and told again only when one of its tasks changes. A starving finding's
+// key is only its task, status and after list: a task it waits for being retried does not tell it again.
 import type { Board, BoardTask } from './board-file'
 import { asBlockers, blockerFiles, find, intoOf, isFinished, waitsForFiles } from './board-file'
 import { AFTER_CHANGED, ranNow } from './history'
@@ -54,9 +55,9 @@ export type HealthFinding = {
 const WAITS: readonly string[] = ['todo', 'backlog']
 const byId = (x: BoardTask, y: BoardTask) => num(x.id) - num(y.id)
 
-function finding(b: Board, reason: HealthReason, tasks: string[], text: string, consider: string): HealthFinding {
+function finding(b: Board, reason: HealthReason, tasks: string[], text: string, consider: string, key?: string): HealthFinding {
   const stamp = tasks.map(id => `${id}@${find(b, id)?.updated_at ?? '-'}`).join(',')
-  return { reason, tasks, key: `${reason}:${stamp}`, text, consider }
+  return { reason, tasks, key: key ?? `${reason}:${stamp}`, text, consider }
 }
 
 /** Whether two files lists may touch the same file: an empty list means anywhere. Globs count up to their first * or ?. */
@@ -128,6 +129,19 @@ function readyAt(b: Board, t: BoardTask): number {
   return times.length ? Math.max(...times) : NaN
 }
 
+/**
+ * When task `t` last moved to todo (from the backlog, or back after a failure or pause); else when it was made.
+ * A retry, a reject and an "asked more" write no history line, so a task that already had a try counts from its last change.
+ */
+function todoSince(t: BoardTask): number {
+  const moves = (t.history ?? []).filter(e => (e.kind === 'moved-backlog' && !e.backlog) || e.kind === 'retried' || e.kind === 'resumed').map(e => Date.parse(e.at || ''))
+  const back = t.runs?.length ? Date.parse(t.updated_at || '') : NaN
+  return Math.max(Date.parse(t.created_at || ''), ...[...moves, back].filter(Number.isFinite))
+}
+
+/** When task `t` started (its first try, else its last change). */
+const startedAt = (t: BoardTask) => Date.parse(t.runs?.[0]?.started || t.updated_at || '')
+
 /** The ready tasks the pump starts next: the first ones (by priority, then id) that fit in the free worker slots. */
 function aboutToStart(b: Board): Set<string> {
   const free = Math.max(0, (b.max_parallel ?? 0) - b.tasks.filter(t => t.status === 'doing').length)
@@ -146,15 +160,15 @@ function starving(b: Board, nowMs: number): HealthFinding[] {
     if (t.after.some(a => !find(b, a) && !(b.archived_done ?? []).includes(a))) continue // that is "stuck"
     if (!blockers.every(d => num(d.id) > num(t.id))) continue // it waits on an older task: fair
     const changes = afterChanges(t)
-    const newer = b.tasks.filter(x => num(x.id) > num(t.id) && started(x) && (x.priority ?? 0) >= (t.priority ?? 0)).length
-    // could start: its wait counts from when it became ready; just ready, or about to start, is fine
-    const since = blockers.length ? Date.parse(t.created_at || '') : readyAt(b, t)
+    // its wait counts from when it last moved to todo (blocked) or became ready (could start); just ready, or about to start, is fine
+    const since = blockers.length ? todoSince(t) : readyAt(b, t)
+    const newer = b.tasks.filter(x => num(x.id) > num(t.id) && started(x) && (x.priority ?? 0) >= (t.priority ?? 0) && !(startedAt(x) < since)).length
     if (!blockers.length && (nowMs - since < CHECK_MS || next.has(t.id))) continue
     const age = nowMs - since
     const why = changes >= STARVE_AFTER_CHANGES ? `its after list was changed ${changes} times` : age > STARVE_MS && newer >= STARVE_NEWER ? `it has waited ${Math.floor(age / 3_600_000)}+ hours while ${newer} newer tasks already started` : ''
     if (!why) continue
     const on = blockers.length ? `waits only on newer tasks (${blockers.map(d => d.id).join(', ')})` : 'could start but has not'
-    out.push(finding(b, 'starving', [t.id], `${t.id} ${on}, and ${why} — it keeps getting pushed back`, `let ${t.id} go first: give it a lower priority (e.g. -1), and make newer tasks that share its files wait on it`))
+    out.push(finding(b, 'starving', [t.id], `${t.id} ${on}, and ${why} — it keeps getting pushed back`, `let ${t.id} go first: give it a lower priority (e.g. -1), and make newer tasks that share its files wait on it`, `starving:${t.id}:${t.status}:${t.after.join(',')}`))
   }
   return out
 }
@@ -219,5 +233,5 @@ export function newFindings(found: readonly HealthFinding[], told: ReadonlySet<s
 
 /** The one "triage needed" message for the lead. */
 export function healthText(found: readonly HealthFinding[]): string {
-  return [`Triage needed: the board health check found ${found.length === 1 ? 'a problem' : `${found.length} problems`}:`, ...found.map(f => `- ${f.text}. Consider: ${f.consider}.`), 'Older tasks first unless the owner said one is urgent; bugs and safety fixes before features. Fix it with the board tools (change after / priority, retry, drop), or ask the owner if it is their call.'].join('\n')
+  return [`[symcc health check] Triage needed (an automatic check, not a scout or a worker): found ${found.length === 1 ? 'a problem' : `${found.length} problems`}:`, ...found.map(f => `- ${f.text}. Consider: ${f.consider}.`), 'Older tasks first unless the owner said one is urgent; bugs and safety fixes before features. Fix it with the board tools (change after / priority, retry, drop), or ask the owner if it is their call.'].join('\n')
 }
