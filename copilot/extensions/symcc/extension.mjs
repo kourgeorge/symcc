@@ -19056,7 +19056,7 @@ var onHereText = (b) => {
   const paused = m === "paused" ? ` No work starts while the board is paused; /${S.N.name}-mode auto (or review) starts it.` : "";
   return `${S.N.name} is on in this window, in mode ${settingShown("mode", m)}: ${modeText(m)}.${paused}`;
 };
-async function enableHere(host, tell, command = "enable") {
+async function enableHere(host, tell) {
   let b = await load(host);
   if (b.enabled !== false && !S.offHere)
     return setSymcc(host, true);
@@ -19075,7 +19075,7 @@ async function enableHere(host, tell, command = "enable") {
     });
   await claimLead(host).catch(() => false);
   pump(host);
-  tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-${command}. You are a lead again; the board is in mode ${modeOf(b)}.`);
+  tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-enable. You are a lead again; the board is in mode ${modeOf(b)}.`);
   return onHereText(b);
 }
 async function offHereBeat(host, nowMs = Date.now()) {
