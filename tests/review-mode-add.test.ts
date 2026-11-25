@@ -66,3 +66,8 @@ test('no mode set: the add answer has no reminder', async ($, on) => {
   setup(on, { tasks: [] })
   expect(await call($, 'add', wish)).not.toContain('Review mode:')
 })
+
+test('T-1045: the lead guide says a short owner reply is quoted with the ask and the question', () => {
+  const guide = leadGuide()
+  expect(guide).toContain('when those words are a short reply like "yes", quote “<the owner\'s earlier ask, trimmed>” → lead: “<your question, short>” → “<the reply>”')
+})
