@@ -153,10 +153,10 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
   const t = liveTrains(trainView, T0)
   const rows = trainRows(t.lanes['T-712']!, 100)
   expect(rows.map(r => segText(r.segs))).toEqual([
-    '  └─◇ T-713 Task files: no silent d…  waits  change',
-    '     └─◇ T-714 Help: /symcc-help shows…  waits  change',
-    '     └─◇ T-717 Waits for a todo and a …  waits  + also T-690  change',
-    '  └─◇ T-716 Live deps drawn as trai…  waits  + also T-690  change',
+    '  └─◇ T-713 Task files: no …  waits  change',
+    '     └─◇ T-714 Help: /symcc-he…  waits  change',
+    '     └─◇ T-717 Waits for a tod…  waits  + also T-690  change',
+    '  └─◇ T-716 Live deps drawn…  waits  + also T-690  change',
   ])
   // T-1058: the kind ends every row and takes only title characters ("waits" and "+ also" come first)
   for (const w of [60, 50]) for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, segText(r.segs).endsWith('change')]).toEqual([w, true])
@@ -169,11 +169,18 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
   expect(segText(trainRows(long, 30)[0]!.segs)).not.toContain('investigation')
   // the kind never replaces "waits"
   const help = [{ id: 'T-714', title: 'Help: /symcc-help shows all', kind: 'change', also: [], trains: [] }] as never
-  for (let w = 20; w <= 40; w++) {
-    const text = segText(trainRows(help, w)[0]!.segs)
-    if (text.endsWith('change')) expect([w, text.includes('waits')]).toEqual([w, true])
+  expect(segText(trainRows(help, 24)[0]!.segs)).toBe('  └─◇ T-714 Hel…  change')
+  // the row with the kind equals the row without it, except for a shorter title
+  for (const also of [[], ['T-700'], ['T-700', 'T-701']]) for (let w = 18; w <= 60; w++) {
+    const mk = (kind: string) => [{ id: 'T-714', title: 'Help: /symcc-help shows all the things', kind, also, trains: [] }] as never
+    const plain = segText(trainRows(mk(''), w)[0]!.segs)
+    const withKind = segText(trainRows(mk('investigation'), w)[0]!.segs)
+    if (withKind.includes('investigation')) {
+      const tail = (s: string) => s.slice(s.indexOf('…') + 1)
+      expect([w, tail(withKind.replace('  investigation', ''))]).toEqual([w, tail(plain)])
+      expect(withKind.indexOf('…') <= plain.indexOf('…')).toBe(true)
+    } else expect([w, withKind]).toEqual([w, plain])
   }
-  expect(segText(trainRows(help, 24)[0]!.segs)).toBe('  └─◇ T-714 Help…  waits')
   const second = [{ id: 'T-1', title: 'First', kind: 'bug', also: [], trains: help }] as never
   const deepText = segText(trainRows(second, 30)[1]!.segs)
   if (deepText.endsWith('change')) expect(deepText).toContain('waits')

@@ -1304,8 +1304,8 @@ words as bold headings with the same spacing):
   ```
    ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m  bug
      try 1/3 · ⏱ 2m · ⌀ at hand-back
-     └─◇ T-713 Task files: no si…  waits  change
-        └─◇ T-714 Help: /symcc-h…  waits  docs
+     └─◇ T-713 Task files: no …  waits  change
+        └─◇ T-714 Help: /symcc-he…  waits  docs
      └─◇ T-716 Live deps…  waits  + also T-690  feature
   ```
 
