@@ -1,0 +1,68 @@
+# Publishes the VS Code and Cursor extension (hosts/cursor/extension, kourgeorge.symcc) to the VS Code Marketplace
+# and Open VSX when a tag vscode-v<version> is pushed. docs/releasing.md has the steps and the one-time setup.
+# Secrets: VSCE_PAT (an Azure DevOps token with the Marketplace Manage scope) and OVSX_PAT (an Open VSX token).
+name: release-extension
+
+on:
+  push:
+    tags: ['vscode-v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-extension
+  cancel-in-progress: false
+
+env:
+  VSCE: '@vscode/vsce@4.1.1'
+  OVSX: 'ovsx@1.4.0'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: hosts/cursor/extension
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+      - name: The tag matches the version
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_REF_NAME" != "vscode-v$version" ]; then
+            echo "::error::the tag is $GITHUB_REF_NAME, but package.json says $version (tag vscode-v$version)"
+            exit 1
+          fi
+          if ! grep -q "^## $version\$" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## $version' section"
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+      - name: Install
+        run: |
+          (cd .. && npm ci --omit=optional --no-audit --no-fund)
+          npm ci --no-audit --no-fund
+      - name: Check
+        run: |
+          npm run typecheck
+          (cd .. && bun test tests/find.spec.ts)
+      - name: Package
+        run: npx -y "$VSCE" package --out "symcc-$VERSION.vsix"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: symcc-${{ env.VERSION }}.vsix
+          path: hosts/cursor/extension/symcc-${{ env.VERSION }}.vsix
+          if-no-files-found: error
+      # --skip-duplicate: re-running the job after one store failed publishes to the other only
+      - name: Publish to the VS Code Marketplace
+        run: npx -y "$VSCE" publish --skip-duplicate --packagePath "symcc-$VERSION.vsix"
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      - name: Publish to Open VSX
+        run: npx -y "$OVSX" publish --skip-duplicate "symcc-$VERSION.vsix"
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
