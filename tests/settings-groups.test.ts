@@ -1,5 +1,13 @@
 import { expect, test } from 'claude-code/testing'
-import { SETTING_GROUPS, SETTING_NAMES, SETTING_PAGES, emptyBoard, leadSettingsText, settingsText } from '../hooks/board'
+import { SETTINGS, SETTING_GROUPS, SETTING_NAMES, SETTING_PAGES, emptyBoard, leadSettingsText, settingsText, settingDots, settingsRuleWidth, settingInfo } from '../hooks/board'
+
+test('T-1055: both boards share the Settings dot leaders and rule width: every value starts in one column', () => {
+  const ends = [...SETTINGS.map(x => x.label), 'Roles', 'Task types'].map(l => (l + settingDots(l)).length)
+  expect(new Set(ends).size).toBe(1)
+  expect(settingDots('Task types').trim().length).toBeGreaterThanOrEqual(2)
+  expect([0, 30, 100].map(settingsRuleWidth)).toEqual([10, 28, 60])
+  expect(settingInfo('max_parallel')?.label).toBe(SETTINGS.find(s => s.name === 'max_parallel')!.label)
+})
 
 test('every setting is in exactly one category (a new setting needs one), and so are the Roles and Task types pages', () => {
   const all = SETTING_GROUPS.flatMap(g => g.items)
