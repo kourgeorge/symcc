@@ -8,7 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_IDLE, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveNowSegs, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
+import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_IDLE, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveNowSegs, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, SETTINGS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccMode, SymccTask } from '../../../types'
 import { ICON } from '../../name'
@@ -1523,20 +1523,31 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 1, settingsOpen: ALL_GROUPS }, NOW, 140)
   const s = settings.lines.map(lineText)
   for (const g of ['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts']) expect(s).toContain(`  ▾ ${g}`)
-  expect(s.find(l => l.includes('max_parallel'))).toMatch(/max_parallel +2 · default 3 · 1-8/)
-  expect(s.find(l => l.includes('test_commands'))).toContain('bun test')
+  // T-1047: rows are "label ..... value", with no default or range on the row
+  const mp = SETTINGS.find(x => x.name === 'max_parallel')!
+  expect(s.find(l => l.includes(mp.label))).toMatch(new RegExp(`${mp.label} \\.+ 2$`))
+  const ruleAt = s.findIndex(l => /^─+$/.test(l))
+  expect(s.slice(0, ruleAt).some(l => l.includes('· default') || l.includes('max_parallel'))).toBe(false)
+  expect(s.find(l => l.includes('Test commands .'))).toContain('bun test')
   // T-908: docs_test_commands sits right after test_commands under Checks before merging, none by default
   expect(settings.ids[settings.ids.indexOf('test_commands') + 1]).toBe('docs_test_commands')
-  expect(s.find(l => l.includes('docs_test_commands'))).toMatch(/docs_test_commands +none · default none/)
-  expect(s.find(l => /^› /.test(l))).toContain('mode')
+  expect(s.find(l => /^› /.test(l))).toContain(SETTINGS.find(x => x.name === 'mode')!.label)
   expect(settings.ids.slice(0, 2)).toEqual(['settings-group:Work', 'mode'])
+  // T-1047: under a rule, the selected row's help: its label, its meaning, then "name · default X · range"
+  const at = s.findIndex(l => /^─+$/.test(l))
+  expect(s.slice(at + 1, at + 2)).toEqual(['Mode'])
+  expect(s.some((l, i) => i > at && l.includes('mode · default auto merge · paused / approve merge / auto merge'))).toBe(true)
+  // and a 30-column panel keeps every closed group's line inside it
+  const narrow = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: [] }, NOW, 30).lines.map(lineText)
+  expect(narrow.filter(l => l.includes('▸')).length).toBe(5)
+  for (const l of narrow) expect(l.length).toBeLessThan(31)
   expect(settings.ids).toContain('notify')
   // T-695: one notify row holds the sound set (voice / sound 1 / sound 2 / sound 3 / off); no sound_set row
   expect(settings.ids.includes('sound_set' as never)).toBe(false)
   expect(s.some(l => l.includes('sound_set'))).toBe(false)
-  expect(s.find(l => /notify +sound/.test(l))).toMatch(/notify +sound 2 · default voice .*· voice \/ sound 1 \/ sound 2 \/ sound 3/)
+  expect(s.find(l => l.includes(SETTINGS.find(x => x.name === 'notify')!.label + ' .'))).toMatch(/\.+ sound 2/)
   expect(settings.ids[settings.ids.indexOf('notify') + 1]).toBe('open_on_start')
-  expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
+  expect(settings.hits[s.findIndex(l => l.includes('Time per worker .'))]).toEqual({ setting: 'max_minutes' })
   expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the footer is core's settingsKeys, as Claude Code's: on a group heading Enter opens or closes it (T-584)
   expect(settings.keys).toEqual(settingsKeys(false))
@@ -1604,18 +1615,18 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   expect([board.state().tab, board.state().opened, board.state().run, board.state().cursor]).toEqual(['settings', '', '', 0])
   // the groups start closed: Enter on the Work heading opens it
   await board.press('open', 'ses_1')
-  expect(lines().some(l => l.includes('max_parallel') && l.includes('default 3'))).toBe(true)
+  expect(lines().some(l => l.includes(SETTINGS.find(x => x.name === 'max_parallel')!.label + ' .'))).toBe(true)
   await board.press('down', 'ses_1')
   await board.press('open', 'ses_1')
   await board.press('down', 'ses_1')
   await board.press('open', 'ses_1')
   ;(rowEls(panel).find(r => r.text.includes('▸ Checks before merging'))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
-  const checker = rowEls(panel).find(r => r.text.includes('checker ') && r.text.includes('default off'))!
+  const checker = rowEls(panel).find(r => r.text.includes(SETTINGS.find(x => x.name === 'checker')!.label + ' .'))!
   ;(checker.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await new Promise<void>(res => setTimeout(res, 0))
   // a bad value is not sent
   answers.prompt = 'lots'
-  const maxMinutes = rowEls(panel).find(r => r.text.includes('max_minutes'))!
+  const maxMinutes = rowEls(panel).find(r => r.text.includes(SETTINGS.find(x => x.name === 'max_minutes')!.label + ' .'))!
   ;(maxMinutes.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await new Promise<void>(res => setTimeout(res, 0))
   expect(board.state().cursor).toBe(3)
@@ -1629,7 +1640,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   // T-695: notify is picked from the five choices, sound set included
   ;(rowEls(panel).find(r => r.text.includes('▸ Board and alerts'))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   answers.select = 'sound 3'
-  const notifyRow = rowEls(panel).find(r => /notify +sound 2/.test(r.text))!
+  const notifyRow = rowEls(panel).find(r => /Alert \.+ sound 2/.test(r.text))!
   ;(notifyRow.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await new Promise<void>(res => setTimeout(res, 0))
   expect(picks.at(-1)).toEqual(['voice', 'sound 1', 'sound 2', 'sound 3', 'off'])
@@ -1702,8 +1713,8 @@ test('T-562: the Settings tab opens the Roles and Task types pages from view.jso
   // the Settings list: the Roles and Task types rows with their counts, each a row the cursor goes over
   const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ['Workers'] }, NOW, 140)
   const s = settings.lines.map(lineText)
-  expect(s.find(l => l.includes('Roles'))).toMatch(/Roles +4 roles · 1 off/)
-  expect(s.find(l => /^ +Task types/.test(l))).toMatch(/Task types +2 task types/)
+  expect(s.find(l => l.includes('Roles'))).toMatch(/Roles \.+ 4 roles · 1 off/)
+  expect(s.find(l => /^ +Task types/.test(l))).toMatch(/Task types \.+ 2 task types/)
   expect(settings.ids).toContain('roles')
   expect(settings.ids).toContain('kinds')
   expect(settings.hits[s.findIndex(l => l.includes('4 roles'))]).toEqual({ page: 'roles' })
@@ -2024,12 +2035,13 @@ test('T-585: the Settings tab\'s groups open and close like the Claude Code boar
   const c = closed.lines.map(lineText)
   const pages = { roles: '0 roles', kinds: '0 task types' }
   for (const g of SETTING_GROUPS) {
-    const sum = groupSummaryParts(g, f.view, 136, pages)
-    expect(c.some(l => l.endsWith(`▸ ${sum.title}${sum.values}`))).toBe(true)
+    // T-1047: the title padded to one column, then the values in short
+    const sum = groupSummaryParts(g, f.view, 140 - 4 - 24 + g.title.length + 3, pages)
+    expect(c.some(l => l.includes(`▸ ${sum.title.padEnd(24)}`) && l.endsWith(sum.values.replace(/^ · /, '')))).toBe(true)
   }
   expect(c.find(l => l.includes('▸ Work'))).toContain('auto')
   expect(closed.ids).toEqual(SETTING_GROUPS.map(g => `settings-group:${g.title}`))
-  expect(c.some(l => l.includes('max_parallel'))).toBe(false)
+  expect(c.some(l => l.includes('Workers at once'))).toBe(false)
   expect(closed.hits[c.findIndex(l => l.includes('▸ Work'))]).toEqual({ settingGroup: 'Work' })
   // startTui: Enter on a heading and a click on one open and close it
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
@@ -2059,10 +2071,10 @@ test('T-585: the Settings tab\'s groups open and close like the Claude Code boar
   await board.press('open', 'ses_1')
   expect(board.state().settingsOpen).toEqual(['Work'])
   expect(lines().some(l => l.includes('▾ Work'))).toBe(true)
-  expect(lines().some(l => l.includes('max_parallel'))).toBe(true)
+  expect(lines().some(l => l.includes('Workers at once'))).toBe(true)
   await board.press('open', 'ses_1')
   expect(board.state().settingsOpen).toEqual([])
-  expect(lines().some(l => l.includes('max_parallel'))).toBe(false)
+  expect(lines().some(l => l.includes('Workers at once'))).toBe(false)
   // a click on Scouts opens it and puts the cursor on its heading
   clickRow('▸ Scouts')
   expect(board.state().settingsOpen).toEqual(['Scouts'])

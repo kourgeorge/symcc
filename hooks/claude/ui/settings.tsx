@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, settingRowValue, groupHint, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, mergeRoles, roleKeys, roleEditKeys, rolesKeys, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, isCheckerRole, checkerOn } from '../../board'
+import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, settingRowValue, settingsHelpOf, groupHint, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, mergeRoles, roleKeys, roleEditKeys, rolesKeys, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
@@ -634,14 +634,10 @@ export async function settingsPage($: $, pane: PaneParts) {
     return helpFor(k && (k.startsWith('setting:') || k.startsWith('group:') || k.startsWith('settings-r') || k.startsWith('settings-k')) ? k : first)
   }
   const helpFor = (k: string): { lines: string[]; name: string } => {
-    if (k.startsWith('setting:')) {
-      const x = SETTINGS.find(s => s.name === k.slice(8))
-      if (x) return { name: x.label, lines: [x.meaning, `${x.name} · default ${x.default} · ${x.range}`] }
-    }
-    if (k === 'settings-roles') return { name: 'Roles', lines: ['The worker roles: open, edit, turn off or add one.'] }
-    if (k === 'settings-kinds') return { name: 'Task types', lines: ['The kinds of task: open, edit, turn off or add one.'] }
-    const g = SETTING_GROUPS.find(x => `group:${x.title}` === k)
-    return { name: g?.title ?? '', lines: g ? [groupHint(g.title)] : [] }
+    if (k.startsWith('setting:')) return settingsHelpOf({ setting: k.slice(8) })
+    if (k === 'settings-roles') return settingsHelpOf({ page: 'roles' })
+    if (k === 'settings-kinds') return settingsHelpOf({ page: 'kinds' })
+    return settingsHelpOf({ group: SETTING_GROUPS.find(x => `group:${x.title}` === k)?.title ?? '' })
   }
   const help = helpOf()
   return (
