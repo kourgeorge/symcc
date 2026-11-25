@@ -24,9 +24,9 @@ import type { AgentChoice, FromWebview, PanelActionId, PanelMode, ToWebview } fr
 import { manifestVersion } from '../../hooks/host'
 import { nodeFs } from '../node/host'
 
-/** The symcc folder this file ships in: hosts/cursor/main.ts, or its bundle in hosts/cursor/dist/. */
+/** The symcc folder this file ships in: hosts/cursor/main.ts, its bundle in hosts/cursor/dist/, or editor/serve.mjs. */
 const HERE = dirname(fileURLToPath(import.meta.url))
-const PLUGIN_ROOT = resolve(HERE, basename(HERE) === 'dist' ? '../../..' : '../..')
+const PLUGIN_ROOT = resolve(HERE, basename(HERE) === 'editor' ? '..' : basename(HERE) === 'dist' ? '../../..' : '../..')
 
 /** `--name value` options; a bare option with no value after it is refused. */
 export function parseOptions(argv: readonly string[]): Record<string, string> {
@@ -181,6 +181,8 @@ async function main() {
       .finally(() => process.exit(0)))
   process.on('SIGTERM', () => stop('the editor stopped symcc'))
   process.on('SIGINT', () => stop('symcc got Ctrl-C'))
+  // an editor that went away no longer reads stdout
+  process.stdout.on('error', () => stop('the editor closed symcc'))
 
   const lines = createInterface({ input: process.stdin, terminal: false })
   lines.on('close', () => stop('the editor closed symcc'))
