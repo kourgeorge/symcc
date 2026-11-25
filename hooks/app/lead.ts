@@ -306,7 +306,7 @@ const onHereText = (b: Board) => {
  * window on if it was off here; this window is then a lead and may drive again by the normal rules. "already enabled"
  * only when both were on already.
  */
-export async function enableHere(host: Host, tell: (text: string) => void, command: 'enable' | 'drive' = 'enable'): Promise<string> {
+export async function enableHere(host: Host, tell: (text: string) => void): Promise<string> {
   let b = await load(host)
   if (b.enabled !== false && !S.offHere) return setSymcc(host, true)
   if (b.enabled === false) {
@@ -321,11 +321,11 @@ export async function enableHere(host: Host, tell: (text: string) => void, comma
   if (openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true }).catch(() => undefined)
   await claimLead(host).catch(() => false)
   void pump(host)
-  tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-${command}. You are a lead again; the board is in mode ${modeOf(b)}.`)
+  tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-enable. You are a lead again; the board is in mode ${modeOf(b)}.`)
   return onHereText(b)
 }
 
-/** The heartbeat of a window off here: it drives nothing; it looks whether the window with symcc on is gone and tells the owner once. */
+/** The heartbeat of a window off here: it drives nothing and only keeps the driver notice fresh. */
 export async function offHereBeat(host: Host, nowMs = Date.now()) {
   await refreshMe(host)
   // a hand-over that landed on this window (it asked with /drive before turning off): give the board straight back

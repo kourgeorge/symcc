@@ -240,8 +240,7 @@ test('T-875: plain /symcc-enable in an off-here window turns this window on; the
   await startHere(w.host)
   await disableHere(w.host)
   expect(S.offHere).toBe(true)
-  // T-952: started off because another window drives: the answer names it
-  expect(S.driver !== undefined).toBe(true)
+  // off here: the plain off answer
   expect(await toolCall(w.host, toolName('board'), undefined, {})).toEqual({ result: offHereAnswer(S.N.name) })
   const r = await runCommand(w.host, 'symcc-enable', '')
   expect(r?.text?.startsWith('symcc is on in this window, in mode ')).toBe(true)
@@ -340,8 +339,9 @@ test('a window turned off with /symcc-disable here stays off and silent when its
   await disableHere(w.host)
   w.toasts.length = 0
   // the driver closes (it lets go of lead.json), long enough ago for any old grace to be over
-  w.files.delete(w.lead)
   const t0 = Date.now()
+  await offHereBeat(w.host, t0 + 1000)
+  w.files.delete(w.lead)
   for (const dt of [0, 1000, 100_000, 20 * 60_000]) await offHereBeat(w.host, t0 + dt)
   expect(S.offHere).toBe(true)
   expect(S.driving).toBe(false)

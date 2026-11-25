@@ -1,7 +1,6 @@
 // T-952: a window that doesn't drive the board names the window that does: when it started driving (lead.json's
 // `since`, kept across its heartbeats) and when it was last active (`active`: its owner's last prompt or turn end), else
-// when it last checked in (the heartbeat, for an older lead.json). Off here: "another window drives this board (…) ·
-// /symcc-drive to drive from here · /symcc-enable to follow it"; following: "this window follows (…); /symcc-drive to
+// when it last checked in (the heartbeat, for an older lead.json). Following: "this window follows (…); /symcc-drive to
 // drive from here". Shorter forms when narrow: "started …" goes first, then the commands get short.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
