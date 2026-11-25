@@ -379,7 +379,7 @@ test('T-902: /symcc-status prints the Live tab as text (needs you, the lanes and
       const text = await slashCommand(s, 'symcc-status', '')
       expect(statusHeadings(text).filter(h => h !== 'BRANCHES')).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
       expect(statusSection(text, 'TASKS').some(l => l.startsWith(' ▶ T-2') && l.endsWith('↺2'))).toBe(true)
-      expect(statusSection(text, 'TASKS').includes('   └─◇ T-4 Write t…  waits  change')).toBe(true)
+      expect(statusSection(text, 'TASKS').includes('   └─◇ T-4 Write the export  waits  change')).toBe(true)
       // T-938: TODAY's first row is "Now:" the mode line (no stand-alone mode line above the sections), then the figures
       expect(statusSection(text, 'TODAY')[0]!.startsWith(' Now: ⏸ paused · agents ')).toBe(true)
       expect(text.split('\n')[0]!.startsWith('─── ❯ ')).toBe(true)

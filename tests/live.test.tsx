@@ -153,10 +153,10 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
   const t = liveTrains(trainView, T0)
   const rows = trainRows(t.lanes['T-712']!, 100)
   expect(rows.map(r => segText(r.segs))).toEqual([
-    '  └─◇ T-713 Task files: no …  waits  change',
-    '     └─◇ T-714 Help: /symcc-he…  waits  change',
-    '     └─◇ T-717 Waits for a tod…  waits  + also T-690  change',
-    '  └─◇ T-716 Live deps drawn…  waits  + also T-690  change',
+    '  └─◇ T-713 Task files: no silent d…  waits  change',
+    '     └─◇ T-714 Help: /symcc-help shows…  waits  change',
+    '     └─◇ T-717 Waits for a todo and a …  waits  + also T-690  change',
+    '  └─◇ T-716 Live deps drawn as trai…  waits  + also T-690  change',
   ])
   // T-1058: the kind ends every row and takes only title characters ("waits" and "+ also" come first)
   for (const w of [60, 50]) for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, segText(r.segs).endsWith('change')]).toEqual([w, true])
@@ -167,6 +167,9 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
     if (text.includes('investigation')) expect(text).toContain('T-690 Wai')
   }
   expect(segText(trainRows(long, 30)[0]!.segs)).not.toContain('investigation')
+  // a short title on a wide panel keeps its whole title and shows the kind
+  const fix = [{ id: 'T-714', title: 'Fix it', kind: 'feature', also: [], trains: [] }] as never
+  expect(segText(trainRows(fix, 120)[0]!.segs)).toBe('  └─◇ T-714 Fix it  waits  feature')
   // the kind never replaces "waits"
   const help = [{ id: 'T-714', title: 'Help: /symcc-help shows all', kind: 'change', also: [], trains: [] }] as never
   expect(segText(trainRows(help, 24)[0]!.segs)).toBe('  └─◇ T-714 Hel…  change')
@@ -264,6 +267,13 @@ test('T-690: lane lines fit the width with nothing cut, and the current station 
     expect([width, b.gap, b.sep, b.labels, b.rightW]).toEqual([width, a.gap, a.sep, a.labels, a.rightW])
     expect([width, !!b.kindW]).toEqual([width, a.titleW - 15 >= 3])
     if (b.kindW) expect(b.titleW).toBe(a.titleW - 15)
+  }
+  // a short title on a wide panel keeps its whole title and shows the kind
+  for (const width of [80, 120, 200]) {
+    const one = [{ ...liveLanes(view(true), T0)[0]!, id: 'T-99', title: 'Fix login', kind: 'bug' }]
+    const lk = liveLayout(one, liveStations(true), width, true)
+    const first = segText(laneLines(one[0]!, lk, { nowMs: T0, frame: 0 })[0])
+    expect([width, first.includes('T-99 Fix login'), first.endsWith('bug')]).toEqual([width, true, true])
   }
   // T-867: the tokens against the median per merged task: from twice it, "(n×median)" in the warning tone
   const over = laneLines(lanes.find(x => x.id === 'T-685')!, l, { nowMs: T0, frame: 0 })[1]

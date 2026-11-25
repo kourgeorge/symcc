@@ -671,8 +671,12 @@ export function liveLayout(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Par
   const plain = liveLayoutPlain(lanes, stations, fullWidth)
   if (!withKind) return plain
   const kindW = 2 + Math.max(0, ...lanes.map(l => textWidth(l.kind ?? '')))
-  if (plain.titleW - kindW < 3) return { ...plain, kindDropped: true }
-  return { ...plain, titleW: plain.titleW - kindW, kindW }
+  // the room the plain row leaves free: the kind just goes there; only what is missing is cut from the title
+  const free = plain.width - laneWidth(plain.idW, plain.titleW, plain.stations.length, plain.gap, plain.sep, plain.rightW)
+  if (free >= kindW) return { ...plain, kindW }
+  const cut = kindW - free
+  if (plain.titleW <= 3 || plain.titleW - cut < 3) return { ...plain, kindDropped: true }
+  return { ...plain, titleW: plain.titleW - cut, kindW }
 }
 
 function liveLayoutPlain(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Partial<Pick<LiveLane, 'done' | 'kind'>>)[], stations: readonly LiveStation[], fullWidth: number): LiveLayout {
@@ -965,7 +969,11 @@ function trainLine(x: LiveTrain, depth: number, width: number): LiveSeg[] {
   if (b && x.kind) {
     const shown = Math.min(b.titleW, textWidth(x.title))
     const kindW = textWidth(x.kind) + 2
-    if (shown > 3 && shown - kindW >= 3) return make(b.t, shown - kindW, x.kind)
+    const rowW = textWidth(lead + x.id + b.t.waits + b.t.also) + (b.titleW > 0 ? 1 + shown : 0)
+    const free = width - rowW
+    if (b.titleW > 0 && free >= kindW) return make(b.t, b.titleW, x.kind)
+    const cut = kindW - free
+    if (b.titleW > 0 && shown > 3 && shown - cut >= 3) return make(b.t, shown - cut, x.kind)
   }
   if (b) return make(b.t, b.titleW)
   // narrower than its lead and id: cut
