@@ -44,7 +44,7 @@ test('T-769: ▍Today in 4 lines at a wide panel: the figures, the per-task medi
   const lines = liveTodayLines({ tasks: TASKS as never[], today_team: TEAM }, T0, 140, 0)
   expect(texts(lines)).toEqual([
     '✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ ⌀ 10M',
-    '⌀ ░░████████▓▒▒▒▒▒ lead 10% · workers 57% · checkers 3% · scouts 30%',
+    '⌀ ████████████████ lead 10% · workers 57% · checkers 3% · scouts 30%',
     TODAY_LINE_3,
     '⏱ 1h 15m agent work · ≈ $12 this session   busiest hour 11:00 · ⌀ 4M   ⌀/h 00▕▁▁▁▁▁▁▁▁▄▁▂█▁···········▏24',
   ])
@@ -53,8 +53,8 @@ test('T-769: ▍Today in 4 lines at a wide panel: the figures, the per-task medi
   expect(/[▁▂▃▄▅▆▇]/.test(texts(lines)[2]!)).toBe(false)
   expect(/ 00▕[▁▂▃▄▅▆▇█]+·{11}▏24$/.test(texts(lines)[3]!)).toBe(true)
   // the bar's parts and the shares in their board colors
-  const bar = lines[1]!.filter(s => /^[█▓▒░]+$/.test(s.text))
-  expect(bar.map(s => [s.text[0], LIVE_TONE[s.tone]])).toEqual([['░', 'success'], ['█', 'ide'], ['▓', 'autoAccept'], ['▒', 'suggestion']])
+  const bar = lines[1]!.filter(s => /^█+$/.test(s.text))
+  expect(bar.map(s => [s.text[0], LIVE_TONE[s.tone]])).toEqual([['█', 'success'], ['█', 'ide'], ['█', 'autoAccept'], ['█', 'suggestion']])
   expect(lines[1]!.find(s => s.text === 'checkers 3%')?.tone).toBe('checkers')
   // the hour labels dim
   expect(lines[3]!.filter(s => ['⌀/h 00', '24'].includes(s.text.trim())).map(s => s.tone)).toEqual(['dim', 'dim'])
@@ -64,7 +64,7 @@ test('T-769: ▍Today in 4 lines at a wide panel: the figures, the per-task medi
   const free = liveTodayLines({ tasks: TASKS as never[], today_team: { ...TEAM, usd: undefined } }, T0, 140, 0)
   expect(segText(free[3]!)).toBe('⏱ 1h 15m agent work   busiest hour 11:00 · ⌀ 4M   ⌀/h 00▕▁▁▁▁▁▁▁▁▄▁▂█▁···········▏24')
   // a part with few tokens still gets a cell
-  expect(segText(todayBar([{ who: 'lead', tokens: 1 }, { who: 'workers', tokens: 999 }]))).toBe(`░${'█'.repeat(15)}`)
+  expect(segText(todayBar([{ who: 'lead', tokens: 1 }, { who: 'workers', tokens: 999 }]))).toBe('█'.repeat(16))
 })
 
 test('T-809: on a narrower panel line 4 drops busiest, then the cost, then squeezes the sparkline (labels stay, at the end); line 3 drops from its end; never wider', () => {
@@ -76,7 +76,7 @@ test('T-809: on a narrower panel line 4 drops busiest, then the cost, then squee
     // both hour labels and a sparkline end the line
     if (w >= 11) expect([w, s4, /⌀(?:\/h)? 00▕[▁▂▃▄▅▆▇█]+·*▏24$/.test(s4)]).toEqual([w, s4, true])
     expect([w, /[▁▂▃▄▅▆▇]/.test(segText(two)) || /[▁▂▃▄▅▆▇]/.test(segText(three))]).toEqual([w, false])
-    expect([w, /^⌀ [█▓▒░]+|^[█▓▒░]+/.test(segText(two))]).toEqual([w, true])
+    expect([w, /^⌀ █+|^█+/.test(segText(two))]).toEqual([w, true])
     // busiest goes before the cost
     expect([w, s4.includes('busiest') && !s4.includes('≈ $')]).toEqual([w, false])
   }
@@ -239,7 +239,7 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
     for (const l of all) expect([bodyColumns, l, textWidth(l) <= bodyColumns]).toEqual([bodyColumns, l, true])
     if (bodyColumns === 140) {
       expect(today[0]).toBe(`${LIVE_INDENT}✓ 3 merged   ↺ 0 sent back   ✗ 0 failed   Σ ⌀ 10M`)
-      expect(today[1]).toBe(`${LIVE_INDENT}⌀ ░░████████▓▒▒▒▒▒ lead 10% · workers 57% · checkers 3% · scouts 30%`)
+      expect(today[1]).toBe(`${LIVE_INDENT}⌀ ████████████████ lead 10% · workers 57% · checkers 3% · scouts 30%`)
       expect(today[2]).toBe(`${LIVE_INDENT}${TODAY_LINE_3}`)
       // (the hours depend on the machine's time zone: only the sparkline's end is compared)
       expect(today[3]!.startsWith(`${LIVE_INDENT}⏱ 1h 15m agent work · ≈ $12 this session   busiest hour `)).toBe(true)
@@ -248,7 +248,7 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
       // narrow (T-864: the owner's 60-80 columns too): the busiest hour goes first, then the cost; the bar kept,
       // and the sparkline always keeps its ⌀ label and borders at the end of line 4
       if (bodyColumns <= 60) expect(all.some(l => l.includes('≈ $'))).toBe(false)
-      expect(all.some(l => l.startsWith(`${LIVE_INDENT}⌀ ░░████████▓▒▒▒▒▒`))).toBe(true)
+      expect(all.some(l => l.startsWith(`${LIVE_INDENT}⌀ ████████████████`))).toBe(true)
       expect([bodyColumns, today[3], / ⌀(?:\/h)? 00▕[▁▂▃▄▅▆▇█]+·*▏24$/.test(today[3] ?? '')]).toEqual([bodyColumns, today[3], true])
       expect([bodyColumns, today[3]?.includes('busiest')]).toEqual([bodyColumns, false])
     }
