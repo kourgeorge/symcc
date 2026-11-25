@@ -1,4 +1,4 @@
-import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, beatText, driverTimes, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, driveNoticeParts, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
+import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, beatText, driverTimes, carriedText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, driveNoticeParts, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
 import { homeBranch } from './git'
 import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, fitView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
@@ -45,7 +45,7 @@ async function refreshMe(host: Host) {
   // driving under the made-up id: lead.json and the doing tasks move to the real id (as handOver does after /clear)
   await locked(host, async () => {
     const l = await readLead(host)
-    if (!l || l.session === old) await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...(l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}) }))
+    if (!l || l.session === old) await writeLead(host, carriedText(l, S.me, Date.now()))
   })
   if (await host.fs.exists(path(S.N.boardFile))) await change(host, b => relabelSession(b, old, S.me))
 }
@@ -57,7 +57,7 @@ export async function carryDriver(host: Host, old: string): Promise<boolean> {
   await locked(host, async () => {
     const l = await readLead(host)
     if (l && l.session === old) {
-      await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...(l.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}) }))
+      await writeLead(host, carriedText(l, S.me, Date.now()))
       moved = true
     }
   })
@@ -441,7 +441,7 @@ export async function handOver(host: Host) {
     await locked(host, async () => {
       const l = await readLead(host)
       if (S.driving) {
-        if (!l || l.session === old) await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...(l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}) }))
+        if (!l || l.session === old) await writeLead(host, carriedText(l, S.me, Date.now()))
         return
       }
       if (!l) return
