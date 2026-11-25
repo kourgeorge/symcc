@@ -21,7 +21,7 @@ import { markMerged } from './merged'
 import { publish, enableHere } from './lead'
 import { orgMemTool } from './org-mem'
 import { ORG_MEM_MAX_LINES, TOPIC_MAX_CHARS } from '../core/org-mem'
-import { canRunNow, runNowLine, runNowPlanText, runNowQuestion, runNowRefusal, runNowShares, runNowWaits } from '../core/run-now'
+import { backlogMovedText, canRunNow, runNowLine, runNowPlanText, runNowQuestion, runNowRefusal, runNowShares, runNowWaits } from '../core/run-now'
 
 /** T-717: how the lead keeps org-mem's topics tidy (in the orgmem tool's description and the lead's guide). */
 const TOPIC_RULES = 'reuse an existing topic when it fits (a new one only when nothing fits); keep about 6-10 topics; split a topic past ~15 notes, and merge one with only 1-2 notes into a close one; a topic disappears when its last note goes.'
@@ -766,7 +766,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         await scratchGone()
         await change($, x => promoteTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir), t.id, now()))
         void pump($)
-        return `${t.id} moved from the backlog to todo`
+        const nb = (await load($)).tasks
+        return backlogMovedText(nb, nb.find(x => x.id === t.id) ?? t)
       }
       if (t.status === 'backlog') {
         await scratchGone()
