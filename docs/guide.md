@@ -989,7 +989,10 @@ are about changes; under "How tasks ended" a read investigation shows as
   line per role:
 
   ```
-  ▍Roles  8 roles · 2 changed by you
+  ‹ [Settings]
+  Roles
+  8 roles · 2 changed by you
+  ────────────────────────────────────────────────────────────────
     NAME        FROM       MODEL   WEB  WRITES  WHAT IT'S FOR
   ❯ general     changed    —       —    code    a plain worker for any task
     checker     built-in   —       —    code    checks a finished change and tries to break it
