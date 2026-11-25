@@ -204,3 +204,20 @@ for (const [name, op] of [['merge', 'merge -q --no-edit side'], ['cherry-pick', 
     }
   }, 600_000)
 }
+
+// A merge whose conflict the worker resolved and staged but did not commit (the merge_main prompt allows leaving that
+// to symcc) is kept: symcc's commit finishes it as a merge commit, so the resolution and the merged-in branch reach main.
+test('T-1053: a merge the worker resolved but did not commit is committed by symcc as a merge, not aborted', async () => {
+  const r = await scratchRepo('wresolve', 'hello.txt', 'test -f hello.txt\n')
+  try {
+    expect((await r.cli({}, 'add', 'Say hello', 'Write hello.txt', '--files', 'hello.txt')).stdout).toContain('added T-1')
+    const fakeGit = `git add -A && ${W} commit -qm "worker: hello" && { ${W} merge -q --no-edit side >/dev/null 2>&1; echo resolved > hello.txt; git add -A; test -z "$(git ls-files -u)"; }`
+    const tick = await r.cli({ FAKE_GIT: fakeGit }, 'tick')
+    expect(tick.stdout).toMatch(/T-1 "Say hello" merged into main/)
+    expect((await r.git('show', 'main:hello.txt')).stdout).toBe('resolved\n')
+    expect((await r.git('merge-base', '--is-ancestor', 'side', 'main')).exitCode).toBe(0)
+    expect((await r.git('log', '--merges', '--format=%H', 'main')).stdout.trim()).not.toBe('')
+  } finally {
+    await rm(r.repo, { recursive: true, force: true })
+  }
+}, 600_000)

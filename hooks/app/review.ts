@@ -172,7 +172,8 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // folder is on the task's branch again and symcc's commit lands there
   const onBranch = await backOnBranch($, dir, taskBranch(t))
   if (onBranch) return { ok: false, reason: 'other', detail: onBranch }
-  // T-1053: a merge or cherry-pick (revert, am) it left stopped on a conflict is aborted, so no conflict markers get committed
+  // T-1053: a merge or cherry-pick (revert, am) it left stopped on a conflict is aborted, so no conflict markers get
+  // committed; one it resolved but did not commit is finished by symcc's commit below
   const unfinished = await endUnfinished($, dir)
   if (unfinished) return { ok: false, reason: 'other', detail: unfinished }
   // T-1053: the worker's own commits of this try (a commit, a merge of another branch), saved with the try's commits
@@ -417,22 +418,29 @@ async function backOnBranch($: Host, dir: string, branch: string): Promise<strin
 }
 
 /**
- * T-1053: ends a merge, cherry-pick, revert or `git am` the worker left unfinished in folder `dir` (stopped on a
- * conflict), so its conflict markers are never staged and committed: each is aborted, which puts the files back as they
- * were before it. '' when fine, else why symcc can't commit (files still unmerged after that).
+ * T-1053: ends a merge, cherry-pick, revert or `git am` the worker left stopped on a conflict in folder `dir`, so its
+ * conflict markers are never staged and committed: while files are still unmerged, each is aborted, which puts the
+ * files back as they were before it. One the worker fully resolved but did not commit is kept: symcc's own commit
+ * then finishes it (a merge becomes a merge commit), as the merge_main prompt allows. A `git am` is always aborted
+ * (a commit does not end it). '' when fine, else why symcc can't commit (files still unmerged after that).
  */
 async function endUnfinished($: Host, dir: string): Promise<string> {
   const pending = async (ref: string) => {
     const r = await git($, ['rev-parse', '-q', '--verify', ref], dir)
     return r.exitCode === 0 && !!r.stdout.trim()
   }
-  for (const [ref, cmd] of [['MERGE_HEAD', 'merge'], ['CHERRY_PICK_HEAD', 'cherry-pick'], ['REVERT_HEAD', 'revert']] as const) {
-    if (await pending(ref)) await git($, [cmd, '--abort'], dir)
+  const unmerged = async () => {
+    const r = await git($, ['ls-files', '-u', '-z'], dir)
+    return r.exitCode === 0 && !!r.stdout.trim()
+  }
+  if (await unmerged()) {
+    for (const [ref, cmd] of [['MERGE_HEAD', 'merge'], ['CHERRY_PICK_HEAD', 'cherry-pick'], ['REVERT_HEAD', 'revert']] as const) {
+      if (await pending(ref)) await git($, [cmd, '--abort'], dir)
+    }
   }
   const apply = (await git($, ['rev-parse', '--path-format=absolute', '--git-path', 'rebase-apply'], dir)).stdout.trim()
   if (apply && (await $.fs.exists(apply).catch(() => false))) await git($, ['am', '--abort'], dir)
-  const unmerged = await git($, ['ls-files', '-u', '-z'], dir)
-  if (unmerged.exitCode === 0 && unmerged.stdout.trim()) return 'the worker left files with unresolved merge conflicts in its folder, so symcc did not commit them'
+  if (await unmerged()) return 'the worker left files with unresolved merge conflicts in its folder, so symcc did not commit them'
   return ''
 }
 
