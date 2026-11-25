@@ -51,7 +51,7 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
     const picks = x.kind === 'onoff' ? ['on', 'off'] : settingChoices(name, v.notify_choices)
     const choices = picks.length ? picks : null
     const key = `vs-setting-${name}`
-    const first = x.meaning.split(/(?<=[.!?])\s/)[0]!
+    const first = x.meaning.split(/(?<=[.!?])\s(?=[A-Z])/)[0]!
     const short = first.length > 100 ? first.slice(0, 100).replace(/\s+\S*$/, '').replace(/[\s;:,]+$/, '') : first
     const about = line(`${key}-about`, null, plain('about', `${name}  ${short}`))
     if (choices) {
