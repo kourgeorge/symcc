@@ -1,6 +1,6 @@
 // A stand-in for the extension in a plain browser: demo data (made up, for looking at the panel) and replies that
 // act like the engine's, so every card and button can be tried. Loaded before the webview's bridge.
-import type { ChatItem, FromWebview, LeadSettings, ModelInfo, PanelLane, PanelNeed, PanelNews, PanelStep, PanelTask, PanelView, PanelWorktree, SlashItem, ToWebview } from '../../protocol'
+import type { ChatItem, FromWebview, LeadSettings, ModelInfo, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelOrgNote, PanelStep, PanelTask, PanelView, PanelWorktree, SlashItem, ToWebview } from '../../protocol'
 import { copilotModels } from '../../copilot'
 
 const now = Date.now()
@@ -197,7 +197,23 @@ const leadTurn = (): PanelStep[] => {
   ]
 }
 
+/** ?state=idle: all done, nothing running or waiting, a backlog left. */
 function view(): PanelView {
+  const v = busyView()
+  if (state !== 'idle') return v
+  const backlog = v.tasks.filter(t => t.status === 'backlog')
+  return {
+    ...v,
+    needs: [],
+    lanes: [],
+    next: [],
+    tasks: v.tasks.filter(t => t.status === 'done' || t.status === 'backlog'),
+    counts: { needs: 0, running: 0, next: 0, doneToday: 6, backlog: backlog.length },
+    idle: { kind: 'done', text: 'All done · last merged T-38, 4m ago', hint: `Tell the lead what's next, or move one of ${backlog.length} backlog items to todo.`, next: backlog.map(t => ({ id: t.id, title: t.title })), more: 0 },
+  }
+}
+
+function busyView(): PanelView {
   const off = (window as unknown as { __off?: boolean }).__off
   return {
     on: !off,
@@ -232,8 +248,39 @@ function view(): PanelView {
       { name: 'secrets', summary: 'Looks for keys and tokens committed by mistake.', every: 'every 2 days', running: true, paused: false, lastRunMs: m(2900) },
     ],
     counts: { needs: needs.length, running: 3, next: next.length, doneToday: 6, backlog: 3 },
+    idle: { kind: 'waiting', text: 'Nothing running · 2 waiting: T-46 waits for T-42, T-47 waits for T-46', next: [], more: 0 },
+    orgMem: orgMem(),
     dir: '.symcc',
     nowMs: Date.now(),
+  }
+}
+
+let notes: Omit<PanelOrgNote, 'key' | 'head' | 'ask'>[] = [
+  { n: 7, date: '2026-11-23', topic: 'tests', text: 'Run one test file with npm test -- test/invoices; the whole suite takes four minutes.' },
+  { n: 6, date: '2026-11-22', topic: 'git', text: 'Rebase on main before asking for review; main moves several times a day.' },
+  { n: 5, date: '2026-11-21', topic: 'tests', text: 'The date tests pin TZ=UTC in package.json; never build today from the local clock.' },
+  { n: 4, date: '2026-11-20', topic: 'api', text: 'Every route returns errors as { error, code }; reuse src/http/errors.ts.' },
+  { n: 3, date: '2026-11-19', topic: 'ci', text: 'CI skips the e2e job on branches named symcc/*; run npm run e2e locally when touching routes.' },
+  { n: 2, date: '2026-11-18', topic: 'api', text: 'Money is integer cents everywhere; format it only in src/format/money.ts.' },
+  { n: 1, date: '', topic: 'unsorted', text: 'Ask Dana before changing anything under src/billing/legacy.' },
+]
+function orgMem(): PanelOrgMem {
+  const file = '.symcc/org-mem.md'
+  const counts = new Map<string, number>()
+  for (const x of notes) counts.set(x.topic, (counts.get(x.topic) ?? 0) + 1)
+  const topics = [...counts].map(([topic, count]) => ({ topic, count })).sort((a, b) => (a.topic === 'unsorted' ? 1 : b.topic === 'unsorted' ? -1 : b.count - a.count || a.topic.localeCompare(b.topic)))
+  return {
+    file,
+    max: 60,
+    title: 'Organizational memory (org-mem)',
+    subtitle: 'Notes shared with workers, checkers and scouts',
+    about: `Notes for the agents: symcc puts ${file} (at most 60 lines) into every new worker's, checker's and scout's prompt. Agents may suggest notes right after they hand back a task (one short follow-up question); the lead decides what goes in. You may edit the file by hand too.`,
+    empty: 'No notes yet.',
+    topics,
+    notes: notes.map(x => {
+      const head = `#${x.n} · ${x.date || 'written by hand'}`
+      return { ...x, key: x.n.toString(16).padStart(6, '0'), head, ask: `Delete note ${head} from ${file}?` }
+    }),
   }
 }
 
@@ -320,6 +367,13 @@ window.acquireVsCodeApi = () => ({
       mode = msg.mode
       reply(`The board is now in ${msg.mode === 'paused' ? 'paused' : msg.mode === 'review' ? 'approve merge' : 'auto merge'} mode.`)
       later(450, () => send({ type: 'view', view: view() }))
+      return
+    }
+    if (msg.type === 'forget') {
+      const gone = notes.find(x => x.n === msg.n)
+      notes = notes.filter(x => x !== gone).map(x => (x.n > msg.n ? { ...x, n: x.n - 1 } : x))
+      reply(gone ? `Deleted note ${msg.n} from .symcc/org-mem.md${gone.date ? ` (${gone.date})` : ''}.` : `No note ${msg.n}.`)
+      later(300, () => send({ type: 'view', view: view() }))
       return
     }
     if (msg.type === 'proxy') {

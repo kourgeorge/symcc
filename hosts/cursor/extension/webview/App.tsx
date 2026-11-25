@@ -1,11 +1,11 @@
-// The board panel: a rail (Now, Board, Worktrees, Scouts), the header with the mode switch, and the page. Now is one stream:
+// The board panel: a rail (Now, Board, Worktrees, Scouts, Memory), the header with the mode switch, and the page. Now is one stream:
 // what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
 // with the message box under it, and the running work beside it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
+import type { BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
 import { LEAD_AGENT, addStep } from '../../steps'
 import { ask, onMessage, tell } from './bridge'
-import { Icon, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
+import { Icon, IdleNote, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
 import { TaskSession, latestStep, openSession, stepIcon, stepWords } from './session'
 import { LeadChat } from './chat'
 import { Worktrees, type WorktreeList } from './worktrees'
@@ -101,13 +101,15 @@ export function App() {
           <OffScreen view={view} onSay={say} />
         ) : view ? (
           page === 'now' ? (
-            <Now view={view} chat={chat} busy={busy} steps={steps} lead={lead} ready={engine.state === 'ready'} onSay={say} onTask={openTask} />
+            <Now view={view} chat={chat} busy={busy} steps={steps} lead={lead} ready={engine.state === 'ready'} onSay={say} onTask={openTask} onMemory={() => setPage('memory')} />
           ) : page === 'board' ? (
             <Board view={view} steps={steps} focus={focus} onSay={say} onTask={openTask} />
           ) : page === 'trees' ? (
             <Worktrees view={view} steps={steps} trees={trees} onSay={say} onTask={openTask} />
-          ) : (
+          ) : page === 'scouts' ? (
             <Scouts scouts={view.scouts} onSay={say} />
+          ) : (
+            <Memory mem={view.orgMem} onSay={say} />
           )
         ) : (
           <EngineScreen engine={{ state: 'starting' }} />
@@ -132,6 +134,7 @@ function Rail({ page, onPage, needs }: { page: Page; onPage: (p: Page) => void; 
       {item('board', 'checklist', 'Board')}
       {item('trees', 'repo-forked', 'Worktrees')}
       {item('scouts', 'telescope', 'Scouts')}
+      {item('memory', 'book', 'Memory')}
     </nav>
   )
 }
@@ -340,14 +343,14 @@ export function OffScreen({ view, onSay }: { view: PanelView; onSay: Say }) {
 
 /* ---------- Now: needs, stream, composer, running ---------- */
 
-function Now({ view, chat, busy, steps, lead, ready, onSay, onTask }: { view: PanelView; chat: ChatItem[]; busy: boolean; steps: Steps; lead: Lead; ready: boolean; onSay: Say; onTask: (id: string) => void }) {
+function Now({ view, chat, busy, steps, lead, ready, onSay, onTask, onMemory }: { view: PanelView; chat: ChatItem[]; busy: boolean; steps: Steps; lead: Lead; ready: boolean; onSay: Say; onTask: (id: string) => void; onMemory: () => void }) {
   return (
     <div className="now">
       <div className="center">
         <Needs needs={view.needs} tasks={view.tasks} onSay={onSay} onTask={onTask} />
         <LeadChat chat={chat} news={view.news} lanes={view.lanes} busy={busy} lead={steps[LEAD_AGENT] ?? []} ready={ready} settings={lead.settings} models={lead.models} slash={lead.slash} onSay={onSay} onTask={onTask} />
       </div>
-      <Side view={view} steps={steps} onTask={onTask} />
+      <Side view={view} steps={steps} onTask={onTask} onMemory={onMemory} />
     </div>
   )
 }
@@ -503,7 +506,7 @@ export function NeedCard({ need, task: of, onSay, onTask }: { need: PanelNeed; t
   )
 }
 
-function Side({ view, steps, onTask }: { view: PanelView; steps: Steps; onTask: (id: string) => void }) {
+function Side({ view, steps, onTask, onMemory }: { view: PanelView; steps: Steps; onTask: (id: string) => void; onMemory: () => void }) {
   const running = view.lanes.filter(l => l.doneMs === undefined && l.stations[l.at] !== 'you')
   const merged = view.lanes.filter(l => l.doneMs !== undefined)
   const shown = view.next.slice(0, 6)
@@ -513,7 +516,7 @@ function Side({ view, steps, onTask }: { view: PanelView; steps: Steps; onTask: 
         <h2>
           Running <span className="count">{view.counts.running}</span>
         </h2>
-        {running.length ? running.map(l => <LaneCard key={l.id} lane={l} step={l.agentId ? latestStep(steps[l.agentId]) : undefined} onTask={onTask} />) : <p className="quiet">Nothing running.</p>}
+        {running.length ? running.map(l => <LaneCard key={l.id} lane={l} step={l.agentId ? latestStep(steps[l.agentId]) : undefined} onTask={onTask} />) : <IdleNote idle={view.idle} onTask={onTask} />}
       </section>
       {!!merged.length && (
         <section>
@@ -544,6 +547,18 @@ function Side({ view, steps, onTask }: { view: PanelView; steps: Steps; onTask: 
         )}
       </section>
       {!!view.counts.backlog && <Backlog tasks={view.tasks.filter(t => t.status === 'backlog')} count={view.counts.backlog} onTask={onTask} />}
+      <section className="org-line">
+        <h2>
+          Organizational memory{' '}
+          <span className="count">
+            {view.orgMem.notes.length} / {view.orgMem.max}
+          </span>
+        </h2>
+        <button type="button" className="row-btn" onClick={onMemory}>
+          <Icon name="book" />
+          <span className="title">{view.orgMem.notes.length ? 'All notes' : view.orgMem.empty}</span>
+        </button>
+      </section>
     </aside>
   )
 }
@@ -793,6 +808,64 @@ function Scouts({ scouts, onSay }: { scouts: PanelScout[]; onSay: Say }) {
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+/* ---------- Organizational memory ---------- */
+
+/** Org-mem's notes, newest first, a topic at a time or all; each one deleted after the extension asks. */
+function Memory({ mem, onSay }: { mem: PanelOrgMem; onSay: Say }) {
+  const [pick, setPick] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<number | null>(null)
+  const topic = pick && mem.topics.some(t => t.topic === pick) ? pick : null
+  const notes = topic ? mem.notes.filter(x => x.topic === topic) : mem.notes
+  const forget = (n: number) => {
+    setDeleting(n)
+    ask({ type: 'forget', n })
+      .then(t => t && onSay(t), (e: Error) => onSay(e.message, true))
+      .finally(() => setDeleting(null))
+  }
+  return (
+    <div className="page memory">
+      <div className="page-head">
+        <h2>{mem.title}</h2>
+        <span className="count">{topic ? `${notes.length} of ${mem.notes.length}` : `${mem.notes.length} / ${mem.max}`}</span>
+        <button type="button" className="btn" onClick={() => tell({ type: 'open-file', path: mem.file })}>
+          <Icon name="go-to-file" /> Open {mem.file}
+        </button>
+      </div>
+      <p className="quiet mem-about">{mem.about}</p>
+      {mem.topics.length > 1 && (
+        <div className="mem-topics" role="group" aria-label="Topics">
+          <button type="button" className="mem-topic" aria-pressed={!topic} onClick={() => setPick(null)}>
+            all <span className="count">{mem.notes.length}</span>
+          </button>
+          {mem.topics.map(t => (
+            <button key={t.topic} type="button" className="mem-topic" aria-pressed={topic === t.topic} onClick={() => setPick(t.topic)}>
+              {t.topic} <span className="count">{t.count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {notes.length ? (
+        <ul className="mem-notes">
+          {notes.map(x => (
+            <li key={`${x.n}-${x.key}`} className="mem-note">
+              <div className="mem-note-head">
+                <span>{x.head}</span>
+                <span className="tag">{x.topic}</span>
+                <button type="button" className="icon-btn" title={`Delete note ${x.head}`} aria-label={`Delete note ${x.head}`} disabled={deleting !== null} onClick={() => forget(x.n)}>
+                  <Icon name={deleting === x.n ? 'loading' : 'trash'} />
+                </button>
+              </div>
+              <p>{x.text}</p>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="quiet">{mem.empty}</p>
+      )}
     </div>
   )
 }

@@ -81,6 +81,36 @@ export type PanelNews = { key: string; task: string; title: string; tone: 'good'
 
 export type PanelScout = { name: string; summary?: string; every: string; running: boolean; paused: boolean; lastRunMs?: number; nextRunMs?: number; lastReport?: string; warning?: string }
 
+/**
+ * Why nothing runs, in the board's words (hooks/core/live.ts liveIdleFacts): `text` says it whole ("Nothing running ·
+ * 2 waiting: T-3 waits for T-2"); when all is done, `hint` says what to do next and `next` holds the first backlog
+ * items, with `more` the rest.
+ */
+export type PanelIdle = { kind: 'fresh' | 'paused' | 'waiting' | 'done'; text: string; hint?: string; next: { id: string; title: string }[]; more: number }
+
+/**
+ * One note of organizational memory (hooks/core/org-mem.ts OrgMemNote): `n` is its place in the file (1 = the oldest
+ * line), `key` its check word, so a delete never takes another note after the file changed; `head` "#3 · 2026-11-20"
+ * and `ask` the delete's question, in the board's words.
+ */
+export type PanelOrgNote = { n: number; date: string; topic: string; text: string; key: string; head: string; ask: string }
+
+/**
+ * Organizational memory (org-mem): the notes every new worker, checker and scout reads in its prompt, newest first,
+ * with its topics (the biggest first), the file (".symcc/org-mem.md") and the most lines it keeps; the page's words
+ * come from the board (hooks/core/org-mem.ts).
+ */
+export type PanelOrgMem = {
+  file: string
+  max: number
+  title: string
+  subtitle: string
+  about: string
+  empty: string
+  topics: { topic: string; count: number }[]
+  notes: PanelOrgNote[]
+}
+
 export type PanelView = {
   /** symcc is on in this project (else `off` says why, and the panel offers to turn it on) */
   on: boolean
@@ -98,6 +128,9 @@ export type PanelView = {
   news: PanelNews[]
   scouts: PanelScout[]
   counts: { needs: number; running: number; next: number; doneToday: number; backlog: number }
+  /** what nothing running means, for when no lane runs */
+  idle: PanelIdle
+  orgMem: PanelOrgMem
   /** a note about the board itself (git missing, a data file near its size limit) */
   note?: string
   /** the data folder in the project (".symcc"), where each agent's session is kept: <dir>/sessions/<agent>.jsonl */
@@ -183,7 +216,7 @@ export type PanelStep = { atMs: number; kind: 'text' | 'thinking' | 'tool' | 'st
 export type NetworkProblem = { text: string; proxy: string; service: string }
 
 /** A page of the board panel. */
-export type BoardPage = 'now' | 'board' | 'trees' | 'scouts'
+export type BoardPage = 'now' | 'board' | 'trees' | 'scouts' | 'memory'
 
 /** From the extension to the webview (the board panel and the sidebar alike; `go` only to the panel). */
 export type ToWebview =
@@ -213,6 +246,7 @@ export type FromWebview =
   | { type: 'mode'; id: number; mode: PanelMode }
   | { type: 'command'; id: number; name: string; args?: string }
   | { type: 'scout'; id: number; name: string }
+  | { type: 'forget'; id: number; n: number }
   | { type: 'proxy'; id: number; proxy: string }
   | { type: 'log' }
   | { type: 'session'; agent: string; title: string }

@@ -54,7 +54,7 @@ export function sdkFor(agents: string | undefined): Sdk {
   throw new Error(`--agents is cursor or copilot, not ${agents}`)
 }
 
-type Request = { id?: unknown; op?: unknown; name?: unknown; input?: unknown; args?: unknown; text?: unknown; task?: unknown; action?: unknown; need?: unknown; mode?: unknown; model?: unknown; images?: unknown; path?: unknown; file?: unknown }
+type Request = { id?: unknown; op?: unknown; name?: unknown; input?: unknown; args?: unknown; text?: unknown; task?: unknown; action?: unknown; need?: unknown; mode?: unknown; model?: unknown; images?: unknown; path?: unknown; file?: unknown; n?: unknown; key?: unknown }
 
 const PANEL_ACTIONS: readonly PanelActionId[] = ['approve', 'reject', 'done', 'keep-note', 'ask-more', 'retry', 'run-now', 'drop', 'pause', 'resume', 'show-changes', 'to-todo', 'merge-now']
 const MODES: readonly PanelMode[] = ['paused', 'review', 'auto']
@@ -80,6 +80,10 @@ async function handle(s: CursorSession, r: Request, stop: () => void): Promise<s
     }
     case 'scout':
       return s.runScout(word(r.name, 'name'))
+    case 'forget': {
+      if (typeof r.n !== 'number' || !Number.isInteger(r.n) || r.n < 1) throw new Error('forget needs a note number')
+      return s.forget(r.n, word(r.key, 'key'))
+    }
     case 'tool':
       if (typeof r.name !== 'string') throw new Error('tool needs a name')
       return s.tool(r.name, r.input && typeof r.input === 'object' ? (r.input as Record<string, unknown>) : {})

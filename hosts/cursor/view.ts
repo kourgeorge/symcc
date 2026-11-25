@@ -7,7 +7,9 @@ import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isF
 import { isOpenQuestion } from '../../hooks/core/questions'
 import { viewMarks } from '../../hooks/core/board-parts'
 import { byRunOrder } from '../../hooks/core/board-file'
-import type { PanelAction, PanelActionId, PanelLane, PanelNeed, PanelNews, PanelScout, PanelSession, PanelTask, PanelView } from './protocol'
+import { liveIdle, liveIdleFacts } from '../../hooks/core/live'
+import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, ORG_MEM_SUBTITLE, ORG_MEM_TITLE, orgMemAbout, orgMemDeleteAsk, orgMemNoteHead, orgMemNoteKey, orgMemTopicCounts, type OrgMemNote } from '../../hooks/core/org-mem'
+import type { PanelAction, PanelActionId, PanelIdle, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelScout, PanelSession, PanelTask, PanelView } from './protocol'
 
 const ms = (iso: unknown): number | undefined => {
   const n = typeof iso === 'string' ? Date.parse(iso) : NaN
@@ -144,6 +146,25 @@ function panelLane(l: ReturnType<typeof liveLanes>[number], t: BoardTask | undef
   }
 }
 
+function panelOrgMem(notes: OrgMemNote[], file: string): PanelOrgMem {
+  return {
+    file,
+    max: ORG_MEM_MAX_LINES,
+    title: ORG_MEM_TITLE,
+    subtitle: ORG_MEM_SUBTITLE,
+    about: orgMemAbout(file),
+    empty: ORG_MEM_EMPTY,
+    topics: orgMemTopicCounts(notes),
+    notes: notes.map(x => ({ ...x, key: orgMemNoteKey(x.text), head: orgMemNoteHead(x), ask: orgMemDeleteAsk(x, file) })),
+  }
+}
+
+function panelIdle(view: Parameters<typeof liveIdleFacts>[0], nowMs: number): PanelIdle {
+  const f = liveIdleFacts(view, nowMs)
+  const hint = f.kind === 'done' ? liveIdle(view, nowMs, Infinity)[1] : undefined
+  return { kind: f.kind, text: f.text, ...(hint ? { hint } : {}), next: f.next, more: f.more }
+}
+
 const startOfDay = (nowMs: number) => {
   const d = new Date(nowMs)
   d.setHours(0, 0, 0, 0)
@@ -152,9 +173,10 @@ const startOfDay = (nowMs: number) => {
 
 /**
  * The panel's view of published view `v` at `nowMs`. `changes` holds the changed files of each task in review (read
- * with git by the caller, see session.ts); `project` is the project folder's name.
+ * with git by the caller, see session.ts); `project` is the project folder's name; `orgMem` org-mem's notes and file
+ * (hooks/app/org-mem.ts orgMemNow, also read by the caller).
  */
-export function panelView(v: PaneView, o: { project: string; dir: string; nowMs: number; changes?: Record<string, DiffFile[]> }): PanelView {
+export function panelView(v: PaneView, o: { project: string; dir: string; nowMs: number; changes?: Record<string, DiffFile[]>; orgMem?: { notes: OrgMemNote[]; file: string } }): PanelView {
   const nowMs = o.nowMs
   const tasks = (v.tasks ?? []) as BoardTask[]
   const questions = (v.questions ?? []).filter(q => isOpenQuestion(q))
@@ -202,6 +224,8 @@ export function panelView(v: PaneView, o: { project: string; dir: string; nowMs:
       doneToday: tasks.filter(t => t.status === 'done' && (ms(t.updated_at) ?? 0) >= startOfDay(nowMs)).length,
       backlog: tasks.filter(t => t.status === 'backlog').length,
     },
+    idle: panelIdle(view, nowMs),
+    orgMem: panelOrgMem(o.orgMem?.notes ?? [], o.orgMem?.file ?? `${o.dir}/org-mem.md`),
     ...(v.branch_note ? { note: v.branch_note } : {}),
     dir: o.dir,
     nowMs,

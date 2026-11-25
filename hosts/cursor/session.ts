@@ -12,6 +12,7 @@ import { stopForQuit } from '../../hooks/app/board-mode'
 import { TOOLS } from '../../hooks/app/tools'
 import { ANSWER_COMMAND, answerCommand } from '../../hooks/app/answer'
 import { changedFiles } from '../../hooks/app/review'
+import { orgMemNow } from '../../hooks/app/org-mem'
 import { type DiffFile, intoOf, isAnswered, type BoardTask } from '../../hooks/board'
 import { nodeHost } from '../node/host'
 import { sdkAgents, type SdkAgents } from './agents'
@@ -116,6 +117,8 @@ export type CursorSession = {
   mode: (mode: PanelMode) => Promise<string>
   /** the owner ran a scout now */
   runScout: (name: string) => Promise<string>
+  /** the owner deleted org-mem note `n` (its place in the file), `key` its check word (PanelOrgNote) */
+  forget: (n: number, key: string) => Promise<string>
   /** the project's git worktrees: the workers' folders, the project itself and the owner's other checkouts */
   worktrees: Worktrees
   /** whether nothing of symcc's runs or waits now (no agent, start, check or merge; the lead's turn done) */
@@ -191,7 +194,16 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     Object.fromEntries(
       TOOLS().map(d => [
         d.name,
-        { description: d.description, inputSchema: d.inputSchema as Record<string, unknown>, execute: async (input: Record<string, unknown>) => answerText(d.name, await toolCall(ref.host!, toolName(d.name), undefined, input)) },
+        {
+          description: d.description,
+          inputSchema: d.inputSchema as Record<string, unknown>,
+          execute: async (input: Record<string, unknown>) => {
+            const said = answerText(d.name, await toolCall(ref.host!, toolName(d.name), undefined, input))
+            // org-mem is a file of its own, not in the published view: the panel reads it again on a redraw
+            if (d.name === 'orgmem') redraw()
+            return said
+          },
+        },
       ]),
     )
   // the lead loads the project's settings (AGENTS.md, rules, skills, MCP servers) and the plugins', never the user's
@@ -221,7 +233,8 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
       if (t.status !== 'review' || isAnswered(t as BoardTask) || changes.get(t.id)?.at === t.updated_at) continue
       changes.set(t.id, { at: t.updated_at, files: await changedFiles(ref.host!, intoOf(t), t).catch(() => []) })
     }
-    shown = panelView(v, { project, dir: S.N.dir, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])) })
+    const orgMem = await orgMemNow(ref.host!).catch(() => undefined)
+    shown = panelView(v, { project, dir: S.N.dir, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])), ...(orgMem ? { orgMem } : {}) })
     o.onView?.(shown)
   }
   let drawing: Promise<void> = Promise.resolve()
@@ -316,6 +329,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     answer: async (id, text) => (await answerCommand(host, `${S.N.name}-answer`, `${id} ${text}`)).text,
     mode: mode => command(`${S.N.name}-mode`, mode),
     runScout: name => command(`${S.N.name}-scout`, name),
+    forget: (n, key) => command(`${S.N.name}-settings`, `orgmem delete ${n} ${key}`),
     worktrees,
     quiet: () =>
       (S.startupDone || S.guardOnly) && agents.running() === 0 && !lead.busy() && workers.size === 0 && starting.size === 0 && queuedWorkers.size === 0 && finishing.size === 0 && approving.size === 0 && scoutRuns.size === 0 && checkerRuns.size === 0,

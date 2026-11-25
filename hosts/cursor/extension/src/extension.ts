@@ -255,6 +255,12 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (m.type === 'answer') return reply(true, await engine.text({ op: 'answer', need: m.need, text: m.text }))
       if (m.type === 'mode') return reply(true, await engine.text({ op: 'mode', mode: m.mode }))
       if (m.type === 'scout') return reply(true, await engine.text({ op: 'scout', name: m.name }))
+      if (m.type === 'forget') {
+        const note = view?.orgMem.notes.find(x => x.n === m.n)
+        if (!note) return reply(false, `Note ${m.n} is gone from organizational memory.`)
+        const pick = await vscode.window.showWarningMessage(note.ask, { modal: true, detail: note.text }, 'Delete')
+        return reply(true, pick === 'Delete' ? await engine.text({ op: 'forget', n: note.n, key: note.key }) : '')
+      }
       if (m.type === 'command') return reply(true, await engine.text({ op: 'command', name: m.name, args: m.args ?? '' }))
       if (m.type === 'worktree') return reply(true, await worktreeAction(m.path, m.action, m.file))
       if (m.type === 'act') {

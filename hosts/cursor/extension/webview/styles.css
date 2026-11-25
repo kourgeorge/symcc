@@ -1623,6 +1623,19 @@ input:focus {
 .next .quiet {
   padding: 4px 0;
 }
+.idle {
+  display: grid;
+  gap: 4px;
+}
+.idle-done {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+}
+.idle-done .codicon {
+  color: var(--good);
+}
 .fold {
   display: inline-flex;
   align-items: center;
@@ -2064,6 +2077,65 @@ input:focus {
   margin-top: 6px;
   max-height: 280px;
   overflow: auto;
+}
+
+/* ---------- Organizational memory: the notes every agent reads ---------- */
+
+.memory .page-head .btn {
+  margin-left: auto;
+}
+.mem-about {
+  max-width: 72ch;
+  margin: -6px 0 14px;
+}
+.mem-topics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.mem-topic {
+  padding: 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 12px;
+}
+.mem-topic:hover {
+  color: var(--fg);
+  background: var(--raised-2);
+}
+.mem-topic[aria-pressed='true'] {
+  color: var(--fg);
+  border-color: var(--coral-edge);
+  background: var(--coral-wash);
+}
+.mem-notes {
+  display: flex;
+  flex-direction: column;
+  max-width: 88ch;
+}
+.mem-note {
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--line);
+}
+.mem-note-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.mem-note-head .icon-btn {
+  margin-left: auto;
+}
+.mem-note p {
+  margin-top: 2px;
+  overflow-wrap: anywhere;
+}
+.org-line .row-btn .codicon {
+  color: var(--muted);
 }
 
 /* ---------- Worktrees: the folder each piece of work is in ---------- */

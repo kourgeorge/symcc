@@ -3,7 +3,7 @@
 import { memo, useEffect, useState, type ReactNode } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { PanelLane, PanelStation } from '../../protocol'
+import type { PanelIdle, PanelLane, PanelStation } from '../../protocol'
 import { tell } from './bridge'
 
 const CLEF =
@@ -62,6 +62,32 @@ export function dayWord(atMs: number, now: number): string {
 }
 
 export const tokensWord = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${(n / 1000).toFixed(1)}k` : `${n}`)
+
+/** Why nothing runs, in the board's words; when all is done, what to do next and the first backlog items (`compact`: the line only). */
+export function IdleNote({ idle, onTask, compact = false }: { idle: PanelIdle; onTask: (id: string) => void; compact?: boolean }) {
+  if (idle.kind !== 'done') return <p className="quiet">{idle.text}</p>
+  return (
+    <div className="idle">
+      <p className="idle-done">
+        <Icon name="pass" /> {idle.text}
+      </p>
+      {!compact && idle.hint && <p className="quiet">{idle.hint}</p>}
+      {!compact && idle.next.length > 0 && (
+        <ul className="next">
+          {idle.next.map(t => (
+            <li key={t.id}>
+              <button type="button" className="row-btn" onClick={() => onTask(t.id)}>
+                <span className="id">{t.id}</span>
+                <span className="title">{t.title}</span>
+              </button>
+            </li>
+          ))}
+          {idle.more > 0 && <li className="quiet">and {idle.more} more in the backlog</li>}
+        </ul>
+      )}
+    </div>
+  )
+}
 
 /** The word under each station's note. */
 export const STATION_WORD: Record<PanelStation, string> = { work: 'work', check: 'checker', queue: 'queue', tests: 'tests', you: 'you', done: 'done' }

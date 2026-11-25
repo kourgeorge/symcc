@@ -369,6 +369,11 @@ test("the board panel: a task in review is a card with Approve first, Approve on
     await until(() => s.view().needs.length === 0 && s.view().news.some(n => n.task === 'T-1' && n.kind === 'merged'), 20_000, 'the merge in the news')
     expect(s.view().counts.doneToday).toBe(1)
     expect(views.length).toBeGreaterThan(2)
+    // nothing runs: the board says why in its own words (live.ts liveIdleFacts)
+    expect(views.find(v => v.idle.kind === 'fresh')?.idle.text).toBe('No tasks yet. Tell the lead what you want built.')
+    await until(() => s.view().idle.kind === 'done', 20_000, 'all done')
+    expect(s.view().idle.text).toMatch(/^All done · last merged T-1, /)
+    expect(s.view().idle.hint).toBe("Tell the lead what's next.")
   } finally {
     await s.close()
     await rm(repo, { recursive: true, force: true })
@@ -559,3 +564,41 @@ test("Run now from the panel: a task that waits asks first and starts once told 
     await rm(repo, { recursive: true, force: true })
   }
 }, 120_000)
+
+test("organizational memory on the panel: its notes newest first in the board's words; a delete takes only the note the panel showed, and the lead hears of it", async () => {
+  const repo = await scratchRepo()
+  const sdk = fakeSdk(async () => ({ status: 'finished', result: 'ok' }))
+  const s = await openCursorSession({ root: repo, sdk, pluginRoot: PLUGIN_ROOT, sessionId: 'cursor-org-mem' })
+  const leadTurns = () => sdk.agents.flatMap(a => a.turns).filter(isLead)
+  const file = `${repo}/.symcc/org-mem.md`
+  try {
+    await s.command('symcc-init')
+    await writeFile(file, '- 2026-11-20 [tests] Run one test file at a time.\n- 2026-11-21 [git] Rebase before asking for review.\n- Ask before touching legacy/.\n')
+    await s.mode('paused')
+    await until(() => s.view().orgMem.notes.length === 3, 10_000, 'the notes on the panel')
+    const mem = s.view().orgMem
+    expect([mem.file, mem.max, mem.title, mem.empty]).toEqual(['.symcc/org-mem.md', 60, 'Organizational memory (org-mem)', 'No notes yet.'])
+    expect(mem.notes.map(x => [x.n, x.topic, x.head])).toEqual([
+      [3, 'unsorted', '#3 · written by hand'],
+      [2, 'git', '#2 · 2026-11-21'],
+      [1, 'tests', '#1 · 2026-11-20'],
+    ])
+    expect(mem.topics.map(t => t.topic)).toEqual(['git', 'tests', 'unsorted'])
+    const rebase = mem.notes[1]!
+    expect(rebase.ask).toBe('Delete note #2 · 2026-11-21 from .symcc/org-mem.md?')
+
+    // another note's check word: the file changed since the panel drew it, so nothing goes
+    expect(await s.forget(2, mem.notes[0]!.key)).toContain('nothing deleted')
+    expect(await s.forget(2, rebase.key)).toContain('Deleted note 2 from .symcc/org-mem.md (2026-11-21).')
+    expect(await readFile(file, 'utf8')).toBe('- 2026-11-20 [tests] Run one test file at a time.\n- Ask before touching legacy/.\n')
+    await until(() => s.view().orgMem.notes.length === 2, 10_000, 'the note gone from the panel')
+
+    await s.lead.idle()
+    await s.message('anything new?')
+    await until(() => leadTurns().some(t => t.text.endsWith('anything new?')), 20_000, "the owner's message")
+    expect(leadTurns().find(t => t.text.endsWith('anything new?'))!.text).toContain('The owner deleted org-mem note 2: "Rebase before asking for review."')
+  } finally {
+    await s.close()
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 60_000)

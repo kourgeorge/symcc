@@ -6,7 +6,7 @@ import type { BoardPage, ChatItem, PanelStep, PanelView } from '../../protocol'
 import { LEAD_AGENT } from '../../steps'
 import { EngineScreen, LaneCard, ModeMenu, NeedCard, NetworkCard, NoticeLine, OffScreen, useNotice, useSymcc, type Say, type Steps } from './App'
 import { ask, tell } from './bridge'
-import { Icon, Mark, Markdown, ago, useNow } from './parts'
+import { Icon, IdleNote, Mark, Markdown, ago, useNow } from './parts'
 import { latestStep, stepIcon, stepWords } from './session'
 
 /** At most this many cards of what needs you; the rest are on the board. */
@@ -203,7 +203,7 @@ function Work({ view, steps }: { view: PanelView; steps: Steps }) {
         <h2 id="sb-running-h">
           Running <span className="count">{view.counts.running}</span>
         </h2>
-        {running.length ? running.map(l => <LaneCard key={l.id} lane={l} step={l.agentId ? latestStep(steps[l.agentId]) : undefined} onTask={openTask} />) : <p className="quiet">Nothing running.</p>}
+        {running.length ? running.map(l => <LaneCard key={l.id} lane={l} step={l.agentId ? latestStep(steps[l.agentId]) : undefined} onTask={openTask} />) : <IdleNote idle={view.idle} onTask={openTask} compact />}
       </section>
       {!!view.next.length && (
         <section className="sb-part" aria-labelledby="sb-next-h">
