@@ -94,7 +94,8 @@ if (/▕[█░]+▏ ⌀/.test(board) || /▕[█░]+▏ ⌀/.test(page)) bad('
 if (board.includes('usual per task')) bad('still frame: the key line still explains the bar')
 // (T-757, T-867) the hand-drawn Live tab card tells the same story: whole-task tokens × the median, time, who spent them
 if (/tokens of each try|T-740[\s\S]{0,80}tokens at hand-back/.test(page)) bad('home page: the Live tab card still shows tokens per try ("tokens at hand-back" on T-740\'s try 2)')
-if (!page.includes('try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8×median) · worker 2.6M · checker 1.4M · ⌕ × 1')) bad('home page: the Live tab card\'s T-740 lane does not show "⏱ 22m · ⌀ 4.0M + … (0.8×median) · worker … · checker …"')
+// (T-1058) the card's T-740 first row ends with the kind; its second line carries no kind
+if (!page.includes('▶ T-740  ◉──────○──────○──────○──────○  bug\n  try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8×median) · worker 2.6M · checker 1.4M · ⌕ × 1\n')) bad('home page: the Live tab card\'s T-740 first row does not end with "  bug", or its second line is not "try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8×median) · worker … · checker … · ⌕ × 1" with no kind')
 if (page.includes('usual per task')) bad('home page: the Live tab card still explains the bar')
 // (T-767) the lines under a ▍heading start with 1 space; a running lane with "▶ ", its id in the accent color, its title normal text
 for (const [name, t] of [['board', board], ['Live tab', live]]) {
