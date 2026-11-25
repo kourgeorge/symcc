@@ -3,6 +3,7 @@
 import { type RoleDef, isCheckerRole } from './roles'
 import type { DefSource } from './def-files'
 import type { Seg } from './details'
+import { plural } from './text'
 
 /** One changed line of a checklist: removed (`-`) or added (`+`). */
 export type LineChange = { sign: '-' | '+'; text: string }
@@ -73,11 +74,11 @@ export function changesOfRole(name: string, builtIn: readonly RoleDef[], project
 }
 
 /** "1 change", "3 changes", "no change". */
-export const changeCount = (n: number): string => (n === 0 ? 'no change' : `${n} change${n === 1 ? '' : 's'}`)
+export const changeCount = (n: number): string => (n === 0 ? 'no change' : plural(n, 'change'))
 
 /** A change as one line of the page: "model: (session's model) → sonnet"; a checklist says "checklist: 2 lines changed". */
 export function changeText(c: RoleChange): string {
-  if (c.lines) return `${c.field}: ${c.lines.length} line${c.lines.length === 1 ? '' : 's'} changed`
+  if (c.lines) return `${c.field}: ${plural(c.lines.length, 'line')} changed`
   return `${c.field}: ${c.before} → ${c.after}`
 }
 

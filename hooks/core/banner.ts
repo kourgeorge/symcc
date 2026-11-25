@@ -23,6 +23,7 @@ import { fmtCost } from './runs'
 import { shortSizeWarns } from './board-parts'
 import { type LiveView, liveLanes, liveToday, liveTrains, todayCost } from './live'
 import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
+import { plural } from './text'
 
 /** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
 export function folderName(path: string): string {
@@ -126,7 +127,7 @@ export function bandSummary(view: BandSummaryView, nowMs: number, width = Infini
     `${lanes.filter(l => l.agent).length}/${max} agents busy`,
     waiting ? `${waiting} ${waiting === 1 ? 'task' : 'tasks'} waiting` : '',
     `${liveToday(tasks, nowMs, offsetMin).merged} completed today`,
-    scouts ? `${STEP_ICON.checker} ${scouts} scout${scouts === 1 ? '' : 's'}` : '',
+    scouts ? `${STEP_ICON.checker} ${plural(scouts, 'scout')}` : '',
   ].filter(Boolean)
   for (let n = parts.length; n > 1; n--) {
     const line = parts.slice(0, n).join(' · ')

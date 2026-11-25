@@ -1,5 +1,6 @@
 // Each try's full worker report, kept in a file (<dir>/reports/<T-id>-try-<N>.md), and short clean cuts of it.
 import type { SymccTask } from '../../types'
+import { plural } from './text'
 
 /** The most of a report that is kept (characters); a longer one is cut there, with a line saying so. */
 export const REPORT_MAX_CHARS = 50_000
@@ -72,5 +73,5 @@ export function reportPreview(text: string, file: string, lines = REPORT_PREVIEW
   }
   if (kept.length === all.length && kept.at(-1) === all.at(-1)) return all
   const left = all.length - kept.length
-  return [...kept, `… (${left ? `${left} more line${left === 1 ? '' : 's'}` : 'cut'}) full report: ${file}`]
+  return [...kept, `… (${left ? plural(left, 'more line') : 'cut'}) full report: ${file}`]
 }

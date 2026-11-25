@@ -6,7 +6,8 @@ import { tryTokens } from '../hooks/board'
 import { oldFailReason as failReason, upgradeArchiveTask, upgradeScoutUsage } from '../hooks/core/old-data'
 import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, statsData, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
 import { statsHtml } from '../hooks/core/stats-html'
-import { FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, durOr, failedShown, plural, tokOr } from '../hooks/core/stats'
+import { FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, durOr, failedShown, tokOr } from '../hooks/core/stats'
+import { plural } from '../hooks/core/text'
 import { leadCalls, leadUsage, projectFolderName } from '../hooks/claude/lead-usage'
 import type { LeadUsage } from '../hooks/host'
 import { fakeHost } from './fake-host'
@@ -623,6 +624,9 @@ test('T-739: failedShown gives the text and html reports the same short cut: the
   expect(all.tests).toEqual(tests)
   expect(plural(1, 'try', 'tries')).toBe('1 try')
   expect(plural(2, 'task')).toBe('2 tasks')
+  expect(plural(0, 'commit')).toBe('0 commits')
+  expect(plural(1, 'merged task branch', 'merged task branches')).toBe('1 merged task branch')
+  expect(plural(3, 'merged task branch', 'merged task branches')).toBe('3 merged task branches')
   expect(durOr(undefined)).toBe('-')
   expect(tokOr(undefined)).toBe('-')
 })

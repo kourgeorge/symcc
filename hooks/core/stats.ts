@@ -8,7 +8,7 @@ import { DEFAULT_NAME } from '../name'
 import { isInvestigation, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
 import { ORIGIN_MARK } from './origin'
-import { isObj, jsonObj } from './text'
+import { isObj, jsonObj, plural } from './text'
 import { cutTitle, padWidth, wrapLine } from './width'
 // hooks/claude/stats-lines.ts still reads these two from here.
 export { cutTitle, textWidth } from './width'
@@ -351,7 +351,6 @@ const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '-'
 const avgDur = (xs: number[]) => (xs.length ? fmtDuration(mean(xs)!) : '-')
 const avgTok = (xs: number[]) => (xs.length ? fmtTokens(mean(xs)!) : '-')
 const row = (label: string, text: string, w = 12) => `  ${label.padEnd(w)} ${text}`
-export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /** The widest a bar may be, in blocks. */
 export const BAR_WIDTH = 16

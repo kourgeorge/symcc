@@ -23,6 +23,7 @@ import { changeValues, investigationValues } from './prompt-values'
 import { debriefing, learnedAsk, startDebrief } from './debrief'
 import { orgMemText, keepSuggestions } from './org-mem'
 import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp, ownerAddedMinutes, ownerTimeState } from './cleanup'
+import { plural } from '../core/text'
 
 // ---------------- workers ----------------
 
@@ -93,13 +94,13 @@ export const reportsNote = (copied: readonly string[], details: string) => {
 
 export const behindNote = (behind: number, into: string, why: BehindWhy = 'commits') => {
   if (behind <= 0) return ''
-  const n = `${behind} commit${behind === 1 ? '' : 's'}`
+  const n = plural(behind, 'commit')
   // T-745: merging it in before the try clashed, so the worker merges it in itself (the try runs with merge_main)
-  if (why === 'clash') return `\n\nNote: ${into} has ${behind} new commit${behind === 1 ? '' : 's'} you don't have yet; merge them in first.`
+  if (why === 'clash') return `\n\nNote: ${into} has ${plural(behind, 'new commit')} you don't have yet; merge them in first.`
   const head =
     why === 'changes' ? `your folder has uncommitted work from an earlier try and is ${n} behind ${into}.`
     : why === 'failed' ? `symcc could not move your branch up to ${into}, so it is ${n} behind ${into}.`
-    : `your branch has commits from an earlier try, and ${into} has ${behind} newer commit${behind === 1 ? '' : 's'} your branch lacks.`
+    : `your branch has commits from an earlier try, and ${into} has ${plural(behind, 'newer commit')} your branch lacks.`
   return `\n\nNote: ${head} Your folder shows the older code; symcc brings your work up to date with ${into} when it merges.`
 }
 
@@ -204,7 +205,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const goOn = cur!.attempts > 0 ? goOnRun(cur!.runs, at) : null
       const attempts = goOn ? cur!.attempts : cur!.attempts + 1
       // T-745: the branch had its own commits and main was merged in before this try
-      const upToDate = merged ? { history: withHistory(cur!.history, at, tryEntry({ ...cur!, attempts }, 'stage', `brought up to date with ${intoOf(cur!)} (${merged} commit${merged === 1 ? '' : 's'})`)) } : {}
+      const upToDate = merged ? { history: withHistory(cur!.history, at, tryEntry({ ...cur!, attempts }, 'stage', `brought up to date with ${intoOf(cur!)} (${plural(merged, 'commit')})`)) } : {}
       // and when merging it in clashed, this try merges it in itself (its prompt asks, the git guard lets it), as the clash retry does
       const clash = why === 'clash' && !cur!.merge_main ? { merge_main: true as const } : {}
       // T-873: the same try going on keeps the minutes the owner gave it (the reopen dropped its live record)
@@ -849,7 +850,7 @@ async function stopLeftovers(host: Host, t: SymccTask, end: TurnEnd) {
   const running = end.background?.length ?? 0
   if (!running) return
   const stopped = end.stopBackground ? await end.stopBackground().catch(() => 0) : 0
-  const cmds = (n: number) => `${n} command${n === 1 ? '' : 's'}`
+  const cmds = (n: number) => plural(n, 'command')
   const text = stopped >= running ? `stopped ${cmds(stopped)} still running at hand-back` : stopped > 0 ? `stopped ${cmds(stopped)} of ${running} still running at hand-back` : `${cmds(running)} still running at hand-back (could not stop ${running === 1 ? 'it' : 'them'})`
   await change(host, x => {
     const cur = find(x, t.id)
@@ -1526,7 +1527,7 @@ async function endInvestigation(host: Host, t: BoardTask, keepNote: boolean): Pr
   await resetScratch(host, t.id).catch(() => undefined)
   const { commits } = await taskWork(host, t).catch(() => ({ commits: null }))
   const keep = commits !== 0
-  const what = commits === null ? `git could not tell whether it has commits ${intoOf(t)} doesn't have` : `it has ${commits} commit${commits === 1 ? '' : 's'} from an earlier change try that ${intoOf(t)} doesn't have`
+  const what = commits === null ? `git could not tell whether it has commits ${intoOf(t)} doesn't have` : `it has ${plural(commits, 'commit')} from an earlier change try that ${intoOf(t)} doesn't have`
   const kept = keep ? ` Its branch ${branch} was kept: ${what}. Delete it by hand once that work is not needed.` : ''
   if ((await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false)) && !keep) await git(host, ['branch', '-D', branch])
   if (kept) tellLead(host, `${t.id} "${t.title}" is done.${kept}`)

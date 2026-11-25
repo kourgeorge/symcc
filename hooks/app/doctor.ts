@@ -13,6 +13,7 @@ import { readLeadText } from './lead'
 import { readArchiveFile } from './archive'
 import { git, deleteMergedBranch } from './git'
 import { oldDataFound, oldRowsText, migrateData } from './migrate-data'
+import { plural } from '../core/text'
 
 /** A found item with its fix (fixable ones): answers '' when done, else why it was not done. */
 type Found = DoctorItem & { fix?: () => Promise<string>; done?: string[] }
@@ -199,7 +200,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
       continue
     }
     trees.push({
-      kind: 'worktree', fixable: true, id: folderId(id), bytes, text: `folder ${shown(wt)}/ (${why})${lose ? `: deletes ${lose} uncommitted changed file${lose === 1 ? '' : 's'}` : ''}`,
+      kind: 'worktree', fixable: true, id: folderId(id), bytes, text: `folder ${shown(wt)}/ (${why})${lose ? `: deletes ${plural(lose, 'uncommitted changed file')}` : ''}`,
       fix: async () => {
         const nb = await load(host).catch(() => null)
         if (!nb) return "the board can't be read now"
@@ -271,7 +272,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
     }
     const n = anc?.exitCode === 1 ? await git(host, ['rev-list', '--count', `refs/heads/${into}..${sha}`]).catch(() => null) : null
     const count = n?.exitCode === 0 ? Number(n.stdout.trim()) : NaN
-    const lost = Number.isFinite(count) && count > 0 ? ` (${count} commit${count === 1 ? '' : 's'} not in ${into})` : ''
+    const lost = Number.isFinite(count) && count > 0 ? ` (${plural(count, 'commit')} not in ${into})` : ''
     if (t.status !== 'dropped') {
       listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}) holds unmerged work${lost}; never deleted by the doctor` })
       continue
@@ -285,7 +286,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
     }
     const after = folder !== undefined ? ` (goes after its folder, ${folderId(id)})` : ''
     branches.push({
-      kind: 'branch', fixable: true, id: branchId(id), text: `branch ${br} (${id} is dropped): deletes ${count > 0 ? `${count} commit${count === 1 ? '' : 's'}` : 'commits'} not in ${into}${after}`,
+      kind: 'branch', fixable: true, id: branchId(id), text: `branch ${br} (${id} is dropped): deletes ${count > 0 ? plural(count, 'commit') : 'commits'} not in ${into}${after}`,
       fix: async () => {
         const nb = await load(host).catch(() => null)
         if (!nb) return "the board can't be read now"

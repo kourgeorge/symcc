@@ -23,6 +23,7 @@ import { stageStep, taskPhase } from './phase'
 import { everyText, scoutRanText, scoutStateText, type ScoutRunRecord, sortScouts } from './scouts'
 import { liveLanes, liveTrains, type LiveTrain, type LiveView } from './live'
 import { localOffset } from './days'
+import { plural } from './text'
 
 export type { ActionGroup }
 export { GROUP_ORDER }
@@ -176,7 +177,7 @@ export function scoutStateGroups(sc: SymccScout, nowMs: number, last?: { run: Sc
   const lastSegs: Seg[] = [{ text: ran.startsWith('ran ') ? `last ${ran}` : ran, color: 'inactive' }]
   if (last && ran.startsWith('ran ')) {
     const n = last.run.findings
-    lastSegs.push({ text: `: ${n} finding${n === 1 ? '' : 's'}`, color: n ? 'warning' : 'inactive' })
+    lastSegs.push({ text: `: ${plural(n, 'finding')}`, color: n ? 'warning' : 'inactive' })
     if (last.tasks.length) lastSegs.push({ text: ` → ${last.tasks.join(', ')}`, color: 'claude' })
   }
   return [first, lastSegs]

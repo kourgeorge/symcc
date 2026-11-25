@@ -6,7 +6,7 @@ import { fmtDuration } from './runs'
 import { offAnswer } from './settings'
 import { isFinished, isScoutFindings, type ScoutFindings } from './board-file'
 import { planScoutText } from './plan'
-import { frontMatterLine, isObj, splitFrontMatter } from './text'
+import { frontMatterLine, isObj, splitFrontMatter, plural } from './text'
 
 /**
  * The symcc tools a scout (and a checker, which runs as the scout type) may call, in symcc's own words: both only read
@@ -744,7 +744,7 @@ export const scoutOutcomeTone = (o: ScoutRunOutcome): string => (o === 'found' ?
 /** One run as a line: "8m ago · found · 2 findings · tasks T-3, T-4" (time · outcome · findings · tasks made). */
 export function scoutRunLine(r: ScoutRunRecord, tasks: string[], nowMs: number): string {
   const when = fromNow(r.ended, nowMs) || r.ended
-  const n = `${r.findings} finding${r.findings === 1 ? '' : 's'}`
+  const n = plural(r.findings, 'finding')
   const made = tasks.length ? `task${tasks.length > 1 ? 's' : ''} ${tasks.join(', ')}` : 'no tasks'
   return `${when} · ${scoutOutcomeText(r.outcome)} · ${n} · ${made}`
 }

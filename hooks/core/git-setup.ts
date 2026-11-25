@@ -2,6 +2,7 @@
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { DATA_DIR, intoOf, isFinished } from './board-file'
+import { plural } from './text'
 
 // ---------------- which branch work is merged into ----------------
 
@@ -78,7 +79,7 @@ export function worktreesToRemove(tasks: Pick<SymccTask, 'id' | 'status'>[], exi
 /** The one line for the lead after a cleanup, or '' when it cleaned only a few (`few` or less). */
 export function cleanupText(branches: number, worktrees: number, few = 3): string {
   if (branches + worktrees <= few) return ''
-  const parts = [branches ? `${branches} merged task branch${branches === 1 ? '' : 'es'}` : '', worktrees ? `${worktrees} leftover task folder${worktrees === 1 ? '' : 's'}` : ''].filter(Boolean)
+  const parts = [branches ? plural(branches, 'merged task branch', 'merged task branches') : '', worktrees ? plural(worktrees, 'leftover task folder') : ''].filter(Boolean)
   return `Cleaned up ${parts.join(' and ')}.`
 }
 
@@ -234,7 +235,7 @@ export const ignoreLineFor = (file: string) => `/${file.replace(/([*?[\]!#\\])/g
 /** What setup tells the lead and owner when it is done. */
 export function setupDoneText(o: { init: boolean; branch: string; files: number; left: { file: string; why: string }[]; gitignore: 'made' | 'added' | 'kept'; name?: string }): string {
   const name = o.name ?? DEFAULT_NAME
-  const steps = [o.init ? 'made a git repo' : '', o.gitignore === 'made' ? 'wrote a .gitignore' : o.gitignore === 'added' ? 'added lines to .gitignore' : '', `committed ${o.files} file${o.files === 1 ? '' : 's'} on ${o.branch} ("Initial commit (by ${name})")`].filter(Boolean)
+  const steps = [o.init ? 'made a git repo' : '', o.gitignore === 'made' ? 'wrote a .gitignore' : o.gitignore === 'added' ? 'added lines to .gitignore' : '', `committed ${plural(o.files, 'file')} on ${o.branch} ("Initial commit (by ${name})")`].filter(Boolean)
   const warn = o.left.length ? ` Warning: left out of the commit and added to .gitignore: ${o.left.slice(0, 10).map(x => `${x.file} (${x.why})`).join(', ')}${o.left.length > 10 ? `, and ${o.left.length - 10} more` : ''}.` : ''
   return `Git is set up: ${steps.join(', ')}. Work merges into ${o.branch}; nothing was pushed and no remote was added.${warn}`
 }

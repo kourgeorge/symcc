@@ -14,7 +14,7 @@ import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, ORG_MEM_ALL, orgMemNe
 import { depDone } from './archive'
 import { dayOf, localOffset } from './days'
 import { modeLabel, needsReview } from './review'
-import { num } from './text'
+import { num, plural } from './text'
 import { asksMoreTime, needsYou } from './commands'
 import { fileWaitText, rowMark, STEP_WORD, taskAsks } from './panel'
 import { isOpenQuestion } from './questions'
@@ -519,7 +519,7 @@ export function liveScoutMark(runs: readonly LiveScoutRun[] | undefined, nowMs: 
     const text = ` ${names}`, tail = ` · ${nextText}`
     if (textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text + tail) <= room) return { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text, next: tail }
   }
-  for (const f of [names, `${n} scout${n === 1 ? '' : 's'}`, `${n}`]) {
+  for (const f of [names, plural(n, 'scout'), `${n}`]) {
     const text = ` ${f}`
     if (textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text) <= room) return { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text }
   }
@@ -1666,7 +1666,7 @@ function branchLabels(x: BranchItem, nowMs: number): LiveSeg[][] {
   // T-913: the state after the id ("‖ paused"); when narrow the word goes first, the mark stays
   const word: LiveSeg[] = st ? [{ text: ` ${st.mark} ${st.word}`, tone: st.tone }, dot] : [{ text: ' ', tone: 'dim' }]
   const mark: LiveSeg[] = st ? [{ text: ` ${st.mark}`, tone: st.tone }, { text: ' ', tone: 'dim' }] : [{ text: ' ', tone: 'dim' }]
-  const long: LiveSeg[] = [{ text: `+${ahead} commit${ahead === 1 ? '' : 's'}`, tone: 'text' }, dot, { text: `${behind} behind`, tone: late }]
+  const long: LiveSeg[] = [{ text: `+${plural(ahead, 'commit')}`, tone: 'text' }, dot, { text: `${behind} behind`, tone: late }]
   const mid: LiveSeg[] = [{ text: `+${ahead}`, tone: 'text' }, dot, { text: `${behind} behind`, tone: late }]
   return [
     [id, ...word, ...long],

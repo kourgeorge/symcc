@@ -6,7 +6,8 @@
 import { ICON } from '../name'
 import { ORIGIN_MARK } from '../core/origin'
 import { fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, billedTokens, tokenCount } from '../core/runs'
-import { BILLED_FOOTNOTE, countingText, cutTitle, durOr, failedCountsNote, failedShown, pctText, plural, rangeText, scoutResultsText, textWidth, tokOr, unlinkedText, unreadText, type StatsData, type StatsGroup, type StatsScout, type StatsTop, type SpreadRow, type Stage, type FailReason } from '../core/stats'
+import { BILLED_FOOTNOTE, countingText, cutTitle, durOr, failedCountsNote, failedShown, pctText, rangeText, scoutResultsText, textWidth, tokOr, unlinkedText, unreadText, type StatsData, type StatsGroup, type StatsScout, type StatsTop, type SpreadRow, type Stage, type FailReason } from '../core/stats'
+import { plural } from '../core/text'
 import type { SymccTokens } from '../../types'
 
 /** A run of text in one style: a theme color name, bold, or dim. */

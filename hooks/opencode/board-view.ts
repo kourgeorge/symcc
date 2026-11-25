@@ -44,7 +44,7 @@ import { defActions, roleButtons as headerRoleButtons } from '../core/page-heade
 import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, TASK_ID_COLOR, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { LIST_TONE, sessionNote } from '../core/details'
 import type { SearchMore } from '../core/panel'
-import { isObj } from '../core/text'
+import { isObj, plural } from '../core/text'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
 import { ORG_MEM_EMPTY, ORG_MEM_SUBTITLE, orgMemPageCount, orgMemAbout, orgMemKeys, orgMemNoteHead, orgMemFile, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, type OrgMemNote } from '../core/org-mem'
@@ -1114,7 +1114,7 @@ function defsCount(f: ViewFile, list: DefList): string {
   const all = defsIn(f, list)
   const off = all.filter(x => x.off).length
   const noun = list === 'roles' ? 'role' : 'task type'
-  return `${all.length} ${noun}${all.length === 1 ? '' : 's'}${off ? ` · ${off} off` : ''}`
+  return `${plural(all.length, noun)}${off ? ` · ${off} off` : ''}`
 }
 
 /** A role or task type of the view file as a line of the Roles or Kinds table (core's def-table.ts). */

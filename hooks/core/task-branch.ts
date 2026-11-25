@@ -19,6 +19,7 @@ import { agoText, type BranchCommit, LIVE_INDENT, LIVE_TONE, liveInner } from '.
 import { cutTitle, fitSegs, padWidth, textWidth } from './width'
 import { historyTime } from './history'
 import { taskCommits } from './commits'
+import { plural } from './text'
 
 /** One commit on the task's branch (its first-parent line): its full sha, when it was made (ms), the try that made it
  *  (its Symcc-Try line), and whether it is a merge of the main branch into it (a catch-up). */
@@ -54,7 +55,7 @@ export const branchTime = (ms: number, nowMs: number): string => {
 export function taskBranchTitle(f: TaskBranchFacts): string {
   const own = f.commits.filter(c => !c.catchUp).length
   const state = f.merged ? `merged into ${f.into}` : f.behind ? `${f.behind} behind ${f.into}` : 'up to date'
-  return `Branch  ${f.branch} · ${own} commit${own === 1 ? '' : 's'} · ${state}`
+  return `Branch  ${f.branch} · ${plural(own, 'commit')} · ${state}`
 }
 
 /** A line of cells (one character each, with its color) made into pieces of one color. */
