@@ -985,6 +985,15 @@ test('T-1068: a checker still running after a reload is adopted, not stopped; it
   expect(w.spawns.length).toBe(1)
 })
 
+test('T-1068: an older same-name checker listed first is stopped; the board\'s current checker is adopted', async () => {
+  const w = world()
+  const agents = await reloadDuringChecker(w, 'running')
+  agents.unshift({ id: 'chkOld', name: 'symcc-T-1-checker', kind: 'scout', status: 'running' })
+  await stopOrphans(w.$)
+  expect(adoptedCheckers.get('T-1')?.id).toBe('chk1')
+  expect(w.sends.map(s => s.to)).toEqual(['chkOld'])
+})
+
 test('T-1068: while an adopted checker works, a look for orphans leaves it, and no folder commit runs before its verdict', async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')

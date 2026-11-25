@@ -1,7 +1,7 @@
 // Leftover and overtime cleanup for the regular check: stopping orphan agents after a reload, removing leftover
 // temp files, and a worker that runs over its time limit (ask the owner, wrap up, time out). Split out of
 // workers.ts (T-603); workers.ts's check() imports it, and it never imports workers.ts.
-import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, ownedHere, leftoverTmpFiles, withHistory, tryEntry, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onTask, restartedAgent, workerIdOf, withAgentStart, workerSince } from '../board'
+import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, ownedHere, leftoverTmpFiles, withHistory, tryEntry, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onTask, restartedAgent, workerIdOf, checkerIdOf, withAgentStart, workerSince } from '../board'
 import { worktreeDir, taskBranch } from './git'
 import { alreadyMerged } from './review'
 import { S, type CheckerEnd, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned, checkerRuns, adoptedCheckers } from './state'
@@ -56,7 +56,8 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
     if (a.kind === 'worker' && !b) continue
     // T-1068: a checker still running after a reload is adopted, not stopped: the task's checker step waits for it again
     // (restartCheckers starts that step; see runChecker). A checker with no such task, or one symcc ended, is stopped as before.
-    const chk = a.kind === 'scout' && b ? b.tasks.find(t => checkerName(S.N.name, t.id) === a.name) : undefined
+    // Only the checker the board recorded for the current try (checkerIdOf) is adopted; an older same-name one is stopped.
+    const chk = a.kind === 'scout' && b ? b.tasks.find(t => checkerName(S.N.name, t.id) === a.name && checkerIdOf(t) === a.id) : undefined
     if (onStep(chk) && ![...checkerRuns.values()].some(r => r.task === chk!.id) && !adoptedCheckers.has(chk!.id)) {
       // known to symcc from now on (so its hand-back is kept even before the step waits for it: runChecker takes it over)
       const mark: { id: string; early?: CheckerEnd } = { id: a.id }
