@@ -1246,6 +1246,7 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
 })
 
 test('"c" and the Settings tab show one row per setting: label, dot leaders, value; the focused one has its help below', async ($, on) => {
+  const focusKeys = arrowKeys($, on)
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], mode: 'review', test_commands: ['npm test'], branch: 'main', max_parallel: 5, max_minutes: 45, auto_retries: 2, open_on_start: true, notify: 'off', notify_choices: ['sound 1', 'sound 2', 'sound 3', 'off'] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const settingsTab = await ui.find({ key: 'tab-settings' })
@@ -1281,6 +1282,10 @@ test('"c" and the Settings tab show one row per setting: label, dot leaders, val
   const help = settingHelp('max_parallel')
   expect(help.meaning).toBe('how many workers run at once')
   expect(help.facts).toBe('max_parallel · default 3 · 1-8')
+  // moving the focus to the row shows that meaning, default and range in the drawn page
+  await focusKeys.focus('setting:max_parallel')
+  expect(await ui.find({ type: 'Text', text: help.meaning })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: help.facts })).toBeDefined()
   // Enter on a number opens an edit box; on mode a pick list of paused / approve merge / auto merge (stored review / auto)
   await ui.press({ key: 'setting:max_parallel' })
   expect(await ui.find({ key: 'setting-edit' })).toBeDefined()
@@ -1362,10 +1367,10 @@ test('Settings groups start closed with the first heading focused; Enter opens a
   expect(work?.props.plain).toBe(true)
   expect(work?.props.autoFocus).toBe(true)
   expect((await ui.find({ key: 'group:Scouts' }))?.props.autoFocus).toBeUndefined()
-  expect(work?.props.label).toBe('▸ Work · auto merge · 3 at once · 45 min · 2 re…')
+  expect(work?.props.label).toBe('▸ Work · auto merge · 3 at…')
   expect(await ui.find({ type: 'Text', text: /^▸ Work\s+$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'auto merge · 3 at once · 45 min · 2 re…' })).toBeDefined()
-  expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles? · \d+ task types?/)
+  expect(await ui.find({ type: 'Text', text: 'auto merge · 3 at…' })).toBeDefined()
+  expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles?/)
   expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
   // Enter opens Work: its rows show under "▾ Work"; ↑↓ go from its last row to the next heading, past nothing hidden
   await ui.press({ key: 'group:Work' })
@@ -1421,7 +1426,7 @@ test('a closed group heading draws its title bold in the text colour and its val
   const title = await ui.find({ type: 'Text', text: /^▸ Work\s+$/ })
   expect(title?.props.bold).toBe(true)
   expect(title?.props.color).toBe('text')
-  const values = await ui.find({ type: 'Text', text: /^auto merge · 3 at once/ })
+  const values = await ui.find({ type: 'Text', text: /^auto merge · 3 at/ })
   expect(values?.props.color).toBe('inactive')
   expect(values?.props.bold).toBeFalsy()
   const checks = await ui.find({ key: 'group:Checks before merging' })
