@@ -1701,7 +1701,7 @@ test('reject sends a task in review back to "todo" with the reason, and merges n
   expect(t.note).toBe('rejected: the name is wrong')
   expect(t.history.at(-1)?.text).toBe('try 1: rejected by the owner: the name is wrong')
   // only looking: nothing committed, merged or moved
-  expect(w.calls.filter(c => / git /.test(c))).toEqual(['root: git symbolic-ref --short -q refs/remotes/origin/HEAD', 'root: git symbolic-ref --short -q HEAD', 'root: git for-each-ref --format=%(refname:short) refs/heads'])
+  expect(w.calls.filter(c => / git /.test(c))).toEqual(['root: git symbolic-ref --short -q HEAD'])
   expect(w.git.main).toBe(M1)
 })
 

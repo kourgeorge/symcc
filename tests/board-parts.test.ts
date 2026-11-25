@@ -38,7 +38,7 @@ function world(files = new Map<string, string>()) {
   S.root = ROOT
   S.writing = Promise.resolve()
   S.enabledNow = true
-  return { ...w, files, toasts }
+  return { ...w, files, toasts, runs: [] as string[][] }
 }
 
 const words = (n: number, seed: string) => Array.from({ length: n }, (_, i) => `${seed}${i % 7 ? 'work' : 'check'}`).join(' ')
@@ -440,4 +440,98 @@ test('T-675: leftover temp files of archive-2.json and of the parts files in .sy
   await cleanLeftoverTmp(w.host)
   expect(gone.filter(f => w.files.has(f))).toEqual([])
   expect(keep.filter(f => w.files.has(f))).toEqual(keep)
+})
+
+/**
+ * A world whose files live in folders (T-1065): a write or mv into a missing folder fails (its error names the write's
+ * number), mkdir -p makes the folder (unless `mkdirWorks` is false) and gone() deletes .symcc/tasks/ with its files.
+ */
+function folderWorld(mkdirWorks = true) {
+  const w = world()
+  const TASKS = `${ROOT}/.symcc/tasks`
+  const dirs = new Set([ROOT, `${ROOT}/.symcc`])
+  const parent = (p: string) => p.slice(0, p.lastIndexOf('/'))
+  let writes = 0
+  const write = w.host.fs.write
+  w.host.fs.write = async (p, text) => {
+    writes++
+    if (!dirs.has(parent(p))) throw new Error(`no folder ${parent(p)} (write ${writes})`)
+    return write(p, text)
+  }
+  w.host.fs.exists = async p => dirs.has(p) || w.files.has(p)
+  const inner = w.host.run
+  w.host.run = async (argv, o) => {
+    w.runs.push([...argv])
+    const [cmd, ...a] = argv
+    const paths = a.filter(v => !v.startsWith('-'))
+    if (cmd === 'mkdir') {
+      if (mkdirWorks) for (const d of paths) dirs.add(d)
+      return done()
+    }
+    if (cmd === 'mv' && !dirs.has(parent(paths[1]!))) return done({ exitCode: 1, stderr: 'no such folder' })
+    return inner(argv, o)
+  }
+  const gone = () => {
+    dirs.delete(TASKS)
+    for (const f of [...w.files.keys()]) if (f.startsWith(`${TASKS}/`)) w.files.delete(f)
+  }
+  const mkdirs = () => w.runs.filter(r => r[0] === 'mkdir').length
+  const partsFiles = () => [...w.files.keys()].filter(f => f.startsWith(`${TASKS}/`) && f.endsWith('.json')).sort()
+  return { ...w, gone, mkdirs, partsFiles }
+}
+
+test('T-1065: after .symcc/tasks/ is deleted mid-session, the next save makes it again and writes the parts files', async () => {
+  resetStore()
+  const w = folderWorld()
+  const b = bigBoard()
+  await saveBoard(w.host, b)
+  const before = w.partsFiles()
+  expect(before.length).toBeGreaterThan(0)
+  expect(w.mkdirs()).toBe(1)
+  w.gone()
+  // forget what was written, so the next save writes every parts file again; the folder stays "known made"
+  resetStore()
+  await saveBoard(w.host, b)
+  expect(w.mkdirs()).toBe(2)
+  expect(w.partsFiles()).toEqual(before)
+})
+
+test('T-1065: after .symcc/tasks/ is deleted mid-session, no done task\'s parts are lost', async () => {
+  resetStore()
+  const w = folderWorld()
+  const b = bigBoard()
+  await saveBoard(w.host, b)
+  w.gone()
+  resetStore()
+  await saveBoard(w.host, b)
+  resetStore()
+  const back = await loaded(w)
+  const finished = b.tasks.filter(t => t.status === 'done' || t.status === 'dropped').map(t => t.id)
+  const whole = new Set(back.tasks.filter(t => t.history.length === 30 && t.details === b.tasks.find(x => x.id === t.id)!.details).map(t => t.id))
+  expect(finished.filter(id => !whole.has(id))).toEqual([])
+})
+
+test('T-1065: when the folder can\'t be made again, the save fails with the first write\'s error', async () => {
+  resetStore()
+  const w = folderWorld(false)
+  const b = bigBoard()
+  // the folder is never there: the first parts write fails, mkdir is tried again and the second write fails too
+  await expect(saveBoard(w.host, b)).rejects.toThrow(/^no folder \/repo\/\.symcc\/tasks \(write 1\)$/)
+  expect(w.mkdirs()).toBe(2)
+  // board.json is not written while its parts files are missing
+  expect(w.files.has(BOARD)).toBe(false)
+})
+
+test('T-1056: the tasks folder is made once per session, while its writes go through', async () => {
+  resetStore()
+  const w = world()
+  const inner = w.host.run
+  w.host.run = async (argv, o) => (w.runs.push([...argv]), inner(argv, o))
+  const mkdirs = () => w.runs.filter(r => r[0] === 'mkdir').length
+  const b = bigBoard()
+  await saveBoard(w.host, b)
+  expect(mkdirs()).toBe(1)
+  await saveBoard(w.host, b)
+  await saveBoard(w.host, b)
+  expect(mkdirs()).toBe(1)
 })
