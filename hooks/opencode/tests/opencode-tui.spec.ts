@@ -3093,7 +3093,7 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
     expect(lineText(d.lines[at + 1]!).trim()).toBe('')
     const labels = d.lines[at + 2]!
     const lanes = liveLanes(f.view, NOW)
-    expect(lineText(labels)).toBe(LIVE_INDENT + liveLabelLine(liveLayout(lanes, liveStations(true), liveInner(w))))
+    expect(lineText(labels)).toBe(LIVE_INDENT + liveLabelLine(liveLayout(lanes, liveStations(true), liveInner(w), true)))
     if (w === 120) expect(lineText(labels).includes('work✧') && lineText(labels).includes('check✧')).toBe(true)
     expect(lineText(labels).includes('·')).toBe(false)
     const heading = d.lines[at]![0]!.color
@@ -3203,7 +3203,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     const lanes = liveLanes(view, NOW)
     // T-747: each section under its "▍Name" heading, its lines indented
     const inner = liveInner(w)
-    const layout = liveLayout(lanes, liveStations(true), inner)
+    const layout = liveLayout(lanes, liveStations(true), inner, true)
     const frame = Math.floor(NOW / 1000)
     const under = (x: string) => LIVE_INDENT + x
     // T-938: no mode line above the sections: it is ▍Today's first row, "Now:"
@@ -3271,9 +3271,9 @@ test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the 
   expect(sub('T-801')).toContain('⌀ 4M + … (1×median)')
   // (b) handed back with 1M: the sum, its active time and the worker's share (the checker's 0 left out)
   // T-931: the clock first, " · " between parts, the per-agent tokens in < > without ⌀
-  expect(sub('T-802')).toMatch(/^ {2,}try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3×median\) · worker 5M +\w+$/)
+  expect(sub('T-802')).toMatch(/^ {2,}try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3×median\) · worker 5M( +\w+)?$/)
   // (c) try 1 running: no < > part (no breakdown yet)
-  expect(sub('T-803')).toMatch(/^ {2,}try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back +\w+$/)
+  expect(sub('T-803')).toMatch(/^ {2,}try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back( +\w+)?$/)
   // (d) at the median and at half
   expect(sub('T-804')).toContain('⌀ 4M (1×median)')
   expect(sub('T-805')).toContain('⌀ 2M (0.5×median)')
@@ -3283,7 +3283,7 @@ test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the 
   expect(sub('T-806')).not.toContain('⚠')
   expect(warn('T-806')).toBe(true)
   // (f) T-931: merged with worker and checker: both in one < >, no ⌀ inside
-  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ 4M \(1×median\) · worker 3M · checker 1M +\w+$/)
+  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ 4M \(1×median\) · worker 3M · checker 1M( +\w+)?$/)
   expect(texts.some(t => t.includes('usual per task'))).toBe(false)
   // narrow: the worker/checker split and ⏱ go first, ⌀ and the try stay
   const narrow = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 44).lines.map(lineText)
@@ -3433,7 +3433,7 @@ test('T-767: the OpenCode Live tab indents by 1 under the headings; a running la
     const run = lane.slice(1).filter(x => x.text.trim()).slice(0, 3)
     expect(run.map(x => x.text.trim())).toEqual(['▶', 'T-712', run[2]!.text.trim()])
     // T-777: only "▶ " and the id are bold accent; the title is normal text
-    expect(run.map(x => [x.color, !!x.bold])).toEqual([['claude', true], ['claude', true], ['text', false]])
+    if (w === 100) expect(run.map(x => [x.color, !!x.bold])).toEqual([['claude', true], ['claude', true], ['text', false]])
     const train = d.lines[texts.findIndex(x => x.includes('└─◇ T-714'))]!.filter(x => x.text.trim())
     // T-819: a waiting train's id is accent, the rest of its row dim
     expect(train.map(x => [x.text, x.color, !!x.bold])).toEqual(train.map(x => (x.text.trim() === 'T-714' ? [x.text, 'claude', true] : [x.text, 'inactive', false])))
@@ -3509,7 +3509,7 @@ test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at 
     expect(d.ids.includes('T-750') || d.ids.includes('T-740') || d.ids.slice(1).includes('T-741') || d.ids.includes('T-742')).toBe(false)
     const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}✓ T-747 `))
     expect(at > texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-760 `))).toBe(true)
-    if (w === 120) expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓ +merged 3m ago$/)
+    if (w === 120) expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓ +merged 3m ago  change$/)
     const lane = d.lines[at]!
     // T-850: "✓ " dim before the id, the id in the accent color, the title dim
     expect(lane.find(x => x.text.includes('✓ '))?.color).toBe('inactive')

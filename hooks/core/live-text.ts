@@ -45,7 +45,7 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
   if (!running.length && lanes.length) out.push('')
   if (lanes.length) {
     const room = Math.max(0, ...lanes.map(l => (l.done ? 0 : tryText(l.tryNo).length)))
-    const layout = liveLayout(lanes, liveColumns(lanes, view.checker === true), Math.max(1, inner - room))
+    const layout = liveLayout(lanes, liveColumns(lanes, view.checker === true), Math.max(1, inner - room), true)
     const trains = liveTrains(view, nowMs, lanes)
     under(liveLabelSegs(layout))
     for (const l of lanes) {
