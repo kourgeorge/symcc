@@ -17,7 +17,7 @@ trap 'rm -rf "$tmp"' EXIT
 
 # 1. the build writes serve.mjs, the webview, codicons and the notices
 sh scripts/build-editor.sh --out "$tmp/editor" >/dev/null || fail "scripts/build-editor.sh failed"
-for f in serve.mjs webview/webview.js webview/webview.css webview/codicons/codicon.css webview/codicons/codicon.ttf THIRD-PARTY-NOTICES.md; do
+for f in serve.mjs serve.json webview/webview.js webview/webview.css webview/codicons/codicon.css webview/codicons/codicon.ttf THIRD-PARTY-NOTICES.md; do
   [ -s "$tmp/editor/$f" ] || fail "the build wrote no editor/$f"
 done
 serve="$tmp/editor/serve.mjs"
@@ -40,6 +40,7 @@ git -C "$repo" init -q -b main
 git -C "$repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
 version=$(node -p 'require("./.claude-plugin/plugin.json").version')
 protocol=$(sed -n 's/^export const PROTOCOL = \([0-9][0-9]*\)$/\1/p' hosts/cursor/contract.ts)
+[ "$(cat "$tmp/editor/serve.json")" = "{\"protocol\":$protocol}" ] || fail "editor/serve.json is not {\"protocol\":$protocol}: $(cat "$tmp/editor/serve.json")"
 for agents in cursor copilot; do
   SYMCC_CACHE="$tmp/cache" SYMCC_NPM_REGISTRY=http://127.0.0.1:9 COPILOT_CLI_PATH=/nonexistent/copilot node -e '
     const { spawn } = require("node:child_process")

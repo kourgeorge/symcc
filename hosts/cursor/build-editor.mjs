@@ -2,6 +2,7 @@
 //   serve.mjs        serve, from main.ts, with the Copilot SDK, undici and https-proxy-agent inside. The Cursor SDK stays
 //                    out (its license keeps it out of symcc; ./sdk-fetch.ts fetches it), and so does the Copilot SDK's own
 //                    runtime: koffi, which only that runtime uses, is a stub, and serve runs the owner's copilot CLI.
+//   serve.json       the contract's number ({"protocol": 1}), so an extension can choose a copy without starting it.
 //   webview/         the board's webview (webview.js, webview.css) and codicons, from extension/webview/.
 //   THIRD-PARTY-NOTICES.md  the licenses of the open packages inside both.
 // Usage: node build-editor.mjs <out>   (from hosts/cursor, after npm ci here and in extension/)
@@ -58,6 +59,9 @@ const webview = await build({
   metafile: true,
   logLevel: 'warning',
 })
+const protocol = /^export const PROTOCOL = (\d+)$/m.exec(await readFile('contract.ts', 'utf8'))?.[1]
+if (!protocol) throw new Error("build-editor: contract.ts has no line 'export const PROTOCOL = <number>'")
+await writeFile(join(out, 'serve.json'), `${JSON.stringify({ protocol: Number(protocol) })}\n`)
 await mkdir(join(out, 'webview', 'codicons'), { recursive: true })
 for (const f of ['codicon.css', 'codicon.ttf']) await cp(`extension/node_modules/@vscode/codicons/dist/${f}`, join(out, 'webview', 'codicons', f))
 
