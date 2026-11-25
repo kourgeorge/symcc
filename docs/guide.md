@@ -1418,13 +1418,13 @@ words as bold headings with the same spacing):
   ```
   ─── ❯ ORGANIZATIONAL MEMORY   57 / 60 ────────────────────────
 
-     newest [all]
-      11-21  tests      In tests, put dates relative to now, never a…
-      11-21  workers    Before handing back, wait for every command…
-      11-21  snapshots  To re-capture a saved page picture, print s…
-     topics
-      tests       14    git         11    board        9
-      opencode     9    vs code      8    hosts       6
+   newest [all]
+     11-21  tests      In tests, put dates relative to now, never a…
+     11-21  workers    Before handing back, wait for every command…
+     11-21  snapshots  To re-capture a saved page picture, print s…
+   topics
+     tests       14    git         11    board        9
+     opencode     9    vs code      8    hosts       6
   ```
 
   The heading has the note count out of the 60 allowed and a fill bar, both in one calm

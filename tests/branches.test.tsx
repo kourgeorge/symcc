@@ -251,7 +251,7 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     expect([heads.length, /^─── ❯ ORGANIZATIONAL MEMORY {3}\d+ \/ 60 ─+$/.test(heads[3] ?? '')]).toEqual([4, true])
     expect(live.filter(l => (!l.startsWith('─── ❯ ') && l.includes('── ')) || /^─+$/.test(l)).length).toBe(1)
     // the lines under a heading are indented by 1 (T-767; a running lane starts "▶ ")
-    for (const l of [' ▶ T-7', '  main ', ' ✓ ', '   newest [all]']) expect([l, live.some(x => x.startsWith(l))]).toEqual([l, true])
+    for (const l of [' ▶ T-7', '  main ', ' ✓ ', ' newest [all]']) expect([l, live.some(x => x.startsWith(l))]).toEqual([l, true])
     for (const isHead of LIVE_HEADS) {
       const at = live.findIndex(isHead)
       expect([at, at > 0]).toEqual([at, true])
