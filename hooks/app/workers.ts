@@ -15,7 +15,7 @@ import { loadKinds } from './kinds'
 import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, startCancelled, claimNote, rewakeStarts } from './starts'
-import { load, change, now, path, safeWrite, aboutToWait } from './store'
+import { load, change, now, path, safeWrite, aboutToWait, holdPublish } from './store'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
 import { optionsVia, popupTied } from './questions'
@@ -398,6 +398,9 @@ export async function workerFinished(host: Host, agentId: string, answer: string
   // moved): the try is not failed, it ends as restarted and the next worker goes on with the same try
   const bySymcc = await stoppedBySymcc(host, agentId, end)
   let restarted = false
+  // T-1029: the changes of this hand-back (up to the check's start) draw the view once, when finishTry lets go of the hold
+  const letGo = holdPublish(host)
+  handBackHolds.set(w.task, letGo)
   try {
     tryNo = await change(host, x => {
       const t = find(x, w.task)
@@ -421,17 +424,29 @@ export async function workerFinished(host: Host, agentId: string, answer: string
     // left as it is, and the task is not sent back to "todo" meanwhile (see sendBackIdle).
     keptHandBacks.set(agentId, { w, answer, end, tokens, cost })
     finishing.delete(w.task)
+    handBackHolds.delete(w.task)
+    await letGo()
     return
   }
   if (tryNo === null) {
     finishing.delete(w.task)
+    handBackHolds.delete(w.task)
+    await letGo()
     if (restarted) await pump(host)
     return
   }
   // T-656: the same agent is asked for org-mem suggestions in one follow-up turn; nothing below waits for its answer
   if (tryNo !== undefined && end.reason === 'answer' && !stopped.has(agentId)) startDebrief(host, agentId, w.task, tryNo, answer)
-  await finishUnderLimit(host, w.task, tryNo, limitMs, (gaveUp, over, limit) => finishWork(host, agentId, w, answer, end, gaveUp, over, limit))
+  try {
+    await finishUnderLimit(host, w.task, tryNo, limitMs, (gaveUp, over, limit) => finishWork(host, agentId, w, answer, end, gaveUp, over, limit))
+  } finally {
+    handBackHolds.delete(w.task)
+    await letGo()
+  }
 }
+
+/** T-1029: the hold on drawing the view that workerFinished takes for its task's hand-back; finishTry lets go of it before the check starts. */
+const handBackHolds = new Map<string, () => Promise<void>>()
 
 /**
  * Runs task `id`'s checking and merging step `step` for try `tryNo` (a worker's hand-back, or one started again after a
@@ -972,6 +987,16 @@ export async function finishWork(host: Host, agentId: string, w: Pick<Worker, 't
 
 /** finishWork's body: true when this try's outcome was written (its folder's .scratch/ may be emptied), false when it was not ours to end. */
 async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd, gaveUp: () => boolean, release?: Promise<unknown>, limit?: TurnLimit): Promise<boolean> {
+  const letGo = handBackHolds.get(w.task)
+  handBackHolds.delete(w.task)
+  try {
+    return await finishTryBody(host, agentId, w, answer, end, gaveUp, release, limit, letGo)
+  } finally {
+    await letGo?.()
+  }
+}
+
+async function finishTryBody(host: Host, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd, gaveUp: () => boolean, release: Promise<unknown> | undefined, limit: TurnLimit | undefined, letGo: (() => Promise<void>) | undefined): Promise<boolean> {
   const b = await load(host)
   const t = find(b, w.task)
   if (!t || t.status !== 'doing') return false // changed or dropped meanwhile
@@ -1032,6 +1057,8 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
     await change(host, x => (find(x, t.id)?.status === 'doing' && !gaveUp() ? patchTask(x, t.id, { note: PREP_NOTE }, now()) : x))
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
+    // T-1029: the quick steps of the hand-back are done: the view is drawn once now, before the long check starts
+    await letGo?.()
     // The checker setting: a change that is not docs only gets a checker after its prep step, before it joins the merge line (checkerFirst).
     const first = checkerOn(b) ? checkerFirst(host, t, b, w.worktree, made, stop) : undefined
     const r: CheckResult = await checkAndMerge(host, t, w.worktree, b, 'finish', made, stop, false, release, limit, first).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))

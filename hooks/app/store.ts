@@ -342,7 +342,13 @@ export async function saveMigrated(host: Host): Promise<void> {
 }
 
 /** The parts files last read or written (path → their text and tasks), so a save writes only the ones that changed. */
-const partsSeen = new Map<string, { text: string; tasks: Record<string, Record<string, unknown>> }>()
+const partsSeen = new Map<string, { text: string; tasks: Record<string, Record<string, unknown>>; stamp?: string }>()
+
+/** A file's mtime and size as one text (T-1029): a parts file with the same stamp as when last read or written is not read again. */
+async function stampOf(host: Host, file: string): Promise<string | undefined> {
+  const st = await host.fs.stat(file).catch(() => null)
+  return st ? `${st.mtimeMs}|${st.size}` : undefined
+}
 
 /**
  * The finished tasks the last read loaded as stubs, their parts missing (T-681): a save leaves them out of their parts
@@ -414,11 +420,18 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; raw
       missingNow.add(rel)
       continue
     }
+    const stamp = await stampOf(host, file)
+    const had = partsSeen.get(file)
+    if (had && stamp !== undefined && had.stamp === stamp) {
+      noteRead(host, file, had.text)
+      files.set(rel, had.tasks)
+      continue
+    }
     const t = await readWhole(host, file)
     const p = readParts(t)
     if (p.broken) return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be read (${p.broken})` }, whole: false, missing: [], missingFiles: new Set<string>() }
     files.set(rel, p.tasks)
-    partsSeen.set(file, { text: t, tasks: p.tasks })
+    partsSeen.set(file, { text: t, tasks: p.tasks, stamp })
   }
   const j = joinParts(raw, files)
   if (j.missing.length && again) return readJoined(host, false)
@@ -553,7 +566,7 @@ export async function saveBoard(host: Host, b: Board) {
   for (const [file, tasks] of want) {
     const text = partsText(tasks)
     if (text !== first.get(file)) await safeWrite(host, file, text, `the board's ${fileName(file)}`)
-    partsSeen.set(file, { text, tasks })
+    partsSeen.set(file, { text, tasks, stamp: await stampOf(host, file) })
   }
   const dir = path(`${S.N.dir}/${PARTS_DIR}/`)
   for (const file of [...partsSeen.keys()]) {
@@ -620,10 +633,38 @@ export async function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board
     await emitTaskEvents(host, events)
     // a guard-only copy (guardStart, in a worker's folder) saves the board but never shows it: no panel, no status line
     if (S.guardOnly) return value
+    // T-1029: held (see holdPublish): the view is drawn once, at the end
+    if (heldViews > 0) {
+      heldBoard = after
+      return value
+    }
     await publish(host, after)
     checkHealth(host, after)
     return value
   })
+}
+
+let heldViews = 0
+let heldBoard: Board | null = null
+
+/**
+ * T-1029: from now on, board changes do not draw the view; the last one is drawn once when the answered function is
+ * called (a hand-back makes several changes back to back; drawing after each one kept the hooks worker busy).
+ * Calling it again does nothing.
+ */
+export function holdPublish(host: Host): () => Promise<void> {
+  heldViews++
+  let done = false
+  return async () => {
+    if (done) return
+    done = true
+    heldViews--
+    if (heldViews > 0 || !heldBoard) return
+    const b = heldBoard
+    heldBoard = null
+    await publish(host, b)
+    checkHealth(host, b)
+  }
 }
 
 /** Runs fn while holding the board lock, one at a time within this session too. */
