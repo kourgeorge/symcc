@@ -63,7 +63,7 @@ function liveFor(t: BoardTask, patch: TaskPatch, next: BoardTask): Live | undefi
   const sameTry = next.status === t.status && next.attempts === t.attempts
   const kept: Live = patch.live === null ? {} : { ...(t.live ?? {}) }
   // the over-time marks, the hand-back record and the check step belong to one try, and to the status it was in
-  if (!sameTry) for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'ask', 'refused', 'checking'] as const) delete kept[k]
+  if (!sameTry) for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'ask', 'refused', 'checking', 'tested'] as const) delete kept[k]
   // waiting only for the owner's files to merge: kept while the task stays where it is (or the patch sets it again)
   if (next.status !== t.status) delete kept.merge_wait
   const set = patch.live ? patch.live : {}

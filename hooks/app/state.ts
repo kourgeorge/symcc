@@ -337,6 +337,8 @@ export const leadQueue: string[] = []
 export const meanwhile: string[] = []
 /** task id → spawns in a row that failed only because the plugin wasn't ready yet (see notReadyYet in host.ts) */
 export const notReady = new Map<string, number>()
+/** task id → the id of its checker agent that survived a plugin reload: the next checker step waits for it instead of starting a new one (T-1068) */
+export const adoptedCheckers = new Map<string, { id: string; early?: CheckerEnd }>()
 /** task id → checker starts in a row, after a reload (see checkAgain in workers.ts), that failed only because the agent type wasn't loaded yet */
 export const checkerNotReady = new Map<string, number>()
 /** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */

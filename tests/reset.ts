@@ -5,7 +5,7 @@
 import { test as plainTest, type TestBody, type TestOptions, type TestRest } from 'claude-code/testing'
 import { emptyHeard, useAssistantWord } from '../hooks/board'
 import { SYMCC_WORDS } from '../hooks/host'
-import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRuns, checkerRuns, stopped, movedAgents, movedRefused, haltedAnywhere, boardAgents, reminded, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, scratchUse, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/app/state'
+import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRuns, checkerRuns, stopped, movedAgents, movedRefused, haltedAnywhere, boardAgents, reminded, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, adoptedCheckers, openDays, heard, sayQueue, keptDirty, changesCache, scratchUse, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/app/state'
 import { resetScoutRuns } from '../hooks/app/scouts'
 import { resetStarts } from '../hooks/app/starts'
 import { resetStore } from '../hooks/app/store'
@@ -51,7 +51,7 @@ export function resetPlugin() {
   resetBranches()
   resetTodayTeam()
   forgetSearchParts()
-  for (const m of [workers, queuedWorkers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, checkerNotReady, changesCache, scratchUse, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
+  for (const m of [workers, queuedWorkers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, checkerNotReady, adoptedCheckers, changesCache, scratchUse, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
   for (const s of [starting, finishing, stopped, movedAgents, boardAgents, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou, guardLogged]) s.clear()
   movedRefused().clear()
   haltedAnywhere().clear()
