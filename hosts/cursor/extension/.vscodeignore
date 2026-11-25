@@ -1,0 +1,9 @@
+# The VSIX holds only the extension: dist/extension.js, media/, and the store files. The board's webview and serve
+# come from the symcc copy the extension finds (editor/ in that folder).
+**
+!package.json
+!dist/extension.js
+!media/**
+!README.md
+!CHANGELOG.md
+!LICENSE
