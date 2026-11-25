@@ -169,8 +169,9 @@ ${features.panel ? '' : `  /${S.N.name}-board               show the board panel
   /${S.N.name}-doctor [fix [id ...]] check ${S.N.dir}/ and git: old migration backups, task branches
                        already merged, folders of finished tasks, stale worktree entries,
                        files near the 4 MB limit, stray files and a stuck board, with sizes;
-                       "fix" cleans up every item it offers, "fix b-T-5 w-T-5" only those. Unmerged
-                       branches and folders with uncommitted changes are only listed
+                       "fix" cleans up every item it offers, "fix b-T-5 w-T-5" only those. For a dropped
+                       task, fix also deletes its folder with unsaved changes and its unmerged
+                       branch (they can't be got back); for other tasks such work is only listed
   /${S.N.help} [TOPIC]           this manual
 ${features.panel ? `On the board: t tasks · l live · s scouts · c settings · m switch approve merge / auto merge.
 In the settings view: Enter on a row changes it: on/off flips, mode, notify, scout_findings and

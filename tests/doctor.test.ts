@@ -6,7 +6,7 @@ import { type BoardTask, emptyBoard, leadText } from '../hooks/board'
 import { oldBackups, parseDoctorArgs, backupIds } from '../hooks/core/doctor'
 import { doctor } from '../hooks/app/doctor'
 import { runCommand, COMMANDS } from '../hooks/app/symcc'
-import { runTool, TOOLS } from '../hooks/app/tools'
+import { runTool, TOOLS, manual } from '../hooks/app/tools'
 import { S, finishing, workers, starting } from '../hooks/app/state'
 import type { HostFileEntry, HostRunResult } from '../hooks/host'
 import { test } from './reset'
@@ -451,4 +451,16 @@ test('T-1032: a worker of this window keeps its dropped task folder and branch o
   expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
   expect(w.branches.has('symcc/T-494')).toBe(true)
   expect(w.branches.has('symcc/T-3')).toBe(false)
+})
+
+test('T-1033: the manual and the command say fix deletes a dropped task\'s unsaved folder and unmerged branch', async () => {
+  const text = manual('')
+  const line = text.slice(text.indexOf('/symcc-doctor [fix'))
+  const doctorLine = line.slice(0, line.indexOf('/symcc-help'))
+  expect(doctorLine).toContain('For a dropped')
+  expect(doctorLine).toContain('unmerged')
+  expect(doctorLine).toContain('for other tasks such work is only listed')
+  expect(doctorLine).not.toContain('Unmerged\n')
+  const cmd = COMMANDS().find(c => c.name === 'symcc-doctor')!
+  expect(cmd.description).toContain('for a dropped task, fix also deletes its folder with unsaved changes and its unmerged branch')
 })
