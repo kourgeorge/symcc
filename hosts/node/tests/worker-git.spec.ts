@@ -218,8 +218,14 @@ test('T-1053: a merged-in commit that only deletes a file outside the task fails
 }, 600_000)
 
 // A merge or cherry-pick the worker left stopped on a conflict: prep aborts it, so the conflict markers are never
-// committed; the worker's own commit before it merges as usual.
-for (const [name, op] of [['merge', 'merge -q --no-edit side'], ['cherry-pick', 'cherry-pick side']] as const) {
+// committed; the worker's own commit before it merges as usual. `cherry-pick -n` and `merge --squash` leave nothing to
+// abort (no CHERRY_PICK_HEAD or MERGE_HEAD): prep resets the files, so the folder is not stuck (checker, try 10).
+for (const [name, op] of [
+  ['merge', 'merge -q --no-edit side'],
+  ['cherry-pick', 'cherry-pick side'],
+  ['cherry-pick -n', 'cherry-pick -n side'],
+  ['merge --squash', 'merge -q --squash side'],
+] as const) {
   test(`T-1053: a ${name} the worker left on a conflict is aborted in prep; no conflict markers reach main`, async () => {
     const r = await scratchRepo(`wconflict-${name}`, 'hello.txt', 'test -f hello.txt\n')
     try {

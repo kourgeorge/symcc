@@ -674,7 +674,7 @@ function braceTextArgs(p: { words: string[] }): Set<number> {
  * runs every command in the shell's folder (T-1053).
  */
 /** Words that may change the shell's folder when they are not the first word of a command (gitFolders). */
-const FOLDER_WORDS = new Set(['cd', 'pushd', 'popd', 'eval', 'source', '.'])
+const FOLDER_WORDS = new Set(['cd', 'chdir', 'pushd', 'popd', 'eval', 'source', '.'])
 
 function gitFolders(pieces: ShellPiece[], cwd?: string): Map<ShellPiece, string | undefined> {
   const out = new Map<ShellPiece, string | undefined>()
@@ -703,7 +703,8 @@ function gitFolders(pieces: ShellPiece[], cwd?: string): Map<ShellPiece, string 
     out.set(p, dir)
     const words = rawWords(p.text)
     const name = words[0]?.raw
-    if (name === 'cd' || name === 'pushd' || name === 'popd') {
+    if (name === 'cd' || name === 'chdir' || name === 'pushd' || name === 'popd') {
+      // zsh's chdir is the same as cd (T-1053)
       moved = true
       dir = name !== 'popd' && prev !== '||' && words.length === 2 ? literalPath(words[1]!.raw) : undefined
     } else if (words[0]?.expands || (!isGit(words[0]?.w ?? '') && words.some(x => FOLDER_WORDS.has(x.w)))) {

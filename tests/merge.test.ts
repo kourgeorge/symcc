@@ -4096,6 +4096,16 @@ test("T-1053: a worker may change git in its own folder on its own branch; push,
   // a path in the owner's copy, or another task's folder, is still refused for that first
   expect(await bash(`cd ${ROOT} && git commit -m x`)).toMatch(/^Refused: this command names .* outside your own folder/)
   expect(await bash(`git -C ${ROOT}/.symcc/worktrees/T-7 commit -m x`)).toMatch(/^Refused: this command names .* outside your own folder/)
+  // zsh's chdir moves the folder like cd: refused the same way (checker, try 10)
+  for (const [cd, zsh] of [
+    ['cd ${PWD%/.symcc*} && git commit -am x', 'chdir ${PWD%/.symcc*} && git commit -am x'],
+    ['true | cd /owner; git commit -am x', 'true | chdir /owner; git commit -am x'],
+    [`cd ${ROOT} && git merge main`, `chdir ${ROOT} && git merge main`],
+  ] as const) {
+    const want = await bash(cd)
+    expect([cd, typeof want]).toEqual([cd, 'string'])
+    expect([zsh, await bash(zsh)]).toEqual([zsh, want])
+  }
   // an investigation's changes are never kept: its worker still only reads with git
   await saveBoard(f.$, patchTask(b, 'T-1', { kind: 'investigation' } as Partial<BoardTask>, ISO))
   expect(await bash('git commit -am x')).toBe(workerGitWriteText('git commit'))

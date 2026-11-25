@@ -7,6 +7,8 @@ import { checkEdit } from '../hooks/app/ask'
 import { gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, bashOutsideText, BASH_UNRESOLVED, unresolvedTarget } from '../hooks/board'
 import { S, scoutRuns, workers, checkerRuns } from '../hooks/app/state'
 import { fakeHost } from './fake-host'
+import { workerGitAllow } from '../hooks/core/git-guard'
+import { bashOutsideFolder } from '../hooks/core/path-guard'
 import { bestPairMsOf, growsSlowly } from './timing'
 
 const ROOT = '/repo'
@@ -407,5 +409,17 @@ test('braces in paths after `--` of a read-only git, and in echo, printf or `x=`
     expect(await checkEdit($, 'w1', { command }, WT)).toBe(firstRefusal(command, workerGitWriteText('git with {braces}')))
     expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText('git with {braces}'))
     expect(await checkEdit($, 'c1', { command }, WT)).toBe(gitWriteText('git with {braces}'))
+  }
+})
+
+test("T-1053: zsh's chdir is a folder change like cd, for the git guard and the path guard (checker, try 10)", () => {
+  const own = '/Users/u/p/.symcc/worktrees/T-9'
+  for (const verb of ['cd', 'chdir']) {
+    for (const command of [`${verb} \${PWD%/.symcc*} && git commit -am x`, `true | ${verb} \${PWD%/.symcc*}; git commit -am x`]) {
+      expect([command, typeof gitWriteIn(command, workerGitAllow([own]), own)]).toEqual([command, 'string'])
+      expect([command, typeof bashOutsideFolder(command, [own], ['/Users/u/p'], '/Users/u', own)]).toEqual([command, 'string'])
+    }
+    // a plain one inside its own folder is still fine
+    expect(gitWriteIn(`${verb} ${own}/src && git commit -am x`, workerGitAllow([own]), own)).toBe(undefined)
   }
 })

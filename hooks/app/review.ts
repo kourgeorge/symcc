@@ -420,7 +420,8 @@ async function backOnBranch($: Host, dir: string, branch: string): Promise<strin
 /**
  * T-1053: ends a merge, cherry-pick, revert or `git am` the worker left stopped on a conflict in folder `dir`, so its
  * conflict markers are never staged and committed: while files are still unmerged, each is aborted, which puts the
- * files back as they were before it. One the worker fully resolved but did not commit is kept: symcc's own commit
+ * files back as they were before it; files still unmerged with nothing to abort (`cherry-pick -n`, `merge --squash`)
+ * are reset with `git reset --merge`. One the worker fully resolved but did not commit is kept: symcc's own commit
  * then finishes it (a merge becomes a merge commit), as the merge_main prompt allows. A `git am` is always aborted
  * (a commit does not end it). '' when fine, else why symcc can't commit (files still unmerged after that).
  */
@@ -437,6 +438,9 @@ async function endUnfinished($: Host, dir: string): Promise<string> {
     for (const [ref, cmd] of [['MERGE_HEAD', 'merge'], ['CHERRY_PICK_HEAD', 'cherry-pick'], ['REVERT_HEAD', 'revert']] as const) {
       if (await pending(ref)) await git($, [cmd, '--abort'], dir)
     }
+    // a conflict with nothing to abort (cherry-pick -n, merge --squash, revert -n): put the files back to HEAD's, so
+    // the folder isn't stuck for this try and every later one
+    if (await unmerged()) await git($, ['reset', '-q', '--merge'], dir)
   }
   const apply = (await git($, ['rev-parse', '--path-format=absolute', '--git-path', 'rebase-apply'], dir)).stdout.trim()
   if (apply && (await $.fs.exists(apply).catch(() => false))) await git($, ['am', '--abort'], dir)
