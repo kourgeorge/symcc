@@ -1,8 +1,7 @@
 // T-952: the notice a window that does not drive the board shows, naming the window that drives it: when that window
 // started driving and when it was last active (from lead.json's `since` and `active`), else when it last checked in
-// (the heartbeat). Two cases: a window with symcc off here ("another window drives this board (…) · /symcc-drive to
-// drive from here · /symcc-enable to follow it") and a window that follows ("this window follows (…); /symcc-drive to
-// drive from here"). Each has shorter forms for a narrow place: "started …" goes first, then the commands get short.
+// (the heartbeat). A window that follows says "this window follows (…); /symcc-drive to
+// drive from here". Each has shorter forms for a narrow place: "started …" goes first, then the commands get short.
 
 /** What a window knows of the driving window, from lead.json (see Lead): its heartbeat, and since T-952 when it claimed the board and when it was last active. */
 export type DriverFacts = { heartbeat: number; since?: number; active?: number }
@@ -54,22 +53,6 @@ export function driverWhen(d: DriverFacts | undefined, nowMs: number, withStart 
 export type NoticePart = { text: string; command?: boolean }
 
 const brackets = (s: string) => (s ? ` (${s})` : '')
-
-/**
- * The notice of a window with symcc off here while another window drives, longest first (see the top of this file):
- * the full one, without "started …", then with the short commands ("· /symcc-drive · /symcc-enable"), then with no facts.
- */
-export function otherDrivesForms(name: string, d: DriverFacts | undefined, nowMs: number): NoticePart[][] {
-  const drive = { text: `/${name}-drive`, command: true }
-  const enable = { text: `/${name}-enable`, command: true }
-  const head = (facts: string) => ({ text: `another window drives this board${brackets(facts)} · ` })
-  const long = (facts: string): NoticePart[] => [head(facts), drive, { text: ' to drive from here · ' }, enable, { text: ' to follow it' }]
-  const short = (facts: string): NoticePart[] => [head(facts), drive, { text: ' · ' }, enable]
-  const driveOnly = (facts: string): NoticePart[] => [head(facts), drive]
-  const full = driverWhen(d, nowMs, true)
-  const act = driverWhen(d, nowMs, false)
-  return uniqueForms([long(full), long(act), short(act), driveOnly(act), short(''), driveOnly('')])
-}
 
 /**
  * The notice of a window that follows (symcc on here, another window drives), longest first: "this window follows

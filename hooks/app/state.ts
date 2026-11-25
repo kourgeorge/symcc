@@ -103,13 +103,6 @@ export const startS = () => ({
   fresh: false,
   /** T-793: this window only is turned off (/<name>-disable here); never saved, gone when the session ends */
   offHere: false,
-  /** T-793: why: 'off' (/<name>-disable here), 'other' (another window has symcc on), 'gone' (that window closed) */
-  offWhy: 'off' as OffHere,
-  /** T-793: while off here, whether another window was seen driving (so its going away is worth telling) and whether that was told */
-  sawOther: false,
-  takeoverTold: false,
-  /** T-793: when the window with symcc on was first missed (ms), so the take-over line waits out a grace; null while seen */
-  missingSince: null as number | null,
   /** T-952: what lead.json said of the driving window at this window's last look, while another window drives (see seeDriver) */
   driver: undefined as DriverFacts | undefined,
   /** T-952: when the owner last typed a prompt here or the lead's turn last ended (saved in lead.json as `active` while this window drives) */

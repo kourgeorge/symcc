@@ -1,10 +1,9 @@
 // T-793: /symcc-disable here and /symcc-enable turn symcc off or on in ONE window (kept in that session's state,
-// never in board.json). A window opened while another live window has symcc on starts off here. An off-here window
-// gets no lead prompt, no board updates, its tools refuse, it never drives, and it tells the owner once when the
-// symcc window is gone.
+// never in board.json). An off-here window gets no lead prompt, no board updates, its tools refuse, it never drives,
+// and it stays off, whatever other windows do, until /symcc-enable.
 import { expect } from 'claude-code/testing'
 import { emptyBoard, leadText, parseLead, parseCommand, offStatusLine, offHereAnswer, LEAD_STALE_MS, addTask, patchTask, find, type Board } from '../hooks/board'
-import { claimLead, disableHere, enableHere, offHereBeat, handOver, GONE_REMIND_MS, GONE_GRACE_MS, startHere, driveHere } from '../hooks/app/lead'
+import { claimLead, disableHere, enableHere, offHereBeat, handOver, startHere, driveHere } from '../hooks/app/lead'
 import { S, sayQueue, toolName, workers } from '../hooks/app/state'
 import { leadBeat, leadGuideText, sessionStart, toolCall, runCommand, COMMANDS } from '../hooks/app/symcc'
 import { saveBoard } from '../hooks/app/store'
@@ -40,14 +39,6 @@ function world(id: string) {
     ui: { toast: (text: string) => void toasts.push(text), open: (async (a: { id: string }) => (opened.push(a.id), { isPlaced: true })) as never },
   })
   return { ...w, files, toasts, opened, lead: `${ROOT}/${S.N.leadFile}`, board: `${ROOT}/${S.N.boardFile}` }
-}
-
-/** A window that is off here while another window drives (the state a disabled window is in once its driver is back after the take-over line). */
-const startOff = async (host: Parameters<typeof startHere>[0]) => {
-  await startHere(host)
-  await disableHere(host)
-  S.offWhy = 'other'
-  S.sawOther = true
 }
 
 const boardOf = (w: ReturnType<typeof world>) => JSON.parse(w.files.get(w.board)!) as Board
@@ -155,7 +146,6 @@ test('an off-here window that finds the board handed to it gives it straight bac
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   S.offHere = true
-  S.offWhy = 'off'
   w.files.set(w.lead, JSON.stringify({ session: 'b', heartbeat: Date.now(), handFrom: 'a' }))
   await offHereBeat(w.host)
   expect(w.files.has(w.lead)).toBe(false)
@@ -190,7 +180,8 @@ test('/symcc-enable through the real command tells the lead with one message', a
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOff(w.host)
+  await startHere(w.host)
+  await disableHere(w.host)
   expect(S.offHere).toBe(true)
   await runCommand(w.host, 'symcc-enable', '')
   expect(S.offHere).toBe(false)
@@ -205,37 +196,10 @@ test('handOver (after /clear) does not open the panel in an off-here window', as
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOff(w.host)
+  await startHere(w.host)
+  await disableHere(w.host)
   await handOver(w.host)
   expect(w.opened).toEqual([])
-})
-
-test('the take-over line waits a grace so a second on-window can claim lead.json first', async () => {
-  S.root = ROOT
-  S.me = 'b'
-  const w = world('b')
-  await saveBoard(w.host, emptyBoard())
-  const t0 = Date.now()
-  w.files.set(w.lead, leadText('a', t0))
-  await startOff(w.host)
-  w.toasts.length = 0
-  w.files.delete(w.lead)
-  await offHereBeat(w.host, t0 + 1000)
-  expect(w.toasts).toEqual([])
-  w.files.set(w.lead, leadText('c', t0 + 30_000))
-  await offHereBeat(w.host, t0 + 31_000)
-  await offHereBeat(w.host, t0 + 31_000 + GONE_GRACE_MS)
-  expect(w.toasts).toEqual([])
-  expect(w.files.has(`${ROOT}/${S.N.dir}/gone.json`)).toBe(false)
-  expect(S.offWhy).toBe('other')
-  // nobody claims: the line shows once after the grace
-  w.files.delete(w.lead)
-  const t1 = t0 + 200_000
-  await offHereBeat(w.host, t1)
-  expect(w.toasts).toEqual([])
-  await offHereBeat(w.host, t1 + GONE_GRACE_MS)
-  await offHereBeat(w.host, t1 + GONE_GRACE_MS + 30_000)
-  expect(w.toasts).toHaveLength(1)
 })
 
 test('T-875: /symcc-enable with the whole project disabled turns the project on and this window too, and says so', async () => {
@@ -273,15 +237,16 @@ test('T-875: plain /symcc-enable in an off-here window turns this window on; the
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOff(w.host)
+  await startHere(w.host)
+  await disableHere(w.host)
   expect(S.offHere).toBe(true)
   // T-952: started off because another window drives: the answer names it
   expect(S.driver !== undefined).toBe(true)
-  expect(await toolCall(w.host, toolName('board'), undefined, {})).toEqual({ result: offHereAnswer(S.N.name, 'other', S.driver) })
+  expect(await toolCall(w.host, toolName('board'), undefined, {})).toEqual({ result: offHereAnswer(S.N.name) })
   const r = await runCommand(w.host, 'symcc-enable', '')
   expect(r?.text?.startsWith('symcc is on in this window, in mode ')).toBe(true)
   expect(S.offHere).toBe(false)
-  expect(await toolCall(w.host, toolName('board'), undefined, {})).not.toEqual({ result: offHereAnswer(S.N.name, 'other', S.driver) })
+  expect(await toolCall(w.host, toolName('board'), undefined, {})).not.toEqual({ result: offHereAnswer(S.N.name) })
   expect(takeBoardUpdate()).toContain('with /symcc-enable.')
   expect(w.panel.view()).toMatchObject({ on_here: true })
   expect(offStatusLine('symcc', false, false)).not.toContain('here')
@@ -293,7 +258,8 @@ test('T-880: turning enabled on from Settings in an off-here window works like /
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOff(w.host)
+  await startHere(w.host)
+  await disableHere(w.host)
   expect(S.offHere).toBe(true)
   const said = await ownerSettings(w.host, { enabled: true }, 'from the board')
   expect(said.startsWith('symcc is on in this window, in mode ')).toBe(true)
@@ -332,20 +298,6 @@ test('a second live window starts as a follower: on, a lead, not driving, with t
   expect(await leadGuideText(w.host)).toBeDefined()
 })
 
-test('T-1041: /symcc-drive from a window that is off here tells the lead /symcc-drive, not /symcc-enable', async () => {
-  S.root = ROOT
-  S.me = 'b'
-  const w = world('b')
-  await saveBoard(w.host, emptyBoard())
-  w.files.set(w.lead, leadText('a', Date.now()))
-  await startOff(w.host)
-  await runCommand(w.host, 'symcc-drive', '')
-  expect(S.offHere).toBe(false)
-  const update = takeBoardUpdate()
-  expect(update).toContain('with /symcc-drive.')
-  expect(update).not.toContain('/symcc-enable')
-})
-
 test('the first window starts with symcc on, and opens its panel', async () => {
   S.root = ROOT
   const w = world('a')
@@ -378,87 +330,43 @@ test('a project disabled as a whole does not start a window off here', async () 
   expect(S.offHere).toBe(false)
 })
 
-test('when the only window with symcc on goes away, an off-here window says so once and does not start driving', async () => {
+test('a window turned off with /symcc-disable here stays off and silent when its driver closes and when a new driver appears', async () => {
   S.root = ROOT
   S.me = 'b'
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOff(w.host)
-  expect(S.offHere).toBe(true)
+  await startHere(w.host)
+  await disableHere(w.host)
   w.toasts.length = 0
-  // a still drives: nothing to tell
-  await offHereBeat(w.host)
-  expect(w.toasts).toEqual([])
-  // a closes (it lets go of lead.json)
+  // the driver closes (it lets go of lead.json), long enough ago for any old grace to be over
   w.files.delete(w.lead)
-  const tn = Date.now()
-  await offHereBeat(w.host, tn)
-  await offHereBeat(w.host, tn + GONE_GRACE_MS)
-  await offHereBeat(w.host, tn + GONE_GRACE_MS + 1000)
-  expect(w.toasts).toHaveLength(1)
-  expect(w.toasts[0]).toContain('the symcc window closed · /symcc-enable to take over')
+  const t0 = Date.now()
+  for (const dt of [0, 1000, 100_000, 20 * 60_000]) await offHereBeat(w.host, t0 + dt)
+  expect(S.offHere).toBe(true)
   expect(S.driving).toBe(false)
+  expect(w.toasts).toEqual([])
+  expect(sayQueue).toEqual([])
   expect(w.files.has(w.lead)).toBe(false)
-  expect(w.panel.view()).toMatchObject({ off_here: 'gone' })
-  expect(offStatusLine('symcc', true, 'gone')).toBe('the symcc window closed · /symcc-enable to take over')
-  // the heartbeat of the session does the same and still claims nothing
+  expect(w.panel.view()).toMatchObject({ off_here: 'off' })
+  // the heartbeat of the session claims nothing either
   leadBeat(w.host)
   for (let i = 0; i < 30; i++) await Promise.resolve()
   expect(w.files.has(w.lead)).toBe(false)
-  expect(w.toasts).toHaveLength(1)
-})
-
-test('nobody takes over: "needs you" plays once, 15 minutes after the take-over line, from one window only', async () => {
-  S.root = ROOT
-  S.me = 'b'
-  const w = world('b')
-  await saveBoard(w.host, emptyBoard())
-  const t0 = Date.now()
-  w.files.set(w.lead, leadText('a', t0))
-  await startOff(w.host)
-  w.files.delete(w.lead)
-  await offHereBeat(w.host, t0 + 1000) // first missed
-  const t1 = t0 + 1000 + GONE_GRACE_MS
-  await offHereBeat(w.host, t1) // the take-over line shows; the note starts
+  // a new driver appears: still off, still silent
+  w.files.set(w.lead, leadText('c', Date.now()))
+  await offHereBeat(w.host)
+  expect(S.offHere).toBe(true)
+  expect(w.toasts).toEqual([])
   expect(sayQueue).toEqual([])
-  await offHereBeat(w.host, t1 + GONE_REMIND_MS - 1000)
-  expect(sayQueue).toEqual([])
-  await offHereBeat(w.host, t1 + GONE_REMIND_MS)
-  expect(sayQueue).toEqual(['?'])
-  // not again, and a second off-here window (same files) does not play it either
-  await offHereBeat(w.host, t1 + GONE_REMIND_MS + 60_000)
-  S.me = 'c'
-  await offHereBeat(w.host, t1 + GONE_REMIND_MS + 120_000)
-  expect(sayQueue).toEqual(['?'])
+  expect(w.panel.view()).toMatchObject({ off_here: 'off' })
+  // /symcc-drive still refuses; /symcc-enable turns it on as a follower of c
+  const r = await runCommand(w.host, 'symcc-drive', '')
+  expect(S.offHere).toBe(true)
+  expect(JSON.stringify(r)).toContain('disable here')
+  await runCommand(w.host, 'symcc-enable', '')
+  expect(S.offHere).toBe(false)
   expect(S.driving).toBe(false)
-})
-
-test('the reminder does not play when a window took over first, or when notify is off', async () => {
-  S.root = ROOT
-  S.me = 'b'
-  const w = world('b')
-  await saveBoard(w.host, emptyBoard())
-  const t0 = Date.now()
-  w.files.set(w.lead, leadText('a', t0))
-  await startOff(w.host)
-  w.files.delete(w.lead)
-  await offHereBeat(w.host, t0 + 1000)
-  // another window takes over before the time is up
-  w.files.set(w.lead, leadText('c', t0 + 5 * 60_000))
-  await offHereBeat(w.host, t0 + 5 * 60_000)
-  await offHereBeat(w.host, t0 + 1000 + GONE_REMIND_MS + 1000)
-  expect(sayQueue).toEqual([])
-  // notify off: nothing is queued
-  const w2 = world('b')
-  await saveBoard(w2.host, { ...emptyBoard(), notify: 'off' })
-  S.offHere = true
-  S.offWhy = 'other'
-  S.sawOther = true
-  S.takeoverTold = false
-  await offHereBeat(w2.host, t0)
-  await offHereBeat(w2.host, t0 + GONE_REMIND_MS + 1)
-  expect(sayQueue).toEqual([])
 })
 
 test('T-984: a window that starts while lead.json names its own session (stale or fresh) is not off here', async () => {
@@ -475,37 +383,15 @@ test('T-984: a window that starts while lead.json names its own session (stale o
   }
 })
 
-test('T-984: an off-here window that finds its own session in lead.json drives again on its heartbeat, unless it was turned off on purpose', async () => {
+test('T-984: an off-here window that finds its own session in lead.json stays off, and /symcc-drive leaves it off and names /symcc-disable here', async () => {
   S.root = ROOT
   const w = world('me')
   await saveBoard(w.host, emptyBoard())
   S.me = 'me'
   S.offHere = true
-  S.offWhy = 'gone'
-  w.files.set(w.lead, leadText('me', Date.now() - LEAD_STALE_MS * 10))
-  await offHereBeat(w.host)
-  expect(S.offHere).toBe(false)
-  expect(S.driving).toBe(true)
-  // turned off on purpose: stays off
-  S.offHere = true
-  S.offWhy = 'off'
   w.files.set(w.lead, leadText('me', Date.now() - LEAD_STALE_MS * 10))
   await offHereBeat(w.host)
   expect(S.offHere).toBe(true)
-})
-
-test('T-984: /symcc-drive turns an off-here window on and drives, except after /symcc-disable here, which it names', async () => {
-  S.root = ROOT
-  const w = world('me')
-  await saveBoard(w.host, emptyBoard())
-  S.me = 'me'
-  S.offHere = true
-  S.offWhy = 'gone'
-  const r = await runCommand(w.host, `${S.N.name}-drive`, '')
-  expect(S.offHere).toBe(false)
-  expect(JSON.stringify(r)).toContain('already drives the board')
-  S.offHere = true
-  S.offWhy = 'off'
   const r2 = await runCommand(w.host, `${S.N.name}-drive`, '')
   expect(S.offHere).toBe(true)
   expect(JSON.stringify(r2)).toContain('disable here')
@@ -528,7 +414,7 @@ test('T-984: a made-up id is swapped for the real one on the next beat, so the w
   w.toasts.length = 0 // the host could not name this window at start, so the start notice cannot know it is itself
   await offHereBeat(w.host, t0 + 1000)
   await offHereBeat(w.host, t0 + LEAD_STALE_MS + 1000)
-  await offHereBeat(w.host, t0 + LEAD_STALE_MS + GONE_GRACE_MS + 2000)
+  await offHereBeat(w.host, t0 + LEAD_STALE_MS + 92_000)
   expect(S.me).toBe('me')
   expect(S.offHere).toBe(false)
   expect(w.toasts.filter(t => t.includes('closed') || t.includes('another'))).toEqual([])
@@ -597,13 +483,6 @@ test("T-991: the id swap leaves lead.json alone when another window drives now, 
   expect(S.driving).toBe(false)
   expect(parseLead(w.files.get(w.lead) ?? null)?.session).toBe('other')
   expect(w.toasts.filter(t => t.includes('drives it now'))).toEqual([])
-})
-
-test('T-1016: the tools and the status line give the same notice for "another window drives" and for "the window closed"', async () => {
-  const now = Date.now()
-  const driver = { session: 'a', since: now - 5 * 60000, beat: now - 3 * 60000 } as never
-  expect(offHereAnswer('symcc', 'other', driver, now)).toBe(`symcc is off in this window: ${offStatusLine('symcc', false, 'other', driver, now)}.`)
-  expect(offHereAnswer('symcc', 'gone')).toBe(`symcc is off in this window: ${offStatusLine('symcc', false, 'gone')}.`)
 })
 
 test('T-1016: the driving window gets a new session id: it keeps driving, lead.json gets the new id, tools still work', async () => {

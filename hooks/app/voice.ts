@@ -177,14 +177,9 @@ export function sayQuestion(host: Host, b: Board, id: string) {
   if (queueSay(host, b, NEEDS_YOU_MARK + id)) saidNeedsYou.add(key)
 }
 
-/** T-793: the reminder when the symcc window is gone and nobody took over: "needs you" (or the chime), from a window off here. */
-export function sayGone(host: Host, b: Board): boolean {
-  return queueSay(host, b, NEEDS_YOU_MARK, true)
-}
-
 /** Adds `item` to the queue and plays it soon; false when nothing plays here (not the driver, notify or plugin off). */
-function queueSay(host: Host, b: Board, item: string, anyWindow = false): boolean {
-  if (!anyWindow && (!S.driving || !onHere(b))) return false
+function queueSay(host: Host, b: Board, item: string): boolean {
+  if (!S.driving || !onHere(b)) return false
   if (b.notify === 'off') return false
   S.notifyWanted = b.notify ?? null
   sayQueue.push(item)

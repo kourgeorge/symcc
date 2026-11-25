@@ -117,7 +117,7 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
   const d = emptyBoard()
   const name = namesFor(S.N.name)
   const folder = folderName(S.root)
-  const off = v.on_here === false ? offStatusParts(S.N.name, true, v.off_here, v.driver, k.nowMs) : []
+  const off = v.on_here === false ? offStatusParts(S.N.name, true, v.off_here) : []
   const driving = v.driving ?? S.driving
   const retries = v.auto_retries ?? d.auto_retries
   const counts = bannerCounts({ ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: retries, mode }, k.nowMs)

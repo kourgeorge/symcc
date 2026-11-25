@@ -6,7 +6,6 @@ import { ellipsis, num } from './text'
 import { MODE_NAME } from './review'
 import { MAX_TEST_MINUTES } from './test-timeout'
 import { testOutputHeading } from './test-output-heading'
-import { type DriverFacts, fitForm, noticeText, otherDrivesForms } from './driver-notice'
 
 /** 'retry' while fewer than `max` tries were used, else 'fail'. */
 const retryOrFail = (tries: number | undefined, max: number): 'retry' | 'fail' => ((tries ?? 0) < max ? 'retry' : 'fail')
@@ -223,35 +222,27 @@ export type OffPart = { text: string; command?: boolean }
  * "symcc is disabled · /symcc-enable to turn it back on". `withName` false leaves the name out ("disabled · /symcc-enable to turn it back on"),
  * for the line under the prompt, where Claude Code already puts "⚠ symcc: " in front.
  */
-export type OffHere = 'off' | 'other' | 'gone' | 'new'
+export type OffHere = 'off' | 'new'
 
-/** T-952: `here` 'other' (another window drives): the notice that names it (core/driver-notice.ts otherDrivesForms), from
- *  `driver` (what lead.json says of it) at `nowMs`, the longest form no wider than `width`. */
-export const offStatusParts = (name: string = DEFAULT_NAME, withName = true, here: OffHere | false | undefined = false, driver?: DriverFacts, nowMs: number = Date.now(), width = Infinity): OffPart[] =>
+export const offStatusParts = (name: string = DEFAULT_NAME, withName = true, here: OffHere | false | undefined = false): OffPart[] =>
   here === 'new'
     ? [{ text: 'no board here · ' }, { text: `/${name}-init`, command: true }]
-    : here === 'gone'
-    ? [{ text: `the ${name} window closed · ` }, { text: `/${name}-enable`, command: true }, { text: ' to take over' }]
-    : here === 'other'
-      ? fitForm(otherDrivesForms(name, driver, nowMs), width)
-      : here
-        ? [{ text: `${name} is off in this window · ` }, { text: `/${name}-enable`, command: true }]
-        : [
+    : here
+      ? [{ text: `${name} is off in this window · ` }, { text: `/${name}-enable`, command: true }]
+      : [
         { text: withName ? `${name} is disabled · ` : 'disabled · ' },
         { text: `/${name}-enable`, command: true },
         { text: ' to turn it back on' },
       ]
 
 /** What every lead tool answers in a window turned off with /<name>-disable here (T-793). */
-export const offHereAnswer = (name: string = DEFAULT_NAME, here: OffHere = 'off', driver?: DriverFacts, nowMs: number = Date.now()) =>
-  here === 'other' ? `${name} is off in this window: ${noticeText(otherDrivesForms(name, driver, nowMs)[0]!)}.`
-  : here === 'gone' ? `${name} is off in this window: ${offStatusLine(name, false, 'gone')}.` : `${name} is off in this window. /${name}-enable turns it back on.`
+export const offHereAnswer = (name: string = DEFAULT_NAME) => `${name} is off in this window. /${name}-enable turns it back on.`
 
 /** What every lead tool answers in a new project, a folder with no board in it or above it, where the owner has not run /<name>-init yet (T-795, T-844). */
 export const notSetUpAnswer = (name: string = DEFAULT_NAME) => `no ${name} board in this folder · /${name}-init to create one here`
 
 /** The "disabled" line as plain text (see offStatusParts). */
-export const offStatusLine = (name: string = DEFAULT_NAME, withName = true, here: OffHere | false | undefined = false, driver?: DriverFacts, nowMs: number = Date.now(), width = Infinity) => offStatusParts(name, withName, here, driver, nowMs, width).map(p => p.text).join('')
+export const offStatusLine = (name: string = DEFAULT_NAME, withName = true, here: OffHere | false | undefined = false) => offStatusParts(name, withName, here).map(p => p.text).join('')
 
 /** The spoken line for tasks just merged: "T-3 done", "T-3 and T-4 done", "T-3, T-4 and T-5 done". '' for none. */
 export function spokenDone(ids: string[]): string {

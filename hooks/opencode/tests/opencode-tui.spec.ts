@@ -136,9 +136,9 @@ test('T-643: a session that does not drive: a warning line under the banner and 
   expect(bandDraw(led, NOW, 120).lines[0]![1]!.text).toBe(' ⚠ this window follows (driver active 3 min ago) · /symcc-drive')
   expect(bandDraw(led, NOW, 100).lines[0]![1]!.text).toBe(' ⚠ follows (driver active 3 min ago) · /symcc-drive')
   expect(bandDraw(led, NOW, 70).lines[0]![1]!.text).toBe(' ⚠ this window follows · /symcc-drive')
-  // off here (another window drives): the banner's first line names it too
-  const off: ViewFile = { ...led, view: { ...led.view, on_here: false, off_here: 'other' } }
-  expect(panelLines(off, { opened: '', cursor: 0 }, NOW, 200).lines.map(lineText).join('\n')).toContain('another window drives this board (')
+  // off here (turned off on purpose): the banner's first line says so
+  const off: ViewFile = { ...led, view: { ...led.view, on_here: false, off_here: 'off' } }
+  expect(panelLines(off, { opened: '', cursor: 0 }, NOW, 200).lines.map(lineText).join('\n')).toContain('symcc is off in this window · /symcc-enable')
   // the driving session: neither, and the row keeps its own note
   expect(warnLines(view(true))).toEqual([])
   const own = bandDraw(view(true), NOW, 120).lines
@@ -4249,7 +4249,7 @@ test('T-841: /symcc-enable in this window\'s session opens the board; other wind
   expect(s.opens.length).toBe(n)
   // the owner closes it; another window (off here, then on) writes the file: nothing reopens
   s.panel.close()
-  s.setView({ open_on_start: true, on_here: false, off_here: 'other' } as never)
+  s.setView({ open_on_start: true, on_here: false, off_here: 'off' } as never)
   await s.board.refresh()
   s.setView({ open_on_start: true, on_here: true })
   await s.board.refresh()

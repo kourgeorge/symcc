@@ -2209,11 +2209,9 @@ banner and status line say so:
 Type `/symcc-drive` to drive from it. A window that crashed and left an old marker does not count:
 "live" uses the same stale rule as the hand-over.
 A window you turned off yourself with `/symcc-disable here` (see [Disabling symcc](#disabling-symcc))
-stays off, even when it was driving. If the driving window closes and only windows turned off here remain,
-none takes over by itself: each says once `the symcc window closed · /symcc-enable to take over`, and no
-worker runs until you do. If nobody has done so 15 minutes later, one of them (never all) plays the
-"needs you" notice once (your notify setting; nothing when notify is off). `/symcc-drive` in such a
-window turns it on and asks to drive, and tells the lead you typed `/symcc-drive`.
+stays off, even when it was driving, whatever other windows do: when the driving window closes, or
+another one starts driving, it stays off and says nothing. `/symcc-drive` there refuses; `/symcc-enable`
+turns it on as a follower.
 
 ### How the lead keeps the board in order
 

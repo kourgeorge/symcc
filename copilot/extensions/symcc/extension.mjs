@@ -55,6 +55,7 @@ var clean = (s, n) => String(s ?? "").replace(/[\u0000-\u0008\u000b-\u001f\u007f
 var shownPath = (p) => p.replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
 var squash = (s) => s.replace(/\s+/g, " ").trim();
 var ellipsis = (s, n) => s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`;
+var plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 var num = (id) => Number(id.replace(/\D/g, "")) || 0;
 function splitFrontMatter(text) {
   const m = /^---\s*\n([\s\S]*?)\n---\s*\n?/.exec(text);
@@ -856,9 +857,9 @@ var ago = (ms) => {
   if (h < 1)
     return "less than an hour ago";
   if (h < 24)
-    return `${h} hour${h === 1 ? "" : "s"} ago`;
+    return `${plural(h, "hour")} ago`;
   const d = Math.floor(h / 24);
-  return `${d} day${d === 1 ? "" : "s"} ago`;
+  return `${plural(d, "day")} ago`;
 };
 var CHANGED_ASK = (tool) => `ask the owner with the ${tool} tool, with options such as "drop it" and "do the new plan: …".`;
 function changedSinceText(s, tool = "ask_owner") {
@@ -866,7 +867,7 @@ function changedSinceText(s, tool = "ask_owner") {
     return null;
   const made = Date.parse(s.created);
   const written = `This task was written ${when(s.created)}${Number.isFinite(made) ? ` (${ago(s.nowMs - made)})` : ""}.`;
-  const n = `${s.total} commit${s.total === 1 ? "" : "s"}`;
+  const n = plural(s.total, "commit");
   let changed;
   if (s.scope === "none" || !s.commits.length)
     changed = `${written} Since then ${n} landed on the branch it merges into.`;
@@ -1606,7 +1607,7 @@ var isOpenQuestion = (q) => !q.answered_at && !q.dropped;
 function openQuestions(b) {
   return (b.questions ?? []).filter(isOpenQuestion);
 }
-var questionsForYou = (n) => n > 0 ? `${n} question${n === 1 ? "" : "s"} for you` : "";
+var questionsForYou = (n) => n > 0 ? `${plural(n, "question")} for you` : "";
 var questionsLabel = (n) => `Questions for you (${n})`;
 function cleanQuestions(v) {
   if (!Array.isArray(v))
@@ -2193,6 +2194,7 @@ function parseLead(text) {
   return { ...l, ...handTo ? { handTo, ...handAt !== undefined ? { handAt } : {} } : {}, ...handFrom ? { handFrom } : {}, ...since !== undefined ? { since } : {}, ...active !== undefined ? { active } : {} };
 }
 var driverTimes = (l) => ({ ...l?.since !== undefined ? { since: l.since } : {}, ...l?.active !== undefined ? { active: l.active } : {} });
+var carriedText = (l, to, nowMs) => leadText(to, nowMs, { ...driverTimes(l), ...l?.handTo ? { handTo: l.handTo, ...l.handAt !== undefined ? { handAt: l.handAt } : {} } : {} });
 function beatText(before, me, nowMs, activeAt) {
   const l = parseLead(before);
   const mine = l?.session === me && !l.handFrom ? l : null;
@@ -2294,7 +2296,7 @@ function mergedDone(t, sha, when2, now) {
 }
 var MERGED_OUTSIDE_FROM = ["todo", "doing", "failed", "waiting", "paused", "review", "dropped"];
 var mergedOutsideLine = (sha, by) => `merged outside the board (${shortSha(sha)}); marked done by ${by}`;
-var notMergedText = (id, n, into) => `${id}'s branch has ${n} commit${n === 1 ? "" : "s"} that ${n === 1 ? "isn't" : "aren't"} in ${into} yet`;
+var notMergedText = (id, n, into) => `${id}'s branch has ${plural(n, "commit")} that ${n === 1 ? "isn't" : "aren't"} in ${into} yet`;
 function mergedOutside(t, sha, by, commits, now) {
   const { live: _l, test_output: _o, ask: _ak, ...rest } = t;
   const ended = t.status === "doing" ? endedBy(t, now, "finished", "merged").runs : t.runs?.length ? withEnd(t.runs, "finished", "merged", true) : undefined;
@@ -4711,7 +4713,7 @@ function worktreesToRemove(tasks, existing) {
 function cleanupText(branches, worktrees, few = 3) {
   if (branches + worktrees <= few)
     return "";
-  const parts = [branches ? `${branches} merged task branch${branches === 1 ? "" : "es"}` : "", worktrees ? `${worktrees} leftover task folder${worktrees === 1 ? "" : "s"}` : ""].filter(Boolean);
+  const parts = [branches ? plural(branches, "merged task branch", "merged task branches") : "", worktrees ? plural(worktrees, "leftover task folder") : ""].filter(Boolean);
   return `Cleaned up ${parts.join(" and ")}.`;
 }
 function gitStateOf(p) {
@@ -4828,7 +4830,7 @@ function riskyFiles(files, max = BIG_FILE_BYTES) {
 var ignoreLineFor = (file) => `/${file.replace(/([*?[\]!#\\])/g, "\\$1").replace(/^ /, "\\ ")}`;
 function setupDoneText(o) {
   const name = o.name ?? DEFAULT_NAME;
-  const steps = [o.init ? "made a git repo" : "", o.gitignore === "made" ? "wrote a .gitignore" : o.gitignore === "added" ? "added lines to .gitignore" : "", `committed ${o.files} file${o.files === 1 ? "" : "s"} on ${o.branch} ("Initial commit (by ${name})")`].filter(Boolean);
+  const steps = [o.init ? "made a git repo" : "", o.gitignore === "made" ? "wrote a .gitignore" : o.gitignore === "added" ? "added lines to .gitignore" : "", `committed ${plural(o.files, "file")} on ${o.branch} ("Initial commit (by ${name})")`].filter(Boolean);
   const warn = o.left.length ? ` Warning: left out of the commit and added to .gitignore: ${o.left.slice(0, 10).map((x) => `${x.file} (${x.why})`).join(", ")}${o.left.length > 10 ? `, and ${o.left.length - 10} more` : ""}.` : "";
   return `Git is set up: ${steps.join(", ")}. Work merges into ${o.branch}; nothing was pushed and no remote was added.${warn}`;
 }
@@ -5054,75 +5056,6 @@ var timedOutHead = (cmd, min) => `$ ${cmd} (ran out of time after ${min} min; ${
 var timedOutRetryNote = (min, n, max) => `tests ran out of time after ${min} min; a new try will look at them (${n} of ${max}); ${RAISE_TEST_MINUTES}`;
 var MAX_TEST_MINUTES = 120;
 
-// hooks/core/driver-notice.ts
-var MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-var two = (n) => String(n).padStart(2, "0");
-function startedText(ms) {
-  const d = new Date(ms);
-  return `${MONTHS2[d.getMonth()]} ${d.getDate()} ${two(d.getHours())}:${two(d.getMinutes())}`;
-}
-function agoShort(ms) {
-  const s = Math.floor(Math.max(0, ms) / 1000);
-  if (s < 5)
-    return "just now";
-  if (s < 60)
-    return `${s} s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60)
-    return `${m} min ago`;
-  const h = Math.floor(m / 60);
-  return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`;
-}
-var num3 = (v) => typeof v === "number" && Number.isFinite(v) ? v : undefined;
-function driverFacts(l) {
-  const heartbeat = num3(l?.heartbeat);
-  if (heartbeat === undefined)
-    return;
-  const since = num3(l?.since);
-  const active = num3(l?.active);
-  return { heartbeat, ...since !== undefined ? { since } : {}, ...active !== undefined ? { active } : {} };
-}
-function driverWhen(d, nowMs, withStart = true) {
-  if (!d)
-    return "";
-  const start = withStart && d.since !== undefined ? `started ${startedText(d.since)}` : "";
-  const act = d.active !== undefined ? `active ${agoShort(nowMs - d.active)}` : `checked in ${agoShort(nowMs - d.heartbeat)}`;
-  return [start, act].filter(Boolean).join(", ");
-}
-var brackets = (s) => s ? ` (${s})` : "";
-function otherDrivesForms(name, d, nowMs) {
-  const drive = { text: `/${name}-drive`, command: true };
-  const enable = { text: `/${name}-enable`, command: true };
-  const head = (facts) => ({ text: `another window drives this board${brackets(facts)} · ` });
-  const long = (facts) => [head(facts), drive, { text: " to drive from here · " }, enable, { text: " to follow it" }];
-  const short = (facts) => [head(facts), drive, { text: " · " }, enable];
-  const driveOnly = (facts) => [head(facts), drive];
-  const full = driverWhen(d, nowMs, true);
-  const act = driverWhen(d, nowMs, false);
-  return uniqueForms([long(full), long(act), short(act), driveOnly(act), short(""), driveOnly("")]);
-}
-function followForms(name, d, nowMs, idle = false) {
-  const drive = { text: `/${name}-drive`, command: true };
-  const facts = (withStart) => {
-    const when2 = driverWhen(d, nowMs, withStart);
-    const parts = [when2 ? `driver ${when2}` : "", idle ? when2 ? "looks idle" : "the driver looks idle" : ""].filter(Boolean);
-    return brackets(parts.join(", "));
-  };
-  const long = (f) => [{ text: `this window follows${f}; ` }, drive, { text: " to drive from here" }];
-  const short = (f) => [{ text: `this window follows${f} · ` }, drive];
-  const shorter = (f) => [{ text: `follows${f} · ` }, drive];
-  return uniqueForms([long(facts(true)), long(facts(false)), short(facts(false)), shorter(facts(false)), short(idle ? brackets("idle?") : "")]);
-}
-var formText = (f) => f.map((p) => p.text).join("");
-function uniqueForms(forms) {
-  const seen = new Set;
-  return forms.filter((f) => !seen.has(formText(f)) && (seen.add(formText(f)), true));
-}
-function fitForm(forms, width = Infinity, before = "") {
-  return forms.find((f) => before.length + formText(f).length <= width) ?? forms[forms.length - 1];
-}
-var noticeText = formText;
-
 // hooks/core/settings.ts
 var retryOrFail = (tries, max) => (tries ?? 0) < max ? "retry" : "fail";
 var TEST_OUTPUT_CHARS = 3000;
@@ -5266,14 +5199,14 @@ function unplayableNote(n, can) {
 var symccOn = (b) => b.enabled !== false;
 var setEnabled = (b, on) => ({ ...b, enabled: on });
 var offAnswer = (name = DEFAULT_NAME) => `${name} is disabled. The owner can turn it back on with /${name}-enable.`;
-var offStatusParts = (name = DEFAULT_NAME, withName = true, here = false, driver, nowMs = Date.now(), width = Infinity) => here === "new" ? [{ text: "no board here · " }, { text: `/${name}-init`, command: true }] : here === "gone" ? [{ text: `the ${name} window closed · ` }, { text: `/${name}-enable`, command: true }, { text: " to take over" }] : here === "other" ? fitForm(otherDrivesForms(name, driver, nowMs), width) : here ? [{ text: `${name} is off in this window · ` }, { text: `/${name}-enable`, command: true }] : [
+var offStatusParts = (name = DEFAULT_NAME, withName = true, here = false) => here === "new" ? [{ text: "no board here · " }, { text: `/${name}-init`, command: true }] : here ? [{ text: `${name} is off in this window · ` }, { text: `/${name}-enable`, command: true }] : [
   { text: withName ? `${name} is disabled · ` : "disabled · " },
   { text: `/${name}-enable`, command: true },
   { text: " to turn it back on" }
 ];
-var offHereAnswer = (name = DEFAULT_NAME, here = "off", driver, nowMs = Date.now()) => here === "other" ? `${name} is off in this window: ${noticeText(otherDrivesForms(name, driver, nowMs)[0])}.` : here === "gone" ? `${name} is off in this window: ${offStatusLine(name, false, "gone")}.` : `${name} is off in this window. /${name}-enable turns it back on.`;
+var offHereAnswer = (name = DEFAULT_NAME) => `${name} is off in this window. /${name}-enable turns it back on.`;
 var notSetUpAnswer = (name = DEFAULT_NAME) => `no ${name} board in this folder · /${name}-init to create one here`;
-var offStatusLine = (name = DEFAULT_NAME, withName = true, here = false, driver, nowMs = Date.now(), width = Infinity) => offStatusParts(name, withName, here, driver, nowMs, width).map((p) => p.text).join("");
+var offStatusLine = (name = DEFAULT_NAME, withName = true, here = false) => offStatusParts(name, withName, here).map((p) => p.text).join("");
 function spokenDone(ids) {
   const xs = [...new Set(ids.map((x) => String(x ?? "").trim()).filter(Boolean))];
   if (!xs.length)
@@ -5303,20 +5236,20 @@ function useAssistantWord(word) {
   assistantWord = word;
 }
 var SETTINGS = [
-  { name: "test_commands", kind: "commands", default: "none", range: "one shell line, or a list of up to 5 lines", meaning: "must all pass before work is merged" },
-  { name: "docs_test_commands", kind: "commands", default: "none", range: "one shell line, or a list of up to 5 lines", meaning: "run instead of test_commands when a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test" },
-  { name: "test_minutes", kind: "number", min: 1, max: MAX_TEST_MINUTES, default: String(DEFAULT_TEST_MINUTES), range: `1-${MAX_TEST_MINUTES}`, meaning: "how long each test command may run before merging" },
-  { name: "max_parallel", kind: "number", min: 1, max: 8, default: "3", range: "1-8", meaning: "how many workers run at once" },
-  { name: "max_minutes", kind: "number", min: 5, max: 600, default: "45", range: "5-600", meaning: "a worker running longer makes symcc ask the owner for more time" },
-  { name: "auto_retries", kind: "number", min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: "0-10", meaning: "new tries on their own after failing tests" },
-  { name: "archive_days", kind: "number", min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: "0-3650 (0 = never)", meaning: "done and dropped tasks older than this move to archive.json" },
-  { name: "open_on_start", kind: "onoff", default: "on", range: "on / off", meaning: "open the board panel when a session starts" },
-  { name: "notify", kind: "notify", default: "voice (else sound N, N picked from the project name, else off)", range: "voice / sound 1 / sound 2 / sound 3 / off", meaning: 'when a task is merged or a worker asks you something: "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice), or a chime from sound set N, so you can tell which project chimed (on macOS sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Submarine and Funk; the second one when a question waits); picking a sound plays its chime' },
-  { name: "scout_findings", kind: "findings", default: "auto", range: "auto / backlog", meaning: "the default for scouts without their own findings choice. auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you" },
-  { name: "tests_with_changes", kind: "untested", default: "ask", range: "off / ask / review", meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
-  { name: "checker", kind: "onoff", default: "off", range: "off / on", meaning: "on: after the prep step and before a change joins the merge queue (where its tests run), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it" },
-  { name: "mode", kind: "mode", default: "auto merge", range: "paused / approve merge / auto merge", meaning: "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own" },
-  { name: "enabled", kind: "onoff", default: "on", range: "on / off", get meaning() {
+  { name: "test_commands", label: "Test commands", kind: "commands", default: "none", range: "one shell line, or a list of up to 5 lines", meaning: "must all pass before work is merged" },
+  { name: "docs_test_commands", label: "Docs test commands", kind: "commands", default: "none", range: "one shell line, or a list of up to 5 lines", meaning: "run instead of test_commands when a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test" },
+  { name: "test_minutes", label: "Time per test", kind: "number", min: 1, max: MAX_TEST_MINUTES, default: String(DEFAULT_TEST_MINUTES), range: `1-${MAX_TEST_MINUTES}`, meaning: "how long each test command may run before merging" },
+  { name: "max_parallel", label: "Workers at once", kind: "number", min: 1, max: 8, default: "3", range: "1-8", meaning: "how many workers run at once" },
+  { name: "max_minutes", label: "Time per worker", kind: "number", min: 5, max: 600, default: "45", range: "5-600", meaning: "a worker running longer makes symcc ask the owner for more time" },
+  { name: "auto_retries", label: "Retries on failure", kind: "number", min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: "0-10", meaning: "new tries on their own after failing tests" },
+  { name: "archive_days", label: "Archive after", kind: "number", min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: "0-3650 (0 = never)", meaning: "done and dropped tasks older than this move to archive.json" },
+  { name: "open_on_start", label: "Open on start", kind: "onoff", default: "on", range: "on / off", meaning: "open the board panel when a session starts" },
+  { name: "notify", label: "Alert", kind: "notify", default: "voice (else sound N, N picked from the project name, else off)", range: "voice / sound 1 / sound 2 / sound 3 / off", meaning: 'when a task is merged or a worker asks you something: "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice), or a chime from sound set N, so you can tell which project chimed (on macOS sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Submarine and Funk; the second one when a question waits); picking a sound plays its chime' },
+  { name: "scout_findings", label: "Scout findings", kind: "findings", default: "auto", range: "auto / backlog", meaning: "the default for scouts without their own findings choice. auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you" },
+  { name: "tests_with_changes", label: "Code without tests", kind: "untested", default: "ask", range: "off / ask / review", meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
+  { name: "checker", label: "Checker", kind: "onoff", default: "off", range: "off / on", meaning: "on: after the prep step and before a change joins the merge queue (where its tests run), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it" },
+  { name: "mode", label: "Mode", kind: "mode", default: "auto merge", range: "paused / approve merge / auto merge", meaning: "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own" },
+  { name: "enabled", label: "Symcc on", kind: "onoff", default: "on", range: "on / off", get meaning() {
     return `off: the whole plugin rests and ${assistantWord} works as normal`;
   } }
 ];
@@ -5739,7 +5672,7 @@ function taskDay(t, offsetMin) {
   return "";
 }
 var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-var MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+var MONTHS2 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 function dayLabel(day, today) {
   const d = new Date(`${day}T00:00:00Z`);
   if (!Number.isFinite(d.getTime()))
@@ -5748,7 +5681,7 @@ function dayLabel(day, today) {
   if (Number.isFinite(t.getTime()) && t.getTime() - d.getTime() === 86400000)
     return "Yesterday";
   const year = day.slice(0, 4) !== today.slice(0, 4) ? ` ${d.getUTCFullYear()}` : "";
-  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS3[d.getUTCMonth()]}${year}`;
+  return `${WEEKDAYS[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS2[d.getUTCMonth()]}${year}`;
 }
 function boardSections(tasks, nowMs, offsetMin) {
   const today = dayOf(nowMs, offsetMin);
@@ -6336,8 +6269,8 @@ function trimScoutRuns(all, keep = SCOUT_RUNS_KEPT) {
 var addScoutRunRecord = (runs, run, keep = SCOUT_RUNS_KEPT) => trimScoutRuns([...runs, run], keep);
 var reported = (r) => r.outcome === "found" || r.outcome === "nothing";
 var byNumber = (ids) => {
-  const num4 = (id) => Number(/\d+/.exec(id)?.[0] ?? 0);
-  return [...new Set(ids)].sort((a, b) => num4(a) - num4(b));
+  const num3 = (id) => Number(/\d+/.exec(id)?.[0] ?? 0);
+  return [...new Set(ids)].sort((a, b) => num3(a) - num3(b));
 };
 function scoutRunTasks(runs, tasks, scout) {
   const out = runs.map((r) => [...r.tasks ?? []]);
@@ -6387,7 +6320,7 @@ function linkScoutRunTaskAt(runs, id, made) {
 var scoutOutcomeText = (o) => ({ found: "found", nothing: "nothing", stopped: "stopped", error: "API error", refusal: "refusal", "not started": "couldn't start" })[o];
 function scoutRunLine(r, tasks, nowMs) {
   const when3 = fromNow(r.ended, nowMs) || r.ended;
-  const n = `${r.findings} finding${r.findings === 1 ? "" : "s"}`;
+  const n = plural(r.findings, "finding");
   const made = tasks.length ? `task${tasks.length > 1 ? "s" : ""} ${tasks.join(", ")}` : "no tasks";
   return `${when3} · ${scoutOutcomeText(r.outcome)} · ${n} · ${made}`;
 }
@@ -6588,9 +6521,9 @@ function orgMemAdd(guide, notes, date, max = ORG_MEM_MAX_LINES) {
 }
 function findOrgMemNote(guide, which) {
   const notes = orgMemNotes(guide);
-  const num4 = typeof which === "number" ? which : /^\s*#?\d+\s*$/.test(String(which)) ? Number(String(which).replace(/\D/g, "")) : NaN;
-  if (!Number.isNaN(num4))
-    return notes.find((x) => x.n === num4) ?? null;
+  const num3 = typeof which === "number" ? which : /^\s*#?\d+\s*$/.test(String(which)) ? Number(String(which).replace(/\D/g, "")) : NaN;
+  if (!Number.isNaN(num3))
+    return notes.find((x) => x.n === num3) ?? null;
   const w = wordsOf(lessonOf(String(which ?? "")));
   if (!w)
     return null;
@@ -6701,7 +6634,7 @@ ${lines.join(`
 `;
 }
 var ORG_MEM_EMPTY = "No notes yet.";
-var orgMemCount = (n) => `${n} note${n === 1 ? "" : "s"}`;
+var orgMemCount = (n) => plural(n, "note");
 var ORG_MEM_ALL = "all";
 var NOTE_FRONT = /^\s*(?:[-*•]\s+)?(\d{4}-\d{2}-\d{2})\s*(:?)\s*/;
 var TOPIC_FRONT = /^\[([^\]\n]{1,40})\](?:\s+|$)/;
@@ -6932,7 +6865,7 @@ function reportPreview(text, file, lines = REPORT_PREVIEW_LINES, chars = REPORT_
   if (kept.length === all.length && kept.at(-1) === all.at(-1))
     return all;
   const left = all.length - kept.length;
-  return [...kept, `… (${left ? `${left} more line${left === 1 ? "" : "s"}` : "cut"}) full report: ${file}`];
+  return [...kept, `… (${left ? plural(left, "more line") : "cut"}) full report: ${file}`];
 }
 
 // hooks/core/failure.ts
@@ -7336,7 +7269,14 @@ function runNowWaits(b, t) {
   });
 }
 var runNowQuestion = (id, waits) => `${id} waits on ${waits.map((w) => `${w.id} (${w.state})`).join(", ")}. Start anyway?`;
-var runNowShares = (all, t) => all.filter((x) => x.id !== t.id && x.status === "doing" && shareFiles(x.files ?? [], t.files ?? [])).map((x) => x.id);
+var runNowShares = (all, t, statuses = ["doing"]) => all.filter((x) => x.id !== t.id && statuses.includes(x.status) && shareFiles(x.files ?? [], t.files ?? [])).map((x) => x.id);
+var OPEN_STATUSES = ["todo", "doing", "review", "waiting", "paused", "failed"];
+function backlogMovedText(all, t) {
+  const after = t.after ?? [];
+  const ids = runNowShares(all, t, OPEN_STATUSES).filter((id) => !after.includes(id));
+  const shared = ids.map((id) => `${id} (${all.find((x) => x.id === id).status})`);
+  return `${t.id} moved from the backlog to todo` + (shared.length ? `; shares files with ${shared.join(", ")}; not in its after list` : "") + `; priority ${t.priority ?? 0}`;
+}
 function runNowLine(o) {
   const more = [
     o.waits?.length ? `without waiting for ${o.waits.map((w) => w.id).join(", ")}` : "",
@@ -7698,6 +7638,64 @@ function wrapLine(l, width = STATS_WIDTH) {
   }
   return [...out, rest];
 }
+
+// hooks/core/driver-notice.ts
+var MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+var two = (n) => String(n).padStart(2, "0");
+function startedText(ms) {
+  const d = new Date(ms);
+  return `${MONTHS3[d.getMonth()]} ${d.getDate()} ${two(d.getHours())}:${two(d.getMinutes())}`;
+}
+function agoShort(ms) {
+  const s = Math.floor(Math.max(0, ms) / 1000);
+  if (s < 5)
+    return "just now";
+  if (s < 60)
+    return `${s} s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60)
+    return `${m} min ago`;
+  const h = Math.floor(m / 60);
+  return h < 24 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`;
+}
+var num3 = (v) => typeof v === "number" && Number.isFinite(v) ? v : undefined;
+function driverFacts(l) {
+  const heartbeat = num3(l?.heartbeat);
+  if (heartbeat === undefined)
+    return;
+  const since = num3(l?.since);
+  const active = num3(l?.active);
+  return { heartbeat, ...since !== undefined ? { since } : {}, ...active !== undefined ? { active } : {} };
+}
+function driverWhen(d, nowMs, withStart = true) {
+  if (!d)
+    return "";
+  const start = withStart && d.since !== undefined ? `started ${startedText(d.since)}` : "";
+  const act = d.active !== undefined ? `active ${agoShort(nowMs - d.active)}` : `checked in ${agoShort(nowMs - d.heartbeat)}`;
+  return [start, act].filter(Boolean).join(", ");
+}
+var brackets = (s) => s ? ` (${s})` : "";
+function followForms(name, d, nowMs, idle = false) {
+  const drive = { text: `/${name}-drive`, command: true };
+  const facts = (withStart) => {
+    const when3 = driverWhen(d, nowMs, withStart);
+    const parts = [when3 ? `driver ${when3}` : "", idle ? when3 ? "looks idle" : "the driver looks idle" : ""].filter(Boolean);
+    return brackets(parts.join(", "));
+  };
+  const long = (f) => [{ text: `this window follows${f}; ` }, drive, { text: " to drive from here" }];
+  const short = (f) => [{ text: `this window follows${f} · ` }, drive];
+  const shorter = (f) => [{ text: `follows${f} · ` }, drive];
+  return uniqueForms([long(facts(true)), long(facts(false)), short(facts(false)), shorter(facts(false)), short(idle ? brackets("idle?") : "")]);
+}
+var formText = (f) => f.map((p) => p.text).join("");
+function uniqueForms(forms) {
+  const seen = new Set;
+  return forms.filter((f) => !seen.has(formText(f)) && (seen.add(formText(f)), true));
+}
+function fitForm(forms, width = Infinity, before = "") {
+  return forms.find((f) => before.length + formText(f).length <= width) ?? forms[forms.length - 1];
+}
+var noticeText = formText;
 
 // hooks/core/board-parts.ts
 var PARTS_DIR = "tasks";
@@ -8073,7 +8071,6 @@ function countingText(r, counting, asked, name = DEFAULT_NAME) {
 }
 var pct = (a, b) => b ? `${Math.round(a / b * 100)}%` : "-";
 var row = (label, text, w = 12) => `  ${label.padEnd(w)} ${text}`;
-var plural = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 var BAR_WIDTH = 16;
 function bar(value, max, width = BAR_WIDTH) {
   if (!(value > 0) || !(max > 0))
@@ -8900,7 +8897,7 @@ function liveScoutMark(runs, nowMs, room = Infinity, next) {
     if (textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text + tail) <= room)
       return { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text, next: tail };
   }
-  for (const f of [names, `${n} scout${n === 1 ? "" : "s"}`, `${n}`]) {
+  for (const f of [names, plural(n, "scout"), `${n}`]) {
     const text = ` ${f}`;
     if (textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text) <= room)
       return { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text };
@@ -9667,7 +9664,7 @@ function branchLabels(x, nowMs) {
   const st = x.state;
   const word = st ? [{ text: ` ${st.mark} ${st.word}`, tone: st.tone }, dot] : [{ text: " ", tone: "dim" }];
   const mark = st ? [{ text: ` ${st.mark}`, tone: st.tone }, { text: " ", tone: "dim" }] : [{ text: " ", tone: "dim" }];
-  const long = [{ text: `+${ahead} commit${ahead === 1 ? "" : "s"}`, tone: "text" }, dot, { text: `${behind} behind`, tone: late }];
+  const long = [{ text: `+${plural(ahead, "commit")}`, tone: "text" }, dot, { text: `${behind} behind`, tone: late }];
   const mid = [{ text: `+${ahead}`, tone: "text" }, dot, { text: `${behind} behind`, tone: late }];
   return [
     [id, ...word, ...long],
@@ -10114,10 +10111,6 @@ var startS = () => ({
   enabledNow: true,
   fresh: false,
   offHere: false,
-  offWhy: "off",
-  sawOther: false,
-  takeoverTold: false,
-  missingSince: null,
   driver: undefined,
   activeAt: null,
   roles: [],
@@ -14458,11 +14451,8 @@ function sayQuestion(host, b, id) {
   if (queueSay(host, b, NEEDS_YOU_MARK + id))
     saidNeedsYou.add(key);
 }
-function sayGone(host, b) {
-  return queueSay(host, b, NEEDS_YOU_MARK, true);
-}
-function queueSay(host, b, item, anyWindow = false) {
-  if (!anyWindow && (!S.driving || !onHere(b)))
+function queueSay(host, b, item) {
+  if (!S.driving || !onHere(b))
     return false;
   if (b.notify === "off")
     return false;
@@ -14883,7 +14873,7 @@ async function findAll(host, b, mergingId) {
       fixable: true,
       id: folderId(id),
       bytes,
-      text: `folder ${shown(wt)}/ (${why})${lose ? `: deletes ${lose} uncommitted changed file${lose === 1 ? "" : "s"}` : ""}`,
+      text: `folder ${shown(wt)}/ (${why})${lose ? `: deletes ${plural(lose, "uncommitted changed file")}` : ""}`,
       fix: async () => {
         const nb = await load(host).catch(() => null);
         if (!nb)
@@ -14964,7 +14954,7 @@ ${dry.stderr}`) : [];
     }
     const n = anc?.exitCode === 1 ? await git(host, ["rev-list", "--count", `refs/heads/${into}..${sha}`]).catch(() => null) : null;
     const count2 = n?.exitCode === 0 ? Number(n.stdout.trim()) : NaN;
-    const lost = Number.isFinite(count2) && count2 > 0 ? ` (${count2} commit${count2 === 1 ? "" : "s"} not in ${into})` : "";
+    const lost = Number.isFinite(count2) && count2 > 0 ? ` (${plural(count2, "commit")} not in ${into})` : "";
     if (t.status !== "dropped") {
       listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}) holds unmerged work${lost}; never deleted by the doctor` });
       continue;
@@ -14980,7 +14970,7 @@ ${dry.stderr}`) : [];
       kind: "branch",
       fixable: true,
       id: branchId(id),
-      text: `branch ${br} (${id} is dropped): deletes ${count2 > 0 ? `${count2} commit${count2 === 1 ? "" : "s"}` : "commits"} not in ${into}${after}`,
+      text: `branch ${br} (${id} is dropped): deletes ${count2 > 0 ? plural(count2, "commit") : "commits"} not in ${into}${after}`,
       fix: async () => {
         const nb = await load(host).catch(() => null);
         if (!nb)
@@ -16183,7 +16173,8 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
         await scratchGone();
         await change($, (x) => promoteTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir), t.id, now()));
         pump($);
-        return `${t.id} moved from the backlog to todo`;
+        const nb = (await load($)).tasks;
+        return backlogMovedText(nb, nb.find((x) => x.id === t.id) ?? t);
       }
       if (t.status === "backlog") {
         await scratchGone();
@@ -16551,12 +16542,12 @@ Earlier answer${many ? "s" : ""} for this task: ${extra.join(", ")}. ${many ? "T
 var behindNote = (behind, into, why = "commits") => {
   if (behind <= 0)
     return "";
-  const n = `${behind} commit${behind === 1 ? "" : "s"}`;
+  const n = plural(behind, "commit");
   if (why === "clash")
     return `
 
-Note: ${into} has ${behind} new commit${behind === 1 ? "" : "s"} you don't have yet; merge them in first.`;
-  const head = why === "changes" ? `your folder has uncommitted work from an earlier try and is ${n} behind ${into}.` : why === "failed" ? `symcc could not move your branch up to ${into}, so it is ${n} behind ${into}.` : `your branch has commits from an earlier try, and ${into} has ${behind} newer commit${behind === 1 ? "" : "s"} your branch lacks.`;
+Note: ${into} has ${plural(behind, "new commit")} you don't have yet; merge them in first.`;
+  const head = why === "changes" ? `your folder has uncommitted work from an earlier try and is ${n} behind ${into}.` : why === "failed" ? `symcc could not move your branch up to ${into}, so it is ${n} behind ${into}.` : `your branch has commits from an earlier try, and ${into} has ${plural(behind, "newer commit")} your branch lacks.`;
   return `
 
 Note: ${head} Your folder shows the older code; symcc brings your work up to date with ${into} when it merges.`;
@@ -16640,7 +16631,7 @@ async function queueWorker(host, id) {
       const at2 = now();
       const goOn = cur.attempts > 0 ? goOnRun(cur.runs, at2) : null;
       const attempts = goOn ? cur.attempts : cur.attempts + 1;
-      const upToDate = merged ? { history: withHistory(cur.history, at2, tryEntry({ ...cur, attempts }, "stage", `brought up to date with ${intoOf(cur)} (${merged} commit${merged === 1 ? "" : "s"})`)) } : {};
+      const upToDate = merged ? { history: withHistory(cur.history, at2, tryEntry({ ...cur, attempts }, "stage", `brought up to date with ${intoOf(cur)} (${plural(merged, "commit")})`)) } : {};
       const clash = why === "clash" && !cur.merge_main ? { merge_main: true } : {};
       const added = goOn ? ownerAddedMinutes(cur.history, attempts) : 0;
       const time = goOn ? ownerTimeState(cur.history, attempts, at2) : {};
@@ -17110,7 +17101,7 @@ async function stopLeftovers(host, t, end2) {
   if (!running)
     return;
   const stopped2 = end2.stopBackground ? await end2.stopBackground().catch(() => 0) : 0;
-  const cmds = (n) => `${n} command${n === 1 ? "" : "s"}`;
+  const cmds = (n) => plural(n, "command");
   const text = stopped2 >= running ? `stopped ${cmds(stopped2)} still running at hand-back` : stopped2 > 0 ? `stopped ${cmds(stopped2)} of ${running} still running at hand-back` : `${cmds(running)} still running at hand-back (could not stop ${running === 1 ? "it" : "them"})`;
   await change(host, (x) => {
     const cur = find(x, t.id);
@@ -17670,7 +17661,7 @@ async function endInvestigation(host, t, keepNote) {
   });
   const { commits: commits2 } = await taskWork(host, t).catch(() => ({ commits: null }));
   const keep = commits2 !== 0;
-  const what = commits2 === null ? `git could not tell whether it has commits ${intoOf(t)} doesn't have` : `it has ${commits2} commit${commits2 === 1 ? "" : "s"} from an earlier change try that ${intoOf(t)} doesn't have`;
+  const what = commits2 === null ? `git could not tell whether it has commits ${intoOf(t)} doesn't have` : `it has ${plural(commits2, "commit")} from an earlier change try that ${intoOf(t)} doesn't have`;
   const kept = keep ? ` Its branch ${branch} was kept: ${what}. Delete it by hand once that work is not needed.` : "";
   if (await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false) && !keep)
     await git(host, ["branch", "-D", branch]);
@@ -18840,7 +18831,7 @@ async function refreshMe(host) {
   await locked(host, async () => {
     const l = await readLead(host);
     if (!l || l.session === old)
-      await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...l?.handTo ? { handTo: l.handTo, ...l.handAt !== undefined ? { handAt: l.handAt } : {} } : {} }));
+      await writeLead(host, carriedText(l, S.me, Date.now()));
   });
   if (await host.fs.exists(path(S.N.boardFile)))
     await change(host, (b) => relabelSession(b, old, S.me));
@@ -18852,7 +18843,7 @@ async function carryDriver(host, old) {
   await locked(host, async () => {
     const l = await readLead(host);
     if (l && l.session === old) {
-      await writeLead(host, leadText(S.me, Date.now(), { ...driverTimes(l), ...l.handTo ? { handTo: l.handTo, ...l.handAt !== undefined ? { handAt: l.handAt } : {} } : {} }));
+      await writeLead(host, carriedText(l, S.me, Date.now()));
       moved = true;
     }
   });
@@ -18970,7 +18961,7 @@ async function stepDown(host, leadBefore) {
 var shortSession = (id) => id.slice(0, 8);
 async function driveHere(host) {
   if (S.offHere)
-    return offHereAnswer(S.N.name, S.offWhy, S.driver);
+    return offHereAnswer(S.N.name);
   if (handing)
     return "This session is handing the board over to another session right now; type it again in a minute.";
   const [ask2, text] = await locked(host, async () => {
@@ -19007,12 +18998,8 @@ async function followBoard(host) {
       return;
     });
 }
-var takeoverText = () => `the ${S.N.name} window closed · /${S.N.name}-enable to take over`;
 async function startHere(host) {
   S.offHere = false;
-  S.sawOther = false;
-  S.takeoverTold = false;
-  S.missingSince = null;
   const id = await host.session.id().catch(() => "");
   if (id)
     S.me = id;
@@ -19030,11 +19017,7 @@ async function disableHere(host) {
   if (S.offHere)
     return `${S.N.name} is already off in this window. /${S.N.name}-enable turns it back on.`;
   S.offHere = true;
-  S.offWhy = "off";
   S.enabledNow = false;
-  S.sawOther = false;
-  S.takeoverTold = false;
-  S.missingSince = null;
   dropLeadUpdates();
   const drove = S.driving;
   if (drove) {
@@ -19085,9 +19068,6 @@ async function enableHere(host, tell, command = "enable") {
   }
   S.offHere = false;
   S.enabledNow = true;
-  S.sawOther = false;
-  S.takeoverTold = false;
-  S.missingSince = null;
   await publish(host, b);
   if (openOnStart(b))
     await openPane(host, { tab: "live", focus: false, quiet: true }).catch(() => {
@@ -19098,33 +19078,6 @@ async function enableHere(host, tell, command = "enable") {
   tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-${command}. You are a lead again; the board is in mode ${modeOf(b)}.`);
   return onHereText(b);
 }
-var GONE_REMIND_MS = 15 * 60000;
-var goneFile = () => path(`${S.N.dir}/gone.json`);
-async function goneReminder(host, live2, nowMs) {
-  return locked(host, async () => {
-    const raw = await host.fs.read(goneFile()).catch(() => null);
-    let g = null;
-    try {
-      g = raw ? JSON.parse(raw) : null;
-    } catch {
-      g = null;
-    }
-    if (live2) {
-      if (g)
-        await host.run(["rm", "-f", goneFile()]);
-      return false;
-    }
-    if (!g || typeof g.since !== "number") {
-      await safeWrite(host, goneFile(), JSON.stringify({ since: nowMs }), `${S.N.dir}/gone.json`);
-      return false;
-    }
-    if (g.played || nowMs - g.since < GONE_REMIND_MS)
-      return false;
-    await safeWrite(host, goneFile(), JSON.stringify({ since: g.since, played: S.me }), `${S.N.dir}/gone.json`);
-    return true;
-  }).catch(() => false);
-}
-var GONE_GRACE_MS = 90000;
 async function offHereBeat(host, nowMs = Date.now()) {
   await refreshMe(host);
   await locked(host, async () => {
@@ -19134,43 +19087,8 @@ async function offHereBeat(host, nowMs = Date.now()) {
   }).catch(() => {
     return;
   });
-  if (S.offWhy !== "off" && parseLead(await readLeadText(host))?.session === S.me) {
-    const b = await load(host).catch(() => null);
-    if (b && b.enabled !== false) {
-      await enableHere(host, () => {
-        return;
-      }).catch(() => {
-        return;
-      });
-      return;
-    }
-  }
-  const text = await readLeadText(host);
-  const live2 = liveDriver(text, nowMs);
-  seeDriver(text);
-  const was = S.offWhy;
-  if (live2 && live2 !== S.me) {
-    S.sawOther = true;
-    S.takeoverTold = false;
-    S.missingSince = null;
-    if (S.offWhy === "gone")
-      S.offWhy = "other";
-  } else if (S.sawOther && !S.takeoverTold && (S.missingSince ??= nowMs, nowMs - S.missingSince >= GONE_GRACE_MS)) {
-    S.takeoverTold = true;
-    S.offWhy = "gone";
-    host.ui.toast(S.N.toast(takeoverText()));
-  }
-  if (S.offWhy !== was)
-    await publish(host, await load(host)).catch(() => {
-      return;
-    });
-  else
-    await showDriver(host);
-  const other = !!live2 && live2 !== S.me;
-  if (S.offWhy === "gone" || other) {
-    if (await goneReminder(host, other, nowMs))
-      sayGone(host, await load(host));
-  }
+  seeDriver(await readLeadText(host));
+  await showDriver(host);
   await followBoard(host);
 }
 async function releaseLead(host) {
@@ -19281,7 +19199,7 @@ async function publish(host, b) {
   const branches = branchFacts(host, b, branch || "main").facts;
   const team = todayTeam(host, [...scoutState.keys()]).team;
   const task_branches = taskBranchesView(host, b).facts;
-  const v = { tasks: b.tasks, working, scouts: [...scoutState.values()].map((s) => s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s), mode: modeOf(b), test_commands: b.test_commands, ...b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}, home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...b.archived ? { archived: b.archived } : {}, ...b.archived_done?.length ? { archived_done: b.archived_done } : {}, open_on_start: openOnStart(b), notify_now: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...!S.driving && S.driver ? { driver: S.driver } : {}, ...S.offHere ? { off_here: S.offWhy } : S.fresh ? { off_here: "new" } : {}, driving: S.driving, branch_note, ...size_note ? { size_note } : {}, git_state: S.gitState, ...S.gitInstall ? { git_install: S.gitInstall } : {}, plan_mode: inPlan(S.plan), ...branches ? { branches } : {}, ...team ? { today_team: team } : {}, ...Object.keys(task_branches).length ? { task_branches } : {}, ...openQuestions(b).length ? { questions: openQuestions(b) } : {} };
+  const v = { tasks: b.tasks, working, scouts: [...scoutState.values()].map((s) => s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s), mode: modeOf(b), test_commands: b.test_commands, ...b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}, home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...b.archived ? { archived: b.archived } : {}, ...b.archived_done?.length ? { archived_done: b.archived_done } : {}, open_on_start: openOnStart(b), notify_now: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...!S.driving && S.driver ? { driver: S.driver } : {}, ...S.offHere ? { off_here: "off" } : S.fresh ? { off_here: "new" } : {}, driving: S.driving, branch_note, ...size_note ? { size_note } : {}, git_state: S.gitState, ...S.gitInstall ? { git_install: S.gitInstall } : {}, plan_mode: inPlan(S.plan), ...branches ? { branches } : {}, ...team ? { today_team: team } : {}, ...Object.keys(task_branches).length ? { task_branches } : {}, ...openQuestions(b).length ? { questions: openQuestions(b) } : {} };
   const fit = fitView(host, v);
   if (fit.note)
     sizeNotes.set("the board view", fit.note);
@@ -19303,7 +19221,7 @@ async function publish(host, b) {
     return;
   });
   const facts = { tasks: b.tasks, questions: b.questions, scouts: v.scouts, home_branch: branch, branch_note, mode: modeOf(b) };
-  showStatus(host, () => onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name), ...!S.driving && S.driver ? { driver: S.driver } : {} }) : offStatusLine(S.N.name, false, S.offHere ? S.offWhy : S.fresh ? "new" : false, S.driver, Date.now(), statusRoom(S.N.name)));
+  showStatus(host, () => onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name), ...!S.driving && S.driver ? { driver: S.driver } : {} }) : offStatusLine(S.N.name, false, S.offHere ? "off" : S.fresh ? "new" : false));
 }
 async function statusView(host, b) {
   const branch = S.gitState === "ok" ? await homeBranch(host) : "";
@@ -20183,14 +20101,6 @@ ${skipped}` : "") };
         return say(await enableHere(host, (t) => tellLead(host, t)));
       return say(cmd.here ? await disableHere(host) : await setSymcc(host, false));
     case "drive": {
-      if (S.offHere && S.offWhy !== "off") {
-        const on = await enableHere(host, (t) => tellLead(host, t), "drive");
-        if (S.offHere)
-          return say(on);
-        return say(`${on}
-
-${await driveHere(host)}`);
-      }
       if (S.offHere)
         return say(`${S.N.name} is off in this window because you ran /${S.N.name}-disable here, so /${S.N.name}-drive leaves it off. /${S.N.name}-enable turns it on here; then /${S.N.name}-drive can make this window drive.`);
       return say(await driveHere(host));
@@ -20319,7 +20229,7 @@ async function toolCall(host, tool, agentId, input) {
   if (S.guardOnly)
     return { result: guardOnlyText() };
   if (!await isOn(host))
-    return { result: S.fresh ? notSetUpAnswer(S.N.name) : S.offHere ? offHereAnswer(S.N.name, S.offWhy, S.driver) : offAnswer(S.N.name) };
+    return { result: S.fresh ? notSetUpAnswer(S.N.name) : S.offHere ? offHereAnswer(S.N.name) : offAnswer(S.N.name) };
   try {
     return { result: await runTool(host, name, input) };
   } catch (err) {

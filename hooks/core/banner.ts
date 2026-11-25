@@ -406,7 +406,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   // disabled: "symcc is disabled · /symcc-enable to turn it back on", the command in the accent color (bold) so it stands out
   const off: BannerPart[] =
     b.on_here === false
-      ? offStatusParts(name, true, b.off_here, b.driver, nowMs ?? Date.now(), Math.max(20, width - textWidth(`${namesFor(name).name}${versionMark(version)} · ${folder} · `) - (width >= BANNER_NARROW && logo[0] !== undefined ? logo[0].length + 1 : 0))).map(p => (p.command ? { text: p.text, tone: 'accent' as const, bold: true } : { text: p.text, tone: 'warning' as const }))
+      ? offStatusParts(name, true, b.off_here).map(p => (p.command ? { text: p.text, tone: 'accent' as const, bold: true } : { text: p.text, tone: 'warning' as const }))
       : b.mode && modeOf({ mode: b.mode }) === 'paused'
         ? [{ text: `${modeLabel('paused')}: nothing starts`, tone: 'warning' }]
         : []

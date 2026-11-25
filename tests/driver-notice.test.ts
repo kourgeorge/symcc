@@ -30,21 +30,9 @@ test('T-952: times read the way the owner says them', () => {
   expect(agoShort(125 * MIN)).toBe('2 h ago')
 })
 
-test('T-952: off here: the notice names the driver, its start and activity; narrow forms drop "started …", then shorten the commands', () => {
-  const full = 'another window drives this board (started Nov 23 09:26, active 3 min ago) · /symcc-drive to drive from here · /symcc-enable to follow it'
-  expect(offStatusLine('symcc', false, 'other', DRIVER, NOW)).toBe(full)
-  expect(offStatusLine('symcc', false, 'other', DRIVER, NOW, 115)).toBe('another window drives this board (active 3 min ago) · /symcc-drive to drive from here · /symcc-enable to follow it')
-  expect(offStatusLine('symcc', false, 'other', DRIVER, NOW, 90)).toBe('another window drives this board (active 3 min ago) · /symcc-drive · /symcc-enable')
-  // the status line under the prompt: Claude Code puts "⚠ symcc: " in front
-  const status = offStatusLine('symcc', false, 'other', DRIVER, NOW, ROOM)
-  expect(status).toBe('another window drives this board (active 3 min ago) · /symcc-drive')
-  expect(status.length <= ROOM).toBe(true)
-  expect(offStatusLine('symcc', false, 'other', DRIVER, NOW, 40)).toBe('another window drives this board · /symcc-drive')
-  // the commands stand out in the views
-  expect(offStatusLine('symcc', true, 'other', DRIVER, NOW).includes('/symcc-enable')).toBe(true)
-  // the tool answers say it in full
-  expect(offHereAnswer('symcc', 'other', DRIVER, NOW)).toBe(`symcc is off in this window: ${full}.`)
+test('T-952: off here: the answer and the status line say so and how to turn it on', () => {
   expect(offHereAnswer('symcc')).toBe('symcc is off in this window. /symcc-enable turns it back on.')
+  expect(offStatusLine('symcc', true, 'off')).toBe('symcc is off in this window · /symcc-enable')
 })
 
 test('T-952: an older lead.json with no since or active still works: only the heartbeat age shows', () => {
@@ -52,10 +40,7 @@ test('T-952: an older lead.json with no since or active still works: only the he
   expect(l.since).toBe(undefined)
   expect(l.active).toBe(undefined)
   expect(driverFacts(l)).toEqual(OLD)
-  expect(offStatusLine('symcc', false, 'other', driverFacts(l), NOW)).toBe('another window drives this board (checked in 10 s ago) · /symcc-drive to drive from here · /symcc-enable to follow it')
   expect(driveWarning(false, [], NOW, 'symcc', Infinity, driverFacts(l))).toBe('⚠ this window follows (driver checked in 10 s ago); /symcc-drive to drive from here')
-  // nothing known at all: no brackets
-  expect(offStatusLine('symcc', false, 'other', undefined, NOW)).toBe('another window drives this board · /symcc-drive to drive from here · /symcc-enable to follow it')
 })
 
 test('T-952: a following window: the band and board warning name the driver; the status line has the short forms', () => {
@@ -143,7 +128,7 @@ test('T-952: the driving window saves since and active in lead.json; a following
   expect(parseLead(b.files.get(b.lead)!)).toMatchObject({ session: 'a', since, active: since + 1_000 })
 })
 
-test('T-952: /symcc-drive in a window that started off because another window drives turns it on and asks to drive; one turned off on purpose stays off', async () => {
+test('T-952: /symcc-drive in a following window asks to drive; one turned off on purpose stays off', async () => {
   S.root = '/repo'
   S.me = 'b'
   const b = world('b')
@@ -151,8 +136,6 @@ test('T-952: /symcc-drive in a window that started off because another window dr
   b.files.set(b.lead, leadText('a', Date.now()))
   await startHere(b.host)
   expect(S.offHere).toBe(false)
-  await disableHere(b.host)
-  S.offWhy = 'other'
   const r = await runCommand(b.host, 'symcc-drive', '')
   expect(S.offHere).toBe(false)
   expect(r?.text).toContain('Asked session a to hand over')

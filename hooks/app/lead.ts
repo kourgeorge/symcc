@@ -4,7 +4,7 @@ import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState
 import { type Host, agentState } from '../host'
 import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
 import { openPane } from './open'
-import { playable, sayGone } from './voice'
+import { playable } from './voice'
 import { logoIdle, logoOnPublish } from './logo'
 import { pump, waitEnded, ORPHAN_WAIT_MS, unclaimQueued, queuedNeverStarted, unclaimed } from './workers'
 import { haltAll, haltWorkers, dropLeadUpdates, setSymcc } from './board-mode'
@@ -207,7 +207,7 @@ const shortSession = (id: string) => id.slice(0, 8)
  * after that. Answers plainly what happened, with the workers that will be stopped and restarted.
  */
 export async function driveHere(host: Host): Promise<string> {
-  if (S.offHere) return offHereAnswer(S.N.name, S.offWhy, S.driver)
+  if (S.offHere) return offHereAnswer(S.N.name)
   if (handing) return 'This session is handing the board over to another session right now; type it again in a minute.'
   const [ask, text] = await locked(host, async () => {
     const t = await readLeadText(host)
@@ -246,15 +246,9 @@ async function followBoard(host: Host) {
 // /<name>-disable here turns symcc off in this window only: S.offHere (never saved). Such a window never drives; it
 // hands driving over (another window claims lead.json on its heartbeat) and, with no other window left, waits.
 
-/** The text of the take-over notice (a window off here tells it once when the window with symcc on is gone). */
-const takeoverText = () => `the ${S.N.name} window closed · /${S.N.name}-enable to take over`
-
 /** At session start: this window starts on. When another window with symcc on is live (a fresh heartbeat in lead.json), it follows: a lead that does not drive (claimLead leaves driving to the other window). */
 export async function startHere(host: Host) {
   S.offHere = false
-  S.sawOther = false
-  S.takeoverTold = false
-  S.missingSince = null
   // T-984: the session id as the host says it now; a window that started with a made-up id (the host could not answer
   // yet) must still know itself in lead.json, or it would take its own fresh heartbeat for another window's
   const id = await host.session.id().catch(() => '')
@@ -272,11 +266,7 @@ export async function startHere(host: Host) {
 export async function disableHere(host: Host): Promise<string> {
   if (S.offHere) return `${S.N.name} is already off in this window. /${S.N.name}-enable turns it back on.`
   S.offHere = true
-  S.offWhy = 'off'
   S.enabledNow = false
-  S.sawOther = false
-  S.takeoverTold = false
-  S.missingSince = null
   dropLeadUpdates()
   const drove = S.driving
   if (drove) {
@@ -327,9 +317,6 @@ export async function enableHere(host: Host, tell: (text: string) => void, comma
   }
   S.offHere = false
   S.enabledNow = true
-  S.sawOther = false
-  S.takeoverTold = false
-  S.missingSince = null
   await publish(host, b)
   if (openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true }).catch(() => undefined)
   await claimLead(host).catch(() => false)
@@ -337,35 +324,6 @@ export async function enableHere(host: Host, tell: (text: string) => void, comma
   tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-${command}. You are a lead again; the board is in mode ${modeOf(b)}.`)
   return onHereText(b)
 }
-
-/** T-793: how long after the take-over line first showed, with nobody taking over, the "needs you" reminder plays (once). */
-export const GONE_REMIND_MS = 15 * 60_000
-
-/** The shared note for one gone episode: when the take-over line first showed and which window played the reminder. */
-const goneFile = () => path(`${S.N.dir}/gone.json`)
-
-/** Under the board lock: starts the note, drops it when a window is live, and says whether this window plays the reminder now. */
-async function goneReminder(host: Host, live: boolean, nowMs: number): Promise<boolean> {
-  return locked(host, async () => {
-    const raw = await host.fs.read(goneFile()).catch(() => null)
-    let g: { since?: number; played?: string } | null = null
-    try { g = raw ? JSON.parse(raw) : null } catch { g = null }
-    if (live) {
-      if (g) await host.run(['rm', '-f', goneFile()])
-      return false
-    }
-    if (!g || typeof g.since !== 'number') {
-      await safeWrite(host, goneFile(), JSON.stringify({ since: nowMs }), `${S.N.dir}/gone.json`)
-      return false
-    }
-    if (g.played || nowMs - g.since < GONE_REMIND_MS) return false
-    await safeWrite(host, goneFile(), JSON.stringify({ since: g.since, played: S.me }), `${S.N.dir}/gone.json`)
-    return true
-  }).catch(() => false)
-}
-
-/** T-793: how long lead.json may be missing or stale before the take-over line shows (one heartbeat plus a margin), so a second on-window can claim it. */
-export const GONE_GRACE_MS = 90_000
 
 /** The heartbeat of a window off here: it drives nothing; it looks whether the window with symcc on is gone and tells the owner once. */
 export async function offHereBeat(host: Host, nowMs = Date.now()) {
@@ -375,36 +333,9 @@ export async function offHereBeat(host: Host, nowMs = Date.now()) {
     const l = await readLead(host)
     if (l && l.session === S.me && l.handFrom) await host.run(['rm', '-f', path(S.N.leadFile)])
   }).catch(() => undefined)
-  // T-984: lead.json names this very window (stale or not) and it was not turned off on purpose: it drives again
-  if (S.offWhy !== 'off' && parseLead(await readLeadText(host))?.session === S.me) {
-    const b = await load(host).catch(() => null)
-    if (b && b.enabled !== false) {
-      await enableHere(host, () => undefined).catch(() => undefined)
-      return
-    }
-  }
-  const text = await readLeadText(host)
-  const live = liveDriver(text, nowMs)
-  seeDriver(text)
-  const was = S.offWhy
-  if (live && live !== S.me) {
-    S.sawOther = true
-    S.takeoverTold = false
-    S.missingSince = null
-    if (S.offWhy === 'gone') S.offWhy = 'other'
-  } else if (S.sawOther && !S.takeoverTold && (S.missingSince ??= nowMs, nowMs - S.missingSince >= GONE_GRACE_MS)) {
-    S.takeoverTold = true
-    S.offWhy = 'gone'
-    host.ui.toast(S.N.toast(takeoverText()))
-  }
-  if (S.offWhy !== was) await publish(host, await load(host)).catch(() => undefined)
-  else await showDriver(host)
-  // nobody took over: 15 minutes after the take-over line first showed, ONE window (the first to see the time up,
-  // under the board lock) plays "needs you"; a live window drops the note
-  const other = !!live && live !== S.me
-  if (S.offWhy === 'gone' || other) {
-    if (await goneReminder(host, other, nowMs)) sayGone(host, await load(host))
-  }
+  // a window turned off on purpose stays off, whatever other windows do, until /<name>-enable: it only keeps the driver notice fresh
+  seeDriver(await readLeadText(host))
+  await showDriver(host)
   await followBoard(host)
 }
 
@@ -565,7 +496,7 @@ export async function publish(host: Host, b: Board) {
   const team = todayTeam(host, [...scoutState.keys()]).team
   // T-761: each task page's Branch section, read the same way (OpenCode's panel draws only what the view holds)
   const task_branches = taskBranchesView(host, b).facts
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s)), mode: modeOf(b), test_commands: b.test_commands, ...(b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}), home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify_now: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...(!S.driving && S.driver ? { driver: S.driver } : {}), ...(S.offHere ? { off_here: S.offWhy } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, ...(S.gitInstall ? { git_install: S.gitInstall } : {}), plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s)), mode: modeOf(b), test_commands: b.test_commands, ...(b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}), home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify_now: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...(!S.driving && S.driver ? { driver: S.driver } : {}), ...(S.offHere ? { off_here: 'off' as const } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, ...(S.gitInstall ? { git_install: S.gitInstall } : {}), plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
   // T-891: the view as it is stored (trimmed by slimView), worked out once here and written as it is: the owner is
   // told when trimming had to leave tasks out of the panel
   const fit = fitView(host, v)
@@ -589,7 +520,7 @@ export async function publish(host: Host, b: Board) {
   // Disabled: "disabled · /symcc-enable to turn it back on" without the name, as Claude Code puts "symcc: " in front; its status line
   // takes plain text only (no colors), so the command can't stand out there.
   const facts = { tasks: b.tasks, questions: b.questions, scouts: v.scouts, home_branch: branch, branch_note, mode: modeOf(b) }
-  showStatus(host, () => (onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name), ...(!S.driving && S.driver ? { driver: S.driver } : {}) }) : offStatusLine(S.N.name, false, S.offHere ? S.offWhy : S.fresh ? 'new' : false, S.driver, Date.now(), statusRoom(S.N.name))))
+  showStatus(host, () => (onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name), ...(!S.driving && S.driver ? { driver: S.driver } : {}) }) : offStatusLine(S.N.name, false, S.offHere ? 'off' : S.fresh ? 'new' : false)))
 }
 
 /** T-902: what /<name>-status draws for board `b`: the Live tab's fields of the view publish() writes, from the same

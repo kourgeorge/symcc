@@ -40,7 +40,7 @@ export function watchdogTick(host: Host) {
 
 /** The lead heartbeat's timer went off: the driver refreshes its heartbeat; the others look whether it went stale and take over. */
 export function leadBeat(host: Host) {
-  // T-793: a window off here drives nothing; it only looks whether the window with symcc on is gone
+  // T-793: a window off here drives nothing; it only keeps the driver notice fresh
   if (S.fresh || S.guardOnly) return // guardOnly: a worker folder never claims a lead
   if (S.offHere) return void offHereBeat(host).catch(() => undefined)
   void claimLead(host)
@@ -96,7 +96,7 @@ export async function sessionStart(host: Host) {
       await scoutOriginsFixed(host).catch(() => undefined)
       await moveOldOrgMem(host).catch(() => undefined)
     }
-    // T-793: another live window with symcc on makes this one start off here (plain), before it can claim the lead
+    // T-1041: with another live window driving, this one starts on and follows it (startHere), before it can claim the lead
     if (wasDriving && oldMe !== S.me) await carryDriver(host, oldMe).catch(() => undefined)
     await startHere(host).catch(() => undefined)
     // Become the driver if nobody drives the board. As the driver, old workers still running
@@ -177,7 +177,7 @@ async function createBoardIn(host: Host, dir: string, setUpGit: boolean): Promis
   return ''
 }
 
-/** A window that started with no board looks again for a board in its own folder; if one is there now, it starts the normal way (off here when another window drives, a lead otherwise). */
+/** A window that started with no board looks again for a board in its own folder; if one is there now, it starts the normal way (a follower when another window drives, a lead otherwise). */
 export async function refreshFresh(host: Host) {
   if (!S.fresh || S.guardOnly) return
   const own = await sessionFolder(host)

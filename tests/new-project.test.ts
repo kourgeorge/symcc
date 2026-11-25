@@ -360,7 +360,6 @@ test('T-856: /symcc-init in a window turned off with /symcc-disable here does no
   await sessionStart(w.host)
   await runCommand(w.host, 'symcc-disable', 'here')
   expect(S.offHere).toBe(true)
-  expect(S.offWhy).toBe('off')
   const r = await runCommand(w.host, 'symcc-init', '')
   expect(r?.text).toContain('already set up here')
   expect(r?.text).not.toContain('another window')

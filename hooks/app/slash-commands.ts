@@ -235,13 +235,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       if (cmd.kind === 'enable') return say(await enableHere(host, t => tellLead(host, t)))
       return say(cmd.here ? await disableHere(host) : await setSymcc(host, false))
     case 'drive': {
-      // T-952: a window that is off only because another window drives (its notice offers /<name>-drive) turns on here
-      // first, then asks to drive; one turned off on purpose (/<name>-disable here) stays off
-      if (S.offHere && S.offWhy !== 'off') {
-        const on = await enableHere(host, t => tellLead(host, t), 'drive')
-        if (S.offHere) return say(on)
-        return say(`${on}\n\n${await driveHere(host)}`)
-      }
+      // a window turned off on purpose (/<name>-disable here) stays off
       // T-984: said plainly why /<name>-drive does not turn it on
       if (S.offHere) return say(`${S.N.name} is off in this window because you ran /${S.N.name}-disable here, so /${S.N.name}-drive leaves it off. /${S.N.name}-enable turns it on here; then /${S.N.name}-drive can make this window drive.`)
       return say(await driveHere(host))
