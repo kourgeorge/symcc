@@ -113,14 +113,14 @@ test('T-1029: a step of the hand-back that throws still draws the view once', as
   await saveBoard(w.host, board())
   workers.set('w1', { task: 'T-2', worktree: `${ROOT}/.symcc/worktrees/T-2`, branch: 'symcc/T-2', since: Date.now() })
   const before = w.views()
-  // the board's second write during the hand-back fails
+  // every board write from the second one on fails, so the error leaves workerFinished
   const write = w.host.fs.write
   let n = 0
   w.host.fs.write = async (p, t) => {
-    if (p.startsWith(`${BOARD}.`) && ++n === 2) throw new Error('disk full')
+    if (p.startsWith(`${BOARD}.`) && ++n >= 2) throw new Error('disk full')
     return write(p, t)
   }
-  await workerFinished(w.host, 'w1', 'Done, but which one?').catch(() => {})
+  await expect(workerFinished(w.host, 'w1', 'Done, but which one?')).rejects.toThrow('disk full')
   expect(n).toBeGreaterThan(1)
   expect(w.views() - before).toBe(1)
 })
