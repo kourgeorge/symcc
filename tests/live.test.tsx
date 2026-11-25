@@ -153,11 +153,15 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
   const t = liveTrains(trainView, T0)
   const rows = trainRows(t.lanes['T-712']!, 100)
   expect(rows.map(r => segText(r.segs))).toEqual([
-    '  └─◇ T-713 Task files: no silent d…  waits',
-    '     └─◇ T-714 Help: /symcc-help shows…  waits',
-    '     └─◇ T-717 Waits for a todo and a …  waits  + also T-690',
-    '  └─◇ T-716 Live deps drawn as trai…  waits  + also T-690',
+    '  └─◇ T-713 Task files: no silent d…  waits  change',
+    '     └─◇ T-714 Help: /symcc-help shows…  waits  change',
+    '     └─◇ T-717 Waits for a todo and a …  waits  + also T-690  change',
+    '  └─◇ T-716 Live deps drawn as trai…  waits  + also T-690  change',
   ])
+  // T-1058: the kind ends every row, even narrow, and takes room from the title first
+  for (const w of [40, 32, 28]) for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, segText(r.segs).endsWith('change')]).toEqual([w, true])
+  const kinds = trainRows(t.lanes['T-712']!, 40).map(r => r.segs.at(-1)!)
+  expect(kinds.every(k => k.tone === 'dim')).toBe(true)
   expect(rows.map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
   for (const w of [100, 60, 40, 32, 24])
     for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, segText(r.segs), textWidth(segText(r.segs)) <= w]).toEqual([w, segText(r.segs), true])
@@ -233,11 +237,11 @@ const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) =
   expect(sub('T-801')).toContain('⌀ 4M + … (1×median)')
   // (b) handed back: the whole sum, no "+ …"; worker and checker split (the checker has no tokens yet: left out)
   // T-931: the clock first, then ⌀, then the per-agent tokens in < > (no ⌀ inside)
-  expect(sub('T-802')).toMatch(/try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3×median\) · worker 5M +\w+$/)
+  expect(sub('T-802')).toMatch(/try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3×median\) · worker 5M( +\w+)?$/)
   expect(sub('T-802')).not.toContain('+ …')
   expect(sub('T-802')).not.toContain('checker')
   // (c) try 1 running
-  expect(sub('T-803')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back +\w+$/)
+  expect(sub('T-803')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back( +\w+)?$/)
   // no breakdown: no < > part
   // (d) at the median and at half
   expect(sub('T-804')).toContain('⌀ 4M (1×median)')
@@ -248,7 +252,7 @@ const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) =
   expect(sub('T-806')).not.toContain('⚠')
   expect(warn('T-806')).toBe(true)
   // (f) T-931: merged with worker and checker: both in one < >, no ⌀ inside
-  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ 37m · ⌀ 4M \(1×median\) · worker 3M · checker 1M +\w+$/)
+  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ 37m · ⌀ 4M \(1×median\) · worker 3M · checker 1M( +\w+)?$/)
 }
 
 test('T-760: the agent stations end in ✧ (accent color), each name still starts over its mark, and the legend says what ✧ means', () => {
