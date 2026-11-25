@@ -188,13 +188,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -313,6 +306,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -975,13 +975,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -1100,6 +1093,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -1720,13 +1720,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -1845,6 +1838,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -2473,13 +2473,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -2598,6 +2591,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -2983,13 +2983,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -3108,6 +3101,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -3736,14 +3736,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · waits on T-498 first"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -3854,6 +3846,14 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · waits on T-498 first"]}
             ]
           }
         ]
@@ -4185,13 +4185,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -4302,6 +4295,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -4615,13 +4615,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -4740,6 +4733,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -5293,13 +5293,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -5418,6 +5411,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -6192,13 +6192,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -6325,6 +6318,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -6901,13 +6901,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -7026,6 +7019,13 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]

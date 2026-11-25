@@ -1096,8 +1096,8 @@ only; the Organizational memory page has the same header shape, see below):
    counted); then where it came from (`♟ from you`, `⌕ scout bugs`, `◆ lead`, `↳ from T-5`,
    `▸ from T-5` for a worker's report); then its note, dim, when it has one. There are no
    Status, Stage or Now rows in Details any more: Details starts with the **Steps** row (the
-   way to the merge) and the **Added** row (when it was added and last changed), then the
-   **Priority** row: the task's priority number (bold when it is not 0) and, in grey, for a
+   way to the merge) and the **Added** row (when it was added and last changed). The
+   **Priority** row comes last, after Tries: the task's priority number (bold when it is not 0) and, in grey, for a
    to do task its place in line: `next to start`, `2nd in line`, `3rd in line`… among the to do
    tasks that are free to start, in the order they start (lowest priority first, then the lower
    task number), or `waits on T-n first` (the first task it waits for that is not done yet).

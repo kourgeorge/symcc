@@ -9523,7 +9523,7 @@ function liveTodayLines(v, nowMs, width, offsetMin = localOffset(nowMs), note = 
   const triesOnly = !more.teamKnown;
   const first = todayLines({ ...d, tokens }, width, triesOnly).map((text) => text.endsWith(TRIES_ONLY) ? [{ text: text.slice(0, -TRIES_ONLY.length), tone: "text" }, { text: TRIES_ONLY, tone: "dim" }] : [{ text, tone: "text" }]);
   const past = pastLines(pastDays(v.tasks, nowMs, 1, offsetMin), pastDays(v.tasks, nowMs, 7, offsetMin), width);
-  return [...first, ...todayMoreLines(more, width), ...past, ...note ? wrapLine(TOKENS_NOTE, width).map((text) => [{ text, tone: "dim" }]) : []];
+  return [...first, ...todayMoreLines(more, width), ...past.length ? [[]] : [], ...past, ...note ? wrapLine(TOKENS_NOTE, width).map((text) => [{ text, tone: "dim" }]) : []];
 }
 var ORG_MEM_GRID_MAX = 4;
 var GRID_LEAD = "   ";

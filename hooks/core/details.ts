@@ -191,8 +191,8 @@ export function prioritySegs(t: SymccTask, all: SymccTask[], archivedDone: strin
 }
 
 /**
- * The labelled rows of the task page, in order: Steps (STEPS_LABEL; `board`: its mode and checker setting, see taskStage), Added, Priority (prioritySegs), Role, From, Why, Request, Seen, Files, Into (the branch it
- * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries.
+ * The labelled rows of the task page, in order: Steps (STEPS_LABEL; `board`: its mode and checker setting, see taskStage), Added, Role, From, Why, Request, Seen, Files, Into (the branch it
+ * merges into), After (with a warning row for a task it waits for that merges into another branch), Research, Branch, Commits, Tries, Priority (prioritySegs, last: the most technical row).
  * `when` turns an ISO time into a short date; `all` finds the tasks this one waits for; `merging`, an approve this
  * page started (see statusBadge), so the Steps line shows the same step as the page header. The status and the note
  * are on the page header's state line (core/page-header.ts, T-751); `driving` is read there (see sessionNote).
@@ -204,7 +204,6 @@ export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'nam
   const stage = taskStage(t as BoardTask, o.nowMs, o.board, !!o.merging)
   if (stage) R.push({ label: STEPS_LABEL, segs: stageSegs(stage) })
   R.push({ label: 'Added', segs: [{ text: o.when(t.created_at), color: 'text' }, { text: ` · changed ${o.when(t.updated_at)}`, color: 'inactive' }] })
-  R.push({ label: 'Priority', segs: prioritySegs(t, o.all, o.archivedDone) })
   const name = roleOf(t)
   const r = findRole(o.roles, name)
   const more = [r?.description, r?.model ? `model ${r.model}` : ''].filter(Boolean).join(' · ')
@@ -254,6 +253,8 @@ export function detailRows(t: SymccTask, o: { roles: readonly Pick<RoleDef, 'nam
   const summary = triesSummary(t.runs, o.nowMs)
   if (summary) tries.push({ text: summary, color: 'inactive' })
   R.push({ label: 'Tries', segs: tries })
+  // the most technical row goes last (T-1044)
+  R.push({ label: 'Priority', segs: prioritySegs(t, o.all, o.archivedDone) })
   return R
 }
 
