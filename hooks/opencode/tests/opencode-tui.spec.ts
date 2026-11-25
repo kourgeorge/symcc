@@ -1722,8 +1722,6 @@ test('T-562: the Settings tab opens the Roles and Task types pages from view.jso
   const list = panelLines(f, { tab: 'settings', opened: 'roles', cursor: 2 }, NOW, 140)
   const l = list.lines.map(lineText)
   // T-918: the heading with its count, the column heads, one line per role (the cursor's marked ❯), + New role (n)
-  // T-1067: the first line is the Back button to Settings, a hit that presses b
-  expect(list.lines.flat().filter(x => x.text === '[Settings]').map(x => x.hit)).toEqual([{ key: 'back' }])
   expect(l).toContain('▍Roles  4 roles · 1 changed by you · 1 off')
   expect(l).toContain("  NAME     FROM      MODEL  WEB  WRITES  WHAT IT'S FOR")
   expect(list.ids).toEqual(['role:general', 'role:checker', 'role:tester', 'role:oops'])
@@ -2862,7 +2860,7 @@ test('T-685: every board screen has Claude Code\'s buttons: the tab row, the lis
   // Back (b) on each list page, as Claude Code's
   const back = (c: Partial<PanelChoice>) => draw(c).lines.flat().filter(s => s.text === '[ Back (b) ]').map(s => s.hit)
   for (const c of [{ tab: 'scouts' }, { tab: 'settings' }] as const) expect([c, back(c)]).toEqual([c, [{ key: 'back' }]])
-  // T-918: the Roles and Task types tables have no Back button (their key line says b back); T-1067: they have the header's [Settings] instead
+  // T-918: the Roles and Task types tables have no Back button (their key line says b back)
   for (const c of [{ tab: 'settings', opened: 'roles' }, { tab: 'settings', opened: 'kinds' }] as const) expect([c, back(c)]).toEqual([c, []])
   // T-790: the org-mem page has the shared detail header: "‹ [Live]" and the count, the title, the subtitle, "[Delete]" (no key in it),
   // a thin rule, kept at the top; then ▍About and ▍Notes; the old Back (b) button is gone
@@ -4606,7 +4604,6 @@ test('T-918: the Roles table drops MODEL, then WEB, then WRITES when narrow, the
   expect(row(24, 'researcher')).toBe('  researcher  built-in')
   // the Kinds table: NAME, FROM, WHAT IT'S FOR
   const kinds = panelLines(g, { tab: 'settings', opened: 'kinds', cursor: 1 }, NOW, 140).lines.map(lineText)
-  expect(kinds.some(x => x.includes('[Settings]'))).toBe(true)
   expect(kinds).toContain('▍Task types  2 task types · 1 changed by you')
   expect(kinds).toContain("  NAME    FROM      WHAT IT'S FOR")
   expect(kinds).toContain('❯ bug     changed   A bug to fix')
