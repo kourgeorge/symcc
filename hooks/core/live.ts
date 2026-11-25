@@ -674,6 +674,8 @@ export function liveLayout(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Par
   const k = stations.length
   const longest = Math.max(3, ...lanes.map(l => textWidth(l.title)))
   const make = (titleW: number, gap: number, sep: number, rightW = RIGHT_W): LiveLayout => {
+    // the layout never goes below its minimum width: when the kind then does not fit beside it, the kind goes
+    if (kindW && laneWidth(idW, titleW, k, gap, sep, rightW) + kindW > fullWidth) return liveLayout(lanes, stations, fullWidth, false)
     const set = LABELS.find(s => stations.slice(0, -1).every(st => textWidth(s[st]) <= gap)) ?? LABELS[LABELS.length - 1]!
     return { width: fullWidth, idW, titleW, gap, labels: stations.map(s => set[s]), rightW, sep, stations: [...stations], ...(kindW ? { kindW } : {}) }
   }

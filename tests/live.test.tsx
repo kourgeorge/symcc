@@ -209,6 +209,19 @@ test('T-690: lane lines fit the width with nothing cut, and the current station 
   expect(segText(a).trimEnd().endsWith('#2')).toBe(true)
   expect(segText(a)).toContain('T-684 /symcc-doctor')
   expect(liveBlink(1, true)).toBe('◉')
+  // T-1058: running rows end with the kind (dim) and still fit narrow widths; the kind goes when it can't fit, even a long one
+  for (const kind of ['change', 'investigation'])
+    for (const width of [100, 60, 40, 32, 28, 24, 20]) {
+      const ks = liveLanes(view(true), T0).map(x => ({ ...x, kind }))
+      const lk = liveLayout(ks, liveStations(true), width, true)
+      for (const lane of ks) {
+        const first = laneLines(lane, lk, { nowMs: T0, frame: 0 })[0]
+        expect([kind, width, textWidth(segText(first)) <= width]).toEqual([kind, width, true])
+        if (lk.kindW) expect(segText(first).endsWith(kind) && first.at(-1)!.tone === 'dim').toBe(true)
+      }
+    }
+  expect(liveLayout(liveLanes(view(true), T0).map(x => ({ ...x, kind: 'change' })), liveStations(true), 100, true).kindW).toBe(8)
+  expect(liveLayout(liveLanes(view(true), T0).map(x => ({ ...x, kind: 'investigation' })), liveStations(true), 20, true).kindW).toBe(undefined)
   // T-867: the tokens against the median per merged task: from twice it, "(n×median)" in the warning tone
   const over = laneLines(lanes.find(x => x.id === 'T-685')!, l, { nowMs: T0, frame: 0 })[1]
   expect(segText(over)).toContain('⌀ 3.4M (4.3×median)')

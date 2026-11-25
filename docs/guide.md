@@ -1234,8 +1234,8 @@ words as bold headings with the same spacing):
 ─── ❯ TASKS ────────────────────────────────────────────────
 
                        work✧    check✧   queue    tests    done
- ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
-   try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9×median) · worker 812.4k · checker 287.6k · ⌕ × 1  change
+ ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2  change
+   try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9×median) · worker 812.4k · checker 287.6k · ⌕ × 1
 ```
 
 - `NEEDS YOU` is the first section, shown only while something waits for you, and hidden (no
@@ -1276,7 +1276,7 @@ words as bold headings with the same spacing):
   from twice the median), how its tokens split between its workers and checkers, as
   `worker 5.4M · checker 1.9M` (a part that is 0 is left out, and nothing shows when there is nothing to split), and
   `⌕ × N` for how many times the checker sent the task back (`⌕` is the checker's mark; on a task row, `↺` with a number is the try). On a narrow panel the parts go in this order: first the
-  split, then `(×median)`, then `⌀`, and the clock `⏱` last; the try stays. The task type (dim) is at the right end of the row, lined up under the time on the first row; when the row is too narrow for both, the type is dropped, never wrapped. A
+  split, then `(×median)`, then `⌀`, and the clock `⏱` last; the try stays. The task type (dim) ends the first row, after the time or place (waiting child rows end with it too); the title gives way to it first, and on a panel too narrow for the type it is dropped, never wrapped. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.
 - **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend at the bottom of the Live tab, below the footer, says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `avg` marks an average (`avg ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
@@ -1288,10 +1288,10 @@ words as bold headings with the same spacing):
   failed or dropped tasks don't. Enter (or a click) on a finished lane opens its task page.
 
   ```
-   ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○      2m
-     try 1/3 · ⏱ 2m · ⌀ at hand-back                            change
-   ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
-     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M  change
+   ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○      2m  change
+     try 1/3 · ⏱ 2m · ⌀ at hand-back
+   ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago  change
+     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,

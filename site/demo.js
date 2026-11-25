@@ -85,7 +85,7 @@
 
   // ---------- the board panel (the Live tab) ----------
   const ID_W = 5
-  const TITLE_W = 12
+  const TITLE_W = 8
   const GAP = 6
   const LABELS = ['work✧', 'check✧', 'queue', 'tests', 'done']
   // T-767: the lines under a ▍heading start with 1 space; a running lane then "▶ " and its id in the accent ('run' tone), its title normal text
@@ -112,7 +112,7 @@
     const right = l.done ? `merged ${dur(s.now - l.done)} ago` : l.place ? `#${l.place}` : dur(s.now - l.since)
     // T-771: a just-merged lane: "✓ " (dim), its id in the accent, title and second line dim
     const title = ' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W)
-    const one = ' ' + (l.done ? sp('✓ ', 'dim') + sp(pad(l.id, ID_W), 'run') + sp(title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track + sp('  ' + right.padStart(6), 'dim')
+    const one = ' ' + (l.done ? sp('✓ ', 'dim') + sp(pad(l.id, ID_W), 'run') + sp(title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track + sp('  ' + right.padStart(6), 'dim') + sp('  ' + l.kind, 'dim')
     // T-867: no bar: the whole task's tokens (every try; the running try's are known only at its hand-back), how many
     // times the median per task (the warning tone from twice it), its time so far, who spent them, the send-backs.
     // T-931: the clock first, then the tokens, then the worker/checker split (no ⌀ inside), the task type at the right end. When the line is too
@@ -135,14 +135,7 @@
       return [[`  try ${l.tryNo}/${l.tries}`, 'dim'], ...parts.flatMap(x => [[' · ', 'dim'], ...x])]
     }
     const width = xs => 1 + xs.reduce((n, [t]) => n + t.length, 0)
-    // (T-1010) the task type dim at the right edge of the row; dropped (never wrapped) when it does not fit
-    const withKind = xs => {
-      const gap = Math.max(2, firstW - width(xs) - l.kind.length)
-      return [...xs, [' '.repeat(gap), 'text'], [l.kind, 'dim']]
-    }
-    // the first row's width: it ends at the time; the kind lines up under it
-    const firstW = 1 + 2 + ID_W + 1 + TITLE_W + 2 + (LABELS.length + GAP * (LABELS.length - 1)) + 2 + 6
-    const tries = [4, 3, 2, 1, 0].flatMap(n => [withKind(line(n)), line(n)])
+    const tries = [4, 3, 2, 1, 0].map(n => line(n))
     const pick = tries.find(xs => width(xs) <= PANEL_W) || tries[tries.length - 1]
     const two = ' ' + pick.map(([t, k]) => sp(t, k)).join('')
     return [one, two]

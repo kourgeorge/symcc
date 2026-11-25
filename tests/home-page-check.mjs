@@ -89,7 +89,7 @@ if (!text(view('scouts')).includes('gaps-bot')) bad('still frame: the scouts vie
 // (T-757, T-867) T-740 on try 2: its lane shows the whole task's tokens (try 1's 4.0M, more coming) against the median
 // tokens per merged task (268.6M / 56 = 4.8M, so 0.8×) and its time, no bar; the key line has no bar text
 // (T-931, T-1010) the clock first, the kind at the right end: "try 2/3 · ⏱ 25m · ⌀ 4.0M + … (0.8×median)   bug"
-if (!/try 2\/3 · ⏱ \d+m · ⌀ 4\.0M \+ … \(0\.8×median\).* bug\b/.test(board) || /bug try 2\/3/.test(board)) bad('still frame: T-740\'s lane does not show "try 2/3 · ⏱ … · ⌀ 4.0M + … (0.8×median)" with "bug" at the right end')
+if (!/T-740[^\n]*\d+[ms]  bug\n[^\n]*try 2\/3 · ⏱ \d+m · ⌀ 4\.0M \+ … \(0\.8×median\)/.test(board) || /bug try 2\/3/.test(board)) bad('still frame: T-740\'s first row does not end with "bug", or its second line "try 2/3 · ⏱ … · ⌀ 4.0M + … (0.8×median)" is missing')
 if (/▕[█░]+▏ ⌀/.test(board) || /▕[█░]+▏ ⌀/.test(page)) bad('still frame: a lane still has a token bar')
 if (board.includes('usual per task')) bad('still frame: the key line still explains the bar')
 // (T-757, T-867) the hand-drawn Live tab card tells the same story: whole-task tokens × the median, time, who spent them
