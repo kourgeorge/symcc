@@ -31,6 +31,12 @@ export function meanwhileText(lines: readonly string[], shown = MEANWHILE_SHOWN)
  * it (takeBoardUpdate) on its next hook that can carry text. `urgent`: the owner must act on it now (a worker needs
  * them, a worker's time is up); the update it goes in is sent as urgent (LeadSend: OpenCode gives it mid-turn).
  */
+/** True when a prompt is symcc's own update to the lead (board update or health check), not the owner's. */
+export function isOwnUpdate(text: string): boolean {
+  const t = text.trimStart()
+  return t.startsWith(`[${S.N.name}] Board update`) || t.startsWith(`[${S.N.name} health check]`)
+}
+
 export function tellLead(host: Host, text: string, how?: { urgent?: boolean }) {
   if (!S.enabledNow) return // the plugin is disabled: no "[name] Board update" messages
   leadQueue.push(text)
