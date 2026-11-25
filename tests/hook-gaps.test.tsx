@@ -36,7 +36,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[]; env?: Recor
   const ended = new Set<string>()
   const toasts: string[] = []
   const spawned: string[] = []
-  const state = { gitFails: false, dropPrompts: false }
+  const state = { gitFails: false, dropPrompts: false, throwOnce: false }
 
   function git(args: string[]): Res {
     // a repo with a commit, so work can start
@@ -76,7 +76,13 @@ function world(on: On, o: { agents?: { id: string; type: string }[]; env?: Recor
     return { value: ok() }
   })
   on('tool.call', (_, e) => (tools.push(e.tool), { result: 'ran' }))
-  on('prompt.submit', (_, e) => (state.dropPrompts ? { drop: 'blocked by a settings hook' } : (prompts.push(e.text), contexts.push(e.context), { text: e.text, context: e.context })) as never)
+  // `throwOnce`: the next prompt.submit beneath the plugin throws (then the flag clears); the engine skips it and,
+  // with nothing else beneath, the plugin's next() rejects (T-1049)
+  on('prompt.submit', (_, e) => {
+    if (!state.throwOnce) return (state.dropPrompts ? { drop: 'blocked by a settings hook' } : (prompts.push(e.text), contexts.push(e.context), { text: e.text, context: e.context })) as never
+    state.throwOnce = false
+    throw new Error('a lower prompt hook broke')
+  })
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('command.run', () => ({ text: 'not a symcc command' }))
   on('agent.list', () => ({ value: (o.agents ?? []).map(a => ({ ...a, status: ended.has(a.id) ? 'completed' : 'running' })) }) as never)
@@ -251,6 +257,40 @@ test("T-968: an owner's prompt that is dropped before the chat puts its Meanwhil
   expect((w.contexts[w.prompts.indexOf('and now?')] ?? []).join('\n')).toContain('The owner rejected T-1 ("too big")')
   await $.prompt.submit({ text: 'and then?', origin: { kind: 'composer' } } as never)
   expect((w.contexts[w.prompts.indexOf('and then?')] ?? []).join('\n')).not.toContain('The owner rejected T-1')
+})
+
+// T-1049: a prompt.submit beneath the plugin that throws (`throwOnce`). The engine skips the broken hook; with nothing else
+// beneath to answer, the plugin's next() rejects, its catch puts the Meanwhile lines back, and passOn's next() replays that
+// failure (the engine's replay-safe next), so this prompt never reaches the chat. The lines must wait for the next one.
+const contextOf = (w: ReturnType<typeof world>, text: string) => (w.contexts[w.prompts.indexOf(text)] ?? []).join('\n')
+const rejectedLines = (w: ReturnType<typeof world>) => w.contexts.filter(c => (c ?? []).join('\n').includes('The owner rejected T-1 ("too big")')).length
+
+test("T-1049: a prompt a lower hook throws on doesn't reach the chat, and the next prompt carries its Meanwhile line exactly once", async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(reviewBoard()))
+  await run($, 'symcc-reject', 'T-1 too big')
+  w.state.throwOnce = true
+  await expect($.prompt.submit({ text: 'what now?', origin: { kind: 'composer' } } as never)).rejects.toThrow('prompt.submit')
+  expect(w.prompts).toEqual([])
+  // the line was put back: the next prompt that gets through carries it, once
+  await $.prompt.submit({ text: 'and now?', origin: { kind: 'composer' } } as never)
+  const context = contextOf(w, 'and now?')
+  expect(context).toContain('The owner rejected T-1 ("too big")')
+  expect(context.split('The owner rejected T-1').length - 1).toBe(1)
+})
+
+test('T-1049: after a lower hook throws on a prompt, only the first of two later prompts carries the Meanwhile line (not put back twice, not lost)', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(reviewBoard()))
+  await run($, 'symcc-reject', 'T-1 too big')
+  w.state.throwOnce = true
+  await expect($.prompt.submit({ text: 'what now?', origin: { kind: 'composer' } } as never)).rejects.toThrow('prompt.submit')
+  await $.prompt.submit({ text: 'and now?', origin: { kind: 'composer' } } as never)
+  await $.prompt.submit({ text: 'and then?', origin: { kind: 'composer' } } as never)
+  expect(w.prompts).toEqual(['and now?', 'and then?'])
+  expect(contextOf(w, 'and now?')).toContain('The owner rejected T-1 ("too big")')
+  expect(contextOf(w, 'and then?')).not.toContain('The owner rejected T-1')
+  expect(rejectedLines(w)).toBe(1)
 })
 
 // ---------------- commands with a broken board.json ----------------
