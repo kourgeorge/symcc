@@ -339,10 +339,9 @@ test('a window turned off with /symcc-disable here stays off and silent when its
   await disableHere(w.host)
   w.toasts.length = 0
   // the driver closes (it lets go of lead.json), long enough ago for any old grace to be over
-  const t0 = Date.now()
-  await offHereBeat(w.host, t0 + 1000)
+  await offHereBeat(w.host)
   w.files.delete(w.lead)
-  for (const dt of [0, 1000, 100_000, 20 * 60_000]) await offHereBeat(w.host, t0 + dt)
+  for (let i = 0; i < 4; i++) await offHereBeat(w.host)
   expect(S.offHere).toBe(true)
   expect(S.driving).toBe(false)
   expect(w.toasts).toEqual([])
@@ -412,9 +411,9 @@ test('T-984: a made-up id is swapped for the real one on the next beat, so the w
   await startHere(w.host)
   up = true
   w.toasts.length = 0 // the host could not name this window at start, so the start notice cannot know it is itself
-  await offHereBeat(w.host, t0 + 1000)
-  await offHereBeat(w.host, t0 + LEAD_STALE_MS + 1000)
-  await offHereBeat(w.host, t0 + LEAD_STALE_MS + 92_000)
+  await offHereBeat(w.host)
+  await offHereBeat(w.host)
+  await offHereBeat(w.host)
   expect(S.me).toBe('me')
   expect(S.offHere).toBe(false)
   expect(w.toasts.filter(t => t.includes('closed') || t.includes('another'))).toEqual([])

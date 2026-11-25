@@ -441,6 +441,12 @@ test("T-943: in a DAM image, symcc's own board update sent with origin sdk leave
   expect(await slackLine($)).toBe(false)
 })
 
+test("T-1061: in a DAM image, the health check's own update sent with origin sdk leaves the Slack line off", async ($, on) => {
+  await damStart($, on)
+  await say($, '[symcc health check] Triage needed (an automatic check, not a scout or a worker): found a problem:\n- T-1 waits.', { origin: { kind: 'sdk' } })
+  expect(await slackLine($)).toBe(false)
+})
+
 test("T-943: in a DAM image, a worker's agent-message sent with origin sdk leaves the Slack line off, with and without the prefix", async ($, on) => {
   await damStart($, on)
   await say($, agentMsg('symcc-worker', '[Subagent hand-back] done'), { origin: { kind: 'sdk' } })

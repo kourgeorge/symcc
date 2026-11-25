@@ -2,7 +2,7 @@
 // Questions for you and NEEDS YOU first, then what runs, what is in review, what failed and what is to do (in run order),
 // then one line of counts and a hint. One line per task: mark, id, short state, title (cut to fit).
 import { DEFAULT_NAME } from '../name'
-import type { Board, BoardTask } from './board-file'
+import { type Board, type BoardTask, isFinished } from './board-file'
 import { cutTitle, padWidth, textWidth } from './width'
 import { boardSections, localOffset } from './days'
 import { panelSections, rowMark, rowCell, MORE_TIME_CELL, SECTION_LABEL } from './panel'
@@ -34,7 +34,7 @@ function stateOf(t: BoardTask, all: readonly BoardTask[], nowMs: number, group: 
     return [cell, tries].filter(Boolean).join(' ')
   }
   if (t.status === 'todo' || t.status === 'paused') {
-    const open = (t.after ?? []).filter(id => all.some(x => x.id === id && x.status !== 'done' && x.status !== 'dropped'))
+    const open = (t.after ?? []).filter(id => all.some(x => x.id === id && !isFinished(x)))
     if (open.length) return `${t.status === 'paused' ? 'paused, ' : ''}after ${open.join(', ')}`
     return t.status === 'paused' ? 'paused' : 'to do'
   }

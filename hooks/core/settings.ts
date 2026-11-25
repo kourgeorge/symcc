@@ -350,17 +350,11 @@ export function settingRowValue(name: string, value: string): string {
   return value
 }
 
-/** The help line under the Settings list for a focused setting: its meaning, then the name to use in /<name>-settings and the default and range. */
-export const settingHelp = (name: string): { meaning: string; facts: string } => {
-  const s = settingInfo(name)
-  return s ? { meaning: s.meaning, facts: `${s.name} · default ${s.default} · ${s.range}` } : { meaning: '', facts: '' }
-}
-
 /** The help area under the Settings list for the focused row (T-1042): a setting's label, meaning, then "name · default X · range"; a page row's or a heading's hint. Both the Claude Code and OpenCode boards draw it. */
 export function settingsHelpOf(f: { setting: string } | { group: string } | { page: SettingPage }): { name: string; lines: string[] } {
   if ('setting' in f) {
     const x = settingInfo(f.setting)
-    return x ? { name: x.label, lines: [x.meaning, settingHelp(x.name).facts] } : { name: '', lines: [] }
+    return x ? { name: x.label, lines: [x.meaning, `${x.name} · default ${x.default} · ${x.range}`] } : { name: '', lines: [] }
   }
   if ('page' in f) return f.page === 'roles' ? { name: 'Roles', lines: ['The worker roles: open, edit, turn off or add one.'] } : { name: 'Task types', lines: ['The kinds of task: open, edit, turn off or add one.'] }
   const g = SETTING_GROUPS.find(x => x.title === f.group)
@@ -368,6 +362,13 @@ export function settingsHelpOf(f: { setting: string } | { group: string } | { pa
 }
 
 export const settingInfo = (name: string): SettingInfo | undefined => SETTINGS.find(s => s.name === name)
+
+/** The Settings list's label column (T-1042): wide enough for the longest label (and the "Task types" page row). */
+const SETTING_LABEL_WIDTH = Math.max(...SETTINGS.map(x => x.label.length), 'Task types'.length)
+/** The dot leaders between a Settings row's label and its value, so every value starts in one column. Both boards draw them. */
+export const settingDots = (label: string): string => ` ${'.'.repeat(Math.max(2, SETTING_LABEL_WIDTH - label.length + 2))} `
+/** The width of the thin rule over the Settings help area on a page `w` columns wide. */
+export const settingsRuleWidth = (w: number): number => Math.max(10, Math.min(60, w - 2))
 
 /** T-800: a setting's value as the owner reads it: the mode "review" / "auto" shows as "approve merge" / "auto merge"; the stored value is unchanged. */
 export const settingShown = (name: string, value: string): string => (name === 'mode' && isMode(value) ? MODE_NAME[value] : value)
