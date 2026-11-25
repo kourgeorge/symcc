@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, settingRowValue, settingsHelpOf, groupHint, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, mergeRoles, roleKeys, roleEditKeys, rolesKeys, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, isCheckerRole, checkerOn } from '../../board'
+import { SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, settingRowValue, settingsHelpOf, settingInfo, settingDots, settingsRuleWidth, groupHint, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, mergeRoles, roleKeys, roleEditKeys, rolesKeys, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
@@ -527,7 +527,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   })
   /** Enter on a row: on/off flips, mode, notify, scout_findings and tests_with_changes open a pick list, the rest an edit box. */
   const pressRow = (name: SettingName) => act(async () => {
-    const info = SETTINGS.find(x => x.name === name)!
+    const info = settingInfo(name)!
     const now = settingValue(viewAsBoard(v), name)
     if (info.kind === 'onoff') return saveIt({ [name]: now !== 'on' })()
     S.settingEdit = null
@@ -540,7 +540,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   const editBox = (name: SettingName) => {
     if (S.settingEdit?.name !== name) return null
     const ed = S.settingEdit
-    const info = SETTINGS.find(x => x.name === name)!
+    const info = settingInfo(name)!
     return (
       <Box key={`setting-box-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
         <Input
@@ -589,17 +589,15 @@ export async function settingsPage($: $, pane: PaneParts) {
     $.ui.invalidate('ui.render')
   }
   // T-1042: the row's label, dot leaders, then the value in one column; the focused row's help is under the list
-  const labelWidth = Math.max(...SETTINGS.map(x => x.label.length), 'Task types'.length)
   const focusedKey = arrows.focused
-  const dots = (label: string) => ` ${'.'.repeat(Math.max(2, labelWidth - label.length + 2))} `
   const mark = (key: string) => (focusedKey === key ? '› ' : '  ')
   const settingRow = (name: SettingName) => {
-    const x = SETTINGS.find(s => s.name === name)!
+    const x = settingInfo(name)!
     const key = row(`setting:${x.name}`)
     return [
       <Button key={key} plain label={`${x.label}: ${settingRowValue(x.name, settingValue(viewAsBoard(v), x.name))}`} onPress={pressRow(x.name)}>
         <Text color={C('text')}>{`${mark(key)}${x.label}`}</Text>
-        <Text color={C('inactive')}>{dots(x.label)}</Text>
+        <Text color={C('inactive')}>{settingDots(x.label)}</Text>
         <Text bold color={C('claude')}>{settingRowValue(x.name, settingValue(viewAsBoard(v), x.name))}</Text>
         {x.name === 'notify' && cantPlayNotify(v) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
       </Button>,
@@ -618,7 +616,7 @@ export async function settingsPage($: $, pane: PaneParts) {
     return (
       <Button key={key} plain label={`${label}: ${count}`} onPress={isRoles ? openRoles : openKinds}>
         <Text color={C('text')}>{`${mark(key)}${label}`}</Text>
-        <Text color={C('inactive')}>{dots(label)}</Text>
+        <Text color={C('inactive')}>{settingDots(label)}</Text>
         <Text bold color={C('claude')}>{count}</Text>
       </Button>
     )
@@ -659,7 +657,7 @@ export async function settingsPage($: $, pane: PaneParts) {
         ]
       })}
       <Text key="settings-blank"> </Text>
-      <Text key="settings-rule" color={C('inactive')}>{'─'.repeat(Math.max(10, Math.min(60, pane.width - 2)))}</Text>
+      <Text key="settings-rule" color={C('inactive')}>{'─'.repeat(settingsRuleWidth(pane.width))}</Text>
       {help.name ? <Text key="settings-help-name" bold color={C('text')}>{help.name}</Text> : null}
       {help.lines.map((l, i) => (
         <Text key={`settings-help-${i}`} wrap="wrap" color={C('inactive')}>{l}</Text>

@@ -27,7 +27,7 @@ import {
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, fileWaitText, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutFindingsOf, findingsLine, findingsDefaultLine, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
-  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingRowValue, settingsHelpOf, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
+  SETTING_GROUPS, isSettingPage, settingInfo, settingDots, settingsRuleWidth, settingRowValue, settingsHelpOf, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning, DRIVE_HERE_LABEL, showsDriveButton,
   searchTasks, showsHeader, type BoardPage, groupLabel,
@@ -1377,8 +1377,6 @@ function orgMemBody(f: ViewFile, cursor: number, w: number, topic = ''): Body {
 function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: number): Body {
   const b = bodyMaker()
   const v = f.view
-  const labelWidth = Math.max(...SETTINGS.map(x => x.label.length), 'Task types'.length)
-  const dots = (label: string) => ` ${'.'.repeat(Math.max(2, labelWidth - label.length + 2))} `
   const ids = settingRows(open)
   const selected = ids[Math.min(Math.max(0, cursor), ids.length - 1)]!
   const pages = { roles: defsCount(f, 'roles'), kinds: defsCount(f, 'kinds') }
@@ -1403,7 +1401,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
           [
             { text: item === selected ? '› ' : '  ', color: 'ide', bold: true },
             { text: label, color: 'text' },
-            { text: dots(label), color: 'inactive' },
+            { text: settingDots(label), color: 'inactive' },
             { text: `${defsCount(f, item)}`, color: 'claude', bold: true },
           ],
           { page: item },
@@ -1416,7 +1414,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
         [
           { text: x.name === selected ? '› ' : '  ', color: 'ide', bold: true },
           { text: x.label, color: 'text' },
-          { text: dots(x.label), color: 'inactive' },
+          { text: settingDots(x.label), color: 'inactive' },
           { text: settingRowValue(x.name, settingValue(viewAsBoard(v), x.name)), color: 'claude', bold: true },
           ...(unplayable ? [{ text: " (can't play here: nothing plays)", color: 'warning' }] : []),
         ],
@@ -1427,7 +1425,7 @@ function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: n
   const sel = isSettingPage(selected) ? { page: selected } : settingInfo(selected) ? { setting: selected } : { group: SETTING_GROUPS.find(g => settingGroupId(g.title) === selected)?.title ?? SETTING_GROUPS[0]!.title }
   const help = settingsHelpOf(sel)
   b.blank()
-  b.add([{ text: '─'.repeat(Math.max(10, Math.min(60, w - 2))), color: 'inactive' }])
+  b.add([{ text: '─'.repeat(settingsRuleWidth(w)), color: 'inactive' }])
   if (help.name) b.add([{ text: help.name, color: 'text', bold: true }])
   for (const l of help.lines) for (const wl of wrapSegs([{ text: l, color: 'inactive' }], w)) b.add(wl)
   b.blank()

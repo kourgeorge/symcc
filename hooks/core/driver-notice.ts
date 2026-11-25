@@ -42,7 +42,7 @@ export function driverFacts(l: { heartbeat?: unknown; since?: unknown; active?: 
  * "active 3 min ago"; with no `active` saved (an old lead.json, or a host that can't tell), the heartbeat's age:
  * "checked in 10 s ago". '' with no facts at all.
  */
-export function driverWhen(d: DriverFacts | undefined, nowMs: number, withStart = true): string {
+function driverWhen(d: DriverFacts | undefined, nowMs: number, withStart = true): string {
   if (!d) return ''
   const start = withStart && d.since !== undefined ? `started ${startedText(d.since)}` : ''
   const act = d.active !== undefined ? `active ${agoShort(nowMs - d.active)}` : `checked in ${agoShort(nowMs - d.heartbeat)}`

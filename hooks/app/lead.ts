@@ -326,7 +326,7 @@ export async function enableHere(host: Host, tell: (text: string) => void): Prom
 }
 
 /** The heartbeat of a window off here: it drives nothing and only keeps the driver notice fresh. */
-export async function offHereBeat(host: Host, nowMs = Date.now()) {
+export async function offHereBeat(host: Host) {
   await refreshMe(host)
   // a hand-over that landed on this window (it asked with /drive before turning off): give the board straight back
   await locked(host, async () => {
