@@ -238,6 +238,15 @@ test('T-690: lane lines fit the width with nothing cut, and the current station 
   }
   expect(liveLayout(liveLanes(view(true), T0).map(x => ({ ...x, kind: 'change' })), liveStations(true), 100, true).kindW).toBe(8)
   expect(liveLayout(liveLanes(view(true), T0).map(x => ({ ...x, kind: 'investigation' })), liveStations(true), 20, true).kindW).toBe(undefined)
+  // the kind never changes the gaps or stations; it takes title characters only, and goes when the title would keep under 3
+  for (let width = 20; width <= 80; width++) {
+    const one = [{ ...liveLanes(view(true), T0)[0]!, title: 'A long title that goes on and on and on for a while', kind: 'investigation' }]
+    const a = liveLayout(one, liveStations(true), width)
+    const b = liveLayout(one, liveStations(true), width, true)
+    expect([width, b.gap, b.sep, b.labels, b.rightW]).toEqual([width, a.gap, a.sep, a.labels, a.rightW])
+    expect([width, !!b.kindW]).toEqual([width, a.titleW - 15 >= 3])
+    if (b.kindW) expect(b.titleW).toBe(a.titleW - 15)
+  }
   // T-867: the tokens against the median per merged task: from twice it, "(n×median)" in the warning tone
   const over = laneLines(lanes.find(x => x.id === 'T-685')!, l, { nowMs: T0, frame: 0 })[1]
   expect(segText(over)).toContain('⌀ 3.4M (4.3×median)')

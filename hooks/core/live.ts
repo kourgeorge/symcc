@@ -666,18 +666,23 @@ const laneWidth = (idW: number, titleW: number, k: number, gap: number, sep: num
  * spaces around the stations. Station names get shorter as the gaps do, so they always fit over their marks.
  */
 export function liveLayout(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Partial<Pick<LiveLane, 'done' | 'kind'>>)[], stations: readonly LiveStation[], fullWidth: number, withKind = false): LiveLayout {
-  // T-1058: with `withKind` each lane's first line ends with its kind (dim, two spaces after the right column): that column
-  // is kept free first, so the title gives way to it, never the kind to the title
-  const kindW = withKind ? 2 + Math.max(0, ...lanes.map(l => textWidth(l.kind ?? ''))) : 0
-  const width = Math.max(1, fullWidth - kindW)
+  // T-1058: the layout runs exactly as without the kind; with `withKind` the kind (two spaces, then its text) only takes room
+  // out of the title, and only while the title keeps 3 characters; otherwise the kind is dropped
+  const plain = liveLayoutPlain(lanes, stations, fullWidth)
+  if (!withKind) return plain
+  const kindW = 2 + Math.max(0, ...lanes.map(l => textWidth(l.kind ?? '')))
+  if (plain.titleW - kindW < 3) return { ...plain, kindDropped: true }
+  return { ...plain, titleW: plain.titleW - kindW, kindW }
+}
+
+function liveLayoutPlain(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Partial<Pick<LiveLane, 'done' | 'kind'>>)[], stations: readonly LiveStation[], fullWidth: number): LiveLayout {
+  const width = fullWidth
   const idW = Math.max(4, ...lanes.map(l => textWidth(l.id)))
   const k = stations.length
   const longest = Math.max(3, ...lanes.map(l => textWidth(l.title)))
   const make = (titleW: number, gap: number, sep: number, rightW = RIGHT_W): LiveLayout => {
-    // the layout never goes below its minimum width: when the kind then does not fit beside it, the kind goes
-    if (kindW && laneWidth(idW, titleW, k, gap, sep, rightW) + kindW > fullWidth) return { ...liveLayout(lanes, stations, fullWidth, false), kindDropped: true }
     const set = LABELS.find(s => stations.slice(0, -1).every(st => textWidth(s[st]) <= gap)) ?? LABELS[LABELS.length - 1]!
-    return { width: fullWidth, idW, titleW, gap, labels: stations.map(s => set[s]), rightW, sep, stations: [...stations], ...(kindW ? { kindW } : {}) }
+    return { width: fullWidth, idW, titleW, gap, labels: stations.map(s => set[s]), rightW, sep, stations: [...stations] }
   }
   const base = Math.min(TITLE_W, longest)
   // T-771: a finished lane's "merged 10m ago" wants a wider right column; when the stations and the title can't keep
