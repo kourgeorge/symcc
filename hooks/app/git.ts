@@ -46,8 +46,11 @@ export async function branchExists($: Host, name: string): Promise<boolean> {
  */
 export async function homeBranch($: Host): Promise<string> {
   if (!S.root) return 'main'
+  const cur = await currentBranch($)
+  if (cur) return startBranch(cur, '', [])
+  // a detached HEAD: only now are the origin head and the branch list needed
   const origin = (await git($, ['symbolic-ref', '--short', '-q', 'refs/remotes/origin/HEAD']).catch(() => null))?.stdout.trim() ?? ''
-  return startBranch(await currentBranch($), origin, await branchList($))
+  return startBranch('', origin, await branchList($))
 }
 
 /** Whether `git --version` output says the Mac's command-line tools are missing (the /usr/bin/git stub). */

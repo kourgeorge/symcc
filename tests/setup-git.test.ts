@@ -6,7 +6,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { type Board, addTask, emptyBoard, patchTask, BIG_FILE_BYTES } from '../hooks/board'
-import { gitReady, setupGit } from '../hooks/app/git'
+import { gitReady, homeBranch, setupGit } from '../hooks/app/git'
 import { S, leadQueue, meanwhile } from '../hooks/app/state'
 import { load, saveBoard } from '../hooks/app/store'
 import { fakeHost, memoryFs } from './fake-host'
@@ -536,3 +536,22 @@ for (const who of ['the lead', 'the owner'])
     expect(leadQueue.filter(x => x.startsWith('Git is ready here now'))).toEqual([])
     expect(leadQueue.length).toBe(who === 'the lead' ? 0 : 1)
   })
+
+test('T-1056: homeBranch makes one call on a branch and three on a detached HEAD', async () => {
+  S.root = '/repo'
+  const calls: string[] = []
+  const answers: Record<string, string> = { 'symbolic-ref --short -q HEAD': 'dev\n', 'for-each-ref --format=%(refname:short) refs/heads': 'master\nx\n' }
+  const { host } = fakeHost({ run: async (argv: readonly string[]) => {
+    const s = argv.slice(1).join(' ')
+    calls.push(s)
+    return { exitCode: 0, stdout: answers[s] ?? '', stderr: '' }
+  } })
+  expect(await homeBranch(host)).toBe('dev')
+  expect(calls.length).toBe(1)
+  calls.length = 0
+  answers['symbolic-ref --short -q HEAD'] = ''
+  expect(await homeBranch(host)).toBe('master')
+  expect(calls.length).toBe(3)
+  answers['symbolic-ref --short -q refs/remotes/origin/HEAD'] = 'origin/trunk\n'
+  expect(await homeBranch(host)).toBe('trunk')
+})
