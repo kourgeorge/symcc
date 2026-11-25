@@ -7,7 +7,7 @@
 //   max_parallel   [2      ] Save             (an Input for numbers and the test commands: Save saves it)
 //   Roles          7 roles · 1 off            (a link row that opens the Roles page; Task types the same)
 // Only real actions are Buttons (an Input's Save). No pills, borders, help sentence or key hints.
-import { SETTINGS, SETTING_GROUPS, isSettingPage, settingChoices, settingShown, settingValue, viewAsBoard, parseSettingValue, type SettingName, type SettingPage, type SettingsInput } from '../../board'
+import { SETTINGS, SETTING_GROUPS, settingInfo, isSettingPage, settingChoices, settingShown, settingValue, viewAsBoard, parseSettingValue, type SettingName, type SettingPage, type SettingsInput } from '../../board'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
 import type { PaneParts } from './parts'
@@ -45,7 +45,7 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
   const name$ = (key: string, name: string) => <Text key={key} color={C('inactive')}>{name}</Text>
 
   const settingRow = (name: SettingName) => {
-    const x = SETTINGS.find(s => s.name === name)!
+    const x = settingInfo(name)!
     const now = settingValue(viewAsBoard(v), name)
     // a Select for on/off and for a setting with a fixed set of choices, a box for the typed ones (numbers, test commands)
     const picks = x.kind === 'onoff' ? ['on', 'off'] : settingChoices(name, v.notify_choices)
