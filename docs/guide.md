@@ -2302,10 +2302,14 @@ sizes. It changes nothing until you say so.
   (the newest one is kept); folders in `.symcc/worktrees/` of done or dropped tasks with no
   uncommitted changes; git worktree entries whose folder is gone (`git worktree prune`);
   `symcc/T-<n>` branches of done or dropped tasks whose work is all in the branch they merge
-  into. The id says what the item is: `m-1101-1000` is the backup made on 1 November at
+  into. For a **dropped** task it also offers its folder with uncommitted changes and its
+  branch with commits not in the target branch, and says what is lost ("deletes 3 uncommitted
+  changed files", "deletes 8 commits not in main"); `fix` removes them (the folder with
+  `git worktree remove --force`, then the branch with `git branch -D`). The id says what the
+  item is: `m-1101-1000` is the backup made on 1 November at
   10:00, `w-T-5` is T-5's folder, `b-T-5` its branch, `p-worktrees` the stale entries.
-- **What it only lists:** a branch that holds unmerged work (it says how many commits), a
-  folder with uncommitted changes (and a merged branch still checked out in such a folder), a
+- **What it only lists:** a branch that holds unmerged work (it says how many commits) and a
+  folder with uncommitted changes, when the task is not dropped (and a branch still checked out in a kept folder), a
   folder whose commits are on no branch, a folder of a task that isn't on the board, data files close to the 4 MB limit, stray files like
   `.DS_Store` and empty `scratch/`, `ideas/` or `artifacts/` folders, a running task with no
   live worker (with the fix: `/symcc-task T-5 retry`), and a `lead.json` left by a session
@@ -2317,7 +2321,7 @@ sizes. It changes nothing until you say so.
   checked again right before it goes, so work added in between is kept. The same works in OpenCode and on the command line (`cmd symcc-doctor fix`), and the
   lead has a `doctor` tool, which it uses to clean up only after you said yes.
 - **Never touched:** reports, org-mem, scouts, roles and task types, a running task's folder or
-  branch, and anything unmerged or uncommitted. While a merge is going on, the doctor still
+  branch, and the unmerged or uncommitted work of any task that is not dropped. While a merge is going on, the doctor still
   checks and shows the list (the task being merged has its folder and branch marked "being
   merged" and never offered), but `fix` changes nothing and says which merge is running; try the
   fix again when it is done. When `board.json` can't be read, it can't tell which

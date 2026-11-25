@@ -1,6 +1,6 @@
 // /<name>-doctor and the lead's doctor tool (T-676): checks the project's data folder (.<name>/) and git, lists what
 // it found with sizes, and cleans up only what the owner confirms (core/doctor.ts has the pure part). Each fix checks
-// again right before it acts, so nothing unmerged, uncommitted or in use is ever deleted. Reports, org-mem, scouts,
+// again right before it acts, so nothing in use is ever deleted, and nothing unmerged or uncommitted unless its task is dropped. Reports, org-mem, scouts,
 // roles and task types are never touched: only migration backups, task folders of finished tasks, stale git worktree
 // entries and task branches already in their branch can be cleaned up.
 import { isFinished, type BoardTask, type Board, liveWorkersFor, intoOf, finishingNow, checkStepNow, parseLead, isFresh, liveDriver, activeFrom } from '../board'
@@ -46,6 +46,12 @@ function inUse(id: string, t: BoardTask | undefined, agents: ReturnType<typeof a
 async function dirty(host: Host, dir: string): Promise<boolean> {
   const st = await git(host, ['status', '--porcelain'], dir).catch(() => null)
   return !st || st.exitCode !== 0 || !!st.stdout.trim()
+}
+
+/** How many files folder `dir` has changed and not committed, or null when git can't tell. */
+async function changedFiles(host: Host, dir: string): Promise<number | null> {
+  const st = await git(host, ['status', '--porcelain'], dir).catch(() => null)
+  return st?.exitCode === 0 ? st.stdout.split('\n').filter(l => l.trim()).length : null
 }
 
 /**
@@ -185,7 +191,10 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
       continue
     }
     const bytes = await folderBytes(host, wt)
-    if (await dirty(host, wt)) {
+    const changed = await changedFiles(host, wt)
+    // only a dropped task's folder may be removed with its changes (T-1031); any other is kept
+    const lose = t.status === 'dropped' && changed !== null && changed > 0 ? changed : 0
+    if (changed !== 0 && !lose) {
       listed.push({ kind: 'worktree', fixable: false, bytes, text: `folder ${shown(wt)}/ (${why}) has uncommitted changes, kept` })
       keptDirs.set(wt, 'has uncommitted changes')
       continue
@@ -196,17 +205,17 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
       continue
     }
     trees.push({
-      kind: 'worktree', fixable: true, id: folderId(id), bytes, text: `folder ${shown(wt)}/ (${why})`,
+      kind: 'worktree', fixable: true, id: folderId(id), bytes, text: `folder ${shown(wt)}/ (${why})${lose ? `: deletes ${lose} uncommitted changed file${lose === 1 ? '' : 's'}` : ''}`,
       fix: async () => {
         const nb = await load(host).catch(() => null)
         if (!nb) return "the board can't be read now"
         const nt = nb.tasks.find(x => x.id === id)
         if (nt && !isFinished(nt)) return `${id} is ${nt.status} now`
         if (inUse(id, nt ?? taskOf(id), await agentsNow(host))) return 'an agent may still use it'
-        if (await dirty(host, wt)) return 'it has uncommitted changes now'
+        // only a dropped task's folder may go with its changes; for any other git itself refuses (no --force)
+        if (!(lose && nt?.status === 'dropped') && (await dirty(host, wt))) return 'it has uncommitted changes now'
         if (!(await headKept(host, wt, into))) return 'it holds commits on no branch now'
-        // no --force: git itself refuses a folder with changes
-        const r = await git(host, ['worktree', 'remove', wt])
+        const r = await git(host, ['worktree', 'remove', ...(lose ? ['--force'] : []), wt])
         return r.exitCode === 0 ? '' : `git worktree remove: ${(r.stderr || r.stdout).trim().slice(0, 150)}`
       },
     })
@@ -263,7 +272,33 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
     }
     const n = anc?.exitCode === 1 ? await git(host, ['rev-list', '--count', `refs/heads/${into}..${sha}`]).catch(() => null) : null
     const count = n?.exitCode === 0 ? Number(n.stdout.trim()) : NaN
-    listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}) holds unmerged work${Number.isFinite(count) && count > 0 ? ` (${count} commit${count === 1 ? '' : 's'} not in ${into})` : ''}; never deleted by the doctor` })
+    const lost = Number.isFinite(count) && count > 0 ? ` (${count} commit${count === 1 ? '' : 's'} not in ${into})` : ''
+    if (t.status !== 'dropped') {
+      listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}) holds unmerged work${lost}; never deleted by the doctor` })
+      continue
+    }
+    // a dropped task's unmerged branch can go (T-1031), after its folder when that is offered too
+    const folder = outAt.get(br)
+    if (wl?.exitCode !== 0 || (folder !== undefined && !(folder === `${wtRoot}/${id}` && offered.has(folderId(id))))) {
+      const why = wl?.exitCode !== 0 ? 'git could not tell where it is checked out' : `checked out in ${shown(folder!)}/`
+      listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is dropped) holds unmerged work${lost}; kept: ${why}` })
+      continue
+    }
+    const after = folder !== undefined ? ` (goes after its folder, ${folderId(id)})` : ''
+    branches.push({
+      kind: 'branch', fixable: true, id: branchId(id), text: `branch ${br} (${id} is dropped): deletes ${count > 0 ? `${count} commit${count === 1 ? '' : 's'}` : 'commits'} not in ${into}${after}`,
+      fix: async () => {
+        const nb = await load(host).catch(() => null)
+        if (!nb) return "the board can't be read now"
+        const nt = nb.tasks.find(x => x.id === id) ?? taskOf(id)
+        if (nt?.status !== 'dropped') return `${id} is not dropped now`
+        if (inUse(id, nt, await agentsNow(host))) return 'an agent may still use it'
+        const cur = await git(host, ['rev-parse', '--verify', '-q', `refs/heads/${br}`]).catch(() => null)
+        if (cur?.exitCode !== 0 || cur.stdout.trim() !== sha) return 'it changed since the list'
+        const r = await git(host, ['branch', '-D', br])
+        return r.exitCode === 0 ? '' : `git branch -D: ${(r.stderr || r.stdout).trim().slice(0, 150)}${after ? ` (clean up ${folderId(id)} too)` : ''}`
+      },
+    })
   }
 
   // 5. the board: who drives it, and running tasks with no worker
