@@ -7,7 +7,7 @@
 // actions on a page are Buttons, the one main action `primary`, the rest `secondary`.
 import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, SvgProps, TextProps } from 'claude-code'
-import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_NAME, nextMode, offStatusParts, testsShort, driveNoticeParts } from '../../board'
+import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_NAME, nextMode, offStatusParts, testsShort, driveNoticeParts, DRIVE_HERE_LABEL, showsDriveButton } from '../../board'
 import { ICON, namesFor } from '../../name'
 import { type PaneView, S } from '../../app/state'
 import type { PaneTab } from '../../app/open'
@@ -146,6 +146,8 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
     </Box>,
     // T-643/T-694/T-973: a session that doesn't drive says so in one notice row, with how to take over
     ...(driving ? [] : [vsNotice(k, 'vs-drive', driveNoticeParts(v.tasks ?? [], k.nowMs, S.N.name, Infinity, v.driver), onDrive)]),
+    // T-1052: a "Drive here" button with the d key, only while another session drives and this window is on
+    ...(showsDriveButton(v, driving) ? [<Box key="vs-drive-here-row" flexDirection="row"><k.Button key="drive-here" label={DRIVE_HERE_LABEL} hotkey="d" onPress={onDrive} /></Box>] : []),
     ...(counts.length
       ? [
           <Box key="vs-counts" flexDirection="row" flexWrap="wrap">

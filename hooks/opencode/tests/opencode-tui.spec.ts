@@ -3933,6 +3933,29 @@ test('T-706: startTui: on the edit page the keyboard reaches Save and Cancel (â†
   t.board.stop()
 })
 
+test('T-1052: the banner shows [ Drive here (d) ] only while another session drives; d sends /symcc-drive; a page without the banner does nothing', async () => {
+  const f = addedViewFile()
+  const other = { ...f, view: { ...f.view, driving: false } }
+  const t = await tuiOn(other)
+  expect(t.lines().some(l => l.includes('[ Drive here (d) ]'))).toBe(true)
+  t.sent.length = 0
+  await t.board.press('d', 's')
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-drive', text: '' }])
+  t.sent.length = 0
+  await t.click('[ Drive here (d) ]')
+  expect(t.sent.map(x => x.name)).toEqual(['symcc-drive'])
+  t.board.stop()
+  const mine = await tuiOn({ ...f, view: { ...f.view, driving: true } })
+  expect(mine.lines().some(l => l.includes('Drive here'))).toBe(false)
+  mine.sent.length = 0
+  await mine.board.press('d', 's')
+  expect(mine.sent).toEqual([])
+  mine.board.stop()
+  const off = await tuiOn({ ...f, view: { ...f.view, driving: false, on_here: false } })
+  expect(off.lines().some(l => l.includes('Drive here'))).toBe(false)
+  off.board.stop()
+})
+
 test('T-706: startTui: Set up git (g, or the banner\'s button) asks a yes first, then sends /symcc-settings git setup; Cancel sends nothing; no git row, or a page without the banner: g does nothing', async () => {
   const t = await tuiOn(addedViewFile('no-repo'))
   for (const how of ['key', 'click'] as const) {

@@ -306,6 +306,29 @@ for (const [name, driving, tasks, want] of [
     await ui.unmount()
   })
 
+// T-1052: "Drive here (d)" in the header (terminal and VS Code): only while another session drives and this window is on;
+// a press asks the driver to hand over (the same path as /symcc-drive) and toasts what happens.
+for (const surface of ['terminal', 'vscode'] as const)
+  for (const [name, extra, shown] of [
+    ['another session drives: the button shows', { driving: false }, true],
+    ['this session drives: no button', { driving: true }, false],
+    ['off here: no button', { driving: false, on_here: false }, false],
+  ] as const)
+    test(`T-1052: ${surface}: ${name}`, async ($, on) => {
+      const toasts: string[] = []
+      on('ui.toast', (_, e) => (toasts.push(String((e as { text?: string }).text ?? '')), { value: undefined }))
+      seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, ...extra } } })
+      const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface })
+      const b = await ui.find({ key: 'drive-here' })
+      expect(b !== undefined && b !== null).toBe(shown)
+      if (b) {
+        expect([b.type, String(b.props.label).startsWith('Drive here'), b.props.hotkey]).toEqual(['Button', true, 'd'])
+        await ui.press({ key: 'drive-here' })
+        expect(toasts.length).toBe(1)
+      }
+      await ui.unmount()
+    })
+
 // T-444, T-448: VS Code's lists: headings with a count badge, each task two lines of text that wrap (its ID a link that
 // opens it, the title up to two lines, then a dim line with the status in color, the kind, the try and the time), the
 // lead's questions in the warning tone, the closed groups folded behind links, and a friendly empty board with one

@@ -2192,7 +2192,9 @@ stale state: a window that stops checking in loses driving within 3 minutes. On 
 /symcc-drive`. Like the rest of the banner, the warning shows on the list pages only (see the
 header rule under [Live status](#live-status-seeing-the-board)). Its doing tasks say "runs in the other session", and the warning adds
 "looks idle" when a task has waited over 5 minutes for the driving window to start it.
-To move driving to the window you are in, type `/symcc-drive` there. If another window
+To move driving to the window you are in, type `/symcc-drive` there, or press the `Drive here (d)` button
+under the banner (it shows only while another window drives, and not in a window turned off with
+`/symcc-disable here`; the Claude Code, VS Code and OpenCode boards all have it). If another window
 drives, symcc asks it to hand over: within 30 s it stops its workers (the answer says which
 ones), steps down, and your window starts driving and restarts those tasks from their kept
 folders and branches. A task stopped this way does not use up a try; its history says

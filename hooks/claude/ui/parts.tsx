@@ -2,7 +2,7 @@
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
-import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows, showsHeader, gitNotice, type BoardPage } from '../../board'
+import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows, showsHeader, gitNotice, type BoardPage, DRIVE_HERE_LABEL, showsDriveButton } from '../../board'
 import { setupGit, recheckGit } from '../../app/git'
 import { logoNow, noteLogoWidth } from '../../app/logo'
 import { type PaneView, S } from '../../app/state'
@@ -84,6 +84,7 @@ export async function paneParts($: $, e: PaneEvent) {
     // T-973: the notice row's /<name>-drive does what the command does
     if (vscode) return vsBanner(vs, v, mode, gitRow(), act(async () => $.ui.toast(S.N.toast(await driveHere(claudeHost($))))))
     const d = emptyBoard()
+    const drivingNow = v.driving ?? S.driving
     const facts = { ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
     // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out
     const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'inactive', dim: 'subtle', warning: 'warning' }
@@ -96,6 +97,8 @@ export async function paneParts($: $, e: PaneEvent) {
           ))}
         </Text>
       )),
+      // T-1052: another session drives: a button that does what /<name>-drive does
+      ...(showsDriveButton(v, drivingNow) ? [<Box key="banner-drive" flexDirection="row"><Button key="drive-here" label={DRIVE_HERE_LABEL} hotkey="d" dimColor onPress={act(async () => $.ui.toast(S.N.toast(await driveHere(claudeHost($)))))} /></Box>] : []),
       ...gitRow(),
     ]
   }

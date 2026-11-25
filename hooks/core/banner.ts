@@ -237,6 +237,10 @@ export function driveWarning(driving: boolean, tasks: readonly DriveTask[], nowM
   if (driving) return ''
   return `⚠ ${noticeText(driveNoticeParts(tasks, nowMs, name, width, driver))}`
 }
+/** T-1052: the header's "Drive here" button (hotkey d): shown only while another session drives and this window is on. */
+export const DRIVE_HERE_LABEL = 'Drive here (d)'
+export const showsDriveButton = (v: { driving?: boolean; on_here?: boolean }, drivingNow: boolean = v.driving ?? true): boolean => !drivingNow && v.on_here !== false
+
 /** T-973: driveWarning's words after its "⚠ " in parts (the slash command marked), for a client that makes the command
  *  something to press (VS Code's notice row). */
 export function driveNoticeParts(tasks: readonly DriveTask[], nowMs: number, name: string = DEFAULT_NAME, width = Infinity, driver?: DriverFacts): NoticePart[] {
