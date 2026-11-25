@@ -2,7 +2,7 @@
 // finishWork (workers.ts) runs a checker here after the prep step and before the task joins the merge line, and waits
 // for its verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
+import { emptyBoard, type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
@@ -10,7 +10,7 @@ import { changeValues } from './prompt-values'
 import { S, type CheckerEnd, checkerRuns, adoptedCheckers, halt, stopped } from './state'
 import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
-import { change, now } from './store'
+import { change, load, now } from './store'
 import { startAgent } from './starts'
 import { logVerdict } from './evidence'
 import { orgMemText, keepSuggestions } from './org-mem'
@@ -46,7 +46,11 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   const held = adopted ? checkerRuns.get(adopted.id)?.held : undefined
   let agentId = adopted?.id ?? ''
   let saved: Awaited<ReturnType<typeof gitPlace>> = null
-  if (!adopted) {
+  if (adopted) {
+    // the tested commit the try recorded when this checker started; the branch is put back there (as for a fresh checker)
+    const tested = find(await load($).catch(() => emptyBoard()), t.id)?.live?.tested
+    if (tested) saved = { head: tested, on: `refs/heads/${taskBranch(t)}`, tip: tested, branch: taskBranch(t) }
+  } else {
     await markStep($, t, 'checker', () => undefined)
     const into = intoOf(t)
     const roles = await loadRoles($).catch(() => S.roles)
@@ -67,6 +71,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     }
     // where the task's branch is now (the committed work): put back after the checker if it moved it
     saved = await gitPlace($, dir, taskBranch(t))
+    // T-1068: kept on the board, so a checker that runs on over a plugin reload is put back there too
+    if (saved) await change($, x => { const cur = find(x, t.id); return cur && cur.status === 'doing' && cur.attempts === t.attempts ? patchTask(x, t.id, { live: { tested: saved!.head } }, cur.updated_at) : x }).catch(() => undefined)
     try {
       // queued: it starts at the next turn's start or end, where Claude Code keeps symcc's hooks (see starts.ts)
       const spawned = await startAgent($, { kind: 'checker', prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...(role?.model ? { model: role.model } : {}) })

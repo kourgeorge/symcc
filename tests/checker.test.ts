@@ -1593,3 +1593,18 @@ test('T-632, T-804: org-mem lines lose their task ids at start; an old field-gui
   await moveOldOrgMem(w.$)
   expect(await w.$.fs.read(GUIDE)).toBe('- 2026-11-20: a note\n- 2026-11-20: a new one\n')
 })
+
+test('T-1068: an adopted checker that moves HEAD and then says OK: the branch is put back and only the tested commit merges', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await check(w.$)
+  await until(() => checkerRuns.has('chk1'))
+  w.git.head = C9
+  checkerFinished('chk1', 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(w.calls).toContain(`git checkout -q -f -B symcc/T-1 ${H1}`)
+  expect(w.git.main).toBe(H1)
+  expect(t.status).toBe('done')
+  expect(t.history.map(h => h.text)).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
+})
