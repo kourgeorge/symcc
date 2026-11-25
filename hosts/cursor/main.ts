@@ -7,7 +7,7 @@
 //           the board panel's: {"op":"view"}  {"op":"act","task":"T-5","action":"approve","text":"..."}
 //           {"op":"answer","need":"T-5","text":"..."}  {"op":"mode","mode":"review"}  {"op":"scout","name":"..."}
 // Answers:  {"id":1,"ok":true,"text":"..."}  or  {"id":1,"ok":false,"error":"..."} (op view: "view" instead of "text")
-// Events:   {"event":"ready"}  {"event":"lead",...LeadEvent}  {"event":"toast","text":"..."}  {"event":"status","text":"..."}
+// Events:   {"event":"ready","version":"0.5.42","protocol":1}  {"event":"lead",...LeadEvent}  {"event":"toast","text":"..."}  {"event":"status","text":"..."}
 //           {"event":"view","view":PanelView}  {"event":"open"} (show the board panel)
 //           {"event":"step","agent":"cursor-1-...","step":PanelStep} (a step of an agent's turn; the lead's agent is "lead")
 //           and {"op":"steps"} answers {"steps":{agent: PanelStep[]}}, the newest steps of each agent
@@ -30,7 +30,9 @@ import { copilotSdk } from './copilot'
 import { copilotGuard } from './guard'
 import type { LeadChoice, LeadEvent } from './lead'
 import type { Sdk, SdkImage, SdkModel } from './sdk'
-import type { PanelActionId, PanelMode } from './protocol'
+import { PROTOCOL, type PanelActionId, type PanelMode, type ReadyEvent } from './protocol'
+import { manifestVersion } from '../../hooks/host'
+import { nodeFs } from '../node/host'
 
 /** The symcc folder this file ships in: hosts/cursor/main.ts, or its bundle in hosts/cursor/dist/. */
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -143,10 +145,12 @@ async function main() {
   const say = (line: string) => void process.stdout.write(`${line}\n`)
   const debug = process.env.SYMCC_DEBUG ? (line: string) => void process.stderr.write(`[symcc] ${line}\n`) : undefined
   const sdk = sdkFor(opts.agents)
+  const pluginRoot = opts['plugin-root'] ?? PLUGIN_ROOT
+  const ready: ReadyEvent = { event: 'ready', version: await manifestVersion(nodeFs, pluginRoot), protocol: PROTOCOL }
   const s = await openCursorSession({
     root: opts.root ?? process.cwd(),
     sdk,
-    pluginRoot: opts['plugin-root'] ?? PLUGIN_ROOT,
+    pluginRoot,
     ...(opts['worker-model'] ? { workerModel: opts['worker-model'] } : {}),
     ...(opts['lead-model'] ? { leadModel: opts['lead-model'] } : {}),
     sessionId: `cursor-${process.pid}`,
@@ -170,7 +174,7 @@ async function main() {
   const lines = createInterface({ input: process.stdin, terminal: false })
   lines.on('close', () => stop('the editor closed symcc'))
   if (!tty) {
-    out({ event: 'ready' })
+    out(ready)
     lines.on('line', line => {
       if (!line.trim()) return
       let r: Request

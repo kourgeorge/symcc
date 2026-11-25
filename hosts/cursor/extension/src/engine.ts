@@ -77,6 +77,7 @@ export class Engine {
     if (typeof m.event === 'string') {
       if (m.event === 'ready') {
         this.crashes = 0
+        this.on.log(`ready: symcc ${String(m.version ?? '?')}, protocol ${String(m.protocol ?? '?')}`)
         return this.set({ state: 'ready' })
       }
       if (m.event === 'view') return this.on.view(m.view as PanelView)

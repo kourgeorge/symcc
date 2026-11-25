@@ -7,6 +7,13 @@ export type ChatImage = SdkImage
 export type LeadModel = SdkModel
 export type ModelInfo = SdkModelInfo
 
+/** The number of the contract between the engine process and an editor extension: raise it when an extension that
+ *  speaks the old number would break. */
+export const PROTOCOL = 1
+
+/** The engine process's first line: which symcc it is and which contract it speaks. */
+export type ReadyEvent = { event: 'ready'; version: string; protocol: number }
+
 export type PanelMode = 'paused' | 'review' | 'auto'
 
 /** A task's stations, as the Live tab draws them (hooks/core/live.ts LiveStation). */

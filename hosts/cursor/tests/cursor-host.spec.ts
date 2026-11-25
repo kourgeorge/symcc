@@ -10,7 +10,7 @@ import type { AgentRunEnd } from '../../../hooks/app/symcc'
 import { agentToolDefs, disallowedFor, runEnd, sdkAgents, withCursorPrompt } from '../agents'
 import { leadChat, type LeadEvent } from '../lead'
 import { actionCommand, openCursorSession } from '../session'
-import type { PanelStep, PanelView } from '../protocol'
+import { PROTOCOL, type PanelStep, type PanelView } from '../protocol'
 import { addStep, readSteps, sessionMarkdown } from '../steps'
 import { taskSessions } from '../view'
 import { modelInfos, type SdkToolVerdict } from '../sdk'
@@ -604,3 +604,17 @@ test("organizational memory on the panel: its notes newest first in the board's 
     await rm(repo, { recursive: true, force: true })
   }
 }, 60_000)
+
+test("the engine process's first line is ready, with symcc's version and the protocol number", async () => {
+  const repo = await scratchRepo()
+  try {
+    // stdin is empty, so the process ends right after it is ready
+    const r = await runCommand([process.execPath, `${PLUGIN_ROOT}/hosts/cursor/main.ts`, '--root', repo], { cwd: repo, timeoutMs: 30_000 })
+    const first = JSON.parse(r.stdout.split('\n')[0] ?? '') as unknown
+    const version = (JSON.parse(await readFile(`${PLUGIN_ROOT}/.claude-plugin/plugin.json`, 'utf8')) as { version: string }).version
+    expect(first).toEqual({ event: 'ready', version, protocol: PROTOCOL })
+    expect(version).toMatch(/^\d+\.\d+\.\d+$/)
+  } finally {
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 40_000)
