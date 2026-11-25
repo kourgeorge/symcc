@@ -5601,6 +5601,24 @@ for (const mode of ['auto', 'review'] as const)
     expect(leadQueue.join('\n')).toContain('T-1 "Do it" is answered and waits for the owner to read it')
   })
 
+for (const mode of ['auto', 'review'] as const)
+  test(`an errand's hand-back ends it done on its own with its report kept, nothing tested, checked or merged (mode ${mode})`, async () => {
+    const w = world()
+    const [b] = boardWith(mode, ['npm test'], { kind: 'errand', history: hist('created by the lead') } as Partial<BoardTask>)
+    await saveBoard(w.$, b)
+    w.put(`${WT}/.git`, 'gitdir: x')
+    workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+    await workerFinished(w.$, 'ag1', 'Moved 3 files to ~/Archive.')
+    const t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('done')
+    expect(t.answer).toBe('Moved 3 files to ~/Archive.')
+    expect(w.files.get(REPORT1)).toContain('Moved 3 files')
+    expect(ranTests(w)).toEqual([])
+    expect(movedMain(w)).toBe(false)
+    expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
+    expect(w.calls).toContain(`root: git worktree remove --force ${WT}`)
+  })
+
 test("a long investigation answer is cut on the task; the report keeps it all", async () => {
   const long = 'x'.repeat(ANSWER_MAX_CHARS + 500)
   const { w, t } = await investigationAnswers('auto', long)

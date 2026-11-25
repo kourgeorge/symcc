@@ -5,5 +5,6 @@ import feature from './feature'
 import refactor from './refactor'
 import docs from './docs'
 import investigation from './investigation'
+import errand from './errand'
 
-export const BUILT_IN_KIND_TEXTS: Readonly<Record<string, string>> = { change, bug, feature, refactor, docs, investigation }
+export const BUILT_IN_KIND_TEXTS: Readonly<Record<string, string>> = { change, bug, feature, refactor, docs, investigation, errand }
