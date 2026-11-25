@@ -2,7 +2,7 @@
 // options, a turn's events as steps and its end, a plan turn that only reads, steering, stopping, models and sign-in.
 // Run with `npx -y bun test ./tests/` in hosts/cursor/ (or `npm test` there).
 import { test, expect } from 'bun:test'
-import { PLAN_NOTE, copilotModels, copilotSdk, excludedTools, readOnlyRefusal, type CopilotClient, type CopilotEvent, type CopilotModule, type CopilotPermissionRequest, type CopilotSession, type CopilotSessionConfig } from '../copilot'
+import { PLAN_NOTE, copilotCli, copilotModels, copilotSdk, excludedTools, protocolWords, readOnlyRefusal, type CliFs, type CopilotClient, type CopilotEvent, type CopilotModule, type CopilotPermissionRequest, type CopilotSession, type CopilotSessionConfig } from '../copilot'
 import { disallowedFor, sdkAgents } from '../agents'
 import type { AgentRunEnd } from '../../../hooks/app/symcc'
 import type { SdkStep, SdkToolCall } from '../sdk'
@@ -301,4 +301,82 @@ test("symcc's agents run on Copilot as on Cursor: a worker's turn ends with its 
   expect(fake.sessions[0]!.config.model).toBe('claude-sonnet-5.5')
   expect(fake.sessions[0]!.config.tools.definitions.map(d => d.name)).toEqual(['ask_owner'])
   await agents.stopAll(100)
+})
+
+/** A Copilot SDK whose own runtime is missing (as in editor/serve.mjs); `cli` answers the start of a CLI at a path. */
+function runtimes(cli: (path: string) => string | undefined) {
+  const started: (string | undefined)[] = []
+  const module: CopilotModule = {
+    CopilotClient: class {
+      constructor(o: { runtime: { path?: string } }) {
+        const path = o.runtime.path
+        return {
+          start: async () => {
+            started.push(path)
+            if (!path) throw new Error('Could not resolve @microsoft/copilot-sdk-linux-x64. Reinstall @microsoft/copilot-sdk so its platform package is installed.')
+            const err = cli(path)
+            if (err) throw new Error(err)
+          },
+          stop: async () => undefined,
+          getAuthStatus: async () => ({ isAuthenticated: true }),
+          listModels: async () => [],
+          createSession: async () => {
+            throw new Error('not here')
+          },
+        } satisfies CopilotClient
+      }
+    } as unknown as CopilotModule['CopilotClient'],
+    RuntimeConnection: { forSpawnedStdio: o => ({ ...o }) },
+  }
+  return { load: async () => module, started }
+}
+
+test("with no runtime of the SDK's own, Copilot runs the owner's copilot CLI; with none, it says how to get one", async () => {
+  const r = runtimes(() => undefined)
+  expect(await copilotSdk({ load: r.load, env: {}, cli: () => '/home/d/.local/bin/copilot' }).models!()).toEqual([])
+  expect(r.started).toEqual([undefined, '/home/d/.local/bin/copilot'])
+
+  const none = await copilotSdk({ load: runtimes(() => undefined).load, env: {}, cli: () => undefined })
+    .models!()
+    .then(
+      () => '',
+      (e: Error) => e.message,
+    )
+  expect(none).toBe('symcc on Copilot runs your copilot CLI, and found none. Install it (npm install -g @github/copilot), sign in with copilot login, then restart symcc. Or set COPILOT_CLI_PATH to it.')
+})
+
+test('a copilot CLI on another protocol is named, with what to update', async () => {
+  const old = 'SDK protocol version mismatch: SDK supports versions 4-4, but server reports version 3. Please update your SDK or server to ensure compatibility.'
+  const r = runtimes(() => old)
+  const said = await copilotSdk({ load: r.load, env: {}, cli: () => '/usr/local/bin/copilot' })
+    .models!()
+    .then(
+      () => '',
+      (e: Error) => e.message,
+    )
+  expect(said).toBe('The copilot CLI at /usr/local/bin/copilot is older than this symcc: it speaks protocol 3, and symcc speaks 4. Update it with copilot update (or npm install -g @github/copilot), then restart symcc.')
+  expect(protocolWords(old.replace('version 3', 'version 5'), '/c')).toBe('The copilot CLI at /c is newer than this symcc: it speaks protocol 5, and symcc speaks 4. Update symcc, then restart it. In Claude Code: claude plugin marketplace update symcc && claude plugin update symcc@symcc. In Copilot CLI: copilot plugin marketplace update symcc && copilot plugin update symcc@symcc. From a clone: git pull.')
+  expect(protocolWords('fetch failed', '/c')).toBe(undefined)
+})
+
+test("the owner's copilot CLI is found on the PATH, else where its installers put it", () => {
+  const fs = (files: Record<string, string>, links: Record<string, string> = {}): CliFs => ({
+    exists: p => p in files || p in links,
+    real: p => links[p] ?? p,
+    read: p => files[p] ?? '',
+  })
+  // an npm install on Linux or macOS: a link to its JavaScript entry
+  const npm = fs({}, { '/usr/local/bin/copilot': '/usr/local/lib/node_modules/@github/copilot/npm-loader.js' })
+  expect(copilotCli({ PATH: '/usr/bin:/usr/local/bin', HOME: '/home/d' }, 'linux', npm)).toBe('/usr/local/lib/node_modules/@github/copilot/npm-loader.js')
+  // the install script's ~/.local/bin, off the PATH of an editor started from the desktop
+  expect(copilotCli({ PATH: '/usr/bin', HOME: '/home/d' }, 'darwin', fs({ '/home/d/.local/bin/copilot': '' }))).toBe('/home/d/.local/bin/copilot')
+  // npm on Windows: copilot.cmd, beside the package that names its entry
+  const appData = 'C:\\Users\\d\\AppData\\Roaming'
+  const pkg = `${appData}\\npm\\node_modules\\@github\\copilot`
+  const winNpm = fs({ [`${appData}\\npm\\copilot.cmd`]: '', [`${pkg}\\package.json`]: JSON.stringify({ bin: { copilot: 'npm-loader.js' } }), [`${pkg}\\npm-loader.js`]: '' })
+  expect(copilotCli({ Path: 'C:\\Windows', APPDATA: appData, USERPROFILE: 'C:\\Users\\d' }, 'win32', winNpm)).toBe(`${pkg}\\npm-loader.js`)
+  // winget's link
+  const local = 'C:\\Users\\d\\AppData\\Local'
+  expect(copilotCli({ LOCALAPPDATA: local, USERPROFILE: 'C:\\Users\\d' }, 'win32', fs({ [`${local}\\Microsoft\\WinGet\\Links\\copilot.exe`]: '' }))).toBe(`${local}\\Microsoft\\WinGet\\Links\\copilot.exe`)
+  expect(copilotCli({ PATH: '/usr/bin', HOME: '/home/d' }, 'linux', fs({}))).toBe(undefined)
 })

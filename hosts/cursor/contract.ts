@@ -13,6 +13,8 @@
 // Environment:  HTTPS_PROXY, HTTP_PROXY, NO_PROXY (and lower case): the proxy serve's network calls go through.
 //               CURSOR_RIPGREP_PATH: the editor's ripgrep, for the Cursor agents' search tool.
 //               COPILOT_CLI_PATH: the GitHub Copilot CLI to run Copilot's agents with (else copilot on the PATH).
+//               SYMCC_CACHE: where serve keeps the Cursor SDK it fetches on first use (else the system's cache folder);
+//               SYMCC_NPM_REGISTRY: an npm mirror to fetch it from.
 //               SYMCC_DEBUG: debug lines on stderr. stderr is the log; stdout carries only JSON lines.
 
 /** The number of this contract. */
