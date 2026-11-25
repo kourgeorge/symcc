@@ -13,10 +13,11 @@ export type EngineEvents = {
 }
 
 /**
- * `serve`: the file to run. `args`: what its command line adds (--agents, --lead-model, ...) and `env` what its
- * environment adds, both read at each start: the settings and the proxy can change in between.
+ * `serve`: the file to run, `node` the Node to run it with (the editor's own when none). `args`: what its command line
+ * adds (--agents, --lead-model, ...) and `env` what its environment adds. All are read at each start: the copy, the
+ * settings and the proxy can change in between.
  */
-export type EngineOptions = { root: string; serve: () => string; node?: string; args?: () => string[]; env?: () => Record<string, string> }
+export type EngineOptions = { root: string; serve: () => string; node?: () => string | undefined; args?: () => string[]; env?: () => Record<string, string> }
 
 type Pending = { resolve: (v: Record<string, unknown>) => void; reject: (e: Error) => void }
 /** A line serve answers, without the id this file gives it. */
@@ -46,8 +47,9 @@ export class Engine {
     this.stopping = false
     this.set({ state: 'starting' })
     const args = [this.o.serve(), '--root', this.o.root, ...(this.o.args?.() ?? [])]
-    const node = this.o.node || process.execPath
-    const env = { ...process.env, SYMCC_DEBUG: '1', ...this.o.env?.(), ...(this.o.node ? {} : { ELECTRON_RUN_AS_NODE: '1' }) }
+    const own = this.o.node?.()
+    const node = own || process.execPath
+    const env = { ...process.env, SYMCC_DEBUG: '1', ...this.o.env?.(), ...(own ? {} : { ELECTRON_RUN_AS_NODE: '1' }) }
     this.on.log(`starting: ${node} ${args.join(' ')}`)
     const child = spawn(node, args, { cwd: this.o.root, env, stdio: ['pipe', 'pipe', 'pipe'] })
     this.child = child

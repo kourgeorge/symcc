@@ -1,17 +1,25 @@
-// symcc in VS Code and Cursor: a client of the symcc plugin. It runs the plugin's serve (./engine.ts) for the first
-// workspace folder and shows the plugin's board webview twice: as a panel (an editor tab) and in the sidebar. It passes
-// the webview's messages to serve and back without reading them, and does what only the editor can
-// (../../contract.ts EditorAction): files, diffs, terminals, windows, confirms, notices, the status bar and the badge.
+// symcc in VS Code and Cursor: a client of the symcc you installed with a harness. It finds that copy (./find.ts), runs
+// its serve (./engine.ts) for the first workspace folder, and shows its board webview twice: as a panel (an editor tab)
+// and in the sidebar. It passes the webview's messages to serve and back without reading them, and does what only the
+// editor can (../../contract.ts EditorAction): files, diffs, terminals, windows, confirms, notices, the status bar and
+// the badge. With no copy that fits, the sidebar shows how to install or update symcc instead.
 import * as vscode from 'vscode'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
+import { homedir } from 'node:os'
 import { Engine } from './engine'
-import type { BoardPage, EditorAction, EngineState, ExtensionToWebview, Surface } from '../../contract'
+import { NODE_NEEDED, SETTING, choose, describe, devCopy, editorRipgrep, nodeFits, places, type Copy } from './find'
+import { PROTOCOL, type BoardPage, type EditorAction, type EngineState, type ExtensionToWebview, type Surface } from '../../contract'
 
 /** Text serve shows read-only (a diff, an agent's session): closing it never asks to save. */
 const TEXT_SCHEME = 'symcc-text'
 /** A file as it was where a worktree is compared from (the left side of its diff). */
 const BASE_SCHEME = 'symcc-base'
+/** The contracts this extension speaks. */
+const SPEAKS = { low: 1, high: PROTOCOL }
+
+/** Why serve can't run, for the setup view (package.json viewsWelcome) and the message. */
+type Problem = { kind: 'none' | 'old' | 'new' | 'node' | 'path'; text: string }
 
 export function activate(ctx: vscode.ExtensionContext) {
   const folder = vscode.workspace.workspaceFolders?.[0]
@@ -21,16 +29,15 @@ export function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(out, status)
 
   const conf = () => vscode.workspace.getConfiguration('symcc')
-  const servePath = () => conf().get<string>('enginePath') || path.join(ctx.extensionPath, '..', 'dist', 'engine.mjs')
   // serve is a separate Node process, so the editor's own proxy handling never reaches it
   const http = () => vscode.workspace.getConfiguration('http')
   const proxy = () => conf().get<string>('proxy')?.trim() || http().get<string>('proxy')?.trim() || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || ''
   const serveEnv = (): Record<string, string> => {
     const p = proxy()
     out.appendLine(`proxy: ${p ? p.replace(/\/\/[^@/]*@/, '//***@') : 'none'}`)
-    if (!p) return {}
+    const rg = process.env.CURSOR_RIPGREP_PATH ? undefined : editorRipgrep(vscode.env.appRoot, process.platform, process.arch)
     const no = (http().get<string[]>('noProxy') ?? []).join(',') || process.env.NO_PROXY || process.env.no_proxy || ''
-    return { HTTPS_PROXY: p, https_proxy: p, HTTP_PROXY: p, http_proxy: p, ...(no ? { NO_PROXY: no, no_proxy: no } : {}) }
+    return { ...(rg ? { CURSOR_RIPGREP_PATH: rg } : {}), ...(p ? { HTTPS_PROXY: p, https_proxy: p, HTTP_PROXY: p, http_proxy: p, ...(no ? { NO_PROXY: no, no_proxy: no } : {}) } : {}) }
   }
   const serveArgs = (): string[] => {
     const agents = conf().get<string>('agents')?.trim()
@@ -39,6 +46,34 @@ export function activate(ctx: vscode.ExtensionContext) {
     const state = ctx.storageUri?.fsPath
     return [...(agents ? ['--agents', agents] : []), ...(lead ? ['--lead-model', lead] : []), ...(worker ? ['--worker-model', worker] : []), ...(state ? ['--state-dir', state] : [])]
   }
+
+  // the symcc copy serve runs from, or why there is none
+  let copy: Copy | undefined
+  let problem: Problem | undefined
+  const find = () => {
+    const setting = conf().get<string>('pluginPath')?.trim()
+    const dev = !setting && ctx.extensionMode === vscode.ExtensionMode.Development ? devCopy(ctx.extensionPath, PROTOCOL) : undefined
+    const copies = setting ? [describe(setting, SETTING)].flatMap(c => c ?? []) : dev ? [dev] : places(process.env, homedir()).flatMap(p => describe(p.root, p.from) ?? [])
+    for (const c of copies) out.appendLine(`found symcc ${c.version} from ${c.from} (${c.protocol === undefined ? 'no editor files' : `protocol ${c.protocol}`}): ${c.root}`)
+    const chosen = choose(copies, SPEAKS)
+    copy = chosen.copy
+    problem = chosen.problem
+    if (setting && !copies.length) problem = { kind: 'path', text: `symcc.pluginPath is ${setting}, which holds no symcc (no .claude-plugin/plugin.json there).` }
+    else if (!copy && !problem) problem = { kind: 'none', text: 'symcc is not installed on this machine yet: install it with Claude Code, Copilot CLI or OpenCode, then look again.' }
+    else if (copy && !conf().get<string>('nodePath') && !nodeFits(process.versions.node))
+      problem = { kind: 'node', text: `symcc needs Node ${NODE_NEEDED} or newer, and this editor runs Node ${process.versions.node}. Update the editor, or set symcc.nodePath to a newer Node.` }
+    out.appendLine(copy && !problem ? `using symcc ${copy.version} from ${copy.from}: ${copy.root}` : `not starting symcc: ${problem?.text}`)
+    void vscode.commands.executeCommand('setContext', 'symcc.found', !!copy && !problem)
+    void vscode.commands.executeCommand('setContext', 'symcc.problem', problem?.kind ?? '')
+    return { copy, problem }
+  }
+  /** Says once why serve can't run (no copy at all shows in the sidebar instead). */
+  const tellProblem = () => {
+    if (!problem) return
+    if (problem.kind === 'none') return void vscode.commands.executeCommand('symcc.setup.focus')
+    void vscode.window.showWarningMessage(problem.text, 'Show the log').then(pick => pick && out.show())
+  }
+  const fromWhere = () => (copy ? `symcc ${copy.version} from ${copy.from}` : '')
 
   let panel: vscode.WebviewPanel | undefined
   let side: vscode.WebviewView | undefined
@@ -60,11 +95,14 @@ export function activate(ctx: vscode.ExtensionContext) {
     status.backgroundColor = undefined
     if (!folder) return void status.hide()
     status.show()
-    if (s.state === 'starting') return void ((status.text = '$(loading~spin) symcc'), (status.tooltip = 'symcc is starting'))
-    if (s.state === 'failed') return void ((status.text = '$(error) symcc'), (status.tooltip = s.text ?? 'symcc stopped'), (status.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground')))
-    if (s.state === 'stopped' || !served) return void ((status.text = 'symcc'), (status.tooltip = 'Open the symcc board'))
+    const where = fromWhere()
+    const tip = (text: string) => new vscode.MarkdownString(where ? `${text}\n\n---\n\n${where}` : text)
+    if (problem) return void ((status.text = '$(warning) symcc'), (status.tooltip = tip(problem.text)))
+    if (s.state === 'starting') return void ((status.text = '$(loading~spin) symcc'), (status.tooltip = tip('symcc is starting')))
+    if (s.state === 'failed') return void ((status.text = '$(error) symcc'), (status.tooltip = tip(s.text ?? 'symcc stopped')), (status.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground')))
+    if (s.state === 'stopped' || !served) return void ((status.text = 'symcc'), (status.tooltip = tip('Open the symcc board')))
     status.text = served.text
-    status.tooltip = new vscode.MarkdownString(served.tooltip)
+    status.tooltip = tip(served.tooltip)
     if (served.tone === 'warning') status.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
   }
   const drawBadge = () => {
@@ -130,7 +168,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   const engine = new Engine(
-    { root: folder?.uri.fsPath ?? '', serve: servePath, node: conf().get<string>('nodePath') || undefined, args: serveArgs, env: serveEnv },
+    { root: folder?.uri.fsPath ?? '', serve: () => copy?.serve ?? '', node: () => conf().get<string>('nodePath') || undefined, args: serveArgs, env: serveEnv },
     {
       state: s => {
         if (s.state !== 'ready') served = undefined
@@ -145,17 +183,24 @@ export function activate(ctx: vscode.ExtensionContext) {
       log: line => out.appendLine(line),
     },
   )
-  /** Resolves once serve is up (starting it if it isn't). */
+  /** Starts serve when there is a project and a copy to run (else says why not, when `tell`). */
+  const start = (tell = false) => {
+    if (!folder || engine.state.state !== 'stopped') return
+    if (!copy || problem) return void (tell && tellProblem())
+    engine.start()
+  }
+  /** Resolves once serve is up (starting it if it isn't); rejects when it can't start. */
   const up = () =>
-    new Promise<void>(resolve => {
+    new Promise<void>((resolve, reject) => {
       if (engine.state.state === 'ready') return resolve()
+      if (!copy || problem) return reject(new Error(problem?.text ?? 'symcc is not installed'))
       waiting = [...waiting, resolve]
-      if (engine.state.state === 'stopped') engine.start()
+      start()
     })
 
   /** A message from webview `surface`: the few that are the editor's are done here, the rest go to serve unread. */
   function fromWebview(m: { type?: unknown; page?: BoardPage; task?: string }, surface: Surface, from: vscode.Webview) {
-    if (m.type === 'restart') return void engine.restart()
+    if (m.type === 'restart') return void restart()
     if (m.type === 'log') return out.show()
     if (m.type === 'open-board') return openBoard(m.page ?? 'now', m.task)
     if (m.type === 'ready') {
@@ -178,15 +223,23 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
   )
 
+  /** The copy's webview folder, which is all a page may load from. */
+  const pageRoot = () => vscode.Uri.file(copy?.webview ?? path.join(ctx.extensionPath, 'dist'))
+  const showPage = (webview: vscode.Webview, surface: Surface) => {
+    webview.options = { enableScripts: true, localResourceRoots: [pageRoot()] }
+    webview.html = boardHtml(webview, pageRoot(), surface)
+  }
+
   function openPanel(quiet = false) {
+    if (!copy || problem) return tellProblem()
     if (panel) return panel.reveal(undefined, quiet)
-    panel = vscode.window.createWebviewPanel('symcc.board', 'symcc', { viewColumn: vscode.ViewColumn.Active, preserveFocus: quiet }, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [vscode.Uri.file(path.join(ctx.extensionPath, 'dist'))] })
+    panel = vscode.window.createWebviewPanel('symcc.board', 'symcc', { viewColumn: vscode.ViewColumn.Active, preserveFocus: quiet }, { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [pageRoot()] })
     panel.iconPath = vscode.Uri.file(path.join(ctx.extensionPath, 'media', 'symcc.svg'))
     const webview = panel.webview
-    webview.html = boardHtml(webview, ctx.extensionPath, 'panel')
+    showPage(webview, 'panel')
     webview.onDidReceiveMessage(m => fromWebview(m as { type?: unknown }, 'panel', webview))
     panel.onDidDispose(() => (panel = undefined))
-    if (engine.state.state === 'stopped') engine.start()
+    start()
   }
   /** Opens the board panel at `page` (the board at task `task`); a panel still loading goes there once it's up. */
   function openBoard(page?: BoardPage, task?: string, quiet = false) {
@@ -198,18 +251,33 @@ export function activate(ctx: vscode.ExtensionContext) {
     openPanel(quiet)
   }
 
+  /** Looks for the copy again and restarts serve from it; open pages load from the new copy. */
+  async function restart(tell = true) {
+    const was = copy?.webview
+    await engine.stop()
+    find()
+    if (copy?.webview !== was) {
+      if (panel) showPage(panel.webview, 'panel')
+      if (side) showPage(side.webview, 'side')
+    }
+    drawStatus(engine.state)
+    start(tell)
+  }
+
+  // the sidebar while no copy fits: package.json's viewsWelcome says what to do
+  const setup: vscode.TreeDataProvider<never> = { getTreeItem: () => new vscode.TreeItem(''), getChildren: () => [] }
   ctx.subscriptions.push(
+    vscode.window.registerTreeDataProvider('symcc.setup', setup),
     vscode.window.registerWebviewViewProvider(
       'symcc.side',
       {
         resolveWebviewView(v) {
           side = v
-          v.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.file(path.join(ctx.extensionPath, 'dist'))] }
-          v.webview.html = boardHtml(v.webview, ctx.extensionPath, 'side')
+          showPage(v.webview, 'side')
           v.webview.onDidReceiveMessage(m => fromWebview(m as { type?: unknown }, 'side', v.webview))
           v.onDidDispose(() => side === v && (side = undefined))
           drawBadge()
-          if (folder && engine.state.state === 'stopped') engine.start()
+          start()
         },
       },
       { webviewOptions: { retainContextWhenHidden: true } },
@@ -219,39 +287,57 @@ export function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(
     vscode.commands.registerCommand('symcc.open', () => openPanel()),
     vscode.commands.registerCommand('symcc.message', async () => {
+      if (!copy || problem) return tellProblem()
       const text = await vscode.window.showInputBox({ prompt: 'Message the symcc lead', placeHolder: 'What do you want done next?' })
       if (!text?.trim()) return
-      if (engine.state.state === 'stopped') engine.start()
+      start()
       engine.send({ op: 'say', text })
     }),
     vscode.commands.registerCommand('symcc.init', async () => {
+      if (!copy || problem) return tellProblem()
       openPanel()
-      await up()
-      const said = await engine.request({ op: 'command', name: 'symcc-init', args: '' }).then(
-        a => (typeof a.text === 'string' ? a.text : ''),
-        err => (err as Error).message,
-      )
+      const said = await up()
+        .then(() => engine.request({ op: 'command', name: 'symcc-init', args: '' }))
+        .then(
+          a => (typeof a.text === 'string' ? a.text : ''),
+          err => (err as Error).message,
+        )
       void vscode.window.showInformationMessage(said.split('\n')[0] ?? said)
     }),
-    vscode.commands.registerCommand('symcc.restart', () => engine.restart()),
+    vscode.commands.registerCommand('symcc.restart', () => restart()),
     vscode.commands.registerCommand('symcc.showLog', () => out.show()),
+    vscode.commands.registerCommand('symcc.findPlugin', async () => {
+      await restart(false)
+      if (copy && !problem) void vscode.window.showInformationMessage(`Using ${fromWhere()}.`)
+      else tellProblem()
+    }),
+    vscode.commands.registerCommand('symcc.choosePlugin', async () => {
+      const [picked] = (await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, openLabel: 'Use this symcc', title: 'The symcc folder (a clone, or an installed copy)' })) ?? []
+      if (!picked) return
+      const c = describe(picked.fsPath, SETTING)
+      if (!c) return void vscode.window.showErrorMessage(`${picked.fsPath} holds no symcc (no .claude-plugin/plugin.json there).`)
+      await conf().update('pluginPath', picked.fsPath, vscode.ConfigurationTarget.Global)
+    }),
     vscode.workspace.onDidChangeConfiguration(e => {
-      const restart = ['symcc.agents', 'symcc.leadModel', 'symcc.workerModel', 'symcc.proxy', 'http.proxy'].some(k => e.affectsConfiguration(k))
-      if (restart && engine.state.state !== 'stopped') void engine.restart()
+      if (['symcc.pluginPath', 'symcc.nodePath'].some(k => e.affectsConfiguration(k))) return void restart()
+      const again = ['symcc.agents', 'symcc.leadModel', 'symcc.workerModel', 'symcc.proxy', 'http.proxy'].some(k => e.affectsConfiguration(k))
+      if (again && engine.state.state !== 'stopped') void engine.restart()
     }),
     { dispose: () => void engine.stop() },
   )
 
+  find()
   drawStatus(engine.state)
+  if (problem && problem.kind !== 'none') tellProblem()
   // a project where symcc was set up starts serve with the window; elsewhere it starts when the board opens
-  if (folder && fs.existsSync(path.join(folder.uri.fsPath, '.symcc'))) engine.start()
+  if (folder && fs.existsSync(path.join(folder.uri.fsPath, '.symcc'))) start()
 }
 
 export function deactivate() {}
 
-/** The webview's page: the built script and styles, codicons, and a content policy that allows nothing else. */
-function boardHtml(webview: vscode.Webview, root: string, surface: Surface): string {
-  const uri = (...p: string[]) => webview.asWebviewUri(vscode.Uri.file(path.join(root, 'dist', ...p)))
+/** The webview's page: the copy's built script and styles, codicons, and a content policy that allows nothing else. */
+function boardHtml(webview: vscode.Webview, root: vscode.Uri, surface: Surface): string {
+  const uri = (...p: string[]) => webview.asWebviewUri(vscode.Uri.joinPath(root, ...p))
   const nonce = Array.from({ length: 32 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.charAt(Math.floor(Math.random() * 62))).join('')
   const csp = [`default-src 'none'`, `img-src ${webview.cspSource} data:`, `style-src ${webview.cspSource}`, `font-src ${webview.cspSource}`, `script-src 'nonce-${nonce}'`].join('; ')
   return `<!doctype html>
