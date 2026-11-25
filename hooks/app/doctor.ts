@@ -42,12 +42,6 @@ function inUse(id: string, t: BoardTask | undefined, agents: ReturnType<typeof a
   return liveWorkersFor({ id, runs: t?.runs }, agents, S.N.name).length > 0
 }
 
-/** Whether folder `dir` (a git worktree) has uncommitted changes; true also when git can't tell. */
-async function dirty(host: Host, dir: string): Promise<boolean> {
-  const st = await git(host, ['status', '--porcelain'], dir).catch(() => null)
-  return !st || st.exitCode !== 0 || !!st.stdout.trim()
-}
-
 /** How many files folder `dir` has changed and not committed, or null when git can't tell. */
 async function changedFiles(host: Host, dir: string): Promise<number | null> {
   const st = await git(host, ['status', '--porcelain', '--untracked-files=all'], dir).catch(() => null)
@@ -213,7 +207,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
         if (nt && !isFinished(nt)) return `${id} is ${nt.status} now`
         if (inUse(id, nt, await agentsNow(host))) return 'an agent may still use it'
         // only a dropped task's folder may go with its changes; for any other git itself refuses (no --force)
-        if (!(lose && nt?.status === 'dropped') && (await dirty(host, wt))) return 'it has uncommitted changes now'
+        if (!(lose && nt?.status === 'dropped') && (await changedFiles(host, wt)) !== 0) return 'it has uncommitted changes now'
         if (!(await headKept(host, wt, into))) return 'it holds commits on no branch now'
         const r = await git(host, ['worktree', 'remove', ...(lose ? ['--force'] : []), wt])
         return r.exitCode === 0 ? '' : `git worktree remove: ${(r.stderr || r.stdout).trim().slice(0, 150)}`

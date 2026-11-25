@@ -438,6 +438,23 @@ test('T-1032: a worker of this window started between the list and the fix keeps
   expect(w.writes.some(x => x.includes('branch -D'))).toBe(false)
 })
 
+test('T-1035: a worker of this window started between the list and the fix keeps a dropped task folder', async () => {
+  const w = world()
+  // the second agents.list call is the folder fix's last-moment check: this window's worker for T-6 starts in between
+  let asked = 0
+  w.host.agents.list = async () => {
+    if (++asked === 2) workers.set('ag-6', { task: 'T-6', worktree: `${D}/worktrees/T-6`, branch: 'symcc/T-6', since: 0 })
+    return []
+  }
+  const said = await doctor(w.host, 'fix w-T-6')
+  expect(asked).toBe(2)
+  expect(said).toContain('cleaned up 0 of 1')
+  expect(said).toContain('✗ w-T-6')
+  expect(said).toContain('kept, an agent may still use it')
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
+  expect(w.writes.some(x => x.includes('worktree remove'))).toBe(false)
+})
+
 test('T-1032: a worker of this window keeps its dropped task folder and branch out of the list', async () => {
   const w = world()
   workers.set('ag-6', { task: 'T-6', worktree: `${D}/worktrees/T-6`, branch: 'symcc/T-6', since: 0 })
