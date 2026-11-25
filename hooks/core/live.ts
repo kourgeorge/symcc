@@ -3,7 +3,7 @@
 // a client needs is worked out here, the lane text included (cut titles, station marks, the blinking current station),
 // so each client (Claude Code's terminal panel now; VS Code and OpenCode later) only draws the segments.
 import type { SymccMode, SymccTask } from '../../types'
-import { type BoardTask, byRunOrder, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
+import { type BoardTask, OPEN, byRunOrder, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
 import { stageStep, taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { median, taskFigures } from './stats'
@@ -113,7 +113,7 @@ export function liveIdle(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'
   const tasks = view.tasks as BoardTask[]
   if (!tasks.length && !(view.archived_done ?? []).length) return wrap(LIVE_IDLE.fresh)
   if (modeOf(view) === 'paused') return wrap(LIVE_IDLE.paused)
-  const open = tasks.filter(t => t.status !== 'done' && t.status !== 'dropped' && t.status !== 'backlog')
+  const open = tasks.filter(t => OPEN.includes(t.status))
   if (open.length) {
     const sorted = [...open.filter(t => needsYou(t, nowMs)), ...open.filter(t => !needsYou(t, nowMs))]
     const head = `Nothing running · ${open.length} waiting`
@@ -158,7 +158,7 @@ export function liveIdleFacts(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_
   const none = { next: [], more: 0, backlog: 0 }
   if (!tasks.length && !(view.archived_done ?? []).length) return { kind: 'fresh', text, ...none }
   if (modeOf(view) === 'paused') return { kind: 'paused', text, ...none }
-  if (tasks.some(t => t.status !== 'done' && t.status !== 'dropped' && t.status !== 'backlog')) return { kind: 'waiting', text, ...none }
+  if (tasks.some(t => OPEN.includes(t.status))) return { kind: 'waiting', text, ...none }
   const { last, items } = idleDone(tasks)
   const next = items.slice(0, IDLE_BACKLOG).map(t => ({ id: t.id, title: t.title }))
   return { kind: 'done', text, ...(last ? { last: { id: last.t.id, ago: idleAgo(nowMs - last.at) } } : {}), next, more: items.length - next.length, backlog: items.length }

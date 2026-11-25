@@ -5,7 +5,7 @@
 // checker, tests, merge, and in approve-merge mode it still waits for review. Pure: the words and checks the engine
 // (app/tools.ts) and the three task pages share.
 import type { SymccStatus, SymccTask } from '../../types'
-import { type Board, STATUS_WORD } from './board-file'
+import { type Board, OPEN, STATUS_WORD } from './board-file'
 import { depDone } from './archive'
 import { shareFiles } from './health'
 
@@ -43,12 +43,10 @@ export const runNowQuestion = (id: string, waits: readonly RunNowWait[]): string
 export const runNowShares = (all: readonly Pick<SymccTask, 'id' | 'status' | 'files'>[], t: Pick<SymccTask, 'id' | 'files'>, statuses: readonly SymccStatus[] = ['doing']): string[] =>
   all.filter(x => x.id !== t.id && statuses.includes(x.status) && shareFiles(x.files ?? [], t.files ?? [])).map(x => x.id)
 
-const OPEN_STATUSES: readonly SymccStatus[] = ['todo', 'doing', 'review', 'waiting', 'paused', 'failed']
-
 /** The reply to moving a task from the backlog: its id, the open tasks sharing its files that are not in its after list, and its priority. */
 export function backlogMovedText(all: readonly Pick<SymccTask, 'id' | 'status' | 'files'>[], t: Pick<SymccTask, 'id' | 'files' | 'after' | 'priority'>): string {
   const after = t.after ?? []
-  const ids = runNowShares(all, t, OPEN_STATUSES).filter(id => !after.includes(id))
+  const ids = runNowShares(all, t, OPEN).filter(id => !after.includes(id))
   const shared = ids.map(id => `${id} (${all.find(x => x.id === id)!.status})`)
   return `${t.id} moved from the backlog to todo` +
     (shared.length ? `; shares files with ${shared.join(', ')}; not in its after list` : '') +

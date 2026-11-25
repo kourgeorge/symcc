@@ -3,7 +3,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
 import { textWidth } from '../hooks/core/width'
-import { SETTINGS, SETTING_GROUPS, settingHelp, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, bandLeads, type KeyHint } from '../hooks/board'
+import { SETTINGS, SETTING_GROUPS, settingsHelpOf, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, bandLeads, type KeyHint } from '../hooks/board'
 import { keysFor } from './task-keys'
 import { STEP_NOTE } from '../hooks/board'
 const CHECKER_NOTE = STEP_NOTE.checker
@@ -1279,7 +1279,8 @@ test('"c" and the Settings tab show one row per setting: label, dot leaders, val
   // the help area is for the focused row only: its meaning, then the name, default and range
   expect(await ui.find({ type: 'Text', text: /^Work$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /how many workers run at once/ })).toBeUndefined()
-  const help = settingHelp('max_parallel')
+  const [meaning, facts] = settingsHelpOf({ setting: 'max_parallel' }).lines
+  const help = { meaning: meaning!, facts: facts! }
   expect(help.meaning).toBe('how many workers run at once')
   expect(help.facts).toBe('max_parallel · default 3 · 1-8')
   // moving the focus to the row shows that meaning, default and range in the drawn page
