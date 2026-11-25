@@ -167,6 +167,17 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
     if (text.includes('investigation')) expect(text).toContain('T-690 Wai')
   }
   expect(segText(trainRows(long, 30)[0]!.segs)).not.toContain('investigation')
+  // the kind never replaces "waits"
+  const help = [{ id: 'T-714', title: 'Help: /symcc-help shows all', kind: 'change', also: [], trains: [] }] as never
+  for (let w = 20; w <= 40; w++) {
+    const text = segText(trainRows(help, w)[0]!.segs)
+    if (text.endsWith('change')) expect([w, text.includes('waits')]).toEqual([w, true])
+  }
+  expect(segText(trainRows(help, 24)[0]!.segs)).toBe('  └─◇ T-714 Help…  waits')
+  const second = [{ id: 'T-1', title: 'First', kind: 'bug', also: [], trains: help }] as never
+  const deepText = segText(trainRows(second, 30)[1]!.segs)
+  if (deepText.endsWith('change')) expect(deepText).toContain('waits')
+  expect(textWidth(deepText) <= 30).toBe(true)
   const kinds = trainRows(t.lanes['T-712']!, 40).map(r => r.segs.at(-1)!)
   expect(kinds.every(k => k.tone === 'dim')).toBe(true)
   expect(rows.map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])

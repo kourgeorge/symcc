@@ -964,8 +964,19 @@ function trainLine(x: LiveTrain, depth: number, width: number): LiveSeg[] {
   // leave the title at least its minimum (3), otherwise the kind is dropped
   if (b && b.titleW > 0 && x.kind) {
     const kind = `  ${x.kind}`
-    const room = width - textWidth(lead + x.id + b.t.waits + b.t.also + kind) - 1
-    if (room >= Math.min(3, textWidth(x.title))) return make(b.t, Math.min(room, b.titleW), x.kind)
+    const need = Math.min(3, textWidth(x.title))
+    // the kind only shows on a row that keeps "waits" (and the best "+ also" that fits) with a title of at least 3
+    for (const t of tries) {
+      if (!t.waits) continue
+      const room = width - textWidth(lead + x.id + t.waits + t.also + kind) - 1
+      if (room >= need) return make(t, Math.min(room, TRAIN_TITLE), x.kind)
+    }
+    // no room for the kind: keep "waits" over title characters
+    for (const t of tries) {
+      if (!t.waits) continue
+      const room = width - textWidth(lead + x.id + t.waits + t.also) - 1
+      if (room >= need) return make(t, Math.min(room, TRAIN_TITLE))
+    }
   }
   if (b) return make(b.t, b.titleW)
   // narrower than its lead and id: cut
