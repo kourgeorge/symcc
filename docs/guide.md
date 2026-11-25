@@ -1826,13 +1826,13 @@ changed. Only you can pause or resume a scout; the lead is told a paused scout d
 A worker (of a change task) may change git in its own folder, on its own
 branch: `commit`, `merge` (main, another task's branch, a pull request's branch), `cherry-pick`,
 `revert`, `restore`, `checkout -- <file>`, `reset`, `rebase` of its own branch,
-`bisect`, `fetch`, `pull`, `add`, `rm`, `mv`, `clean`, `am` and `apply`. The git command must run in
+`bisect`, `add`, `rm`, `mv`, `clean`, `am` and `apply`. The git command must run in
 its folder (the shell's folder, a plain `cd` before it, or `-C <folder>`), and its words may not
-come from a `$variable` (a `-m` message may). Still refused: `push` and any change to remotes;
+come from a `$variable` (a `-m` message may). Still refused: `push`, `fetch`, `pull` (a fetch also copies tags; symcc brings the branch up to date with main itself) and any change to remotes;
 switching to, making or deleting a branch (`checkout <branch>`, `switch`, `branch -d/-D/-m`,
-`rebase main other`, `rebase --root other`, `rebase --update-refs`, `rebase --quit` (it leaves the folder off the branch), `bisect reset other`, `fetch`/`pull` with a `src:dst` refspec or a URL);
-`worktree`; `config` (also `fetch`/`pull --set-upstream`); `tag` (also `fetch`/`pull --tags`, `fetch origin tag <name>` and `--prune-tags`); every `stash` and `--autostash` on merge, rebase or pull (the stash is shared with your own folder); a git
-command that runs another program (`rebase --exec`, `bisect run`, `--upload-pack`, a merge
+`rebase main other`, `rebase --root other`, `rebase --update-refs`, `rebase --quit` (it leaves the folder off the branch), `bisect reset other`);
+`worktree`; `config`; `tag`; every `stash` and `--autostash` on merge or rebase (the stash is shared with your own folder); a git
+command that runs another program (`rebase --exec`, `bisect run`, a merge
 strategy that is not git's own); any other git command (an alias or an add-on such as `git lfs` may do anything); `-c` and
 `GIT_*` settings; and anything that names your copy of the project or another task's folder. An
 investigation's worker still only reads with git: its changes are never kept. symcc's checks cover

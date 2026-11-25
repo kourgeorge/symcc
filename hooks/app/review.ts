@@ -328,12 +328,12 @@ async function changedSince($: Host, base: string, head: string, noDeleted = fal
 
 /**
  * Every file added or changed by any single commit from `base` to `head` (not just the net change: a file
- * added and later deleted again is listed too). Commits that only delete a file don't list it (--diff-filter=d);
+ * added and later deleted again is listed too, and so is a file a commit only deletes);
  * a merge commit lists the files it changed against every parent (--cc: what the merge itself added, T-1053), not
  * the ones it only brought in from one side (those are listed by their own commits).
  */
 async function touchedSince($: Host, base: string, head: string): Promise<string[]> {
-  const d = await git($, ['log', '--cc', '--format=', '--name-only', '--no-renames', '--diff-filter=d', '-z', `${base}..${head}`])
+  const d = await git($, ['log', '--cc', '--format=', '--name-only', '--no-renames', '-z', `${base}..${head}`])
   if (d.exitCode !== 0) throw new Error(`git log --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
   return [...new Set(d.stdout.split('\0').map(f => f.replace(/^\n+/, '')).filter(Boolean))]
 }

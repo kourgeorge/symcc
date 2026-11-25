@@ -276,22 +276,22 @@ export const scratchGitAllow =
  * submodule, gc, prune, init, clone... (each changes what the owner's folder shares: other branches, remotes, settings,
  * tags, the stash, or the whole repository).
  */
-const WORKER_GIT = new Set(['add', 'rm', 'mv', 'restore', 'checkout', 'commit', 'merge', 'cherry-pick', 'revert', 'reset', 'rebase', 'bisect', 'fetch', 'pull', 'clean', 'am', 'apply'])
+const WORKER_GIT = new Set(['add', 'rm', 'mv', 'restore', 'checkout', 'commit', 'merge', 'cherry-pick', 'revert', 'reset', 'rebase', 'bisect', 'clean', 'am', 'apply'])
 
 /** `git rebase` options that take the next word as their value. */
 const REBASE_VALUE = new Set(['--onto', '-s', '--strategy', '-X', '--strategy-option'])
 
 /** git's own merge strategies; any other `-s <name>` runs a program `git-merge-<name>` found on the PATH. */
 const BUILTIN_STRATEGIES = new Set(['ort', 'recursive', 'resolve', 'octopus', 'ours', 'subtree'])
-/** Short options of merge, pull and rebase that take a value (the rest of the word or the next word), so a later
+/** Short options of merge and rebase that take a value (the rest of the word or the next word), so a later
  * `s` in the same word is part of that value, not the strategy option. */
 const SHORT_VALUE = new Set(['m', 'F', 'X', 'S', 'C', 'x', 'j', 'o'])
 /** The git commands that take a merge strategy. */
-const STRATEGY_SUBS = new Set(['merge', 'pull', 'rebase', 'cherry-pick', 'revert'])
+const STRATEGY_SUBS = new Set(['merge', 'rebase', 'cherry-pick', 'revert'])
 
 /**
  * Whether git command words `args` of `sub` would run another program, outside the Bash guard: `rebase -x/--exec
- * <cmd>`, `bisect run <cmd>`, `fetch`/`pull --upload-pack=<cmd>`, or a merge strategy that is not one of git's own.
+ * <cmd>`, `bisect run <cmd>`, or a merge strategy that is not one of git's own.
  */
 function runsProgram(sub: string, args: string[]): boolean {
   if (sub === 'bisect') return args[0] === 'run'
@@ -299,10 +299,9 @@ function runsProgram(sub: string, args: string[]): boolean {
     const a = args[i]!
     if (a === '--') break
     if (sub === 'rebase' && (/^-[a-zA-Z]*x/.test(a) || longStart(a, 'exec'))) return true
-    if ((sub === 'fetch' || sub === 'pull') && longStart(a, 'upload-pack')) return true
     if (!STRATEGY_SUBS.has(sub)) continue
-    // `-s` is a strategy only for merge, pull and rebase (for cherry-pick and revert it is --signoff)
-    const short = sub === 'merge' || sub === 'pull' || sub === 'rebase'
+    // `-s` is a strategy only for merge and rebase (for cherry-pick and revert it is --signoff)
+    const short = sub === 'merge' || sub === 'rebase'
     let strategy: string | undefined
     if (longStart(a, 'strategy')) strategy = a.includes('=') ? a.slice(a.indexOf('=') + 1) : (args[++i] ?? '')
     else if (short && /^-[a-zA-Z]/.test(a)) {
@@ -335,10 +334,9 @@ const longStart = (a: string, name: string) => {
  * it does can be told. Then: `checkout` only with `--` (files, as `git checkout -- a.ts` or `git checkout main -- a.ts`)
  * and without -b, -B, --orphan or --detach; `rebase` of the current branch only (at most one name: `git rebase main`,
  * not `git rebase main other`, and no name with --root) and without --update-refs, which moves other branches, or
- * --quit, which leaves HEAD detached; `bisect reset` only plain; no --autostash on merge, rebase or pull (it uses the
- * shared stash); `fetch` and `pull` without a `:` (a refspec that writes a local branch, `git fetch . HEAD:main`, or a
- * URL), tags (--tags, -t, `tag <name>`, --prune-tags, -P) or --set-upstream (it writes config); none that runs another program
- * (runsProgram: `rebase --exec`, `bisect run`, `--upload-pack`, a strategy not git's own). Refused, as for every agent: `-c`, --exec-path and GIT_* settings (gitWriteIn checks them first).
+ * --quit, which leaves HEAD detached; `bisect reset` only plain; no --autostash on merge or rebase (it uses the
+ * shared stash); none that runs another program (runsProgram: `rebase --exec`, `bisect run`, a strategy not git's
+ * own). fetch and pull are refused (a fetch writes tags and other refs; symcc brings the branch up to date itself). Refused, as for every agent: `-c`, --exec-path and GIT_* settings (gitWriteIn checks them first).
  */
 export const workerGitAllow =
   (own: Folders): GitAllow =>
@@ -377,7 +375,7 @@ export const workerGitAllow =
     args = words
     if (runsProgram(sub, args)) return false
     // --autostash keeps the folder's changes in the stash, which is shared with the owner's folder
-    if ((sub === 'merge' || sub === 'rebase' || sub === 'pull') && args.some(a => longStart(a, 'autostash'))) return false
+    if ((sub === 'merge' || sub === 'rebase') && args.some(a => longStart(a, 'autostash'))) return false
     // `git bisect reset other` ends the bisect on another branch; plain `git bisect reset` goes back to this one
     if (sub === 'bisect' && args[0] === 'reset') return args.length === 1
     // `git checkout main --` (nothing after the `--`) still switches to main
@@ -396,9 +394,6 @@ export const workerGitAllow =
       // with --root the one name is the branch to rebase (`git rebase --root other` switches to other)
       return names <= (root ? 0 : 1)
     }
-    // fetch and pull may not write a local branch or a URL (`:`), tags (--tags/-t, the word `tag`; --prune-tags/-P
-    // deletes local ones) or config (--set-upstream writes branch.<name>.remote and .merge)
-    if (sub === 'fetch' || sub === 'pull') return !args.some(a => a.includes(':') || a === 'tag' || longStart(a, 'tags') || /^--prune-/.test(a) || longStart(a, 'set-upstream') || /^-[^-sXoj][^sXoj]*[tP]|^-[tP]/.test(a))
     return true
   }
 
@@ -868,7 +863,7 @@ export const gitWriteText = (what: string) =>
  * names, remotes, settings and tags are shared with the owner's folder (main too).
  */
 export const workerGitWriteText = (what: string) =>
-  `Refused: ${what} may change more than your own branch. In your own folder you may change git on your own branch (commit, merge, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect, fetch, pull, add, rm). Not allowed: push or changing remotes; switching to, making or deleting a branch (checkout or switch to a branch, branch -d/-D/-m); worktree; config; tag; stash (it is shared with the owner's folder); a git command that runs another program (rebase --exec, bisect run); a git command in another folder, through a $variable, or with -c or GIT_* settings. ${SCRATCH_GIT_TEXT}`
+  `Refused: ${what} may change more than your own branch. In your own folder you may change git on your own branch (commit, merge, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect, add, rm). Not allowed: push, fetch, pull or changing remotes; switching to, making or deleting a branch (checkout or switch to a branch, branch -d/-D/-m); worktree; config; tag; stash (it is shared with the owner's folder); a git command that runs another program (rebase --exec, bisect run); a git command in another folder, through a $variable, or with -c or GIT_* settings. ${SCRATCH_GIT_TEXT}`
 
 /**
  * The reason a scout reads when its Bash command runs git command `what` (from gitWriteIn), which may change

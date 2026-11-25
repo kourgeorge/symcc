@@ -188,6 +188,35 @@ for (const [name, fakeGit] of [
   }, 600_000)
 }
 
+// A merged-in branch whose commit only deletes a file outside the task, the file brought back in the merge commit: the
+// branch's net change and the merge commit itself don't list the file, but the delete commit does, so the scope check
+// fails and that branch's commits never reach main (checker, try 9).
+test('T-1053: a merged-in commit that only deletes a file outside the task fails the scope check, even when the merge restores it', async () => {
+  const r = await scratchRepo('wscopedel', 'side.txt', 'test -f hello.txt\n')
+  try {
+    await writeFile(`${r.repo}/out.txt`, 'the owner\'s file\n')
+    await r.git('add', 'out.txt')
+    await r.git('commit', '-qm', 'owner: out.txt')
+    await r.git('checkout', '-q', '-b', 'del')
+    await r.git('rm', '-q', 'out.txt')
+    await r.git('commit', '-qm', 'del: drop out.txt')
+    await r.git('checkout', '-q', 'main')
+    expect((await r.cli({}, 'add', 'Say hello', 'Write hello.txt', '--files', 'hello.txt')).stdout).toContain('added T-1')
+    const fakeGit = `git add -A && ${W} commit -qm "worker: hello" && ${W} merge -q --no-ff --no-commit del; git checkout HEAD -- out.txt && ${W} commit -qm "merge del"`
+    await r.cli({ FAKE_GIT: fakeGit }, 'tick')
+    const t = await r.task('T-1')
+    expect(t.status).toBe('failed')
+    expect(JSON.stringify(t.history)).toContain('out.txt')
+    expect((await r.git('merge-base', '--is-ancestor', 'del', 'symcc/T-1')).exitCode).toBe(1)
+    expect((await r.cli({}, 'tool', 'retry', JSON.stringify({ task: 'T-1' }))).stdout).toContain('T-1')
+    expect((await r.cli({}, 'tick')).stdout).toMatch(/T-1 "Say hello" merged into main/)
+    expect((await r.git('show', 'main:out.txt')).stdout).toBe('the owner\'s file\n')
+    expect((await r.git('merge-base', '--is-ancestor', 'del', 'main')).exitCode).toBe(1)
+  } finally {
+    await rm(r.repo, { recursive: true, force: true })
+  }
+}, 600_000)
+
 // A merge or cherry-pick the worker left stopped on a conflict: prep aborts it, so the conflict markers are never
 // committed; the worker's own commit before it merges as usual.
 for (const [name, op] of [['merge', 'merge -q --no-edit side'], ['cherry-pick', 'cherry-pick side']] as const) {

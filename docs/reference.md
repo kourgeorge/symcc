@@ -98,7 +98,7 @@ to the backlog and no new worker or scout starts (running workers keep going); t
 move to todo. See [Plan mode](guide.md#plan-mode) in the guide.
 
 In `auto`, say "T-5 needs review" and just that task waits. Workers may change git only in their
-own folder and on their own branch (commit, merge, reset...; never push, other branches, worktree,
+own folder and on their own branch (commit, merge, reset...; never push, fetch, pull, other branches, worktree,
 config or tags; see [a worker's git](guide.md#a-workers-git)), only symcc merges into main, and
 scouts can't edit files. See [approval before merge](guide.md#approval-before-merge).
 

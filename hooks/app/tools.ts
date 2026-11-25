@@ -272,8 +272,8 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     paused (only that one starts). One that waits on unfinished tasks asks first.
   • A worker gets only its task, its folder, its allowed files and the test commands.
     It can't see the board or this chat. It may change git only in its own folder, on its
-    own branch (commit, merge, cherry-pick, restore...); push, other branches, worktree,
-    config, tags and stash are refused.
+    own branch (commit, merge, cherry-pick, restore...); push, fetch, pull, other branches,
+    worktree, config, tags and stash are refused.
   • A resumed or retried task starts over with a fresh worker.
   • A worker's edit of a file outside its list is refused and recorded as a request;
     the worker then stops. The task waits for you: ${features.panel ? `on its page press Allow (the files
