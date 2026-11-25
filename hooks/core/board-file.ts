@@ -128,8 +128,9 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * What the running try recorded for its hand-back, kept here (not only in the plugin's memory) so a plugin
  * reload mid-try doesn't lose it; only while "doing" on one try: `ask`: its worker's ask_owner call (an Ask record by 'worker')
  * (the last one wins); `refused`: the paths of its edits refused as outside the task's files.
+ * `tested` (T-1068): the commit the checker was started on (the tested HEAD), so a checker kept over a plugin reload is put back there too.
  */
-export type Live = { session?: string; phase?: Phase; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; ask?: SymccAsk; refused?: string[] }
+export type Live = { session?: string; phase?: Phase; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; ask?: SymccAsk; refused?: string[]; tested?: string }
 /** How far a "doing" try got before its worker handed back (see Live). */
 export type Phase = 'claimed' | 'worker' | 'checker'
 const PHASES: readonly Phase[] = ['claimed', 'worker', 'checker']
@@ -476,6 +477,7 @@ export function cleanLive(v: unknown, status: SymccStatus): Live | undefined {
   const ask = doing ? cleanAsk(v.ask) : undefined
   if (ask) out.ask = ask
   if (doing && strings(v.refused) && v.refused.length) out.refused = v.refused
+  if (doing && typeof v.tested === 'string' && /^[0-9a-f]{7,64}$/.test(v.tested)) out.tested = v.tested
   return Object.keys(out).length ? out : undefined
 }
 

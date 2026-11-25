@@ -2,15 +2,15 @@
 // finishWork (workers.ts) runs a checker here after the prep step and before the task joins the merge line, and waits
 // for its verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
+import { emptyBoard, type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'
-import { S, type CheckerEnd, checkerRuns, halt, stopped } from './state'
+import { S, type CheckerEnd, checkerRuns, adoptedCheckers, halt, stopped } from './state'
 import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
-import { change, now } from './store'
+import { change, load, now } from './store'
 import { startAgent } from './starts'
 import { logVerdict } from './evidence'
 import { orgMemText, keepSuggestions } from './org-mem'
@@ -40,37 +40,50 @@ export const checkerName = (name: string, id: string) => agentSafeName(`${name}-
  * reload); when it says yes, nothing is written and the outcome is `again` (the caller tries again at the next check).
  */
 export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, stop: () => string | undefined = () => undefined, tryLater?: () => boolean): Promise<CheckerOutcome> {
-  await markStep($, t, 'checker', () => undefined)
-  const into = intoOf(t)
-  const roles = await loadRoles($).catch(() => S.roles)
-  const role = findRole(roles, CHECKER_ROLE)
-  const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
-  const n = await git($, ['diff', '--name-only', '--no-renames', '-z', `refs/heads/${into}...HEAD`], dir).catch(() => null)
-  const changed = n && n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : []
-  // T-551: the project's tests run once, in the merge line, after the checker: it is told not to run them
-  const tests = checkerTestsText(S.N.name, b.test_commands)
-  // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, kind, ...); its {{test_command}} is the checker's own tests line
-  const facts = { ...changeValues(t, b, dir), test_command: tests }
-  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, t), kind_name: t.kind ?? 'change', diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) }, t)
-  const early = stop()
-  if (early) {
-    const why = `not started: the task was ${early}`
-    await record($, t, null, why)
-    return { verdict: null, why }
-  }
-  // where the task's branch is now (the committed work): put back after the checker if it moved it
-  const saved = await gitPlace($, dir, taskBranch(t))
-  let agentId: string
-  try {
-    // queued: it starts at the next turn's start or end, where Claude Code keeps symcc's hooks (see starts.ts)
-    const spawned = await startAgent($, { kind: 'checker', prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
-    if (!spawned.agentId) throw new Error('the checker did not start')
-    agentId = spawned.agentId
-  } catch (err) {
-    const why = `the checker couldn't start: ${cutLine((err as Error)?.message ?? String(err), 200)}`
-    if (notReadyYet(err) && tryLater?.()) return { verdict: null, why, again: true }
-    await record($, t, null, why)
-    return { verdict: null, why }
+  // T-1068: a checker that kept running over a plugin reload is only waited for: its prep and prompt were done before the reload
+  const adopted = adoptedCheckers.get(t.id)
+  adoptedCheckers.delete(t.id)
+  const held = adopted ? checkerRuns.get(adopted.id)?.held : undefined
+  let agentId = adopted?.id ?? ''
+  let saved: Awaited<ReturnType<typeof gitPlace>> = null
+  if (adopted) {
+    // the tested commit the try recorded when this checker started; the branch is put back there (as for a fresh checker)
+    const tested = find(await load($).catch(() => emptyBoard()), t.id)?.live?.tested
+    if (tested) saved = { head: tested, on: `refs/heads/${taskBranch(t)}`, tip: tested, branch: taskBranch(t) }
+  } else {
+    await markStep($, t, 'checker', () => undefined)
+    const into = intoOf(t)
+    const roles = await loadRoles($).catch(() => S.roles)
+    const role = findRole(roles, CHECKER_ROLE)
+    const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
+    const n = await git($, ['diff', '--name-only', '--no-renames', '-z', `refs/heads/${into}...HEAD`], dir).catch(() => null)
+    const changed = n && n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : []
+    // T-551: the project's tests run once, in the merge line, after the checker: it is told not to run them
+    const tests = checkerTestsText(S.N.name, b.test_commands)
+    // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, kind, ...); its {{test_command}} is the checker's own tests line
+    const facts = { ...changeValues(t, b, dir), test_command: tests }
+    const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, t), kind_name: t.kind ?? 'change', diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) }, t)
+    const early = stop()
+    if (early) {
+      const why = `not started: the task was ${early}`
+      await record($, t, null, why)
+      return { verdict: null, why }
+    }
+    // where the task's branch is now (the committed work): put back after the checker if it moved it
+    saved = await gitPlace($, dir, taskBranch(t))
+    // T-1068: kept on the board, so a checker that runs on over a plugin reload is put back there too
+    if (saved) await change($, x => { const cur = find(x, t.id); return cur && cur.status === 'doing' && cur.attempts === t.attempts ? patchTask(x, t.id, { live: { tested: saved!.head } }, cur.updated_at) : x }).catch(() => undefined)
+    try {
+      // queued: it starts at the next turn's start or end, where Claude Code keeps symcc's hooks (see starts.ts)
+      const spawned = await startAgent($, { kind: 'checker', prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
+      if (!spawned.agentId) throw new Error('the checker did not start')
+      agentId = spawned.agentId
+    } catch (err) {
+      const why = `the checker couldn't start: ${cutLine((err as Error)?.message ?? String(err), 200)}`
+      if (notReadyYet(err) && tryLater?.()) return { verdict: null, why, again: true }
+      await record($, t, null, why)
+      return { verdict: null, why }
+    }
   }
   // checkerRuns is set at once (in the promise below, before any await), and the board then names the checker too, so
   // the guards of another session's copy of the plugin know it (T-471); it is taken off when the checker ends
@@ -84,7 +97,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
       timer?.cancel()
       resolve(e)
     }
-    checkerRuns.set(agentId, { task: t.id, worktree: dir, end: done })
+    checkerRuns.set(agentId, { task: t.id, worktree: dir, end: done, ...(held ? { held } : {}) })
     const min = b.max_minutes
     try {
       timer = $.clock.after(min * 60_000, () => {
@@ -95,6 +108,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     } catch {
       timer = null
     }
+    // its hand-back came before this step waited for it (see stopOrphans): that verdict is used now
+    if (adopted?.early) done(adopted.early)
     const late = stop()
     if (late) {
       void halt($, agentId, `the task was ${late}`)

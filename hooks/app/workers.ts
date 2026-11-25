@@ -12,7 +12,7 @@ import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
 import { runChecker, checkerName, cleanFolder, STOPPED_AGAIN } from './checker'
 import { loadKinds } from './kinds'
-import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
+import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, adoptedCheckers, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, startCancelled, claimNote, rewakeStarts } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait, holdPublish } from './store'
@@ -1101,9 +1101,10 @@ export async function restartCheckers(host: Host, agents: HostAgent[]) {
   const b = await load(host).catch(() => null)
   if (!b || !onHere(b)) return
   const live = liveDriver(await readLeadText(host), Date.now())
-  const running = new Set([...checkerRuns.values()].map(r => r.task))
+  const adoptedIds = new Set([...adoptedCheckers.values()].map(v => v.id))
+  const running = new Set([...checkerRuns].filter(([id]) => !adoptedIds.has(id)).map(([, r]) => r.task))
   const checkerAlive = (id: string) => agents.some(a => a.name === checkerName(S.N.name, id) && !stopped.has(a.id) && !ENDED_STATUSES.includes(a.status))
-  const lost = b.tasks.filter(t => t.status === 'doing' && t.live?.phase === 'checker' && handedBack(t) && ownedHere(t, S.me, live) && !finishing.has(t.id) && !approving.has(t.id) && !starting.has(t.id) && !running.has(t.id) && !onPurpose.has(t.id) && ![...workers.values()].some(w => w.task === t.id) && !checkerAlive(t.id))
+  const lost = b.tasks.filter(t => t.status === 'doing' && t.live?.phase === 'checker' && handedBack(t) && ownedHere(t, S.me, live) && !finishing.has(t.id) && !approving.has(t.id) && !starting.has(t.id) && !running.has(t.id) && !onPurpose.has(t.id) && ![...workers.values()].some(w => w.task === t.id) && (!checkerAlive(t.id) || adoptedCheckers.has(t.id)))
   for (const t of lost) void checkAgain(host, t).catch(() => undefined)
 }
 
@@ -1139,7 +1140,7 @@ async function checkAgain(host: Host, t0: BoardTask) {
     if (await folderGone(host, t0, note, `${id} "${t.title}": its checker stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next try goes on from the same branch. This is not counted as a retry.`)) return
     await markFinishing(host, id, tryNo).catch(() => undefined)
     // told once: a start tried again because the agent type wasn't loaded yet is the same restart
-    if (!checkerNotReady.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
+    if (!checkerNotReady.has(id) && !adoptedCheckers.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
     go = { b, t, dir }
   } finally {
     if (!go) await endFinishing(host, id, tryNo)
@@ -1174,11 +1175,15 @@ async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string,
   const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
   const made: string[] = []
   const why = fromChecker ? stop() : undefined
-  if (fromChecker && !why) await cleanFolder(host, dir)
+  if (fromChecker && !why && !adoptedCheckers.has(t.id)) await cleanFolder(host, dir)
+  // T-1068: a checker that kept running over the reload is only waited for (no prep, no folder clean: its try's prep ran before);
+  // its verdict then goes on as a fresh checker's would, through the merge line's prep
+  const adoptedWas = fromChecker && !why && adoptedCheckers.has(t.id)
+  const waited = adoptedWas ? await afterChecker(host, t, b, dir, made, stop, true) : undefined
   const checker = fromChecker || (checkerOn(b) && !t.history.some(h => h.text === checkerLine(tryLabel(t), { ok: true })))
   const r: CheckResult = why
     ? taskWasResult(why)
-    : await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, release, limit, checker ? checkerFirst(host, t, b, dir, made, stop, true) : undefined).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    : await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, release, limit, adoptedWas ? async () => waited : checker ? checkerFirst(host, t, b, dir, made, stop, true) : undefined).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
   // the checker's agent type isn't loaded yet (just after a reload): the task stays "doing" in its checker step, and the next check starts it again (restartCheckers)
   if (r.again) return
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, workerIdOf(t), gaveUp)
@@ -1252,7 +1257,7 @@ const checkerFirst = (host: Host, t: SymccTask, b: Board, dir: string, made: str
  */
 async function afterChecker(host: Host, t: SymccTask, b: Board, dir: string, made: string[], stop: () => string | undefined, restarted = false): Promise<BeforeLine> {
   // the try's commits are saved now, before the checker runs: a reload meanwhile loses `made`, and the checker step started again (checkerStepAgain) only knows the board
-  await recordCommits(host, t.id, made)
+  if (!adoptedCheckers.has(t.id)) await recordCommits(host, t.id, made)
   // `restarted` (a checker started again after a reload): a start that fails only because the agent type isn't
   // loaded yet is tried again at the next check, up to MAX_NOT_READY starts; after that it goes to review as below
   const tryLater = () => {

@@ -5,7 +5,7 @@ import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
 import { notProse } from '../hooks/core/checker'
-import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
+import { S, leadQueue, meanwhile, workers, checkerRuns, stopped, adoptedCheckers } from '../hooks/app/state'
 import { workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
 import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
 import { stopOrphans } from '../hooks/app/cleanup'
@@ -957,23 +957,110 @@ async function reloadDuringChecker(w: ReturnType<typeof world>, status: string) 
   return agents
 }
 
-test('T-386: a reload stops the running checker; at the next check the task gets a new checker on the same work, no retry counted, and the lead is told once', async () => {
+test('T-1068: a checker still running after a reload is adopted, not stopped; its OK is used, nothing new starts, no retry counted', async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
   const sha = w.git.head
   await check(w.$)
-  // the old checker (unknown to this copy) was told to stop, and a new one started at once
-  expect(w.sends.map(m => m.to)).toEqual(['chk1'])
-  await until(() => checkerRuns.size > 0)
-  expect(w.spawns.length).toBe(2)
-  expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
+  // the checker (unknown to this copy) is not told to stop and no new one starts; this copy waits for it
+  for (let i = 0; i < 200; i++) await turn()
+  expect(checkerRuns.has('chk1')).toBe(true)
+  expect(w.sends).toEqual([])
+  expect(w.spawns.length).toBe(1)
   const mid = find(await load(w.$), 'T-1')!
   expect(mid.status).toBe('doing')
   expect(mid.live?.checking?.step).toBe('checker')
   expect(w.git.head).toBe(sha)
-  const told = leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded'))
-  expect(told.length).toBe(1)
-  // a check meanwhile does not start a third one
+  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(0)
+  // a check meanwhile does not start another
+  await check(w.$)
+  expect(w.spawns.length).toBe(1)
+  checkerFinished('chk1', 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  expect(w.spawns.length).toBe(1)
+})
+
+test('T-1068: an older same-name checker listed first is stopped; the board\'s current checker is adopted', async () => {
+  const w = world()
+  const agents = await reloadDuringChecker(w, 'running')
+  agents.unshift({ id: 'chkOld', name: 'symcc-T-1-checker', kind: 'scout', status: 'running' })
+  await stopOrphans(w.$)
+  expect(adoptedCheckers.get('T-1')?.id).toBe('chk1')
+  expect(w.sends.map(s => s.to)).toEqual(['chkOld'])
+})
+
+test('T-1068: while an adopted checker works, a look for orphans leaves it, and no folder commit runs before its verdict', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  const before = w.calls.length
+  await check(w.$)
+  await until(() => checkerRuns.has('chk1'))
+  await stopOrphans(w.$)
+  await check(w.$)
+  for (let i = 0; i < 100; i++) await turn()
+  expect(w.sends).toEqual([])
+  expect(find(await load(w.$), 'T-1')!.live?.phase).toBe('checker')
+  expect(w.calls.slice(before).filter(c => /^git (add|commit)\b/.test(c))).toEqual([])
+  checkerFinished('chk1', 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  expect(w.spawns.length).toBe(1)
+})
+
+test('T-1068: an adopted checker that finds problems: its verdict is used (the task goes back to its worker)', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await check(w.$)
+  await until(() => checkerRuns.has('chk1'))
+  checkerFinished('chk1', 'PROBLEMS: src/a.ts breaks on empty input')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.history.some(h => h.text.includes('the checker found problems') || h.text.includes('checker: problems') || h.text.includes('PROBLEMS'))).toBe(true)
+  expect(t.status).not.toBe('done')
+  expect(w.spawns.length).toBe(1)
+})
+
+test('T-1068: an adopted checker that hands back before the step waits for it: its verdict is kept and used, no new checker', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await stopOrphans(w.$)
+  expect(checkerRuns.has('chk1')).toBe(true)
+  checkerFinished('chk1', 'PROBLEMS: src/a.ts breaks on empty input')
+  await check(w.$)
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.history.some(h => h.text.includes('PROBLEMS') || h.text.includes('found problems'))).toBe(true)
+  expect(t.status).not.toBe('done')
+  expect(w.spawns.length).toBe(1)
+  expect(w.sends).toEqual([])
+})
+
+test('T-1068: an adopted checker whose task left the checker step is stopped at the next look, and forgotten', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await stopOrphans(w.$)
+  expect(w.sends).toEqual([])
+  const b = await load(w.$)
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'todo' }, '2026-01-01T00:00:00Z'))
+  await stopOrphans(w.$)
+  expect(w.sends.map(m => m.to)).toEqual(['chk1'])
+  expect(adoptedCheckers.size).toBe(0)
+  expect(checkerRuns.has('chk1')).toBe(false)
+})
+
+test('T-386: a checker symcc stopped over the reload (its agent is in stopped) gets a new checker at the next check, no retry counted, the lead told once', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
+  await check(w.$)
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
+  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
   await check(w.$)
   expect(w.spawns.length).toBe(2)
   checkerFinished([...checkerRuns.keys()][0]!, 'OK')
@@ -981,14 +1068,12 @@ test('T-386: a reload stops the running checker; at the next check the task gets
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(t.attempts).toBe(1)
-  expect(t.test_tries ?? 0).toBe(0)
-  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
-  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
 })
 
 test("T-386: a checker that ended over the reload, or whose stopped hand-back arrives, gets a new run without waiting for a check", async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
   // the reload's own look for orphans (session start) stops the old checker; its "stopped" answer then comes in
   await stopOrphans(w.$)
   expect(w.spawns.length).toBe(1)
@@ -1061,6 +1146,7 @@ function scoutNotLoaded(w: ReturnType<typeof world>, n: number) {
 test("T-386: a restarted checker whose agent type isn't loaded yet: the task stays doing, and the next check starts a checker", async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
   scoutNotLoaded(w, 1)
   await stopOrphans(w.$)
   await stoppedHandBack(w.$, 'chk1')
@@ -1085,6 +1171,7 @@ test("T-386: a restarted checker whose agent type isn't loaded yet: the task sta
 test("T-386: a restarted checker whose agent type is still not loaded after 3 starts: the task goes to review with no verdict", async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
   scoutNotLoaded(w, 99)
   await stopOrphans(w.$)
   await stoppedHandBack(w.$, 'chk1')
@@ -1514,4 +1601,19 @@ test('T-632, T-804: org-mem lines lose their task ids at start; an old field-gui
   await w.$.fs.write(GUIDE, '- T-611 2026-11-20: a note\n- 2026-11-20: a new one\n')
   await moveOldOrgMem(w.$)
   expect(await w.$.fs.read(GUIDE)).toBe('- 2026-11-20: a note\n- 2026-11-20: a new one\n')
+})
+
+test('T-1068: an adopted checker that moves HEAD and then says OK: the branch is put back and only the tested commit merges', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await check(w.$)
+  await until(() => checkerRuns.has('chk1'))
+  w.git.head = C9
+  checkerFinished('chk1', 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(w.calls).toContain(`git checkout -q -f -B symcc/T-1 ${H1}`)
+  expect(w.git.main).toBe(H1)
+  expect(t.status).toBe('done')
+  expect(t.history.map(h => h.text)).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
 })
