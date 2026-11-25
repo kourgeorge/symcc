@@ -33,8 +33,24 @@ function world(features: Partial<HostFeatures>, b: Board) {
 
 const notes = [1, 2, 3, 4].map(n => ({ n, date: `2026-11-2${n}`, topic: 'tests', text: `note ${n}` }))
 
+// T-1071: fixed local times, never the real clock. Just after midnight T-2's first try (30 minutes back) falls on
+// yesterday, so TODAY gets its blank line and the yesterday / last 7 days lines; at noon and before midnight it doesn't.
+const at = (h: number, m: number) => new Date(2026, 10, 26, h, m).getTime()
+const NOON = at(12, 0)
+const AFTER_MIDNIGHT = at(0, 5)
+const BEFORE_MIDNIGHT = at(23, 55)
+const NOWS = [NOON, AFTER_MIDNIGHT, BEFORE_MIDNIGHT]
+
 test('T-902: the status text has the Live sections in order: needs you, the lanes with their trains, today, the newest notes, the hint', () => {
-  const now = Date.now()
+  for (const now of NOWS) statusTextHasLiveSections(now)
+})
+
+test('T-1071: just after midnight TODAY shows the yesterday and last 7 days lines; at noon and before midnight it does not', () => {
+  const past = (now: number) => statusSection(liveStatusText(statusBoard(now) as never, notes as never, now), 'TODAY').filter(l => /^ (yesterday|last 7 days):/.test(l)).length
+  expect(NOWS.map(past)).toEqual([0, 2, 0])
+})
+
+function statusTextHasLiveSections(now: number) {
   const b = statusBoard(now)
   const text = liveStatusText(b as never, notes as never, now)
   expect(statusHeadings(text)).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
@@ -67,7 +83,7 @@ test('T-902: the status text has the Live sections in order: needs you, the lane
   expect(statusTail(narrow, statusHint())).toEqual(statusTailWant(statusHint(), 30))
   expect(statusHint()).toBe('/symcc-board opens the board · /symcc-tasks lists the tasks')
   expect(text.split('\n').every(l => textWidth(l) <= 80)).toBe(true)
-})
+}
 
 test('T-902: NEEDS YOU is left out when nothing waits; BRANCHES comes between the tasks and today once git was read', () => {
   const now = Date.now()
@@ -85,6 +101,8 @@ test('T-902: NEEDS YOU is left out when nothing waits; BRANCHES comes between th
 
 test('T-902: /symcc-status answers with the Live text and opens no panel, with a panel and without', async () => {
   for (const features of [ALL_FEATURES, BARE]) {
+    // the command reads the real clock (hooks/app/slash-commands.ts); statusSection keeps TODAY's past lines, so this
+    // holds at any time of day (the fixed times are checked on liveStatusText above)
     const now = Date.now()
     const b = statusBoard(now)
     const w = world(features, b)
