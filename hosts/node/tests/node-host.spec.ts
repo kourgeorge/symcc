@@ -217,13 +217,13 @@ test('T-496: claude -p deny rules refuse every git write for a worker and a chec
 })
 
 test('T-1053: a claude -p worker may change git on its own branch; push, other branches, stash, worktree, config, tags and -C stay refused', () => {
-  const own = ['git commit -m x', 'git merge main', 'git merge --no-edit symcc/T-7', 'git cherry-pick abc', 'git revert HEAD', 'git restore .', 'git reset --hard', 'git add -A', 'git rm a.ts', 'git clean -fd', 'git am p', 'git apply p.diff', 'git bisect start']
+  const own = ['git commit -m x', 'git merge main', 'git merge --no-edit symcc/T-7', 'git cherry-pick abc', 'git revert HEAD', 'git restore .', 'git reset --hard', 'git add -A', 'git rm a.ts', 'git clean -fd', 'git am p', 'git apply p.diff', 'git bisect start', 'git bisect run sh check.sh']
   const bad = [
     'git push', 'git push . HEAD:main', 'git remote add x y', 'git branch -D x', 'git branch -f main HEAD', 'git checkout main', 'git checkout -- a.ts',
     'git switch main', 'git rebase main', 'git fetch . HEAD:main', 'git pull', 'git stash', 'git stash pop', 'git worktree add x', 'git config user.name x',
     'git tag v1', 'git update-ref refs/heads/main HEAD', 'git -C /r commit -m x', 'git -C . merge main', 'git --git-dir=/r/.git commit', 'git -c core.hooksPath=x commit',
     'git init', 'env git commit', 'xargs git commit',
-    'git bisect run sh evil.sh', 'git bisect reset other', 'git merge --autostash main', 'git merge --no-edit --autostash main', 'git rebase --root other',
+    'git bisect reset other', 'git merge --autostash main', 'git merge --no-edit --autostash main', 'git rebase --root other',
     // git takes a start of --autostash (down to --au)
     'git merge --autost main', 'git merge --no-edit --au origin/side', 'git rebase --quit', 'git fetch -p -P origin', 'git pull --set-upstream origin main',
   ]

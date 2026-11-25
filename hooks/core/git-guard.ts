@@ -279,47 +279,7 @@ export const scratchGitAllow =
 const WORKER_GIT = new Set(['add', 'rm', 'mv', 'restore', 'checkout', 'commit', 'merge', 'cherry-pick', 'revert', 'reset', 'rebase', 'bisect', 'clean', 'am', 'apply'])
 
 /** `git rebase` options that take the next word as their value. */
-const REBASE_VALUE = new Set(['--onto', '-s', '--strategy', '-X', '--strategy-option'])
-
-/** git's own merge strategies; any other `-s <name>` runs a program `git-merge-<name>` found on the PATH. */
-const BUILTIN_STRATEGIES = new Set(['ort', 'recursive', 'resolve', 'octopus', 'ours', 'subtree'])
-/** Short options of merge and rebase that take a value (the rest of the word or the next word), so a later
- * `s` in the same word is part of that value, not the strategy option. */
-const SHORT_VALUE = new Set(['m', 'F', 'X', 'S', 'C', 'x', 'j', 'o'])
-/** The git commands that take a merge strategy. */
-const STRATEGY_SUBS = new Set(['merge', 'rebase', 'cherry-pick', 'revert'])
-
-/**
- * Whether git command words `args` of `sub` would run another program, outside the Bash guard: `rebase -x/--exec
- * <cmd>`, `bisect run <cmd>`, or a merge strategy that is not one of git's own.
- */
-function runsProgram(sub: string, args: string[]): boolean {
-  if (sub === 'bisect') return args[0] === 'run'
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i]!
-    if (a === '--') break
-    if (sub === 'rebase' && (/^-[a-zA-Z]*x/.test(a) || longStart(a, 'exec'))) return true
-    if (!STRATEGY_SUBS.has(sub)) continue
-    // `-s` is a strategy only for merge and rebase (for cherry-pick and revert it is --signoff)
-    const short = sub === 'merge' || sub === 'rebase'
-    let strategy: string | undefined
-    if (longStart(a, 'strategy')) strategy = a.includes('=') ? a.slice(a.indexOf('=') + 1) : (args[++i] ?? '')
-    else if (short && /^-[a-zA-Z]/.test(a)) {
-      // a short option bundle: git reads `-ns foo` and `-nsfoo` as -n plus strategy foo. Scan the letters up to the
-      // first one that takes a value (the rest of the word, or the next word, is that value)
-      for (let k = 1; k < a.length; k++) {
-        const c = a[k]!
-        if (c === 's') {
-          strategy = k + 1 < a.length ? a.slice(k + 1) : (args[++i] ?? '')
-          break
-        }
-        if (!/[a-zA-Z]/.test(c) || SHORT_VALUE.has(c)) break
-      }
-    }
-    if (strategy !== undefined && !BUILTIN_STRATEGIES.has(strategy)) return true
-  }
-  return false
-}
+const REBASE_VALUE = new Set(['--onto', '-s', '--strategy', '-X', '--strategy-option', '-x', '--exec'])
 
 /** Whether long option word `a` is `--<name>` or a unique start of it (git takes `--upd` for `--update-refs`). */
 const longStart = (a: string, name: string) => {
@@ -335,8 +295,8 @@ const longStart = (a: string, name: string) => {
  * and without -b, -B, --orphan or --detach; `rebase` of the current branch only (at most one name: `git rebase main`,
  * not `git rebase main other`, and no name with --root) and without --update-refs, which moves other branches, or
  * --quit, which leaves HEAD detached; `bisect reset` only plain; no --autostash on merge or rebase (it uses the
- * shared stash); none that runs another program (runsProgram: `rebase --exec`, `bisect run`, a strategy not git's
- * own). fetch and pull are refused (a fetch writes tags and other refs; symcc brings the branch up to date itself). Refused, as for every agent: `-c`, --exec-path and GIT_* settings (gitWriteIn checks them first).
+ * shared stash). A git command that runs another program (`rebase --exec`, `bisect run`, a merge strategy) is not
+ * refused: a worker can run any program from Bash anyway. fetch and pull are refused (a fetch writes tags and other refs; symcc brings the branch up to date itself). Refused, as for every agent: `-c`, --exec-path and GIT_* settings (gitWriteIn checks them first).
  */
 export const workerGitAllow =
   (own: Folders): GitAllow =>
@@ -373,7 +333,6 @@ export const workerGitAllow =
       words.push(a.w)
     }
     args = words
-    if (runsProgram(sub, args)) return false
     // --autostash keeps the folder's changes in the stash, which is shared with the owner's folder
     if ((sub === 'merge' || sub === 'rebase') && args.some(a => longStart(a, 'autostash'))) return false
     // `git bisect reset other` ends the bisect on another branch; plain `git bisect reset` goes back to this one
@@ -864,7 +823,7 @@ export const gitWriteText = (what: string) =>
  * names, remotes, settings and tags are shared with the owner's folder (main too).
  */
 export const workerGitWriteText = (what: string) =>
-  `Refused: ${what} may change more than your own branch. In your own folder you may change git on your own branch (commit, merge, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect, add, rm). Not allowed: push, fetch, pull or changing remotes; switching to, making or deleting a branch (checkout or switch to a branch, branch -d/-D/-m); worktree; config; tag; stash (it is shared with the owner's folder); a git command that runs another program (rebase --exec, bisect run); a git command in another folder, through a $variable, or with -c or GIT_* settings. ${SCRATCH_GIT_TEXT}`
+  `Refused: ${what} may change more than your own branch. In your own folder you may change git on your own branch (commit, merge, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect, add, rm). Not allowed: push, fetch, pull or changing remotes; switching to, making or deleting a branch (checkout or switch to a branch, branch -d/-D/-m); worktree; config; tag; stash (it is shared with the owner's folder); a git command in another folder, through a $variable, or with -c or GIT_* settings. ${SCRATCH_GIT_TEXT}`
 
 /**
  * The reason a scout reads when its Bash command runs git command `what` (from gitWriteIn), which may change
