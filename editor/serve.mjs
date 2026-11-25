@@ -68654,6 +68654,26 @@ function cursorSdk(env = process.env) {
 import { existsSync as existsSync4, readFileSync, realpathSync as realpathSync2 } from "node:fs";
 import { homedir as homedir5 } from "node:os";
 import { posix, win32 as win322 } from "node:path";
+
+// copilot-models.ts
+var EFFORT_WORDS = { none: "None", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" };
+function copilotModels(list2) {
+  return list2.filter((m) => !m.policy || m.policy.state === "enabled").map((m) => {
+    const efforts = m.supportedReasoningEfforts ?? [];
+    const fallback = efforts.includes("medium") ? "medium" : efforts[0];
+    const def = m.defaultReasoningEffort && efforts.includes(m.defaultReasoningEffort) ? m.defaultReasoningEffort : fallback;
+    const cost = m.billing?.multiplier;
+    return {
+      id: m.id,
+      label: m.name || m.id,
+      ...cost !== void 0 ? { description: cost === 0 ? "included" : `${cost}\xD7 premium requests` } : {},
+      options: efforts.length ? [{ id: "reasoning", label: "Reasoning", values: efforts.map((v) => ({ value: v, label: EFFORT_WORDS[v] ?? v })) }] : [],
+      variants: efforts.length ? efforts.map((v) => ({ params: { reasoning: v }, ...v === def ? { isDefault: true } : {} })) : [{ params: {}, isDefault: true }]
+    };
+  });
+}
+
+// copilot.ts
 var COPILOT_SDK = "@microsoft/copilot-sdk";
 async function loadCopilot() {
   try {
@@ -68723,22 +68743,6 @@ function readOnlyRefusal(r) {
   if (r.kind === "shell") return !r.hasWriteFileRedirection && r.commands?.length && r.commands.every((c) => c.readOnly) ? void 0 : `${why2}: run only commands that change nothing.`;
   if (r.kind === "mcp" && !r.readOnly) return `${why2}: ${r.toolName ?? "that tool"} may change things.`;
   return void 0;
-}
-var EFFORT_WORDS = { none: "None", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" };
-function copilotModels(list2) {
-  return list2.filter((m) => !m.policy || m.policy.state === "enabled").map((m) => {
-    const efforts = m.supportedReasoningEfforts ?? [];
-    const fallback = efforts.includes("medium") ? "medium" : efforts[0];
-    const def = m.defaultReasoningEffort && efforts.includes(m.defaultReasoningEffort) ? m.defaultReasoningEffort : fallback;
-    const cost = m.billing?.multiplier;
-    return {
-      id: m.id,
-      label: m.name || m.id,
-      ...cost !== void 0 ? { description: cost === 0 ? "included" : `${cost}\xD7 premium requests` } : {},
-      options: efforts.length ? [{ id: "reasoning", label: "Reasoning", values: efforts.map((v) => ({ value: v, label: EFFORT_WORDS[v] ?? v })) }] : [],
-      variants: efforts.length ? efforts.map((v) => ({ params: { reasoning: v }, ...v === def ? { isDefault: true } : {} })) : [{ params: {}, isDefault: true }]
-    };
-  });
 }
 var text = (v) => typeof v === "string" ? v : "";
 var count2 = (v) => typeof v === "number" ? v : 0;

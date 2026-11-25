@@ -8,8 +8,11 @@
 import { existsSync, readFileSync, realpathSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
+import { copilotModels, type CopilotModel } from './copilot-models'
 import type { Sdk, SdkAgent, SdkAgentOptions, SdkModel, SdkModelInfo, SdkRun, SdkRunResult, SdkSendOptions, SdkStep, SdkToolGuard, SdkUsage } from './sdk'
 import { argWords, short } from './steps'
+
+export { copilotModels, type CopilotModel }
 
 /** A session event: `agentId` is set on a sub-agent's. */
 export type CopilotEvent = { type: string; agentId?: string; data?: Record<string, unknown> }
@@ -50,15 +53,6 @@ export type CopilotSession = {
   setModel: (model: string, o?: { reasoningEffort?: string }) => Promise<void>
   disconnect: () => Promise<void>
   rpc: { history: { compact: () => Promise<{ success: boolean; summaryContent?: string }> } }
-}
-
-export type CopilotModel = {
-  id: string
-  name: string
-  supportedReasoningEfforts?: string[]
-  defaultReasoningEffort?: string
-  policy?: { state: string }
-  billing?: { multiplier?: number }
 }
 
 export type CopilotClient = {
@@ -170,27 +164,6 @@ export function readOnlyRefusal(r: CopilotPermissionRequest): string | undefined
   if (r.kind === 'shell') return !r.hasWriteFileRedirection && r.commands?.length && r.commands.every(c => c.readOnly) ? undefined : `${why}: run only commands that change nothing.`
   if (r.kind === 'mcp' && !r.readOnly) return `${why}: ${r.toolName ?? 'that tool'} may change things.`
   return undefined
-}
-
-const EFFORT_WORDS: Record<string, string> = { none: 'None', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' }
-
-/** Copilot's model list as the host's: the ones the account may use, each with its reasoning efforts (medium by default). */
-export function copilotModels(list: readonly CopilotModel[]): SdkModelInfo[] {
-  return list
-    .filter(m => !m.policy || m.policy.state === 'enabled')
-    .map(m => {
-      const efforts = m.supportedReasoningEfforts ?? []
-      const fallback = efforts.includes('medium') ? 'medium' : efforts[0]
-      const def = m.defaultReasoningEffort && efforts.includes(m.defaultReasoningEffort) ? m.defaultReasoningEffort : fallback
-      const cost = m.billing?.multiplier
-      return {
-        id: m.id,
-        label: m.name || m.id,
-        ...(cost !== undefined ? { description: cost === 0 ? 'included' : `${cost}× premium requests` } : {}),
-        options: efforts.length ? [{ id: 'reasoning', label: 'Reasoning', values: efforts.map(v => ({ value: v, label: EFFORT_WORDS[v] ?? v })) }] : [],
-        variants: efforts.length ? efforts.map(v => ({ params: { reasoning: v }, ...(v === def ? { isDefault: true } : {}) })) : [{ params: {}, isDefault: true }],
-      }
-    })
 }
 
 const text = (v: unknown) => (typeof v === 'string' ? v : '')

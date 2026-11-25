@@ -1,7 +1,7 @@
 // A stand-in for the extension in a plain browser: demo data (made up, for looking at the panel) and replies that
 // act like the engine's, so every card and button can be tried. Loaded before the webview's bridge.
 import type { ChatItem, FromWebview, LeadSettings, ModelInfo, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelOrgNote, PanelStep, PanelTask, PanelView, PanelWorktree, SlashItem, ToWebview } from '../../protocol'
-import { copilotModels } from '../../copilot'
+import { copilotModels } from '../../copilot-models'
 
 const now = Date.now()
 const m = (min: number) => now - min * 60_000
