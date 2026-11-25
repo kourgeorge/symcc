@@ -1,9 +1,10 @@
 // GitHub Copilot's agents (@microsoft/copilot-sdk) behind the host's Sdk (./sdk.ts), so the engine, the lead chat and
 // the board run on them as on Cursor's: each agent is one Copilot session in its folder, symcc's tools are served to it
-// from this process, and its events are the board's steps. copilotSdk() starts the Copilot runtime on first use (the
+// from this process, its events are the board's steps, and symcc's guard (./guard.ts, given in as `guard`) is its
+// onPreToolUse hook, so each tool call is judged before it runs. copilotSdk() starts the Copilot runtime on first use (the
 // SDK's own, or COPILOT_CLI_PATH's), signed in as the copilot CLI is (`copilot login`, or GH_TOKEN). The SDK isn't
 // bundled, nor typed here: it ships the runtime (some 200 MB), so it is an optional dependency the engine loads by name.
-import type { Sdk, SdkAgent, SdkAgentOptions, SdkModel, SdkModelInfo, SdkRun, SdkRunResult, SdkSendOptions, SdkStep, SdkUsage } from './sdk'
+import type { Sdk, SdkAgent, SdkAgentOptions, SdkModel, SdkModelInfo, SdkRun, SdkRunResult, SdkSendOptions, SdkStep, SdkToolGuard, SdkUsage } from './sdk'
 import { argWords, short } from './steps'
 
 /** A session event: `agentId` is set on a sub-agent's. */
@@ -31,8 +32,11 @@ export type CopilotSessionConfig = {
   permissions: { onRequest: (r: CopilotPermissionRequest) => CopilotPermissionResult }
   events: { streaming: boolean }
   instructions: { skipCustomInstructions: boolean }
-  hooks: { enableRepositoryHooks: boolean }
+  hooks: { enableRepositoryHooks: boolean; handlers?: { onPreToolUse: (input: { toolName: string; toolArgs: unknown }) => Promise<CopilotPreToolUseOutput | undefined> } }
 }
+
+/** onPreToolUse's answer: refuse the call with a reason, or run it with changed arguments. */
+export type CopilotPreToolUseOutput = { permissionDecision: 'deny'; permissionDecisionReason: string } | { modifiedArgs: unknown }
 
 export type CopilotSession = {
   sessionId: string
@@ -90,6 +94,18 @@ export const COPILOT_TOOLS: Record<string, readonly string[]> = {
 }
 
 export const excludedTools = (disallowed: readonly string[]): string[] => [...new Set(disallowed.flatMap(n => COPILOT_TOOLS[n] ?? [n]))]
+
+/** Copilot's tools that type into a running shell (hooks/copilot/guard.ts refuses them to symcc's agents). */
+const SHELL_INPUT = ['write_bash', 'write_powershell']
+
+/** symcc's guard as Copilot's onPreToolUse hook. */
+export const guarded =
+  (guard: SdkToolGuard) =>
+  async (input: { toolName: string; toolArgs: unknown }): Promise<CopilotPreToolUseOutput | undefined> => {
+    const v = await guard({ toolName: input.toolName, toolArgs: input.toolArgs })
+    if (!v) return undefined
+    return 'deny' in v ? { permissionDecision: 'deny', permissionDecisionReason: v.deny } : { modifiedArgs: v.args }
+  }
 
 /** What a plan turn is told first: Copilot's own plan mode waits on the owner to leave it, so a plan turn is a read-only one. */
 export const PLAN_NOTE = 'This turn only reads: look, think and answer, but change no files and run nothing that changes anything (a change is refused).'
@@ -225,7 +241,7 @@ function copilotAgent(session: CopilotSession, model: string, turn: { readOnly: 
 }
 
 /** `load`: the SDK's module (a test's fake; the real one when absent). */
-export type CopilotSdkOptions = { load?: () => Promise<CopilotModule>; defaultModel?: string }
+export type CopilotSdkOptions = { load?: () => Promise<CopilotModule>; defaultModel?: string; guard?: Sdk['guard'] }
 
 /** GitHub Copilot's agents as the host's Sdk. One runtime serves every agent; it starts on first use. */
 export function copilotSdk(o: CopilotSdkOptions = {}): Sdk {
@@ -249,6 +265,7 @@ export function copilotSdk(o: CopilotSdkOptions = {}): Sdk {
   return {
     name: 'Copilot',
     defaultModel: o.defaultModel ?? 'auto',
+    ...(o.guard ? { guard: o.guard } : {}),
     async create(a: SdkAgentOptions) {
       const c = await started()
       const turn = { readOnly: false }
@@ -267,7 +284,8 @@ export function copilotSdk(o: CopilotSdkOptions = {}): Sdk {
             defer: 'never' as const,
             handler: (args: unknown) => t.execute((args ?? {}) as Record<string, unknown>),
           })),
-          excludedTools: excludedTools(a.disallowedTools),
+          // symcc's guard judges each shell command whole, so a guarded agent can't type into a running shell
+          excludedTools: excludedTools([...a.disallowedTools, ...(a.guard ? SHELL_INPUT : [])]),
         },
         permissions: {
           onRequest: r => {
@@ -278,7 +296,7 @@ export function copilotSdk(o: CopilotSdkOptions = {}): Sdk {
         events: { streaming: true },
         // the project's instructions (AGENTS.md, .github/copilot-instructions.md) and hooks only where the project's settings load
         instructions: { skipCustomInstructions: !project },
-        hooks: { enableRepositoryHooks: project },
+        hooks: { enableRepositoryHooks: project, ...(a.guard ? { handlers: { onPreToolUse: guarded(a.guard) } } : {}) },
       })
       return copilotAgent(session, a.model, turn)
     },

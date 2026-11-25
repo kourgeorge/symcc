@@ -5,7 +5,7 @@ import { test, expect } from 'bun:test'
 import { PLAN_NOTE, copilotModels, copilotSdk, excludedTools, readOnlyRefusal, type CopilotClient, type CopilotEvent, type CopilotModule, type CopilotPermissionRequest, type CopilotSession, type CopilotSessionConfig } from '../copilot'
 import { disallowedFor, sdkAgents } from '../agents'
 import type { AgentRunEnd } from '../../../hooks/app/symcc'
-import type { SdkStep } from '../sdk'
+import type { SdkStep, SdkToolCall } from '../sdk'
 import { until } from './fake-sdk'
 
 type Emit = (type: string, data?: Record<string, unknown>, agentId?: string) => void
@@ -101,6 +101,30 @@ test("a session gets symcc's tools, Copilot's tools in place of Cursor's names, 
   expect(excludedTools(['task', 'task', 'shell', 'somethingElse'])).toEqual(['task', 'read_agent', 'list_agents', 'write_agent', 'bash', 'read_bash', 'write_bash', 'stop_bash', 'list_bash', 'somethingElse'])
   expect(sdk.name).toBe('Copilot')
   expect(sdk.defaultModel).toBe('auto')
+})
+
+test("symcc's guard is Copilot's onPreToolUse: a refusal is a deny with symcc's reason, changed arguments go back as modifiedArgs, and a guarded agent can't type into a running shell", async () => {
+  const fake = fakeCopilot(answers('ok'))
+  const calls: SdkToolCall[] = []
+  const sdk = copilotSdk({ load: fake.load })
+  const guard = async (c: SdkToolCall) => (calls.push(c), c.toolName === 'create' ? { deny: 'notes.txt is not in T-1 files' } : c.toolName === 'bash' ? { args: { command: 'wrapped' } } : undefined)
+  await sdk.create({ model: 'auto', cwd: '/tmp/w', tools: {}, disallowedTools: [], guard })
+  await sdk.create({ model: 'auto', cwd: '/tmp/p', tools: {}, disallowedTools: [] })
+  const [guarded, plain] = fake.sessions.map(s => s.config)
+  const pre = guarded!.hooks.handlers!.onPreToolUse
+  expect(await pre({ toolName: 'create', toolArgs: { path: 'notes.txt' } })).toEqual({ permissionDecision: 'deny', permissionDecisionReason: 'notes.txt is not in T-1 files' })
+  expect(await pre({ toolName: 'bash', toolArgs: { command: 'ls' } })).toEqual({ modifiedArgs: { command: 'wrapped' } })
+  expect(await pre({ toolName: 'view', toolArgs: { path: 'a' } })).toBe(undefined)
+  expect(calls).toEqual([
+    { toolName: 'create', toolArgs: { path: 'notes.txt' } },
+    { toolName: 'bash', toolArgs: { command: 'ls' } },
+    { toolName: 'view', toolArgs: { path: 'a' } },
+  ])
+  for (const t of ['write_bash', 'write_powershell']) expect(guarded!.tools.excludedTools).toContain(t)
+  expect(guarded!.hooks.enableRepositoryHooks).toBe(false)
+  expect(plain!.hooks.handlers).toBe(undefined)
+  expect(plain!.tools.excludedTools).not.toContain('write_bash')
+  expect(sdk.guard).toBe(undefined)
 })
 
 test("a turn's events are its steps (a sub-agent's aside), and its end has the last answer and every model call's tokens", async () => {

@@ -19,6 +19,6 @@
     "typescript": "5.9.3"
   },
   "optionalDependencies": {
-    "@microsoft/copilot-sdk": "2.0.1"
+    "@microsoft/copilot-sdk": "2.0.2"
   }
 }

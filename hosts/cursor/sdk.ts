@@ -1,6 +1,7 @@
 // The few parts of the Cursor SDK (@cursor/sdk) the Cursor host uses, behind a small interface so tests can hand in a
 // fake (tests/fake-sdk.ts) and GitHub Copilot's agents can stand in (./copilot.ts). cursorSdk() loads the real SDK on
 // first use. It isn't bundled: it ships native helpers.
+import type { Host } from '../../hooks/host'
 import { argWords, short } from './steps'
 
 /** A tool served from this process to an agent (the SDK's custom tools): it answers text. */
@@ -55,17 +56,35 @@ export type SdkAgent = { id: string; send: (text: string, o?: SdkSendOptions) =>
 /** Which of Cursor's own settings an agent loads: the project's rules, skills, AGENTS.md and MCP servers, the plugins'. */
 export type SdkSettingSource = 'project' | 'plugins'
 
+/** A tool call an agent is about to make, in its SDK's own tool names and arguments. */
+export type SdkToolCall = { toolName: string; toolArgs: unknown }
+
+/** symcc's word on a tool call before it runs: refuse it (the agent reads `deny`), run it with `args` instead, or nothing (it runs). */
+export type SdkToolVerdict = { deny: string } | { args: unknown } | undefined
+
+export type SdkToolGuard = (call: SdkToolCall) => Promise<SdkToolVerdict>
+
 /**
  * `disallowedTools` in the Cursor SDK's tool names (shell, edit, delete, webSearch, task, ...), which another SDK maps to
- * its own; `settings`: none when absent.
+ * its own; `settings`: none when absent; `guard`: symcc's check before each tool call, called only by an SDK that can
+ * check a call before it runs (Copilot's can; Cursor's can't).
  */
-export type SdkAgentOptions = { model: string; cwd: string; tools: Record<string, SdkTool>; disallowedTools: readonly string[]; settings?: readonly SdkSettingSource[] }
+export type SdkAgentOptions = { model: string; cwd: string; tools: Record<string, SdkTool>; disallowedTools: readonly string[]; settings?: readonly SdkSettingSource[]; guard?: SdkToolGuard }
 
 /**
  * `name`: whose agents these are, in the owner's words ("Cursor"); `defaultModel`: the model of an agent nothing names
- * one for; `models` lists the models the account can use, where the SDK can; `close` lets go of what the SDK started.
+ * one for; `models` lists the models the account can use, where the SDK can; `close` lets go of what the SDK started;
+ * `guard`: symcc's guard for this SDK's tool names, bound to one agent and the folder it runs in (no `agentId`: the
+ * lead), absent when the SDK can't check a call before it runs.
  */
-export type Sdk = { name: string; defaultModel: string; create: (o: SdkAgentOptions) => Promise<SdkAgent>; models?: () => Promise<SdkModelInfo[]>; close?: () => Promise<void> }
+export type Sdk = {
+  name: string
+  defaultModel: string
+  create: (o: SdkAgentOptions) => Promise<SdkAgent>
+  models?: () => Promise<SdkModelInfo[]>
+  close?: () => Promise<void>
+  guard?: (agent: { host: Host; dir: string; agentId?: string }) => SdkToolGuard
+}
 
 type CursorSdkModule = typeof import('@cursor/sdk')
 type SdkMessage = { type: string; [k: string]: unknown }

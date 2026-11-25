@@ -25,6 +25,7 @@ import { createInterface } from 'node:readline'
 import { openCursorSession, type CursorSession } from './session'
 import { cursorSdk } from './sdk'
 import { copilotSdk } from './copilot'
+import { copilotGuard } from './guard'
 import type { LeadChoice, LeadEvent } from './lead'
 import type { Sdk, SdkImage, SdkModel } from './sdk'
 import type { PanelActionId, PanelMode } from './protocol'
@@ -49,7 +50,7 @@ export function parseOptions(argv: readonly string[]): Record<string, string> {
 /** Whose agents run the lead and the workers: Cursor's when nothing says. */
 export function sdkFor(agents: string | undefined): Sdk {
   if (agents === undefined || agents === 'cursor') return cursorSdk()
-  if (agents === 'copilot') return copilotSdk()
+  if (agents === 'copilot') return copilotSdk({ guard: copilotGuard })
   throw new Error(`--agents is cursor or copilot, not ${agents}`)
 }
 

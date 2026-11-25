@@ -11,7 +11,8 @@ import { actionCommand, openCursorSession } from '../session'
 import type { PanelStep, PanelView } from '../protocol'
 import { addStep, readSteps, sessionMarkdown } from '../steps'
 import { taskSessions } from '../view'
-import { modelInfos } from '../sdk'
+import { modelInfos, type SdkToolVerdict } from '../sdk'
+import { copilotGuard } from '../guard'
 import { skillOf } from '../skills'
 import { parseLog, parseNumstat, parseWorktreeList } from '../worktrees'
 import { fakeSdk, until, type Turn } from './fake-sdk'
@@ -485,6 +486,37 @@ test('panel actions are sent as the owner’s own commands', () => {
   expect(actionCommand('symcc', 'T-5', 'run-now')).toEqual({ command: 'symcc-task', args: 'T-5 run' })
   expect(actionCommand('symcc', 'T-5', 'run-now', 'anyway')).toEqual({ command: 'symcc-task', args: 'T-5 run anyway' })
 })
+
+test("on Copilot's agents symcc's guard judges each tool call first: a worker's edit outside its task's files or its folder is refused, its shell commands run from its folder, the lead's go on", async () => {
+  const repo = await scratchRepo()
+  const sdk = fakeSdk(async t => (isWorker(t) ? await t.onCancel.then(() => ({ status: 'cancelled' as const })) : { status: 'finished' as const, result: 'ok' }))
+  sdk.guard = copilotGuard
+  const s = await openCursorSession({ root: repo, sdk, pluginRoot: PLUGIN_ROOT, sessionId: 'cursor-guard' })
+  const denied = (v: SdkToolVerdict) => (v && 'deny' in v ? v.deny : '')
+  try {
+    await s.command('symcc-init')
+    await s.tool('add', { title: 'Say hello', details: 'Write hello.txt', files: ['hello.txt'], why: 'a test', origin_by: 'owner', request: 'Say hello' })
+    await until(() => sdk.agents.some(a => 'ask_owner' in a.tools), 60_000, 'the worker')
+    const worker = sdk.agents.find(a => 'ask_owner' in a.tools)!
+    const guard = worker.options.guard!
+    expect(await guard({ toolName: 'create', toolArgs: { path: 'hello.txt', file_text: 'hi' } })).toBe(undefined)
+    expect(denied(await guard({ toolName: 'create', toolArgs: { path: 'notes.txt', file_text: 'hi' } }))).toContain("notes.txt is outside this task's files; it's recorded as a request to the owner")
+    expect(denied(await guard({ toolName: 'edit', toolArgs: { path: `${repo}/check.sh`, old_str: 'test', new_str: 'true' } }))).toContain("check.sh is in the owner's copy of the project, outside your own folder")
+    expect(denied(await guard({ toolName: 'bash', toolArgs: { command: `echo true > ${repo}/check.sh` } }))).toContain('outside your own folder')
+    expect(denied(await guard({ toolName: 'some_mcp_tool', toolArgs: {} }))).toContain('some_mcp_tool is not one')
+    expect(await guard({ toolName: 'ask_owner', toolArgs: { question: 'which greeting?' } })).toBe(undefined)
+    const shell = await guard({ toolName: 'bash', toolArgs: { command: 'cat hello.txt' } })
+    expect(shell && 'args' in shell ? (shell.args as { command: string }).command : '').toContain(`cd -- '${worker.options.cwd}'`)
+
+    await s.message('hello')
+    await until(() => sdk.agents.some(a => 'add' in a.tools), 20_000, 'the lead')
+    const lead = sdk.agents.find(a => 'add' in a.tools)!
+    expect(await lead.options.guard!({ toolName: 'create', toolArgs: { path: `${repo}/notes.txt`, file_text: 'hi' } })).toBe(undefined)
+  } finally {
+    await s.close()
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 120_000)
 
 test("Run now from the panel: a task that waits asks first and starts once told anyway; the owner's board actions go with their next message to the lead", async () => {
   const repo = await scratchRepo()

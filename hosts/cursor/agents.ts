@@ -11,7 +11,7 @@ import { TOOLS } from '../../hooks/app/tools'
 import { SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL } from '../../hooks/core/scouts'
 import { cleanTokens } from '../../hooks/core/runs'
 import { S } from '../../hooks/app/state'
-import type { Sdk, SdkAgent, SdkRun, SdkRunResult, SdkStep, SdkTool } from './sdk'
+import type { Sdk, SdkAgent, SdkRun, SdkRunResult, SdkStep, SdkTool, SdkToolGuard } from './sdk'
 
 /** A tool's definition as symcc lists it (TOOLS, ASK_TOOL_DEF). */
 export type ToolDef = { name: string; description: string; inputSchema: unknown }
@@ -58,6 +58,8 @@ export type SdkAgentsOptions = {
   onEnd: (agentId: string, end: AgentRunEnd) => void
   /** agent `agentId` called symcc's tool `tool`; answers the text it gets back */
   onTool: (agentId: string, tool: string, input: Record<string, unknown>) => Promise<string>
+  /** symcc's guard for agent `agentId` in folder `dir`, when the SDK can check a call before it runs (Sdk.guard) */
+  guard?: (agentId: string, dir: string) => SdkToolGuard
   /** each step of agent `agentId`'s turns as it happens */
   onStep?: (agentId: string, s: SdkStep) => void
   /** a line for the debug log */
@@ -115,9 +117,10 @@ export function sdkAgents(o: SdkAgentsOptions): SdkAgents {
       const id = `${o.sdk.name.toLowerCase()}-${++n}-${Date.now().toString(36)}`
       const e: Entry = { agent: { id, kind: a.kind === 'worker' ? 'worker' : 'scout', status: 'pending', name: a.name, description: a.description }, start: a, killed: false, ended: Promise.resolve() }
       const model = a.model && !CLAUDE_MODEL_WORDS.test(a.model) ? a.model : o.model
-      e.sdk = await o.sdk.create({ model, cwd: a.cwd ?? S.root, tools: tools(id, a.kind), disallowedTools: disallowedFor(a) })
+      const cwd = a.cwd ?? S.root
+      e.sdk = await o.sdk.create({ model, cwd, tools: tools(id, a.kind), disallowedTools: disallowedFor(a), ...(o.guard ? { guard: o.guard(id, cwd) } : {}) })
       entries.set(id, e)
-      log(`${id} started (${a.kind}, ${model}) in ${a.cwd ?? S.root}`)
+      log(`${id} started (${a.kind}, ${model}) in ${cwd}`)
       void turn(id, e, withCursorPrompt(a))
       return { agentId: id }
     },

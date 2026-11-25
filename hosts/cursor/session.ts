@@ -177,6 +177,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     sendWords(agent)
     o.onStep?.(agent, step)
   }
+  const guard = o.sdk.guard
   const agents = sdkAgents({
     sdk: o.sdk,
     model: o.workerModel ?? o.sdk.defaultModel,
@@ -184,6 +185,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     onTool: async (agentId, tool, input) => answerText(tool, await toolCall(ref.host!, toolName(tool), agentId, input)),
     onStep,
     log,
+    ...(guard ? { guard: (agentId: string, dir: string) => guard({ host: ref.host!, dir, agentId }) } : {}),
   })
   const leadTools = (): Record<string, SdkTool> =>
     Object.fromEntries(
@@ -204,6 +206,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     onEvent: e => o.onLead?.(e),
     onStep: s => onStep(LEAD_AGENT, s),
     settings: ['project', 'plugins'],
+    ...(guard ? { guard: call => guard({ host: ref.host!, dir: o.root })(call) } : {}),
   })
   const base = nodeHost({ root: o.root, agents, say: line => log(line), ...(o.sessionId ? { sessionId: o.sessionId } : {}), ...(o.pluginRoot ? { pluginRoot: o.pluginRoot } : {}) })
   // the board panel: the published view in memory, and the panel's view of it handed on after each publish; the

@@ -3,7 +3,7 @@
 // once (wakeLead 'now'); messages for a busy lead wait and go together as its next turn, except an urgent one, which
 // is put into the running turn (steer). The lead guide comes in front of the chat's first message while symcc is on.
 // The owner picks the model and mode of the lead's turns from the chat (configure), and can stop or summarize it.
-import type { Sdk, SdkAgent, SdkImage, SdkModel, SdkRun, SdkSettingSource, SdkStep, SdkTool } from './sdk'
+import type { Sdk, SdkAgent, SdkImage, SdkModel, SdkRun, SdkSettingSource, SdkStep, SdkTool, SdkToolGuard } from './sdk'
 
 /** Who a lead message is from: the owner typed it, or symcc sent it (a board update). */
 export type LeadFrom = 'owner' | 'symcc'
@@ -35,6 +35,8 @@ export type LeadChatOptions = {
   onStep?: (s: SdkStep) => void
   /** which of Cursor's settings the lead loads (none when absent) */
   settings?: readonly SdkSettingSource[]
+  /** symcc's guard for the lead's tool calls, when the SDK can check a call before it runs (Sdk.guard) */
+  guard?: SdkToolGuard
 }
 
 export type LeadChat = {
@@ -65,7 +67,7 @@ export function leadChat(o: LeadChatOptions): LeadChat {
   let idleWaiters: (() => void)[] = []
   let choice: LeadChoice = { mode: 'agent' }
 
-  const getAgent = () => (agent ??= o.sdk.create({ model: o.model, cwd: o.cwd, tools: o.tools(), disallowedTools: ['task'], ...(o.settings ? { settings: o.settings } : {}) }))
+  const getAgent = () => (agent ??= o.sdk.create({ model: o.model, cwd: o.cwd, tools: o.tools(), disallowedTools: ['task'], ...(o.settings ? { settings: o.settings } : {}), ...(o.guard ? { guard: o.guard } : {}) }))
 
   function settled() {
     if (running || waiting.length) return
