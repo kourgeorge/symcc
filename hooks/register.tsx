@@ -15,6 +15,7 @@ import { noteBackground, stopSeen, takeBackground } from './claude/background'
 import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideText, ownerTyped, meanwhileForPrompt, toolCall, otherToolDone, toolCallFailed, toolCheck, toolCheckFailed, agentFinished, runCommand } from './app/symcc'
 import { S, useName } from './app/state'
 import { damOwnerPrompt } from './app/dam'
+import { isOwnUpdate } from './app/tell'
 import { hookFailed } from './app/ask'
 import { popupCall } from './app/questions'
 import { spawnFailedText, shellCwd } from './core/path-guard'
@@ -121,7 +122,7 @@ export const register: Register = on => {
     useName(claudeHost($))
     const kind = e.origin?.kind
     // T-922: an "sdk" prompt is the owner's too (a Slack message through DAM), unless it is symcc's own board update or an agent's message
-    const owners = kind === 'composer' || kind === 'bridge' || (kind === 'sdk' && !e.text.trimStart().startsWith(`[${S.N.name}] Board update`) && !/^\s*(Another Claude session sent a message:\s*)?<agent-message /.test(e.text))
+    const owners = kind === 'composer' || kind === 'bridge' || (kind === 'sdk' && !isOwnUpdate(e.text) && !/^\s*(Another Claude session sent a message:\s*)?<agent-message /.test(e.text))
     // T-837: the hidden starter's end ("OK") reaches the lead's chat as a message; dropped here so it wakes no turn
     if (!owners && !e.command && starterFrame(e.text)) return { drop: '▸ agent started' }
     // T-968: the owner's board actions waiting as "Meanwhile" lines go beside their prompt (its context, kept in the chat
