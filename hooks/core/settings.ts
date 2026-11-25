@@ -291,7 +291,7 @@ export const SETTING_NAMES = ['test_commands', 'docs_test_commands', 'test_minut
 export type SettingName = (typeof SETTING_NAMES)[number]
 /** commands: test_commands; number: a whole number within min-max; onoff: true/false; mode: paused/review/auto; notify: voice/sound 1/sound 2/sound 3/off; findings: auto/backlog; untested: off/ask/review */
 export type SettingKind = 'commands' | 'number' | 'onoff' | 'mode' | 'notify' | 'findings' | 'untested'
-export type SettingInfo = { name: SettingName; kind: SettingKind; min?: number; max?: number; default: string; range: string; meaning: string }
+export type SettingInfo = { name: SettingName; label: string; kind: SettingKind; min?: number; max?: number; default: string; range: string; meaning: string }
 
 /** Why test_minutes value `v` is refused ('' when it is a whole number of minutes from 1 to MAX_TEST_MINUTES). */
 export const testMinutesRefusal = (v: unknown): string =>
@@ -307,20 +307,20 @@ export function useAssistantWord(word: string) {
 }
 
 export const SETTINGS: SettingInfo[] = [
-  { name: 'test_commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'must all pass before work is merged' },
-  { name: 'docs_test_commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'run instead of test_commands when a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test' },
-  { name: 'test_minutes', kind: 'number', min: 1, max: MAX_TEST_MINUTES, default: String(DEFAULT_TEST_MINUTES), range: `1-${MAX_TEST_MINUTES}`, meaning: 'how long each test command may run before merging' },
-  { name: 'max_parallel', kind: 'number', min: 1, max: 8, default: '3', range: '1-8', meaning: 'how many workers run at once' },
-  { name: 'max_minutes', kind: 'number', min: 5, max: 600, default: '45', range: '5-600', meaning: 'a worker running longer makes symcc ask the owner for more time' },
-  { name: 'auto_retries', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
-  { name: 'archive_days', kind: 'number', min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: '0-3650 (0 = never)', meaning: 'done and dropped tasks older than this move to archive.json' },
-  { name: 'open_on_start', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'open the board panel when a session starts' },
-  { name: 'notify', kind: 'notify', default: 'voice (else sound N, N picked from the project name, else off)', range: 'voice / sound 1 / sound 2 / sound 3 / off', meaning: 'when a task is merged or a worker asks you something: "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice), or a chime from sound set N, so you can tell which project chimed (on macOS sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Submarine and Funk; the second one when a question waits); picking a sound plays its chime' },
-  { name: 'scout_findings', kind: 'findings', default: 'auto', range: 'auto / backlog', meaning: 'the default for scouts without their own findings choice. auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you' },
-  { name: 'tests_with_changes', kind: 'untested', default: 'ask', range: 'off / ask / review', meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
-  { name: 'checker', kind: 'onoff', default: 'off', range: 'off / on', meaning: 'on: after the prep step and before a change joins the merge queue (where its tests run), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it' },
-  { name: 'mode', kind: 'mode', default: 'auto merge', range: 'paused / approve merge / auto merge', meaning: 'paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own' },
-  { name: 'enabled', kind: 'onoff', default: 'on', range: 'on / off', get meaning() {
+  { name: 'test_commands', label: 'Test commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'must all pass before work is merged' },
+  { name: 'docs_test_commands', label: 'Docs test commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'run instead of test_commands when a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test' },
+  { name: 'test_minutes', label: 'Time per test', kind: 'number', min: 1, max: MAX_TEST_MINUTES, default: String(DEFAULT_TEST_MINUTES), range: `1-${MAX_TEST_MINUTES}`, meaning: 'how long each test command may run before merging' },
+  { name: 'max_parallel', label: 'Workers at once', kind: 'number', min: 1, max: 8, default: '3', range: '1-8', meaning: 'how many workers run at once' },
+  { name: 'max_minutes', label: 'Time per worker', kind: 'number', min: 5, max: 600, default: '45', range: '5-600', meaning: 'a worker running longer makes symcc ask the owner for more time' },
+  { name: 'auto_retries', label: 'Retries on failure', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
+  { name: 'archive_days', label: 'Archive after', kind: 'number', min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: '0-3650 (0 = never)', meaning: 'done and dropped tasks older than this move to archive.json' },
+  { name: 'open_on_start', label: 'Open on start', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'open the board panel when a session starts' },
+  { name: 'notify', label: 'Alert', kind: 'notify', default: 'voice (else sound N, N picked from the project name, else off)', range: 'voice / sound 1 / sound 2 / sound 3 / off', meaning: 'when a task is merged or a worker asks you something: "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice), or a chime from sound set N, so you can tell which project chimed (on macOS sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Submarine and Funk; the second one when a question waits); picking a sound plays its chime' },
+  { name: 'scout_findings', label: 'Scout findings', kind: 'findings', default: 'auto', range: 'auto / backlog', meaning: 'the default for scouts without their own findings choice. auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you' },
+  { name: 'tests_with_changes', label: 'Code without tests', kind: 'untested', default: 'ask', range: 'off / ask / review', meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
+  { name: 'checker', label: 'Checker', kind: 'onoff', default: 'off', range: 'off / on', meaning: 'on: after the prep step and before a change joins the merge queue (where its tests run), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it' },
+  { name: 'mode', label: 'Mode', kind: 'mode', default: 'auto merge', range: 'paused / approve merge / auto merge', meaning: 'paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own' },
+  { name: 'enabled', label: 'Symcc on', kind: 'onoff', default: 'on', range: 'on / off', get meaning() {
     return `off: the whole plugin rests and ${assistantWord} works as normal`
   } },
 ]
@@ -342,10 +342,28 @@ export const SETTING_GROUPS: readonly SettingGroup[] = [
   { title: 'Board and alerts', items: ['notify', 'open_on_start', 'archive_days'] },
 ]
 
+/** One line for a focused group heading on the Settings page (T-1042). */
+export const groupHint = (title: string): string =>
+  ({ Work: 'How work runs: the mode, how many workers, how long and how often they retry.', 'Checks before merging': 'The tests and checks a change passes before it is merged.', Workers: 'The worker roles and the task types.', Scouts: 'What scouts do with what they find.', 'Board and alerts': 'The board panel and how symcc tells you things.' })[title] ?? ''
+
 export const isSettingPage = (x: string): x is SettingPage => (SETTING_PAGES as readonly string[]).includes(x)
 
 /** A category's settings (not the page rows), in its order. */
 export const groupSettings = (g: SettingGroup): SettingInfo[] => g.items.flatMap(x => (isSettingPage(x) ? [] : [settingInfo(x)!]))
+
+/** The value as a settings row shows it (T-1042): units where they help ("45 min"), the mode as the owner reads it. */
+export function settingRowValue(name: string, value: string): string {
+  if (name === 'max_minutes' || name === 'test_minutes') return `${value} min`
+  if (name === 'archive_days') return value === '0' ? 'never' : `${value} day${value === '1' ? '' : 's'}`
+  if (name === 'mode') return settingShown(name, value)
+  return value
+}
+
+/** The help line under the Settings list for a focused setting: its meaning, then the name to use in /<name>-settings and the default and range. */
+export const settingHelp = (name: string): { meaning: string; facts: string } => {
+  const s = settingInfo(name)
+  return s ? { meaning: s.meaning, facts: `${s.name} · default ${s.default} · ${s.range}` } : { meaning: '', facts: '' }
+}
 
 export const settingInfo = (name: string): SettingInfo | undefined => SETTINGS.find(s => s.name === name)
 

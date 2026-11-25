@@ -948,8 +948,12 @@ are about changes; under "How tasks ended" a read investigation shows as
   `last:` one; the name is never cut. Enter opens a scout: its state, its file, its
   instructions, its recent runs, and buttons to run it now, edit it, or pause or resume it.
   Back (`b`) goes back to the Scouts list, and the Scouts list's Back to the Tasks list.
-- The Settings view (`c`, or `/symcc-settings`) has one row per setting: its name, value,
-  default, allowed range and what it means. The rows are grouped under short headings:
+- The Settings view (`c`, or `/symcc-settings`) has one row per setting: a plain label
+  (`Workers at once`), dot leaders, then the value, all values in one column (`45 min`,
+  `auto merge`). The row has no default or range. A help area under a thin rule shows
+  the focused row only: what it means, then its name (the one `/symcc-settings NAME VALUE`
+  takes), default and range; on a group heading it shows a one-line hint. The rows are
+  grouped under short headings (names below are the setting names):
   - **Work**: `mode`, `max_parallel`, `max_minutes`, `auto_retries`, `enabled`
   - **Checks before merging**: `test_commands`, `docs_test_commands` (shell commands, like
     `test_commands` and up to 5, none by default; they run instead of `test_commands` when a
@@ -965,7 +969,7 @@ are about changes; under "How tasks ended" a read investigation shows as
   Each heading is a group you open and close with Enter (→/← do not, since the panel's
   buttons only get Enter and letter or digit keys). When the page opens, all groups
   are closed and the first heading has the focus; a closed group shows its values in short
-  on its heading line, e.g. `▸ Work · auto merge · 3 at once · 45 min · 2 retries`, and an open
+  after its heading, lined up in one column, e.g. `▸ Work                    auto merge · 3 at once · 45 min · 2 retries`, and an open
   one shows `▾ Work` with its rows under it. ↑↓ go over the headings and the rows of open
   groups only. The panel remembers which groups are open until the session ends. The lead's
   `settings` tool and `/symcc-settings` text always list every setting under the same

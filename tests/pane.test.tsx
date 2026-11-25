@@ -3,7 +3,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
 import { textWidth } from '../hooks/core/width'
-import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, bandLeads, type KeyHint } from '../hooks/board'
+import { SETTINGS, SETTING_GROUPS, settingHelp, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, bandLeads, type KeyHint } from '../hooks/board'
 import { keysFor } from './task-keys'
 import { STEP_NOTE } from '../hooks/board'
 const CHECKER_NOTE = STEP_NOTE.checker
@@ -1245,7 +1245,7 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
   await ui.unmount()
 })
 
-test('"c" and the Settings tab show one row per setting, with value, default and range', async ($, on) => {
+test('"c" and the Settings tab show one row per setting: label, dot leaders, value; the focused one has its help below', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], mode: 'review', test_commands: ['npm test'], branch: 'main', max_parallel: 5, max_minutes: 45, auto_retries: 2, open_on_start: true, notify: 'off', notify_choices: ['sound 1', 'sound 2', 'sound 3', 'off'] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const settingsTab = await ui.find({ key: 'tab-settings' })
@@ -1264,13 +1264,23 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   for (const g of SETTING_GROUPS) await ui.press({ key: `group:${g.title}` })
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
   expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'docs_test_commands', 'test_minutes', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
-  expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /default 45 · 5-600/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /one shell line, or a list of up to 5 lines/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^ off$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^ approve merge$/ })).toBeDefined()
+  // T-1042: "label ... value", values in one column, no default/range on the row
+  expect(SETTINGS.every(x => x.label.length > 0 && x.label !== x.name)).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /^npm test$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^5$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^45 min$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^approve merge$/ })).toBeDefined()
+  expect(await ui.find({ key: 'setting:max_parallel' })?.then(b => b?.text)).toMatch(/^ {2}Workers at once \.{2,} 5$/)
+  expect(await ui.find({ key: 'setting:max_minutes' })?.then(b => b?.text)).toMatch(/^ {2}Time per worker \.{2,} 45 min$/)
+  const col = async (k: string) => String((await ui.find({ key: k }))?.text).search(/(?<=\.\s)\S/)
+  expect(await col('setting:max_parallel')).toBe(await col('setting:max_minutes'))
+  expect(await ui.find({ type: 'Text', text: /· default / })).toBeUndefined()
+  // the help area is for the focused row only: its meaning, then the name, default and range
+  expect(await ui.find({ type: 'Text', text: /^Work$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /how many workers run at once/ })).toBeUndefined()
+  const help = settingHelp('max_parallel')
+  expect(help.meaning).toBe('how many workers run at once')
+  expect(help.facts).toBe('max_parallel · default 3 · 1-8')
   // Enter on a number opens an edit box; on mode a pick list of paused / approve merge / auto merge (stored review / auto)
   await ui.press({ key: 'setting:max_parallel' })
   expect(await ui.find({ key: 'setting-edit' })).toBeDefined()
@@ -1313,23 +1323,23 @@ test('Settings groups its rows under 5 headings, in order; with every group open
   expect([...at].sort((a, b) => a - b)).toEqual(at)
   // each row's name sits under its own heading, before the next one
   const under: Record<string, string[]> = {
-    Work: ['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled'],
-    'Checks before merging': ['test_commands', 'docs_test_commands', 'test_minutes', 'tests_with_changes', 'checker'],
+    Work: ['Mode', 'Workers at once', 'Time per worker', 'Retries on failure', 'Symcc on'],
+    'Checks before merging': ['Test commands', 'Docs test commands', 'Time per test', 'Code without tests', 'Checker'],
     Workers: ['Roles', 'Task types'],
-    Scouts: ['scout_findings'],
-    'Board and alerts': ['notify', 'open_on_start', 'archive_days'],
+    Scouts: ['Scout findings'],
+    'Board and alerts': ['Alert', 'Open on start', 'Archive after'],
   }
   titles.forEach((t, i) => {
     const from = at[i]!
     const to = at[i + 1] ?? texts.length
     for (const name of under[t]!) {
-      const k = texts.findIndex((x, j) => j > from && x.trimEnd() === name)
+      const k = texts.findIndex((x, j) => j > from && x.replace(/^[› ]+/, '').trimEnd() === name)
       expect(k).toBeGreaterThan(from)
       expect(k).toBeLessThan(to)
     }
   })
   // the ↑↓ stops are each heading then its rows, category after category
-  const rows = titles.flatMap(t => [`group:${t}`, ...under[t]!.map(n => (n === 'Roles' ? 'settings-roles' : n === 'Task types' ? 'settings-kinds' : `setting:${n}`))])
+  const rows = titles.flatMap(t => [`group:${t}`, ...under[t]!.map(n => (n === 'Roles' ? 'settings-roles' : n === 'Task types' ? 'settings-kinds' : `setting:${SETTINGS.find(x => x.label === n)!.name}`))])
   const isStop = (k: string) => k.startsWith('group:') || k.startsWith('setting:') || k === 'settings-roles' || k === 'settings-kinds'
   const stops = (await ui.findAll({ type: 'Button' })).map(b => String(b.key ?? '')).filter(isStop)
   expect(stops).toEqual(rows)
@@ -1353,8 +1363,8 @@ test('Settings groups start closed with the first heading focused; Enter opens a
   expect(work?.props.autoFocus).toBe(true)
   expect((await ui.find({ key: 'group:Scouts' }))?.props.autoFocus).toBeUndefined()
   expect(work?.props.label).toBe('▸ Work · auto merge · 3 at once · 45 min · 2 re…')
-  expect(await ui.find({ type: 'Text', text: '▸ Work' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' · auto merge · 3 at once · 45 min · 2 re…' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^▸ Work\s+$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'auto merge · 3 at once · 45 min · 2 re…' })).toBeDefined()
   expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles? · \d+ task types?/)
   expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
   // Enter opens Work: its rows show under "▾ Work"; ↑↓ go from its last row to the next heading, past nothing hidden
@@ -1408,14 +1418,14 @@ test('a closed group heading draws its title bold in the text colour and its val
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'tab-settings' })
-  const title = await ui.find({ type: 'Text', text: /^▸ Work$/ })
+  const title = await ui.find({ type: 'Text', text: /^▸ Work\s+$/ })
   expect(title?.props.bold).toBe(true)
   expect(title?.props.color).toBe('text')
-  const values = await ui.find({ type: 'Text', text: /^ · auto merge · 3 at once/ })
+  const values = await ui.find({ type: 'Text', text: /^auto merge · 3 at once/ })
   expect(values?.props.color).toBe('inactive')
   expect(values?.props.bold).toBeFalsy()
   const checks = await ui.find({ key: 'group:Checks before merging' })
-  expect(checks?.text).toMatch(/^▸ Checks before merging · 2 test commands/)
+  expect(checks?.text).toMatch(/^▸ Checks before merging {3}2 test commands/)
   expect(checks?.text).not.toMatch(/[[\]"]/)
   await ui.press({ key: 'group:Work' })
   const open = await ui.find({ type: 'Text', text: /^▾ Work$/ })

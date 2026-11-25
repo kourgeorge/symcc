@@ -14,7 +14,7 @@ import type { PaneParts } from './parts'
 import { vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
 
 /** The one label column's width in cells: the longest setting name and two spaces. */
-export const SETTINGS_LABEL_W = Math.max(...SETTINGS.map(s => s.name.length), 'Task types'.length) + 2
+export const SETTINGS_LABEL_W = Math.max(...SETTINGS.map(s => s.label.length), 'Task types'.length) + 2
 
 /** What settings.tsx hands the VS Code page: the Roles and Task types counts, how to save, how to open those pages. */
 export type VsSettingsCtx = {
@@ -58,7 +58,7 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
       const options = [...choices.map(value => (settingShown(name, value) === value ? { value } : { value, label: settingShown(name, value) })), ...(cantPlay ? [{ value: now, label: `${now} (can't play here)` }] : [])]
       return (
         <Box key={key} flexDirection="column">
-          {line(`${key}-row`, name$('name', name), <Select key={`setting:${name}`} options={options} value={now} onSelect={value => {
+          {line(`${key}-row`, name$('name', x.label), <Select key={`setting:${name}`} options={options} value={now} onSelect={value => {
             const r = parseSettingValue(name, value)
             if (value !== now && r.ok) ctx.save(r.input)()
           }} />)}
@@ -80,7 +80,7 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
     }
     return (
       <Box key={key} flexDirection="column">
-        {line(`${key}-row`, name$('name', name), (
+        {line(`${key}-row`, name$('name', x.label), (
           <Input
             key={`setting:${name}`}
             value={ed ? ed.value : shown}

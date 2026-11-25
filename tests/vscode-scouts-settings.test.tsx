@@ -260,7 +260,7 @@ test('Settings in VS Code at width 50: groups as headings, a Select for each cho
     expect(el?.type, name).toBe('Select')
     // T-1008: the name sits in the shared label column, not in the Select's own label
     expect(el?.props.label, name).toBeUndefined()
-    expect(texts(await ui.find({ key: `vs-setting-${name}-row-label` })), name).toEqual([name])
+    expect(texts(await ui.find({ key: `vs-setting-${name}-row-label` })), name).toEqual([SETTINGS.find(s => s.name === name)!.label])
   }
   expect((await ui.find({ key: 'setting:mode' }))?.props.value).toBe('auto')
   expect((await ui.find({ key: 'setting:mode' }))?.props.options).toEqual([{ value: 'paused' }, { value: 'review', label: 'approve merge' }, { value: 'auto', label: 'auto merge' }])
@@ -611,7 +611,7 @@ for (const bodyColumns of [40, 64, 100])
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
     const settings = await plain(ui, 'settings')
     const all = texts(settings)
-    // one label column: every setting's name in a label Box of the same width; the meaning alone under it, no "default · range"
+    // one label column: every setting's label in a label Box of the same width; the meaning alone under it, no "default · range"
     const widths = new Set(elements(settings).filter(n => /^vs-setting-.*-label$/.test(String(n.props?.key))).map(n => n.props?.width))
     expect([...widths].length).toBe(1)
     for (const x of SETTINGS.filter(x => x.name !== 'enabled')) expect(all, x.name).toContain(x.meaning)
