@@ -1458,7 +1458,9 @@ unchanged.
   Tasks list's Backlog, Done and Dropped headings still fold. The labels of a label and value list share one column, 11 characters wide.
   A link in a row sits in a cell of a set width, so it never drops onto a line of its own.
 - **Live tab**: plain bold headings (`Status`, `Tasks 17 backlog`, `Branches`, `Today`) with
-  the count as plain dim words. Nothing folds: no chevrons. No divider lines and no blank rows.
+  the count as plain dim words. Nothing folds: no chevrons. One thin dim line
+  separates each section from the next (none above the first or below the last, and a hidden
+  section leaves no extra line). No blank rows.
   - **Status**: one row each. Mode (`⏵ auto merge · agents 0/3 busy`, with `change` as a link
     that switches the mode), Scouts (the running ones, a link to the Scouts tab; "none running"
     otherwise), Branch (and which window drives), Tests (short, then the time limit and retries).

@@ -391,14 +391,25 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   // ---- Today: the day's figures as label/value rows (core's liveTodayRows); Tokens in one color
   const today = () => [vsFacts(vs, 'live-today-rows', liveTodayRows(v, nowMs).map(r => ({ key: r.key, label: r.label, value: [<Text key="v" wrap="wrap">{segsText(r.segs, r.key === 'tokens' ? 'text' : undefined)}</Text>] })))]
 
+  // T-1037: one thin dim line between each pair of shown sections (none above the first or below the last)
+  const sections = [
+    liveSection($, pane, 'status', LIVE_STATUS, status),
+    liveSection($, pane, 'tasks', LIVE_SECTIONS.tasks, tasks, backlogCount ? `${backlogCount} backlog` : undefined),
+    branchesVs($, pane, open),
+    liveSection($, pane, 'today', LIVE_SECTIONS.today, today),
+    orgMemLineVs($, pane, notes),
+  ].filter(Boolean)
+  const spaced = sections.flatMap((s, i) => (i ? [
+    <Box key={`live-sep-${i}`} flexDirection="row">
+      <Text wrap="truncate" color={C('inactive')}>{'─'.repeat(Math.max(1, liveInner(width)))}</Text>
+    </Box>,
+    s,
+  ] : [s]))
+
   return (
     <Box flexDirection="column" gap={1} flexGrow={1}>
       {header('live')}
-      {liveSection($, pane, 'status', LIVE_STATUS, status)}
-      {liveSection($, pane, 'tasks', LIVE_SECTIONS.tasks, tasks, backlogCount ? `${backlogCount} backlog` : undefined)}
-      {branchesVs($, pane, open)}
-      {liveSection($, pane, 'today', LIVE_SECTIONS.today, today)}
-      {orgMemLineVs($, pane, notes)}
+      {spaced}
       {/* T-930, T-933: the footer's Box takes the room left on a short page and puts the footer at its bottom */}
       <Box key="live-foot" flexDirection="column" flexGrow={1} justifyContent="flex-end">{vsFooter(vs, 'live-hint')}</Box>
     </Box>

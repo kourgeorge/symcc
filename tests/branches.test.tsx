@@ -280,7 +280,7 @@ test('T-973: the VS Code Live tab has the Status, Tasks, Branches, Today and Org
   const tree = await ui.drawn()
   const page = vsNodes(tree).find(n => n.type === 'Box' && ((n.children ?? []) as VsNode[]).some(k => vsKey(k) === 'live-tasks'))!
   expect(page.props?.gap).toBe(1)
-  expect(((page.children ?? []) as VsNode[]).map(vsKey)).toEqual(['vs-header', 'live-status', 'live-tasks', 'live-br', 'live-today', 'live-om', 'live-foot'])
+  expect(((page.children ?? []) as VsNode[]).map(vsKey)).toEqual(['vs-header', 'live-status', 'live-sep-1', 'live-tasks', 'live-sep-2', 'live-br', 'live-sep-3', 'live-today', 'live-sep-4', 'live-om', 'live-foot'])
   // T-1003: each heading is plain bold words (no Button, no chevron, no UPPERCASE), nothing folds; the Tasks heading has its dim backlog count
   const heads: [string, string][] = [['live-status-head', 'Status'], ['live-tasks-head', 'Tasks'], ['live-br-head', 'Branches'], ['live-today-head', 'Today']]
   const backlog = liveView().value.tasks.filter(t => t.status === 'backlog').length
@@ -308,7 +308,7 @@ test('T-973: the VS Code Live tab has the Status, Tasks, Branches, Today and Org
   // Today: its rows
   for (const k of ['results', 'tokens', 'time']) expect([k, !!(await ui.find({ key: `live-today-rows-${k}` }))]).toEqual([k, true])
   // no divider rules, no blank Text rows, no padding or margin on top of the page's gap
-  const ruleTexts = new Set(vsNodes(page).filter(n => vsKey(n) === 'tabs-rule').flatMap(n => vsNodes(n)))
+  const ruleTexts = new Set(vsNodes(page).filter(n => vsKey(n) === 'tabs-rule' || vsKey(n).startsWith('live-sep-')).flatMap(n => vsNodes(n)))
   const texts = vsNodes(page).filter(n => n.type === 'Text' && !ruleTexts.has(n)).map(vsText)
   expect(texts.filter(t => /[─—]{3,}/.test(t))).toEqual([])
   expect(texts.filter(t => t.length > 0 && !t.trim())).toEqual([])
@@ -316,6 +316,25 @@ test('T-973: the VS Code Live tab has the Status, Tasks, Branches, Today and Org
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
+
+// T-1037: one thin separator between each pair of shown sections: none on top or at the bottom, none doubled when Branches is hidden
+for (const hideBranches of [false, true])
+  test(`T-1037: the VS Code Live tab has one separator between each pair of sections${hideBranches ? ' (no Branches)' : ''}`, async ($, on) => {
+    const view = liveView()
+    if (hideBranches) (view.value as { branches?: unknown }).branches = undefined
+    seedBoard(on, { view })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
+    await ui.press({ key: 'tab-live' })
+    const page = vsNodes(await ui.drawn()).find(n => n.type === 'Box' && ((n.children ?? []) as VsNode[]).some(k => vsKey(k) === 'live-tasks'))!
+    const keys = ((page.children ?? []) as VsNode[]).map(vsKey).filter(k => k !== 'vs-header' && k !== 'live-foot')
+    const sections = hideBranches ? ['live-status', 'live-tasks', 'live-today', 'live-om'] : ['live-status', 'live-tasks', 'live-br', 'live-today', 'live-om']
+    expect(keys.filter(k => !k.startsWith('live-sep-'))).toEqual(sections)
+    expect(keys.map(k => (k.startsWith('live-sep-') ? '-' : 's')).join('')).toBe(sections.map(() => 's').join('-'))
+    const sep = vsNodes(page).find(n => vsKey(n) === 'live-sep-1')!
+    expect(vsText(sep)).toMatch(/^─+$/)
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  })
 
 test('T-1003: nothing folds on the VS Code Live tab: a heading is not pressable, every section stays open', async ($, on) => {
   seedBoard(on, { view: liveView() })
