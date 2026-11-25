@@ -1451,7 +1451,7 @@ export type LiveOrgMem = {
 
 /** The most columns of the topic grid. */
 export const ORG_MEM_GRID_MAX = 4
-const GRID_LEAD = '   '
+const GRID_LEAD = '  '
 const GRID_GAP = '    '
 const NEWEST_TOPIC_MAX = 16
 
@@ -1485,7 +1485,7 @@ function orgMemHead(n: number, width: number): LiveSeg[] {
 
 /** The newest notes' lines: "   11-21  tests      text cut with …", the topic column as wide as the longest topic shown (cut when narrow). */
 function newestLines(notes: readonly OrgMemNote[], width: number): { note: OrgMemNote; segs: LiveSeg[] }[] {
-  const lead = '   '
+  const lead = '  '
   const dayW = 5
   const longest = Math.max(0, ...notes.map(x => textWidth(x.topic)))
   // the text keeps at least about half of the room; the topic column gives way first
@@ -1546,11 +1546,11 @@ export function liveOrgMem(notes: readonly OrgMemNote[], width: number): LiveOrg
   const w = liveInner(full)
   return {
     head: orgMemHead(notes.length, full),
-    newestLabel: '  newest',
+    newestLabel: 'newest',
     all: { label: ORG_MEM_ALL, text: `[${ORG_MEM_ALL}]` },
     newest: newestLines(orgMemNewest(notes), w),
     empty: notes.length ? '' : `  ${ORG_MEM_EMPTY}`,
-    topicsLabel: '  topics',
+    topicsLabel: 'topics',
     grid: topicGrid(orgMemTopicCounts(notes), w),
   }
 }

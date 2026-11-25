@@ -27,7 +27,7 @@
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
 import { VIEW_FILE, parseViewFile, bandDraw, panelLines, pagePlace, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, PANEL_MARK, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, BACKLOG_MORE_ID, dayOfId, dayId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, LIVE_OM_ALL_ID, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, resetAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
-import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingShown, settingValue, viewAsBoard, isSettingPage, everyText, nextFindings, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
+import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingShown, settingValue, viewAsBoard, isSettingPage, everyText, nextFindings, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, showsDriveButton, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
 import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey, orgMemTopicCounts } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
@@ -832,6 +832,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (to && !(page && panelTaskActions(page, approveInProgress(f, page, approving(), now())).some(x => x.key === key))) return showTab(to)
     // the banner's Set up git (g), on the pages that show the banner
     if (key === 'g') return setUpGit(sessionID)
+    // T-1052: the banner's Drive here (d), where the banner shows it and another session drives
+    if (key === 'd' && f && showsDriveButton(f.view, f.view.driving ?? false) && showsHeader(boardPageOf(f, { tab: tab(), opened: opened(), run: run(), ...(edit() ? { edit: edit()! } : {}) }))) return void (await send(sessionID, { kind: 'drive' }))
     keepPage(f)
     if (tab() === 'live') return pressLive(key, sessionID)
     if (tab() === 'scouts') return pressScouts(key, sessionID)

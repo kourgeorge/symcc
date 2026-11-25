@@ -29,7 +29,7 @@ import {
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutFindingsOf, findingsLine, findingsDefaultLine, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingRowValue, settingsHelpOf, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
-  DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
+  DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning, DRIVE_HERE_LABEL, showsDriveButton,
   searchTasks, showsHeader, type BoardPage, groupLabel,
   LIVE_TABS, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveNowSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
@@ -587,6 +587,9 @@ export function gitRowLines(v: Pick<PaneView, 'git_state'> & Partial<Pick<PaneVi
   return lines
 }
 
+/** T-1052: the banner's Drive here button (d), shown while another session drives (and this window is on). */
+export const DRIVE_HERE_BUTTON: PanelButton = { label: DRIVE_HERE_LABEL, hit: { key: 'd' } }
+
 /** The banner's Check again button (g) while git is not installed: looks again, so installing git by hand moves the notice on. */
 export const CHECK_GIT_BUTTON: PanelButton = { label: 'Check again (g)', hit: { key: 'g' } }
 
@@ -676,6 +679,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     ...(l.art ? [{ text: l.art, color: 'ide' }] : []),
     ...l.parts.map(p => ({ text: p.text, color: TONE[p.tone], ...(p.bold ? { bold: true } : {}) })),
   ])
+  if (showsDriveButton(v, v.driving ?? false)) banner.push([{ text: buttonText(DRIVE_HERE_BUTTON), color: 'ide', hit: DRIVE_HERE_BUTTON.hit }])
   banner.push(...gitRowLines(v, w, f.name))
   const tab = choice.tab ?? 'tasks'
   // T-700: the header (banner, tabs, rule) only on a list page, as on the terminal panel and VS Code (core's showsHeader)
@@ -1751,6 +1755,8 @@ export type PanelAction =
   | { kind: 'scout-new'; scout: string; prompt: string }
   | { kind: 'setup-git' }
   | { kind: 'check-git' }
+  /** (T-1052) the banner's Drive here button: /<name>-drive */
+  | { kind: 'drive' }
 
 /**
  * T-888: the hidden mark the board panel puts at the end of the text of every slash command it sends (an invisible
@@ -1779,6 +1785,7 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'def-save') return { name: `${name}-settings`, text: `${defCommandWord(a.def)} ${a.name} save ${JSON.stringify(a.fields)}` }
   if (a.kind === 'scout-new') return { name: `${name}-scout`, text: `${a.scout} new ${a.prompt.trim()}` }
   if (a.kind === 'setup-git') return { name: `${name}-settings`, text: 'git setup' }
+  if (a.kind === 'drive') return { name: `${name}-drive`, text: '' }
   if (a.kind === 'check-git') return { name: `${name}-settings`, text: 'git check' }
   return { name: `${name}-answer`, text: `${a.id} ${a.answer.trim()}` }
 }

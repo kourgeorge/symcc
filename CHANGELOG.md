@@ -2,6 +2,21 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.42 (2026-11-25)
+
+### Added
+- Board header: a "Drive here (d)" button while another session drives the board.
+- A "speed" scout: once a day it looks for measured ways to make symcc more responsive.
+- Moving a task from the backlog to to do names the open tasks that share its files and shows its priority.
+
+### Changed
+- A new window opened while another one drives now follows it (a lead, not driving) instead of starting off. `/symcc-drive` names itself in the lead's message.
+- A window turned off with `/symcc-disable here` stays off until `/symcc-enable`, whatever other windows do; the old "the symcc window closed · take over" notice is gone.
+- Settings page (terminal, VS Code and OpenCode): plain names with values in one column, and help for the selected row (meaning, name, default, range) at the bottom.
+- Live tab: the usage bar uses solid blocks, so each part's color shows clearly; a blank line before "yesterday:"; organizational memory lines indented like Today's.
+- Task page: Priority is the last row of Details.
+- A short owner reply ("yes") is quoted in a task's Request with what it answered.
+
 ## 0.5.41 (2026-11-25)
 
 ### Added

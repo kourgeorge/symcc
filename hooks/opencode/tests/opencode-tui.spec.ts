@@ -2402,17 +2402,17 @@ test('T-718: OpenCode: the Live tab\'s org-mem section draws the header, the 3 n
     expect(head > 0).toBe(true)
     expect(textWidthOf(ls[head]!)).toBe(w)
     expect(ls[head + 1]!.trim()).toBe('')
-    expect(ls[head + 2]).toMatch(/^[ ›] {2}newest \[all\]$/)
-    expect(ls[head + 3]).toMatch(/^[ ›] {3}— +unsorted {2}a note written/)
-    expect(ls[head + 4]).toMatch(/^ {4}11-21 {2}git +Use a plain path/)
-    expect(ls[head + 5]).toMatch(/^ {4}11-21 {2}tests +In tests, put/)
-    expect(ls[head + 6]).toBe('   topics')
+    expect(ls[head + 2]).toMatch(/^[ ›]newest \[all\]$/)
+    expect(ls[head + 3]).toMatch(/^[ ›] {2}— +unsorted {2}a note written/)
+    expect(ls[head + 4]).toMatch(/^ {3}11-21 {2}git +Use a plain path/)
+    expect(ls[head + 5]).toMatch(/^ {3}11-21 {2}tests +In tests, put/)
+    expect(ls[head + 6]).toBe(' topics')
     // T-819: the topic labels (newest rows and the grid) are in the info blue, not green; "unsorted" stays dim
     const colorOfText = (row: number, text: string) => d.lines[row]!.find(s => s.text.trim() === text)?.color
     expect(colorOfText(head + 4, 'git')).toBe('ide')
     expect(colorOfText(head + 5, 'tests')).toBe('ide')
     expect(colorOfText(head + 3, 'unsorted')).toBe('inactive')
-    const gridEnd = ls.findIndex((l, i) => i >= head + 7 && !l.startsWith('    '))
+    const gridEnd = ls.findIndex((l, i) => i >= head + 7 && !l.startsWith('   '))
     const gridSegs = d.lines.slice(head + 7, gridEnd).flat()
     expect(gridSegs.find(s => s.text.trim() === 'tests')?.color).toBe('ide')
     expect(gridSegs.find(s => s.text.trim() === 'unsorted')?.color).toBe('inactive')
@@ -3931,6 +3931,29 @@ test('T-706: startTui: on the edit page the keyboard reaches Save and Cancel (�
   expect(t.sent).toEqual([])
   expect([t.board.state().opened, t.lines().some(l => l.includes('editing'))]).toEqual(['role:tester', false])
   t.board.stop()
+})
+
+test('T-1052: the banner shows [ Drive here (d) ] only while another session drives; d sends /symcc-drive; a page without the banner does nothing', async () => {
+  const f = addedViewFile()
+  const other = { ...f, view: { ...f.view, driving: false } }
+  const t = await tuiOn(other)
+  expect(t.lines().some(l => l.includes('[ Drive here (d) ]'))).toBe(true)
+  t.sent.length = 0
+  await t.board.press('d', 's')
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-drive', text: '' }])
+  t.sent.length = 0
+  await t.click('[ Drive here (d) ]')
+  expect(t.sent.map(x => x.name)).toEqual(['symcc-drive'])
+  t.board.stop()
+  const mine = await tuiOn({ ...f, view: { ...f.view, driving: true } })
+  expect(mine.lines().some(l => l.includes('Drive here'))).toBe(false)
+  mine.sent.length = 0
+  await mine.board.press('d', 's')
+  expect(mine.sent).toEqual([])
+  mine.board.stop()
+  const off = await tuiOn({ ...f, view: { ...f.view, driving: false, on_here: false } })
+  expect(off.lines().some(l => l.includes('Drive here'))).toBe(false)
+  off.board.stop()
 })
 
 test('T-706: startTui: Set up git (g, or the banner\'s button) asks a yes first, then sends /symcc-settings git setup; Cancel sends nothing; no git row, or a page without the banner: g does nothing', async () => {

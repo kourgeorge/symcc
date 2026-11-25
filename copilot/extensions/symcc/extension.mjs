@@ -9523,7 +9523,7 @@ function liveTodayLines(v, nowMs, width, offsetMin = localOffset(nowMs), note = 
   return [...first, ...todayMoreLines(more, width), ...past.length ? [[]] : [], ...past, ...note ? wrapLine(TOKENS_NOTE, width).map((text) => [{ text, tone: "dim" }]) : []];
 }
 var ORG_MEM_GRID_MAX = 4;
-var GRID_LEAD = "   ";
+var GRID_LEAD = "  ";
 var GRID_GAP = "    ";
 var NEWEST_TOPIC_MAX = 16;
 var ORG_MEM_COUNT_GAP = "   ";
@@ -9546,7 +9546,7 @@ function orgMemHead(n, width) {
   return segs({ text: p.lead, tone: "heading" }, { text: p.title, tone: "heading" }, { text: p.gap, tone: "text" }, { text: p.count, tone: "dim" }, { text: rule, tone: "heading" });
 }
 function newestLines(notes, width) {
-  const lead = "   ";
+  const lead = "  ";
   const dayW = 5;
   const longest = Math.max(0, ...notes.map((x) => textWidth(x.topic)));
   const fixed2 = textWidth(lead) + dayW + 2 + 2;
@@ -9598,11 +9598,11 @@ function liveOrgMem(notes, width) {
   const w = liveInner(full);
   return {
     head: orgMemHead(notes.length, full),
-    newestLabel: "  newest",
+    newestLabel: "newest",
     all: { label: ORG_MEM_ALL, text: `[${ORG_MEM_ALL}]` },
     newest: newestLines(orgMemNewest(notes), w),
     empty: notes.length ? "" : `  ${ORG_MEM_EMPTY}`,
-    topicsLabel: "  topics",
+    topicsLabel: "topics",
     grid: topicGrid(orgMemTopicCounts(notes), w)
   };
 }
