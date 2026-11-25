@@ -1367,9 +1367,9 @@ export function liveTodayLines(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs:
   const first = todayLines({ ...d, tokens }, width, triesOnly).map((text): LiveSeg[] =>
     text.endsWith(TRIES_ONLY) ? [{ text: text.slice(0, -TRIES_ONLY.length), tone: 'text' }, { text: TRIES_ONLY, tone: 'dim' }] : [{ text, tone: 'text' }])
   // T-855: with no lane there is no key line, so the dim note that ⌀ means tokens ends the section
-  // T-889: then the dim yesterday and last 7 days lines
+  // T-889: then the dim yesterday and last 7 days lines (T-1043: after one blank line)
   const past = pastLines(pastDays(v.tasks, nowMs, 1, offsetMin), pastDays(v.tasks, nowMs, 7, offsetMin), width)
-  return [...first, ...todayMoreLines(more, width), ...past, ...(note ? wrapLine(TOKENS_NOTE, width).map((text): LiveSeg[] => [{ text, tone: 'dim' }]) : [])]
+  return [...first, ...todayMoreLines(more, width), ...(past.length ? [[] as LiveSeg[]] : []), ...past, ...(note ? wrapLine(TOKENS_NOTE, width).map((text): LiveSeg[] => [{ text, tone: 'dim' }]) : [])]
 }
 
 /** T-973: one label/value row of a section (VS Code's Live tab): its key, its label ("Tokens") and its value in parts. */
@@ -1417,8 +1417,11 @@ export function liveTodayRows(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs: 
     const parts = [p.merged > 0 && `${p.merged} merged`, p.tokens > 0 && fmtTokens(p.tokens), p.workMs >= 1000 && pastTime(p.workMs)].filter((x): x is string => !!x)
     if (parts.length) rows.push({ key, label, segs: [{ text: parts.join(' · '), tone: 'text' }] })
   }
+  const before = rows.length
   past('yesterday', TODAY_ROW.yesterday, pastDays(v.tasks, nowMs, 1, offsetMin))
   past('week', TODAY_ROW.week, pastDays(v.tasks, nowMs, 7, offsetMin))
+  // T-1043: one blank row between today's rows and the past rows (only when a past row shows)
+  if (rows.length > before) rows.splice(before, 0, { key: 'gap', label: '', segs: [] })
   return rows
 }
 

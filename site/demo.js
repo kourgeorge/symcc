@@ -211,6 +211,7 @@
     L.push(' ' + sp('avg ', 'dim') + sp(`⌀ ${TODAY_MORE.perTask.replace(' · ', '/task · ')}`, 'text') + sp(`   first try ${TODAY_MORE.firstTry}% · avg ${TODAY_MORE.avgTries} tries/task   ⌕ ${d.back} sent back by the checker`, 'dim'))
     L.push(' ' + sp('⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text') + sp('   ⌀/h 00', 'dim') + sp('▕', 'dim') + sp('▁'.repeat(8), 'dim') + sp(TODAY_MORE.spark.slice(0, -1), 'bar') + sp(TODAY_MORE.spark.slice(-1), 'now') + sp('·'.repeat(24 - 8 - TODAY_MORE.spark.length) + '▏24', 'dim'))
     // (T-889) then the dim yesterday and last 7 days lines (today left out)
+    L.push('')
     L.push(' ' + sp('yesterday:   ✓ 77 merged · ⌀ 355M · ⏱ 34h', 'dim'))
     L.push(' ' + sp('last 7 days: ✓ 176 merged · ⌀ 854M · ⏱ 53h', 'dim'))
     if (!s.lanes.length) L.push(' ' + sp('⌀ = tokens', 'dim'))
