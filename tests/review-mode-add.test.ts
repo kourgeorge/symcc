@@ -4,7 +4,7 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { inProject } from './project'
 import { ran, readText } from './fakes'
-import { leadGuide, REVIEW_ADD_REMINDER } from '../hooks/app/tools'
+import { leadGuide, TOOLS, REVIEW_ADD_REMINDER } from '../hooks/app/tools'
 import { S } from '../hooks/app/state'
 
 /** A fake board.json: a save (write to a temp file, then mv over it) is kept, so the next read sees it. */
@@ -70,4 +70,10 @@ test('no mode set: the add answer has no reminder', async ($, on) => {
 test('T-1045: the lead guide says a short owner reply is quoted with the ask and the question', () => {
   const guide = leadGuide()
   expect(guide).toContain('when those words are a short reply like "yes", quote “<the owner\'s earlier ask, trimmed>” → lead: “<your question, short>” → “<the reply>”')
+})
+
+test('T-1045: the add tool\'s request description says a short reply is quoted with the ask and the question', () => {
+  const add = TOOLS().find(t => t.name === 'add')!
+  const props = (add.inputSchema as unknown as { properties: Record<string, { description: string }> }).properties
+  expect(props.request!.description).toContain('When they are a short reply ("yes"), write: “<owner\'s earlier ask, trimmed>” → lead: “<your question, short>” → “<reply>”')
 })
