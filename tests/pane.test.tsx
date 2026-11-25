@@ -1314,6 +1314,19 @@ test('"c" and the Settings tab show one row per setting: label, dot leaders, val
   await ui.unmount()
 })
 
+test('Settings closed group lines fit a narrow panel (30 columns)', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], notify: 'off', notify_choices: ['off'] } } })
+  fakeFiles(on, ROLE_FILES)
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
+  await ui.press({ key: 'tab-settings' })
+  for (const g of SETTING_GROUPS) {
+    const t = (await ui.find({ key: `group:${g.title}` }))?.text ?? ''
+    expect(t.length).toBeGreaterThan(0)
+    expect(t.length).toBeLessThanOrEqual(30)
+  }
+  await ui.unmount()
+})
+
 test('Settings groups its rows under 5 headings, in order; with every group open ↑↓ go heading, its rows, next heading', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], notify: 'off', notify_choices: ['off'] } } })
   fakeFiles(on, ROLE_FILES)

@@ -622,7 +622,9 @@ export async function settingsPage($: $, pane: PaneParts) {
       </Button>
     )
   }
-  const groupWidth = Math.max(...SETTING_GROUPS.map(g => g.title.length)) + 3
+  // a closed group's title is padded to one column; on a narrow panel there is no room for that, so it falls back to "▸ Work · summary"
+  const padWidth = Math.max(...SETTING_GROUPS.map(g => g.title.length)) + 3
+  const stacked = pane.width - 4 - padWidth < 12
   // the help for the focused row: a setting's meaning, then its name, default and range; a heading's hint; the first heading before any focus
   const helpOf = (): { lines: string[]; name: string } => {
     const k = focusedKey ?? row(`group:${SETTING_GROUPS[0]!.title}`)
@@ -641,14 +643,14 @@ export async function settingsPage($: $, pane: PaneParts) {
       {header('settings')}
       {SETTING_GROUPS.flatMap((g, gi) => {
         const open = S.settingsOpen.includes(g.title)
-        const sum = groupSummaryParts(g, viewAsBoard(v), Math.max(20, pane.width - 4 - groupWidth + g.title.length), { roles: rolesCount, kinds: kindsCount })
+        const sum = groupSummaryParts(g, viewAsBoard(v), stacked ? pane.width - 4 : pane.width - 4 - padWidth + g.title.length, { roles: rolesCount, kinds: kindsCount })
         const gKey = `group:${g.title}`
-        const shortSum = sum.values.replace(/^ · /, '')
+        const shortSum = stacked ? '' : sum.values.replace(/^ · /, '')
         const label = open ? `▾ ${g.title}` : `▸ ${sum.title}${sum.values}`
         return [
           ...(gi ? [<Text key={`group-blank:${g.title}`}> </Text>] : []),
           <Button key={row(`group:${g.title}`)} plain label={label} autoFocus={gi === 0 && !S.settingEdit && !S.settingPick ? true : undefined} onPress={toggleGroup(g.title)}>
-            <Text bold color={C('text')}>{open ? `▾ ${g.title}` : `▸ ${sum.title.padEnd(groupWidth)}`}</Text>
+            <Text bold color={C('text')}>{open ? `▾ ${g.title}` : `▸ ${stacked ? sum.title + sum.values : sum.title.padEnd(padWidth)}`}</Text>
             {open || !shortSum ? null : <Text color={C('inactive')}>{shortSum}</Text>}
           </Button>,
           ...(open ? g.items.flatMap(item => (isSettingPage(item) ? [pageRow(item)] : settingRow(item))) : []),
