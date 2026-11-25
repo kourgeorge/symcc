@@ -590,7 +590,7 @@ Use absolute paths under that folder for every {{file_tools}}. Never touch the m
 Add or update a test that checks your change, unless the change only touches docs (README, docs/, *.md, comments). Say in your report which test covers it.`,
   rules: `Make code changes with the Edit tool; put any throwaway script or note under .scratch/ in your folder (never commit it); /tmp also works.
 Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch/ (or /tmp), then run them in a separate command; don't write them with a here-document in Bash: the guard refuses those when they mention git or paths outside your folder.
-Do not run git commands that change anything (commit, push, merge, reset, checkout or switch of branches, stash, branch, tag, update-ref...); they are refused. Read-only ones like git status, diff, log and show are fine. A throwaway repository under /tmp is fine too, named by a plain path (git init /tmp/x, git -C /tmp/x commit -m m, cd /tmp/x && git add .; no $variables, ~ or ..), where the host allows it. {{name}} commits, tests and merges your work.
+In your folder you may change git on your own branch: commit, merge another branch, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect. Refused: push, fetch, pull or remotes; switching to, making or deleting branches; worktree; config; tags; stash; git in any other folder. Anything you leave uncommitted is committed for you. A throwaway repository under /tmp is fine too, named by a plain path (git init /tmp/x, git -C /tmp/x commit -m m, cd /tmp/x && git add .; no $variables, ~ or ..), where the host allows it. {{name}} commits, tests and merges your work.
 Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.`,
   done: `When you are done, answer in one or two plain sentences: what you changed.
 {{ask}}
@@ -987,7 +987,7 @@ ${quote(request)}` : ""].filter(Boolean).join(`
 {{earlier_work}}` : ""}`,
     text: (c) => {
       const t = c.task;
-      const merge = c.kind === "change" && t?.merge_main ? `First, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.` : "";
+      const merge = c.kind === "change" && t?.merge_main ? `First, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (commit the merge yourself, or leave it for symcc to commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.` : "";
       const work = c.kind === "change" && c.commits?.length ? `Your earlier tries' work is already here: it is committed on your branch, and your folder shows it. Their commits:
 ${c.commits.map((l) => `- ${l}`).join(`
 `)}` : "";
@@ -1960,6 +1960,8 @@ function cleanLive(v, status) {
     out.ask = ask;
   if (doing && strings(v.refused) && v.refused.length)
     out.refused = v.refused;
+  if (doing && typeof v.tested === "string" && /^[0-9a-f]{7,64}$/.test(v.tested))
+    out.tested = v.tested;
   return Object.keys(out).length ? out : undefined;
 }
 var intoOf = (t) => typeof t?.merge_into === "string" && t.merge_into.trim() ? t.merge_into.trim() : "main";
@@ -2678,7 +2680,7 @@ function liveFor(t, patch, next) {
   const sameTry = next.status === t.status && next.attempts === t.attempts;
   const kept = patch.live === null ? {} : { ...t.live ?? {} };
   if (!sameTry)
-    for (const k of ["extra_minutes", "time_ask", "wrap_up", "ask", "refused", "checking"])
+    for (const k of ["extra_minutes", "time_ask", "wrap_up", "ask", "refused", "checking", "tested"])
       delete kept[k];
   if (next.status !== t.status)
     delete kept.merge_wait;
@@ -3607,7 +3609,7 @@ function unquote(raw) {
 }
 var NESTED_MAX = 8;
 var COPIES = new Set(["cp", "ln", "install", "rsync", "scp"]);
-var CHANGES = new Set(["mv", "rm", "rmdir", "unlink", "shred", "touch", "mkdir", "truncate", "tee", "chmod", "chown", "chgrp", "cd", "pushd"]);
+var CHANGES = new Set(["mv", "rm", "rmdir", "unlink", "shred", "touch", "mkdir", "truncate", "tee", "chmod", "chown", "chgrp", "cd", "chdir", "pushd"]);
 function unresolvedTarget(command, depth = 0) {
   if (depth > NESTED_MAX)
     return command;
@@ -3873,7 +3875,7 @@ var outsideFolderText = (rel, worktree, dataDir2 = ".symcc") => {
   return `Refused: ${rel || "that path"} is in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: edit ${worktree.replace(/\/+$/, "")}/${rel || "..."} instead.`;
 };
 function cdTarget(text, home) {
-  const m = /^(cd|pushd|popd)(?:\s+([^]*))?$/.exec(text.trim());
+  const m = /^(cd|chdir|pushd|popd)(?:\s+([^]*))?$/.exec(text.trim());
   if (!m)
     return;
   if (m[1] === "popd")
@@ -3884,7 +3886,7 @@ function cdTarget(text, home) {
     arg = quoted[1];
   const homeOk = home?.startsWith("/") ? home : undefined;
   if (!arg)
-    return m[1] === "cd" ? homeOk ?? null : null;
+    return m[1] === "cd" || m[1] === "chdir" ? homeOk ?? null : null;
   if (!(quoted ? /^[\w./+@%, -]+$/ : /^[\w./~+@%,-]+$/).test(arg) || arg.startsWith("-"))
     return null;
   if (arg === "~" || arg.startsWith("~/"))
@@ -4297,23 +4299,70 @@ var scratchGitAllow = (temps, keep) => (sub, _args, place) => {
   }
   return true;
 };
-var MERGE_STEP_OPTIONS = new Set(["--no-edit", "--no-ff", "--no-commit"]);
-var mergeStepAllow = (into) => (sub, args) => {
-  if (sub !== "merge")
+var WORKER_GIT = new Set(["add", "rm", "mv", "restore", "checkout", "commit", "merge", "cherry-pick", "revert", "reset", "rebase", "bisect", "clean", "am", "apply"]);
+var REBASE_VALUE = new Set(["--onto", "-s", "--strategy", "-X", "--strategy-option", "-x", "--exec"]);
+var longStart = (a, name) => {
+  const long = /^--([^=]+)/.exec(a)?.[1];
+  return !!long && long.length > 1 && name.startsWith(long);
+};
+var workerGitAllow = (own) => (sub, args, place) => {
+  if (!place || !WORKER_GIT.has(sub))
     return false;
-  const rest = [];
-  for (let i = 0;i < args.length; i++) {
-    const a = args[i];
-    const redir = /^(\d*|&)>>?(&\d+)?(.*)$/.exec(a);
-    if (!redir)
-      rest.push(a);
-    else if (!redir[2] && !redir[3])
-      i++;
+  const mine = folderList(own);
+  let dir = place.dir;
+  for (let i = 0;i < place.pre.length; i++) {
+    const o = place.pre[i].raw;
+    if (o === "-C") {
+      const to = place.pre[++i]?.raw ?? "";
+      dir = to.startsWith("/") || /^["']\//.test(to) ? literalPath(to) : dir !== undefined && /^[\w.@%+,=-][\w./@%+,=-]*$/.test(to) && !to.split("/").includes("..") ? resolvePath(dir, to) : undefined;
+    } else if (o !== "--no-pager")
+      return false;
   }
-  if (rest.length === 1 && rest[0] === "--abort")
-    return true;
-  const names = rest.filter((a) => !MERGE_STEP_OPTIONS.has(a));
-  return names.length === 1 && names[0] === into;
+  if (dir === undefined || insideAny(resolvePath("/", dir), mine, true) === undefined)
+    return false;
+  const words = [];
+  for (let i = 0;i < place.args.length; i++) {
+    const a = place.args[i];
+    const redir = REDIRECT.exec(a.raw);
+    if (redir) {
+      if (!redir[4] && !redir[3])
+        i++;
+      continue;
+    }
+    if (MESSAGE_SUBS.has(sub) && (a.raw === "--message" || /^-[aqsvnS]*m$/.test(a.raw))) {
+      i++;
+      continue;
+    }
+    if (MESSAGE_SUBS.has(sub) && /^(-[aqsvnS]*m|--message=)/.test(a.raw))
+      continue;
+    if (a.expands)
+      return false;
+    words.push(a.w);
+  }
+  args = words;
+  if ((sub === "merge" || sub === "rebase") && args.some((a) => longStart(a, "autostash")))
+    return false;
+  if (sub === "bisect" && args[0] === "reset")
+    return args.length === 1;
+  if (sub === "checkout")
+    return args.indexOf("--") >= 0 && args.indexOf("--") < args.length - 1 && !args.slice(0, args.indexOf("--")).some((a) => /^-[a-zA-Z]*[bB]/.test(a) || longStart(a, "orphan") || longStart(a, "detach"));
+  if (sub === "rebase") {
+    let names = 0;
+    let root = false;
+    for (let i = 0;i < args.length; i++) {
+      const a = args[i];
+      if (longStart(a, "update-refs") || longStart(a, "quit"))
+        return false;
+      if (longStart(a, "root"))
+        root = true;
+      if (REBASE_VALUE.has(a))
+        i++;
+      else if (!a.startsWith("-"))
+        names++;
+    }
+    return names <= (root ? 0 : 1);
+  }
+  return true;
 };
 var TEXT_TOOLS = {
   grep: undefined,
@@ -4523,11 +4572,26 @@ function braceTextArgs(p) {
       out.add(k);
   return out;
 }
-var FOLDER_WORDS = new Set(["cd", "pushd", "popd", "eval", "source", "."]);
+var FOLDER_WORDS = new Set(["cd", "chdir", "pushd", "popd", "eval", "source", "."]);
 function gitFolders(pieces, cwd) {
   const out = new Map;
-  if (pieces.some((p) => ("op" in p) && (p.op === "|" || p.op === "(" || p.op === ")") || !("op" in p) && p.doc))
+  if (pieces.some((p) => !("op" in p) && p.doc))
     return out;
+  if (pieces.some((p) => ("op" in p) && (p.op === "|" || p.op === "(" || p.op === ")"))) {
+    const dir2 = cwd ? literalPath(cwd) : undefined;
+    const moves = pieces.some((p) => {
+      if ("op" in p)
+        return false;
+      const words = rawWords(p.text);
+      return !!words[0]?.expands || words.some((x) => FOLDER_WORDS.has(x.w));
+    });
+    if (!moves && dir2 !== undefined) {
+      for (const p of pieces)
+        if (!("op" in p))
+          out.set(p, dir2);
+    }
+    return out;
+  }
   let dir = cwd ? literalPath(cwd) : undefined;
   let moved = false;
   let prev;
@@ -4541,7 +4605,7 @@ function gitFolders(pieces, cwd) {
     out.set(p, dir);
     const words = rawWords(p.text);
     const name = words[0]?.raw;
-    if (name === "cd" || name === "pushd" || name === "popd") {
+    if (name === "cd" || name === "chdir" || name === "pushd" || name === "popd") {
       moved = true;
       dir = name !== "popd" && prev !== "||" && words.length === 2 ? literalPath(words[1].raw) : undefined;
     } else if (words[0]?.expands || !isGit(words[0]?.w ?? "") && words.some((x) => FOLDER_WORDS.has(x.w))) {
@@ -4665,7 +4729,7 @@ function gitScan(command, depth, allow, broad = false, cwd) {
 var gitReadOnlyText = (what, who) => `Refused: ${what} may change the repository or run another program, and ${who} may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings).`;
 var SCRATCH_GIT_TEXT = "A scratch repository under /tmp with a plain path is fine (e.g. git init /tmp/x, git -C /tmp/x commit -m m); no $TMPDIR, $(mktemp), ~ or ..";
 var gitWriteText = (what) => `${gitReadOnlyText(what, "the checker")} Check the work without changing any branch, commit, tag or the stash. ${SCRATCH_GIT_TEXT}`;
-var workerGitWriteText = (what, into) => `${gitReadOnlyText(what, "a worker")} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work. ${SCRATCH_GIT_TEXT}${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ""}`;
+var workerGitWriteText = (what) => `Refused: ${what} may change more than your own branch. In your own folder you may change git on your own branch (commit, merge, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect, add, rm). Not allowed: push, fetch, pull or changing remotes; switching to, making or deleting a branch (checkout or switch to a branch, branch -d/-D/-m); worktree; config; tag; stash (it is shared with the owner's folder); a git command in another folder, through a $variable, or with -c or GIT_* settings. ${SCRATCH_GIT_TEXT}`;
 var scoutGitWriteText = (what) => `${gitReadOnlyText(what, "a scout")} You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`;
 // hooks/core/git-setup.ts
 function startBranch(current, originHead, branches) {
@@ -5264,6 +5328,7 @@ var SETTING_GROUPS = [
 var isSettingPage = (x) => SETTING_PAGES.includes(x);
 var groupSettings = (g) => g.items.flatMap((x) => isSettingPage(x) ? [] : [settingInfo(x)]);
 var settingInfo = (name) => SETTINGS.find((s) => s.name === name);
+var SETTING_LABEL_WIDTH = Math.max(...SETTINGS.map((x) => x.label.length), "Task types".length);
 var settingShown = (name, value) => name === "mode" && isMode(value) ? MODE_NAME[value] : value;
 var testCommandsText = (cmds) => !cmds.length ? "none" : cmds.length === 1 && !cmds[0].trim().startsWith("[") ? cmds[0] : JSON.stringify(cmds);
 var TESTS_SHORT_MAX = 24;
@@ -7107,9 +7172,9 @@ var SERIAL_CHAIN = 3;
 var OWNER_IDLE_MS = 60 * 60000;
 var WAITS = ["todo", "backlog"];
 var byId = (x, y) => num(x.id) - num(y.id);
-function finding(b, reason, tasks, text, consider) {
+function finding(b, reason, tasks, text, consider, key) {
   const stamp = tasks.map((id) => `${id}@${find(b, id)?.updated_at ?? "-"}`).join(",");
-  return { reason, tasks, key: `${reason}:${stamp}`, text, consider };
+  return { reason, tasks, key: key ?? `${reason}:${stamp}`, text, consider };
 }
 function shareFiles(a, b) {
   if (!a.length || !b.length)
@@ -7177,6 +7242,12 @@ function readyAt(b, t) {
   const times = [t.created_at, t.updated_at, ...t.after.map((a) => find(b, a)?.updated_at)].map((x) => Date.parse(x || "")).filter(Number.isFinite);
   return times.length ? Math.max(...times) : NaN;
 }
+function todoSince(t) {
+  const moves = (t.history ?? []).filter((e) => e.kind === "moved-backlog" && !e.backlog || e.kind === "retried" || e.kind === "resumed").map((e) => Date.parse(e.at || ""));
+  const back = t.runs?.length ? Date.parse(t.updated_at || "") : NaN;
+  return Math.max(Date.parse(t.created_at || ""), ...[...moves, back].filter(Number.isFinite));
+}
+var startedAt = (t) => Date.parse(t.runs?.[0]?.started || t.updated_at || "");
 function aboutToStart(b) {
   const free = Math.max(0, (b.max_parallel ?? 0) - b.tasks.filter((t) => t.status === "doing").length);
   return new Set(ready(b).slice(0, free).map((t) => t.id));
@@ -7192,8 +7263,8 @@ function starving(b, nowMs) {
     if (!blockers.every((d) => num(d.id) > num(t.id)))
       continue;
     const changes = afterChanges(t);
-    const newer = b.tasks.filter((x) => num(x.id) > num(t.id) && started(x) && (x.priority ?? 0) >= (t.priority ?? 0)).length;
-    const since = blockers.length ? Date.parse(t.created_at || "") : readyAt(b, t);
+    const since = blockers.length ? todoSince(t) : readyAt(b, t);
+    const newer = b.tasks.filter((x) => num(x.id) > num(t.id) && started(x) && (x.priority ?? 0) >= (t.priority ?? 0) && !(startedAt(x) < since)).length;
     if (!blockers.length && (nowMs - since < CHECK_MS || next.has(t.id)))
       continue;
     const age = nowMs - since;
@@ -7201,7 +7272,7 @@ function starving(b, nowMs) {
     if (!why)
       continue;
     const on = blockers.length ? `waits only on newer tasks (${blockers.map((d) => d.id).join(", ")})` : "could start but has not";
-    out.push(finding(b, "starving", [t.id], `${t.id} ${on}, and ${why} — it keeps getting pushed back`, `let ${t.id} go first: give it a lower priority (e.g. -1), and make newer tasks that share its files wait on it`));
+    out.push(finding(b, "starving", [t.id], `${t.id} ${on}, and ${why} — it keeps getting pushed back`, `let ${t.id} go first: give it a lower priority (e.g. -1), and make newer tasks that share its files wait on it`, `starving:${t.id}:${t.status}:${t.after.join(",")}`));
   }
   return out;
 }
@@ -7255,7 +7326,7 @@ function newFindings(found, told) {
   return { fresh: found.filter((f) => !told.has(f.key)), told: new Set(found.map((f) => f.key)) };
 }
 function healthText(found) {
-  return [`Triage needed: the board health check found ${found.length === 1 ? "a problem" : `${found.length} problems`}:`, ...found.map((f) => `- ${f.text}. Consider: ${f.consider}.`), "Older tasks first unless the owner said one is urgent; bugs and safety fixes before features. Fix it with the board tools (change after / priority, retry, drop), or ask the owner if it is their call."].join(`
+  return [`[symcc health check] Triage needed (an automatic check, not a scout or a worker): found ${found.length === 1 ? "a problem" : `${found.length} problems`}:`, ...found.map((f) => `- ${f.text}. Consider: ${f.consider}.`), "Older tasks first unless the owner said one is urgent; bugs and safety fixes before features. Fix it with the board tools (change after / priority, retry, drop), or ask the owner if it is their call."].join(`
 `);
 }
 
@@ -7270,10 +7341,9 @@ function runNowWaits(b, t) {
 }
 var runNowQuestion = (id, waits) => `${id} waits on ${waits.map((w) => `${w.id} (${w.state})`).join(", ")}. Start anyway?`;
 var runNowShares = (all, t, statuses = ["doing"]) => all.filter((x) => x.id !== t.id && statuses.includes(x.status) && shareFiles(x.files ?? [], t.files ?? [])).map((x) => x.id);
-var OPEN_STATUSES = ["todo", "doing", "review", "waiting", "paused", "failed"];
 function backlogMovedText(all, t) {
   const after = t.after ?? [];
-  const ids = runNowShares(all, t, OPEN_STATUSES).filter((id) => !after.includes(id));
+  const ids = runNowShares(all, t, OPEN).filter((id) => !after.includes(id));
   const shared = ids.map((id) => `${id} (${all.find((x) => x.id === id).status})`);
   return `${t.id} moved from the backlog to todo` + (shared.length ? `; shares files with ${shared.join(", ")}; not in its after list` : "") + `; priority ${t.priority ?? 0}`;
 }
@@ -8665,7 +8735,7 @@ function liveIdle(view, nowMs, width = 80) {
     return wrap(LIVE_IDLE.fresh);
   if (modeOf(view) === "paused")
     return wrap(LIVE_IDLE.paused);
-  const open = tasks.filter((t) => t.status !== "done" && t.status !== "dropped" && t.status !== "backlog");
+  const open = tasks.filter((t) => OPEN.includes(t.status));
   if (open.length) {
     const sorted = [...open.filter((t) => needsYou(t, nowMs)), ...open.filter((t) => !needsYou(t, nowMs))];
     const head = `Nothing running · ${open.length} waiting`;
@@ -8983,13 +9053,27 @@ var TITLE_W = 12;
 var TITLE_MAX = 40;
 var RIGHT_W = 6;
 var laneWidth = (idW, titleW, k, gap, sep, rightW = RIGHT_W) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap + sep + rightW;
-function liveLayout(lanes, stations, width) {
+function liveLayout(lanes, stations, fullWidth, withKind = false) {
+  const plain = liveLayoutPlain(lanes, stations, fullWidth);
+  if (!withKind)
+    return plain;
+  const kindW = 2 + Math.max(0, ...lanes.map((l) => textWidth(l.kind ?? "")));
+  const free = plain.width - laneWidth(plain.idW, plain.titleW, plain.stations.length, plain.gap, plain.sep, plain.rightW);
+  if (free >= kindW)
+    return { ...plain, kindW };
+  const cut = kindW - free;
+  if (plain.titleW <= 3 || plain.titleW - cut < 3)
+    return { ...plain, kindDropped: true };
+  return { ...plain, titleW: plain.titleW - cut, kindW };
+}
+function liveLayoutPlain(lanes, stations, fullWidth) {
+  const width = fullWidth;
   const idW = Math.max(4, ...lanes.map((l) => textWidth(l.id)));
   const k = stations.length;
   const longest = Math.max(3, ...lanes.map((l) => textWidth(l.title)));
   const make = (titleW, gap, sep, rightW = RIGHT_W) => {
     const set = LABELS.find((s) => stations.slice(0, -1).every((st) => textWidth(s[st]) <= gap)) ?? LABELS[LABELS.length - 1];
-    return { width, idW, titleW, gap, labels: stations.map((s) => set[s]), rightW, sep, stations: [...stations] };
+    return { width: fullWidth, idW, titleW, gap, labels: stations.map((s) => set[s]), rightW, sep, stations: [...stations] };
   };
   const base = Math.min(TITLE_W, longest);
   const wide = Math.max(RIGHT_W, ...lanes.map((l) => l.done ? textWidth(`${l.done.word} 10m ago`) : 0));
@@ -9065,7 +9149,7 @@ function laneLines(lane, l, o) {
       track.push(k < lane.at ? { text: "●", tone: "passed" } : k === lane.at ? done ? { text: LIVE_DONE_MARK, tone: "passed" } : { text: liveBlink(o.frame, o.steady), tone: "current" } : { text: "○", tone: "future" });
   });
   const name = segs({ text: done ? `${LIVE_DONE_MARK} ` : LIVE_RUN_MARK, tone: done ? "dim" : "run" }, { text: padWidth(lane.id, l.idW), tone: "run" }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? "dim" : "text" });
-  const first = [...name, { text: sep, tone: "text" }, ...track, { text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: "dim" }];
+  const first = [...name, { text: sep, tone: "text" }, ...track, { text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: "dim" }, ...l.kindW ? [{ text: `  ${lane.kind}`, tone: "dim" }] : []];
   const back = lane.sentBack > 0 && { text: `⌕ × ${lane.sentBack}`, tone: "dim" };
   const fits = (xs) => textWidth(segText(xs)) <= l.width;
   const times = lane.tokens !== undefined && lane.usual ? lane.tokens / lane.usual : undefined;
@@ -9084,7 +9168,7 @@ function laneLines(lane, l, o) {
     const gap = Math.max(2, textWidth(segText(first)) - textWidth(segText(xs)) - textWidth(lane.kind));
     return [...xs, { text: " ".repeat(gap) + lane.kind, tone: "dim" }];
   };
-  const tries = [4, 3, 2, 1, 0].flatMap((n) => o.noKind ? [line(n)] : [withKind(line(n)), line(n)]);
+  const tries = [4, 3, 2, 1, 0].flatMap((n) => o.noKind || l.kindW || l.kindDropped ? [line(n)] : [withKind(line(n)), line(n)]);
   tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: "dim" }));
   const second = tries.find(fits) ?? tries[tries.length - 1];
   return [first, done ? second.map((x) => x.tone === "text" && !x.text.trim() ? x : { ...x, tone: "dim" }) : second];
@@ -9123,7 +9207,7 @@ function liveTrains(view, nowMs, lanes = liveLanes(view, nowMs)) {
         parent.set(t.id, best), changed = true;
     }
   }
-  const build = (id) => todo.filter((t) => parent.get(t.id) === id).map((t) => ({ id: t.id, title: t.title, also: open.get(t.id).filter((a) => a !== id), trains: build(t.id) }));
+  const build = (id) => todo.filter((t) => parent.get(t.id) === id).map((t) => ({ id: t.id, title: t.title, kind: kindOf(t), also: open.get(t.id).filter((a) => a !== id), trains: build(t.id) }));
   const next = [];
   let more = 0;
   for (const t of todo) {
@@ -9169,16 +9253,33 @@ function trainLine(x, depth, width) {
   for (const waits of ["  waits", ""])
     for (const also of alsos)
       tries.push({ also, waits });
-  const make = (t, titleW) => segs({ text: lead, tone: "dim" }, { text: x.id, tone: "run" }, titleW > 0 && { text: ` ${cutTitle(x.title, titleW)}`, tone: "wait" }, { text: t.waits, tone: "dim" }, { text: t.also, tone: "dim" });
-  for (const least of [8, 3])
-    for (const t of tries) {
-      const room = width - textWidth(lead + x.id + t.waits + t.also) - 1;
-      if (room >= Math.min(least, textWidth(x.title)))
-        return make(t, Math.min(room, TRAIN_TITLE));
-    }
-  for (const t of tries)
-    if (textWidth(lead + x.id + t.waits + t.also) <= width)
-      return make(t, 0);
+  const make = (t, titleW, kind = "") => segs({ text: lead, tone: "dim" }, { text: x.id, tone: "run" }, titleW > 0 && { text: ` ${cutTitle(x.title, titleW)}`, tone: "wait" }, { text: t.waits, tone: "dim" }, { text: t.also, tone: "dim" }, !!kind && { text: `  ${kind}`, tone: "dim" });
+  const base = () => {
+    for (const least of [8, 3])
+      for (const t of tries) {
+        const room = width - textWidth(lead + x.id + t.waits + t.also) - 1;
+        if (room >= Math.min(least, textWidth(x.title)))
+          return { t, titleW: Math.min(room, TRAIN_TITLE) };
+      }
+    for (const t of tries)
+      if (textWidth(lead + x.id + t.waits + t.also) <= width)
+        return { t, titleW: 0 };
+    return;
+  };
+  const b = base();
+  if (b && x.kind) {
+    const shown = Math.min(b.titleW, textWidth(x.title));
+    const kindW = textWidth(x.kind) + 2;
+    const rowW = textWidth(lead + x.id + b.t.waits + b.t.also) + (b.titleW > 0 ? 1 + shown : 0);
+    const free = width - rowW;
+    if (b.titleW > 0 && free >= kindW)
+      return make(b.t, b.titleW, x.kind);
+    const cut = kindW - free;
+    if (b.titleW > 0 && shown > 3 && shown - cut >= 3)
+      return make(b.t, shown - cut, x.kind);
+  }
+  if (b)
+    return make(b.t, b.titleW);
   return [{ text: fitText(lead + x.id, width), tone: "dim" }];
 }
 function liveToday(tasks, nowMs, offsetMin = localOffset(nowMs)) {
@@ -10120,6 +10221,8 @@ var startS = () => ({
   leadTimer: null,
   leadUrgent: false,
   leadRetry: null,
+  healthTold: new Set,
+  healthLoad: null,
   writing: Promise.resolve(),
   me: "",
   driving: false,
@@ -10238,13 +10341,13 @@ async function halt(host, agentId, why) {
   });
 }
 var reminded = new Map;
-var healthTold = new Set;
 var sizeNotes = new Map;
 var scoutState = new Map;
 var timers = [];
 var leadQueue = [];
 var meanwhile = [];
 var notReady = new Map;
+var adoptedCheckers = new Map;
 var checkerNotReady = new Map;
 var openDays = new Set;
 var heard = emptyHeard();
@@ -10336,9 +10439,12 @@ function takeBoardUpdate() {
 `).every((l) => l.startsWith("Starting ") && l.endsWith(START_LINE_END));
   const ending = startOnly ? "No reply needed; end the turn without a message." : `Lead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.
 Reply shape: one line per task ("✓ T-5  merged   what it means"); a routine update with no news is one short line at most.`;
-  return `[${S.N.name}] Board update:
+  const label = !before && body.split(`
 
-${before ? `${before}
+`).every((l) => l.startsWith(`[${S.N.name} health check]`)) ? "" : `[${S.N.name}] Board update:
+
+`;
+  return `${label}${before ? `${before}
 
 ` : ""}${body}
 
@@ -10371,13 +10477,26 @@ function meanwhileForPrompt() {
 }
 
 // hooks/app/health.ts
-function checkHealth($, b, nowMs = Date.now()) {
+var toldFile = () => path(`${S.N.dir}/health-told.json`);
+async function checkHealth($, b, nowMs = Date.now()) {
   if (!S.driving || !onHere(b))
     return;
-  const r = newFindings(boardHealth(b, nowMs), healthTold);
-  healthTold.clear();
+  S.healthLoad ??= $.fs.read(toldFile()).then((text) => {
+    for (const k of JSON.parse(text))
+      S.healthTold.add(k);
+  }).catch(() => {
+    return;
+  });
+  await S.healthLoad;
+  const r = newFindings(boardHealth(b, nowMs), S.healthTold);
+  const changed = r.told.size !== S.healthTold.size || r.fresh.length > 0;
+  S.healthTold.clear();
   for (const k of r.told)
-    healthTold.add(k);
+    S.healthTold.add(k);
+  if (changed)
+    await $.fs.write(toldFile(), JSON.stringify([...r.told])).catch(() => {
+      return;
+    });
   if (r.fresh.length)
     tellLead($, healthText(r.fresh));
 }
@@ -12053,8 +12172,8 @@ async function scheduleScouts(host) {
       scoutState.delete(k);
   const saved = defs.some((d) => !scoutState.has(d.name)) ? await loadScoutMemory(host) : {};
   let soonCount = 0;
-  const startedAt = Date.now();
-  const soon = () => startedAt + SCOUT_SOON_MS + SCOUT_SPREAD_MS * soonCount++;
+  const startedAt2 = Date.now();
+  const soon = () => startedAt2 + SCOUT_SOON_MS + SCOUT_SPREAD_MS * soonCount++;
   for (const s of [...defs].sort((a, b) => a.name.localeCompare(b.name))) {
     const known = scoutState.get(s.name);
     const old = known ?? { ...await lastFromRuns(host, s.name), running: false, ...saved[s.name]?.paused ? { paused: true } : {} };
@@ -12899,6 +13018,30 @@ async function dropIfSame(host, file, text) {
       return;
     });
 }
+var partsDirsMade = new WeakMap;
+async function ensurePartsDir(host) {
+  const dir = path(`${S.N.dir}/${PARTS_DIR}`);
+  const made = partsDirsMade.get(host) ?? new Set;
+  partsDirsMade.set(host, made);
+  if (made.has(dir))
+    return;
+  if (!await host.fs.exists(dir).catch(() => false))
+    await host.run(["mkdir", "-p", dir]).catch(() => {
+      return;
+    });
+  made.add(dir);
+}
+async function safeWriteIn(host, file, text, what) {
+  try {
+    await safeWrite(host, file, text, what);
+  } catch (e) {
+    partsDirsMade.delete(host);
+    await ensurePartsDir(host);
+    await safeWrite(host, file, text, what).catch(() => {
+      throw e;
+    });
+  }
+}
 async function saveBoard(host, b) {
   const hold = new Set(b.tasks.filter((t) => !stubbed.has(t.id) && missingParts.has(partsFileOf(t.id))).map((t) => t.id));
   const { board: slim, parts } = splitBoard(b, hold);
@@ -12912,15 +13055,13 @@ async function saveBoard(host, b) {
       want.set(file, tasks);
   }
   if (want.size)
-    await host.run(["mkdir", "-p", path(`${S.N.dir}/${PARTS_DIR}`)]).catch(() => {
-      return;
-    });
+    await ensurePartsDir(host);
   const first = new Map;
   for (const [file, tasks] of want) {
     const seen = partsSeen.get(file);
     const text = partsText({ ...seen?.tasks ?? {}, ...tasks });
     if (text !== seen?.text)
-      await safeWrite(host, file, text, `the board's ${fileName(file)}`);
+      await safeWriteIn(host, file, text, `the board's ${fileName(file)}`);
     first.set(file, text);
   }
   await safeWrite(host, path(S.N.boardFile), JSON.stringify(slim, null, 2) + `
@@ -12928,7 +13069,7 @@ async function saveBoard(host, b) {
   for (const [file, tasks] of want) {
     const text = partsText(tasks);
     if (text !== first.get(file))
-      await safeWrite(host, file, text, `the board's ${fileName(file)}`);
+      await safeWriteIn(host, file, text, `the board's ${fileName(file)}`);
     partsSeen.set(file, { text, tasks, stamp: await stampOf(host, file) });
   }
   const dir = path(`${S.N.dir}/${PARTS_DIR}/`);
@@ -13623,6 +13764,14 @@ async function checkAndMerge($, t, dir, b, mode = "finish", made = [], stop = ()
   };
   const target = intoOf(t);
   await markStep($, t, "prep", stopped2);
+  const onBranch = await backOnBranch($, dir, taskBranch(t));
+  if (onBranch)
+    return { ok: false, reason: "other", detail: onBranch };
+  const unfinished = await endUnfinished($, dir);
+  if (unfinished)
+    return { ok: false, reason: "other", detail: unfinished };
+  const own = await workerCommits($, t, dir, target);
+  made.push(...own);
   const add = await git($, ["add", "-A", "--", "."], dir);
   if (add.exitCode !== 0)
     return { ok: false, reason: "other", detail: `symcc could not stage the work (git add): ${gitFailText(add)}` };
@@ -13640,7 +13789,10 @@ async function checkAndMerge($, t, dir, b, mode = "finish", made = [], stop = ()
   const unstaged = await unstage($, dir, left);
   if (unstaged)
     return { ok: false, reason: "other", detail: `symcc could not leave out files that look like secrets (${nameList(left)}): ${unstaged}` };
-  const committed = await commitTry($, t, dir, made);
+  const before = made.length;
+  let committed = await commitTry($, t, dir, made);
+  if (!committed && own.length && made.length === before)
+    committed = await commitTry($, t, dir, made, undefined, true);
   if (committed)
     return { ok: false, reason: "other", detail: `symcc could not commit the work: ${committed}` };
   if (!await branchExists($, target))
@@ -13675,7 +13827,8 @@ async function checkAndMerge($, t, dir, b, mode = "finish", made = [], stop = ()
     }
     return { ok: false, reason: "nochange", detail: "the worker made no change" };
   }
-  const bad = outOfScope(changed, t.files, S.N.dir);
+  const touched = [...new Set([...changed, ...await touchedSince($, base, head)])];
+  const bad = outOfScope(touched, t.files, S.N.dir);
   if (bad.length) {
     if (mode !== "finish")
       return withSecrets({ ok: false, reason: "scope", detail: outOfScopeText(bad, t.files) });
@@ -13684,7 +13837,7 @@ async function checkAndMerge($, t, dir, b, mode = "finish", made = [], stop = ()
   }
   const role = findRole(await loadRoles($).catch(() => S.roles), roleOf(t));
   const prose = isProseRole(role);
-  const code = prose ? notProse(changed) : [];
+  const code = prose ? notProse(touched) : [];
   if (code.length) {
     if (mode !== "finish")
       return withSecrets({ ok: false, reason: "scope", detail: notProseText(role.name, code) });
@@ -13749,7 +13902,7 @@ async function changedSince($, base, head, noDeleted = false) {
   return d.stdout.split("\x00").filter(Boolean);
 }
 async function touchedSince($, base, head) {
-  const d = await git($, ["log", "--format=", "--name-only", "--no-renames", "--diff-filter=d", "-z", `${base}..${head}`]);
+  const d = await git($, ["log", "--cc", "--format=", "--name-only", "--no-renames", "-z", `${base}..${head}`]);
   if (d.exitCode !== 0)
     throw new Error(`git log --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`);
   return [...new Set(d.stdout.split("\x00").map((f) => f.replace(/^\n+/, "")).filter(Boolean))];
@@ -13769,13 +13922,66 @@ async function dropFromBranch($, t, dir, base, files, made) {
   return await unstage($, dir, files) || await commitTry($, t, dir, made);
 }
 async function undoOutOfScope($, t, dir, base, bad, made) {
-  for (let i = 0;i < bad.length; i += 100) {
-    const r = await git($, ["restore", `--source=${base}`, "--staged", "--worktree", "--", ...bad.slice(i, i + 100).map((f) => `:(literal)${f}`)], dir);
-    if (r.exitCode !== 0)
-      return `. Could not undo them on the task's branch: ${(r.stderr || r.stdout).trim().slice(0, 200)}`;
+  const head = (await git($, ["rev-parse", "HEAD"], dir)).stdout.trim();
+  const net = new Set(head ? await changedSince($, base, head).catch(() => bad) : bad);
+  const back = bad.filter((f) => net.has(f));
+  const r = await git($, ["reset", "-q", "--soft", base], dir);
+  if (r.exitCode !== 0)
+    return `. Could not undo them on the task's branch: ${gitFailText(r)}`;
+  for (let i = 0;i < back.length; i += 100) {
+    const r2 = await git($, ["restore", `--source=${base}`, "--staged", "--worktree", "--", ...back.slice(i, i + 100).map((f) => `:(literal)${f}`)], dir);
+    if (r2.exitCode !== 0)
+      return `. Could not undo them on the task's branch: ${(r2.stderr || r2.stdout).trim().slice(0, 200)}`;
   }
   const c = await commitTry($, t, dir, made, `${t.id}: undo changes outside the task`);
   return c ? `. Could not undo them on the task's branch: ${c}` : "";
+}
+async function workerCommits($, t, dir, target) {
+  const r = await git($, ["log", "--first-parent", "--reverse", "-z", "--format=%H%n%B", `refs/heads/${target}..HEAD`], dir);
+  if (r.exitCode !== 0)
+    return [];
+  const saved = new Set((t.runs ?? []).flatMap((x) => Array.isArray(x?.commits) ? x.commits : []));
+  return r.stdout.split("\x00").map((e) => ({ sha: e.slice(0, e.indexOf(`
+`) < 0 ? e.length : e.indexOf(`
+`)).trim(), body: e.slice(e.indexOf(`
+`) + 1) })).filter((e) => /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(e.sha) && !saved.has(e.sha) && !isTaskCommit(e.body, t.id, S.N.name)).map((e) => e.sha);
+}
+async function backOnBranch($, dir, branch) {
+  const ref = `refs/heads/${branch}`;
+  const off = async () => {
+    const r = await git($, ["symbolic-ref", "-q", "HEAD"], dir);
+    return r.exitCode === 1 || r.exitCode === 0 && !!r.stdout.trim() && r.stdout.trim() !== ref;
+  };
+  if (!await off())
+    return "";
+  await git($, ["bisect", "reset"], dir);
+  if (await off())
+    await git($, ["rebase", "--abort"], dir);
+  return await off() ? `the worker left its folder off the task's branch ${branch} (HEAD is elsewhere), so symcc could not commit the work there` : "";
+}
+async function endUnfinished($, dir) {
+  const pending2 = async (ref) => {
+    const r = await git($, ["rev-parse", "-q", "--verify", ref], dir);
+    return r.exitCode === 0 && !!r.stdout.trim();
+  };
+  const unmerged = async () => {
+    const r = await git($, ["ls-files", "-u", "-z"], dir);
+    return r.exitCode === 0 && !!r.stdout.trim();
+  };
+  if (await unmerged()) {
+    for (const [ref, cmd] of [["MERGE_HEAD", "merge"], ["CHERRY_PICK_HEAD", "cherry-pick"], ["REVERT_HEAD", "revert"]]) {
+      if (await pending2(ref))
+        await git($, [cmd, "--abort"], dir);
+    }
+    if (await unmerged())
+      await git($, ["reset", "-q", "--merge"], dir);
+  }
+  const apply = (await git($, ["rev-parse", "--path-format=absolute", "--git-path", "rebase-apply"], dir)).stdout.trim();
+  if (apply && await $.fs.exists(apply).catch(() => false))
+    await git($, ["am", "--abort"], dir);
+  if (await unmerged())
+    return "the worker left files with unresolved merge conflicts in its folder, so symcc did not commit them";
+  return "";
 }
 function gitFailText(r) {
   const lines = `${r.stderr}
@@ -13785,9 +13991,9 @@ ${r.stdout}`.split(`
   const signing = /gpg|signing|failed to sign|ssh-keygen/i.test(r.stderr);
   return signing ? `${text} (commit signing failed: run \`git config commit.gpgsign false\` in this repo, or fix the signer so it works without a terminal)` : text;
 }
-async function commitTry($, t, dir, made, subject) {
+async function commitTry($, t, dir, made, subject, empty = false) {
   const before = (await git($, ["rev-parse", "-q", "--verify", "HEAD"], dir)).stdout.trim();
-  const c = await git($, [...asSymcc(), "commit", "-q", "--no-verify", "-m", commitMessage(t, { name: S.N.name, ...subject ? { subject } : {} })], dir);
+  const c = await git($, [...asSymcc(), "commit", "-q", "--no-verify", ...empty ? ["--allow-empty"] : [], "-m", commitMessage(t, { name: S.N.name, ...subject ? { subject } : {} })], dir);
   const head = (await git($, ["rev-parse", "-q", "--verify", "HEAD"], dir)).stdout.trim();
   if (head && head !== before) {
     made.push(head);
@@ -14072,37 +14278,54 @@ var checkerName = (name, id) => agentSafeName(`${name}-${id}-checker`);
 async function runChecker($, t, b, dir, stop = () => {
   return;
 }, tryLater) {
-  await markStep($, t, "checker", () => {
-    return;
-  });
-  const into = intoOf(t);
-  const roles2 = await loadRoles($).catch(() => S.roles);
-  const role = findRole(roles2, CHECKER_ROLE);
-  const d = await git($, ["diff", "--no-color", "--no-ext-diff", "--no-renames", `refs/heads/${into}...HEAD`], dir).catch(() => null);
-  const n = await git($, ["diff", "--name-only", "--no-renames", "-z", `refs/heads/${into}...HEAD`], dir).catch(() => null);
-  const changed = n && n.exitCode === 0 ? n.stdout.split("\x00").filter(Boolean) : [];
-  const tests = checkerTestsText(S.N.name, b.test_commands);
-  const facts = { ...changeValues(t, b, dir), test_command: tests };
-  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, t), kind_name: t.kind ?? "change", diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ""), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) }, t);
-  const early = stop();
-  if (early) {
-    const why2 = `not started: the task was ${early}`;
-    await record($, t, null, why2);
-    return { verdict: null, why: why2 };
-  }
-  const saved = await gitPlace($, dir, taskBranch(t));
-  let agentId;
-  try {
-    const spawned = await startAgent($, { kind: "checker", prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...role?.model ? { model: role.model } : {} });
-    if (!spawned.agentId)
-      throw new Error("the checker did not start");
-    agentId = spawned.agentId;
-  } catch (err) {
-    const why2 = `the checker couldn't start: ${cutLine(err?.message ?? String(err), 200)}`;
-    if (notReadyYet(err) && tryLater?.())
-      return { verdict: null, why: why2, again: true };
-    await record($, t, null, why2);
-    return { verdict: null, why: why2 };
+  const adopted = adoptedCheckers.get(t.id);
+  adoptedCheckers.delete(t.id);
+  const held = adopted ? checkerRuns.get(adopted.id)?.held : undefined;
+  let agentId = adopted?.id ?? "";
+  let saved = null;
+  if (adopted) {
+    const tested = find(await load($).catch(() => emptyBoard()), t.id)?.live?.tested;
+    if (tested)
+      saved = { head: tested, on: `refs/heads/${taskBranch(t)}`, tip: tested, branch: taskBranch(t) };
+  } else {
+    await markStep($, t, "checker", () => {
+      return;
+    });
+    const into = intoOf(t);
+    const roles2 = await loadRoles($).catch(() => S.roles);
+    const role = findRole(roles2, CHECKER_ROLE);
+    const d = await git($, ["diff", "--no-color", "--no-ext-diff", "--no-renames", `refs/heads/${into}...HEAD`], dir).catch(() => null);
+    const n = await git($, ["diff", "--name-only", "--no-renames", "-z", `refs/heads/${into}...HEAD`], dir).catch(() => null);
+    const changed = n && n.exitCode === 0 ? n.stdout.split("\x00").filter(Boolean) : [];
+    const tests = checkerTestsText(S.N.name, b.test_commands);
+    const facts = { ...changeValues(t, b, dir), test_command: tests };
+    const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, t), kind_name: t.kind ?? "change", diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ""), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) }, t);
+    const early = stop();
+    if (early) {
+      const why2 = `not started: the task was ${early}`;
+      await record($, t, null, why2);
+      return { verdict: null, why: why2 };
+    }
+    saved = await gitPlace($, dir, taskBranch(t));
+    if (saved)
+      await change($, (x) => {
+        const cur = find(x, t.id);
+        return cur && cur.status === "doing" && cur.attempts === t.attempts ? patchTask(x, t.id, { live: { tested: saved.head } }, cur.updated_at) : x;
+      }).catch(() => {
+        return;
+      });
+    try {
+      const spawned = await startAgent($, { kind: "checker", prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...role?.model ? { model: role.model } : {} });
+      if (!spawned.agentId)
+        throw new Error("the checker did not start");
+      agentId = spawned.agentId;
+    } catch (err) {
+      const why2 = `the checker couldn't start: ${cutLine(err?.message ?? String(err), 200)}`;
+      if (notReadyYet(err) && tryLater?.())
+        return { verdict: null, why: why2, again: true };
+      await record($, t, null, why2);
+      return { verdict: null, why: why2 };
+    }
   }
   let overTime = false;
   const ended = new Promise((resolve) => {
@@ -14114,7 +14337,7 @@ async function runChecker($, t, b, dir, stop = () => {
       timer?.cancel();
       resolve(e);
     };
-    checkerRuns.set(agentId, { task: t.id, worktree: dir, end: done });
+    checkerRuns.set(agentId, { task: t.id, worktree: dir, end: done, ...held ? { held } : {} });
     const min = b.max_minutes;
     try {
       timer = $.clock.after(min * 60000, () => {
@@ -14125,6 +14348,8 @@ async function runChecker($, t, b, dir, stop = () => {
     } catch {
       timer = null;
     }
+    if (adopted?.early)
+      done(adopted.early);
     const late = stop();
     if (late) {
       halt($, agentId, `the task was ${late}`);
@@ -15179,11 +15404,19 @@ async function stopOrphans(host, leadNow) {
   const agents2 = await host.agents.list().catch(() => []);
   const lead2 = leadNow !== undefined ? leadNow : await host.fs.read(path(S.N.leadFile)).catch(() => null);
   const live2 = liveDriver(lead2, Date.now());
-  const b = agents2.some((a) => a.kind === "worker") ? await load(host).catch(() => null) : emptyBoard();
+  const b = adoptedCheckers.size || agents2.some((a) => a.kind === "worker" || a.kind === "scout" && a.name?.endsWith("-checker") && !ENDED_STATUSES.includes(a.status)) ? await load(host).catch(() => null) : emptyBoard();
+  const onStep = (t) => t?.status === "doing" && t.live?.phase === "checker" && handedBack(t) && ownedHere(t, S.me, live2);
   const out = [...leftovers];
   for (const a of agents2) {
     if (a.kind === "other")
       continue;
+    const adopted = [...adoptedCheckers].find(([, v]) => v.id === a.id);
+    if (adopted) {
+      if (!b || onStep(find(b, adopted[0])))
+        continue;
+      adoptedCheckers.delete(adopted[0]);
+      checkerRuns.delete(a.id);
+    }
     if (isOwnAgent(a.id))
       continue;
     if (debriefs.has(a.id))
@@ -15192,6 +15425,15 @@ async function stopOrphans(host, leadNow) {
       continue;
     if (a.kind === "worker" && !b)
       continue;
+    const chk = a.kind === "scout" && b ? b.tasks.find((t) => checkerName(S.N.name, t.id) === a.name && checkerIdOf(t) === a.id) : undefined;
+    if (onStep(chk) && ![...checkerRuns.values()].some((r) => r.task === chk.id) && !adoptedCheckers.has(chk.id)) {
+      const mark = { id: a.id };
+      adoptedCheckers.set(chk.id, mark);
+      checkerRuns.set(a.id, { task: chk.id, worktree: worktreeDir(chk.id), end: (e) => {
+        mark.early = e;
+      } });
+      continue;
+    }
     if (a.kind === "worker" && b) {
       const taken = [...workers.values()].map((w) => w.task);
       const m = orphanMove(agentState(a), b, S.me, live2, [...taken, ...starting, ...finishing], S.N.name);
@@ -15731,7 +15973,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     every slot is busy (one over; nothing else starts until back under) or the board is
     paused (only that one starts). One that waits on unfinished tasks asks first.
   • A worker gets only its task, its folder, its allowed files and the test commands.
-    It can't see the board or this chat, and must not commit, push or merge.
+    It can't see the board or this chat. It may change git only in its own folder, on its
+    own branch (commit, merge, cherry-pick, restore...); push, fetch, pull, other branches,
+    worktree, config, tags and stash are refused.
   • A resumed or retried task starts over with a fresh worker.
   • A worker's edit of a file outside its list is refused and recorded as a request;
     the worker then stops. The task waits for you: ${features.panel ? `on its page press Allow (the files
@@ -17306,9 +17550,10 @@ async function restartCheckers(host, agents2) {
   if (!b || !onHere(b))
     return;
   const live2 = liveDriver(await readLeadText(host), Date.now());
-  const running = new Set([...checkerRuns.values()].map((r) => r.task));
+  const adoptedIds = new Set([...adoptedCheckers.values()].map((v) => v.id));
+  const running = new Set([...checkerRuns].filter(([id]) => !adoptedIds.has(id)).map(([, r]) => r.task));
   const checkerAlive = (id) => agents2.some((a) => a.name === checkerName(S.N.name, id) && !stopped.has(a.id) && !ENDED_STATUSES.includes(a.status));
-  const lost = b.tasks.filter((t) => t.status === "doing" && t.live?.phase === "checker" && handedBack(t) && ownedHere(t, S.me, live2) && !finishing.has(t.id) && !approving.has(t.id) && !starting.has(t.id) && !running.has(t.id) && !onPurpose.has(t.id) && ![...workers.values()].some((w) => w.task === t.id) && !checkerAlive(t.id));
+  const lost = b.tasks.filter((t) => t.status === "doing" && t.live?.phase === "checker" && handedBack(t) && ownedHere(t, S.me, live2) && !finishing.has(t.id) && !approving.has(t.id) && !starting.has(t.id) && !running.has(t.id) && !onPurpose.has(t.id) && ![...workers.values()].some((w) => w.task === t.id) && (!checkerAlive(t.id) || adoptedCheckers.has(t.id)));
   for (const t of lost)
     checkAgain(host, t).catch(() => {
       return;
@@ -17343,7 +17588,7 @@ async function checkAgain(host, t0) {
     await markFinishing(host, id, tryNo2).catch(() => {
       return;
     });
-    if (!checkerNotReady.has(id))
+    if (!checkerNotReady.has(id) && !adoptedCheckers.has(id))
       tellLead(host, `${id} "${t2.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`);
     go = { b: b2, t: t2, dir: dir2 };
   } finally {
@@ -17369,10 +17614,12 @@ async function checkerStepAgain(host, t, b, dir, fromChecker, gaveUp, release, l
   const stop = () => gaveUp() ? "given up after running too long" : stopAsked.get(t.id);
   const made = [];
   const why = fromChecker ? stop() : undefined;
-  if (fromChecker && !why)
+  if (fromChecker && !why && !adoptedCheckers.has(t.id))
     await cleanFolder(host, dir);
+  const adoptedWas = fromChecker && !why && adoptedCheckers.has(t.id);
+  const waited = adoptedWas ? await afterChecker(host, t, b, dir, made, stop, true) : undefined;
   const checker2 = fromChecker || checkerOn(b) && !t.history.some((h) => h.text === checkerLine(tryLabel(t), { ok: true }));
-  const r = why ? taskWasResult(why) : await checkAndMerge(host, t, dir, b, "finish", made, stop, false, release, limit, checker2 ? checkerFirst(host, t, b, dir, made, stop, true) : undefined).catch((e) => ({ ok: false, reason: "other", detail: `checking failed: ${e.message.slice(0, 300)}` }));
+  const r = why ? taskWasResult(why) : await checkAndMerge(host, t, dir, b, "finish", made, stop, false, release, limit, adoptedWas ? async () => waited : checker2 ? checkerFirst(host, t, b, dir, made, stop, true) : undefined).catch((e) => ({ ok: false, reason: "other", detail: `checking failed: ${e.message.slice(0, 300)}` }));
   if (r.again)
     return;
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, workerIdOf(t), gaveUp);
@@ -17427,7 +17674,8 @@ var checkerFirst = (host, t, b, dir, made, stop, restarted = false) => async (ch
   return afterChecker(host, t, b, dir, made, stop, restarted);
 };
 async function afterChecker(host, t, b, dir, made, stop, restarted = false) {
-  await recordCommits(host, t.id, made);
+  if (!adoptedCheckers.has(t.id))
+    await recordCommits(host, t.id, made);
   const tryLater = () => {
     const misses = checkerNotReady.get(t.id) ?? 0;
     if (onNotReady(misses) === "fail")
@@ -18081,8 +18329,11 @@ async function branchExists($, name) {
 async function homeBranch($) {
   if (!S.root)
     return "main";
+  const cur = await currentBranch($);
+  if (cur)
+    return startBranch(cur, "", []);
   const origin2 = (await git($, ["symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"]).catch(() => null))?.stdout.trim() ?? "";
-  return startBranch(await currentBranch($), origin2, await branchList($));
+  return startBranch("", origin2, await branchList($));
 }
 var macToolsMissing = (out) => /xcrun: error: invalid active developer path|No developer tools were found|requires the command line developer tools/i.test(out);
 async function probeGit($) {
@@ -18683,7 +18934,8 @@ async function readTaskBranch(host, t, into, nowMs) {
     if (out === null)
       return null;
     const lines = logLines(out);
-    const n = lines.findIndex((l) => l.task !== t.id);
+    const saved = new Set((t.runs ?? []).flatMap((r) => Array.isArray(r?.commits) ? r.commits : []));
+    const n = lines.findIndex((l) => l.task !== t.id && !saved.has(l.sha));
     commits2 = lines.slice(0, n < 0 ? lines.length : n);
     if (!commits2.length)
       return null;
@@ -19078,7 +19330,7 @@ async function enableHere(host, tell) {
   tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-enable. You are a lead again; the board is in mode ${modeOf(b)}.`);
   return onHereText(b);
 }
-async function offHereBeat(host, nowMs = Date.now()) {
+async function offHereBeat(host) {
   await refreshMe(host);
   await locked(host, async () => {
     const l = await readLead(host);
@@ -19492,9 +19744,9 @@ async function workerGitWrite($, w, command, cwd) {
   if (!gitWriteIn(command, scratch, cwd))
     return;
   const t = find(await load($), w.task);
-  const into = t?.merge_main ? intoOf(t) : undefined;
-  const git2 = gitWriteIn(command, into ? eitherAllow(scratch, mergeStepAllow(into)) : scratch, cwd);
-  return git2 ? { text: workerGitWriteText(git2, into), guard: "git", what: git2 } : undefined;
+  const own = t && !isInvestigation(t) && w.worktree.startsWith("/") ? workerGitAllow(await bothNames(diskLook($), w.worktree)) : () => false;
+  const git2 = gitWriteIn(command, eitherAllow(scratch, own), cwd);
+  return git2 ? { text: workerGitWriteText(git2), guard: "git", what: git2 } : undefined;
 }
 async function scratchGit($, worktree) {
   if (!S.root || !worktree.startsWith("/"))
@@ -19793,7 +20045,7 @@ function stateOf(t, all, nowMs, group) {
     return [cell2, tries].filter(Boolean).join(" ");
   }
   if (t.status === "todo" || t.status === "paused") {
-    const open = (t.after ?? []).filter((id) => all.some((x) => x.id === id && x.status !== "done" && x.status !== "dropped"));
+    const open = (t.after ?? []).filter((id) => all.some((x) => x.id === id && !isFinished(x)));
     if (open.length)
       return `${t.status === "paused" ? "paused, " : ""}after ${open.join(", ")}`;
     return t.status === "paused" ? "paused" : "to do";
@@ -19864,7 +20116,7 @@ function liveStatusText(view, notes, nowMs, name = DEFAULT_NAME, width2 = 80, of
     out.push("");
   if (lanes.length) {
     const room = Math.max(0, ...lanes.map((l) => l.done ? 0 : tryText(l.tryNo).length));
-    const layout = liveLayout(lanes, liveColumns(lanes, view.checker === true), Math.max(1, inner - room));
+    const layout = liveLayout(lanes, liveColumns(lanes, view.checker === true), Math.max(1, inner - room), true);
     const trains = liveTrains(view, nowMs, lanes);
     under(liveLabelSegs(layout));
     for (const l of lanes) {
