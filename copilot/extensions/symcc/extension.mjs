@@ -12786,6 +12786,10 @@ async function saveMigrated(host) {
   await change(host, (b) => b);
 }
 var partsSeen = new Map;
+async function stampOf(host, file) {
+  const st = await host.fs.stat(file).catch(() => null);
+  return st ? `${st.mtimeMs}|${st.size}` : undefined;
+}
 var stubbed = new Set;
 var isStubbed = (id) => stubbed.has(id);
 var missingParts = new Set;
@@ -12812,12 +12816,19 @@ async function readJoined(host, again = true) {
       missingNow.add(rel);
       continue;
     }
+    const stamp = await stampOf(host, file2);
+    const had = partsSeen.get(file2);
+    if (had && stamp !== undefined && had.stamp === stamp) {
+      noteRead(host, file2, had.text);
+      files.set(rel, had.tasks);
+      continue;
+    }
     const t = await readWhole(host, file2);
     const p = readParts(t);
     if (p.broken)
       return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be read (${p.broken})` }, whole: false, missing: [], missingFiles: new Set };
     files.set(rel, p.tasks);
-    partsSeen.set(file2, { text: t, tasks: p.tasks });
+    partsSeen.set(file2, { text: t, tasks: p.tasks, stamp });
   }
   const j = joinParts(raw, files);
   if (j.missing.length && again)
@@ -12923,7 +12934,7 @@ async function saveBoard(host, b) {
     const text = partsText(tasks);
     if (text !== first.get(file))
       await safeWrite(host, file, text, `the board's ${fileName(file)}`);
-    partsSeen.set(file, { text, tasks });
+    partsSeen.set(file, { text, tasks, stamp: await stampOf(host, file) });
   }
   const dir = path(`${S.N.dir}/${PARTS_DIR}/`);
   for (const file of [...partsSeen.keys()]) {
@@ -12971,10 +12982,32 @@ async function change(host, fn) {
     await emitTaskEvents(host, events);
     if (S.guardOnly)
       return value;
+    if (heldViews > 0) {
+      heldBoard = after;
+      return value;
+    }
     await publish(host, after);
     checkHealth(host, after);
     return value;
   });
+}
+var heldViews = 0;
+var heldBoard = null;
+function holdPublish(host) {
+  heldViews++;
+  let done = false;
+  return async () => {
+    if (done)
+      return;
+    done = true;
+    heldViews--;
+    if (heldViews > 0 || !heldBoard)
+      return;
+    const b = heldBoard;
+    heldBoard = null;
+    await publish(host, b);
+    checkHealth(host, b);
+  };
 }
 function locked(host, fn) {
   const run = S.writing.then(async () => {
@@ -14701,9 +14734,10 @@ function inUse(id, t, agents2) {
     return true;
   return liveWorkersFor({ id, runs: t?.runs }, agents2, S.N.name).length > 0;
 }
-async function dirty(host, dir) {
-  const st = await git(host, ["status", "--porcelain"], dir).catch(() => null);
-  return !st || st.exitCode !== 0 || !!st.stdout.trim();
+async function changedFiles2(host, dir) {
+  const st = await git(host, ["status", "--porcelain", "--untracked-files=all"], dir).catch(() => null);
+  return st?.exitCode === 0 ? st.stdout.split(`
+`).filter((l) => l.trim()).length : null;
 }
 async function headKept(host, dir, into) {
   const h = await git(host, ["rev-parse", "-q", "--verify", "HEAD"], dir).catch(() => null);
@@ -14830,7 +14864,9 @@ async function findAll(host, b, mergingId) {
       continue;
     }
     const bytes = await folderBytes(host, wt);
-    if (await dirty(host, wt)) {
+    const changed = await changedFiles2(host, wt);
+    const lose = t.status === "dropped" && changed !== null && changed > 0 ? changed : 0;
+    if (changed !== 0 && !lose) {
       listed.push({ kind: "worktree", fixable: false, bytes, text: `folder ${shown(wt)}/ (${why}) has uncommitted changes, kept` });
       keptDirs.set(wt, "has uncommitted changes");
       continue;
@@ -14845,21 +14881,21 @@ async function findAll(host, b, mergingId) {
       fixable: true,
       id: folderId(id),
       bytes,
-      text: `folder ${shown(wt)}/ (${why})`,
+      text: `folder ${shown(wt)}/ (${why})${lose ? `: deletes ${lose} uncommitted changed file${lose === 1 ? "" : "s"}` : ""}`,
       fix: async () => {
         const nb = await load(host).catch(() => null);
         if (!nb)
           return "the board can't be read now";
-        const nt = nb.tasks.find((x) => x.id === id);
+        const nt = nb.tasks.find((x) => x.id === id) ?? taskOf(id);
         if (nt && !isFinished(nt))
           return `${id} is ${nt.status} now`;
-        if (inUse(id, nt ?? taskOf(id), await agentsNow(host)))
+        if (inUse(id, nt, await agentsNow(host)))
           return "an agent may still use it";
-        if (await dirty(host, wt))
+        if (!(lose && nt?.status === "dropped") && await changedFiles2(host, wt) !== 0)
           return "it has uncommitted changes now";
         if (!await headKept(host, wt, into))
           return "it holds commits on no branch now";
-        const r = await git(host, ["worktree", "remove", wt]);
+        const r = await git(host, ["worktree", "remove", ...lose ? ["--force"] : [], wt]);
         return r.exitCode === 0 ? "" : `git worktree remove: ${(r.stderr || r.stdout).trim().slice(0, 150)}`;
       }
     });
@@ -14901,28 +14937,64 @@ ${dry.stderr}`) : [];
     }
     if (!t || !isFinished(t))
       continue;
+    if (inUse(id, t, agents2)) {
+      listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}): an agent may still use it, kept` });
+      continue;
+    }
     const into = intoOf(t);
     const anc = await git(host, ["merge-base", "--is-ancestor", sha, `refs/heads/${into}`]).catch(() => null);
     if (anc?.exitCode === 0) {
-      const folder = outAt.get(br);
-      if (wl?.exitCode !== 0 || folder !== undefined && !(folder === `${wtRoot}/${id}` && offered.has(folderId(id)))) {
-        const why = wl?.exitCode !== 0 ? "git could not tell where it is checked out" : keptDirs.get(folder) === "has uncommitted changes" ? "checked out in a folder with uncommitted changes" : `checked out in ${shown(folder)}/`;
+      const folder2 = outAt.get(br);
+      if (wl?.exitCode !== 0 || folder2 !== undefined && !(folder2 === `${wtRoot}/${id}` && offered.has(folderId(id)))) {
+        const why = wl?.exitCode !== 0 ? "git could not tell where it is checked out" : keptDirs.get(folder2) === "has uncommitted changes" ? "checked out in a folder with uncommitted changes" : `checked out in ${shown(folder2)}/`;
         listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into}): kept: ${why}` });
         continue;
       }
-      const after = folder !== undefined ? ` (goes after its folder, ${folderId(id)})` : "";
+      const after2 = folder2 !== undefined ? ` (goes after its folder, ${folderId(id)})` : "";
       branches.push({
         kind: "branch",
         fixable: true,
         id: branchId(id),
-        text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into})${after}`,
-        fix: async () => await deleteMergedBranch(host, br, into) ? "" : `it is no longer all in ${into}, or it is still checked out in a folder${after ? ` (clean up ${folderId(id)} too)` : ""}`
+        text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into})${after2}`,
+        fix: async () => await deleteMergedBranch(host, br, into) ? "" : `it is no longer all in ${into}, or it is still checked out in a folder${after2 ? ` (clean up ${folderId(id)} too)` : ""}`
       });
       continue;
     }
     const n = anc?.exitCode === 1 ? await git(host, ["rev-list", "--count", `refs/heads/${into}..${sha}`]).catch(() => null) : null;
     const count2 = n?.exitCode === 0 ? Number(n.stdout.trim()) : NaN;
-    listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}) holds unmerged work${Number.isFinite(count2) && count2 > 0 ? ` (${count2} commit${count2 === 1 ? "" : "s"} not in ${into})` : ""}; never deleted by the doctor` });
+    const lost = Number.isFinite(count2) && count2 > 0 ? ` (${count2} commit${count2 === 1 ? "" : "s"} not in ${into})` : "";
+    if (t.status !== "dropped") {
+      listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}) holds unmerged work${lost}; never deleted by the doctor` });
+      continue;
+    }
+    const folder = outAt.get(br);
+    if (wl?.exitCode !== 0 || folder !== undefined && !(folder === `${wtRoot}/${id}` && offered.has(folderId(id)))) {
+      const why = wl?.exitCode !== 0 ? "git could not tell where it is checked out" : `checked out in ${shown(folder)}/`;
+      listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is dropped) holds unmerged work${lost}; kept: ${why}` });
+      continue;
+    }
+    const after = folder !== undefined ? ` (goes after its folder, ${folderId(id)})` : "";
+    branches.push({
+      kind: "branch",
+      fixable: true,
+      id: branchId(id),
+      text: `branch ${br} (${id} is dropped): deletes ${count2 > 0 ? `${count2} commit${count2 === 1 ? "" : "s"}` : "commits"} not in ${into}${after}`,
+      fix: async () => {
+        const nb = await load(host).catch(() => null);
+        if (!nb)
+          return "the board can't be read now";
+        const nt = nb.tasks.find((x) => x.id === id) ?? taskOf(id);
+        if (nt?.status !== "dropped")
+          return `${id} is not dropped now`;
+        if (inUse(id, nt, await agentsNow(host)))
+          return "an agent may still use it";
+        const cur = await git(host, ["rev-parse", "--verify", "-q", `refs/heads/${br}`]).catch(() => null);
+        if (cur?.exitCode !== 0 || cur.stdout.trim() !== sha)
+          return "it changed since the list";
+        const r = await git(host, ["branch", "-D", br]);
+        return r.exitCode === 0 ? "" : `git branch -D: ${(r.stderr || r.stdout).trim().slice(0, 150)}${after ? ` (clean up ${folderId(id)} too)` : ""}`;
+      }
+    });
   }
   const nowMs = Date.now();
   const leadText2 = await leadCheck(host, listed);
@@ -15565,8 +15637,9 @@ ${features.panel ? "" : `  /${S.N.name}-board               show the board panel
   /${S.N.name}-doctor [fix [id ...]] check ${S.N.dir}/ and git: old migration backups, task branches
                        already merged, folders of finished tasks, stale worktree entries,
                        files near the 4 MB limit, stray files and a stuck board, with sizes;
-                       "fix" cleans up every item it offers, "fix b-T-5 w-T-5" only those. Unmerged
-                       branches and folders with uncommitted changes are only listed
+                       "fix" cleans up every item it offers, "fix b-T-5 w-T-5" only those. For a dropped
+                       task, fix also deletes its folder with unsaved changes and its unmerged
+                       branch (they can't be got back); for other tasks such work is only listed
   /${S.N.help} [TOPIC]           this manual
 ${features.panel ? `On the board: t tasks · l live · s scouts · c settings · m switch approve merge / auto merge.
 In the settings view: Enter on a row changes it: on/off flips, mode, notify, scout_findings and
@@ -15866,7 +15939,7 @@ var TOOLS = () => [
   },
   {
     name: "doctor",
-    description: `Check the project's ${S.N.dir}/ folder and git (like the owner's /${S.N.name}-doctor): old migration backups (the newest is kept), task branches of done or dropped tasks already in their branch, folders of finished tasks with no changes, stale git worktree entries, data files near the 4 MB read limit, stray files, and running tasks with no worker or a lead.json of a gone session. Without fix it only lists them, with sizes; each one that can be cleaned up has a short id made from what it is (b-T-5 a branch, w-T-5 a task folder, m-1101-1000 a backup by its date and time, p-worktrees the stale worktree entries). fix cleans up: "all", or the ids from the list (e.g. "b-T-5 m-1101-1000"); an id the list no longer offers is skipped and named, never matched to another item. Only give fix after the owner said yes in the chat (once for all, or for the items they picked). Branches with unmerged work, folders with uncommitted changes, reports, org-mem, scouts, roles and task types are never deleted. While a merge runs it still lists (the merging task's folder and branch are marked "being merged"), but fix changes nothing until the merge is done.`,
+    description: `Check the project's ${S.N.dir}/ folder and git (like the owner's /${S.N.name}-doctor): old migration backups (the newest is kept), task branches of done or dropped tasks already in their branch, folders of finished tasks with no changes, stale git worktree entries, data files near the 4 MB read limit, stray files, and running tasks with no worker or a lead.json of a gone session. Without fix it only lists them, with sizes; each one that can be cleaned up has a short id made from what it is (b-T-5 a branch, w-T-5 a task folder, m-1101-1000 a backup by its date and time, p-worktrees the stale worktree entries). fix cleans up: "all", or the ids from the list (e.g. "b-T-5 m-1101-1000"); an id the list no longer offers is skipped and named, never matched to another item. Only give fix after the owner said yes in the chat (once for all, or for the items they picked). A dropped task's folder with uncommitted changes and its branch with unmerged commits are offered too (the list says what is lost; fix removes them with --force and branch -D); those of any other task are only listed, never deleted. Reports, org-mem, scouts, roles and task types are never deleted. While a merge runs it still lists (the merging task's folder and branch are marked "being merged"), but fix changes nothing until the merge is done.`,
     inputSchema: { type: "object", properties: { fix: { type: "string", description: 'Only after the owner confirmed: "all", or the item ids from the list, e.g. "b-T-5 m-1101-1000".' } } }
   }
 ];
@@ -16709,6 +16782,8 @@ async function workerFinished(host, agentId, answer, end2 = { reason: "answer" }
   const ended = now();
   const bySymcc = await stoppedBySymcc(host, agentId, end2);
   let restarted = false;
+  const letGo = holdPublish(host);
+  handBackHolds.set(w.task, letGo);
   try {
     tryNo2 = await change(host, (x) => {
       const t = find(x, w.task);
@@ -16727,18 +16802,28 @@ async function workerFinished(host, agentId, answer, end2 = { reason: "answer" }
   } catch {
     keptHandBacks.set(agentId, { w, answer, end: end2, tokens, cost });
     finishing.delete(w.task);
+    handBackHolds.delete(w.task);
+    await letGo();
     return;
   }
   if (tryNo2 === null) {
     finishing.delete(w.task);
+    handBackHolds.delete(w.task);
+    await letGo();
     if (restarted)
       await pump(host);
     return;
   }
   if (tryNo2 !== undefined && end2.reason === "answer" && !stopped.has(agentId))
     startDebrief(host, agentId, w.task, tryNo2, answer);
-  await finishUnderLimit(host, w.task, tryNo2, limitMs, (gaveUp, over, limit) => finishWork(host, agentId, w, answer, end2, gaveUp, over, limit));
+  try {
+    await finishUnderLimit(host, w.task, tryNo2, limitMs, (gaveUp, over, limit) => finishWork(host, agentId, w, answer, end2, gaveUp, over, limit));
+  } finally {
+    handBackHolds.delete(w.task);
+    await letGo();
+  }
 }
+var handBackHolds = new Map;
 async function finishUnderLimit(host, id, tryNo2, limitMs, step) {
   let beat = null;
   try {
@@ -17122,6 +17207,15 @@ async function finishWork(host, agentId, w, answer, end2 = { reason: "answer" },
     await clearScratch(host, w.worktree).catch(() => false);
 }
 async function finishTry(host, agentId, w, answer, end2, gaveUp, release, limit) {
+  const letGo = handBackHolds.get(w.task);
+  handBackHolds.delete(w.task);
+  try {
+    return await finishTryBody(host, agentId, w, answer, end2, gaveUp, release, limit, letGo);
+  } finally {
+    await letGo?.();
+  }
+}
+async function finishTryBody(host, agentId, w, answer, end2, gaveUp, release, limit, letGo) {
   const b = await load(host);
   const t = find(b, w.task);
   if (!t || t.status !== "doing")
@@ -17189,6 +17283,7 @@ The task now waits for the owner, who can allow the files from the board (Allow 
     await change(host, (x) => find(x, t.id)?.status === "doing" && !gaveUp() ? patchTask(x, t.id, { note: PREP_NOTE }, now()) : x);
     const made = [];
     const stop = () => gaveUp() ? "given up after running too long" : stopAsked.get(t.id);
+    await letGo?.();
     const first = checkerOn(b) ? checkerFirst(host, t, b, w.worktree, made, stop) : undefined;
     const r = await checkAndMerge(host, t, w.worktree, b, "finish", made, stop, false, release, limit, first).catch((e) => ({ ok: false, reason: "other", detail: `checking failed: ${e.message.slice(0, 300)}` }));
     if (r.again)
@@ -18353,12 +18448,12 @@ async function taskWork($, t) {
     commits2 = Number.isFinite(n) ? n : null;
   }
   const dir = worktreeDir(t.id);
-  let dirty2 = false;
+  let dirty = false;
   if (await $.fs.exists(`${dir}/.git`)) {
     const st = await git($, ["status", "--porcelain"], dir).catch(() => null);
-    dirty2 = !st || st.exitCode !== 0 || !!st.stdout.trim();
+    dirty = !st || st.exitCode !== 0 || !!st.stdout.trim();
   }
-  return { commits: commits2, dirty: dirty2 };
+  return { commits: commits2, dirty };
 }
 async function resetScratch($, id) {
   const dir = worktreeDir(id);
@@ -19913,7 +20008,7 @@ function COMMANDS(features = ALL_FEATURES) {
     { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: paused (nothing runs), review = approve merge (finished work waits for you) or auto = auto merge (it merges on its own); no word switches review and auto`, argumentHint: "[paused|review|auto]" },
     { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or type, with on, off, reset or remove) changes a role or task type, role <name> add makes one, role <name> edit <field> <value> changes one part of it (save {"field":"value",...} several at once); /${S.N.name}-settings git setup sets up git (as the lead's setup_git)`, argumentHint: "[name value | role|type <name> on|off|reset|remove | role|type <name> add | role|type <name> edit <field> <value> | role|type <name> save {json} | git setup]" },
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, time per stage, outcomes, by role, origin and day, with bar charts; inside (with a day range) counts only the work inside it; html writes them as a web page with charts and opens it: /${S.N.name}-stats [full|html] [7d [inside]|T-100..T-130]`, argumentHint: "[full|html] [7d [inside]|T-1..T-9]" },
-    { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix b-T-5 m-1101-1000 (the items with those ids)`, argumentHint: "[fix [all|id ...]]" },
+    { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix b-T-5 m-1101-1000 (the items with those ids); for a dropped task, fix also deletes its folder with unsaved changes and its unmerged branch (they can't be got back); for other tasks such work is only listed`, argumentHint: "[fix [all|id ...]]" },
     { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept; "here" turns it off in this window only`, argumentHint: "[here]" },
     { name: `${S.N.name}-enable`, description: `Turn ${S.N.name} on in this window: the project too if it was disabled, in the mode the board had` },
     { name: `${S.N.name}-init`, description: `Set up ${S.N.name} in this folder, like git init: makes ${S.N.dir}/ here, turns it on and opens the board; with no .git of its own the board shows a "No git repo here" notice with a set-up step, and "git" sets up git here first; where a board exists it changes nothing`, argumentHint: "[git]" },

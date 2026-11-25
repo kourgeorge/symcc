@@ -2,6 +2,15 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.41 (2026-11-25)
+
+### Added
+- Doctor offers to delete dropped tasks' leftover folders and branches, but never while an agent may still use them.
+
+### Changed
+- A worker's hand-back does less work per board change, so the board no longer freezes while workers finish.
+- VS Code Live page: a thin line between sections.
+
 ## 0.5.40 (2026-11-25)
 
 ### Changed
