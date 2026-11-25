@@ -21,7 +21,9 @@
 //           file where it is compared from; {"op":"worktree-remove","path":"..."} removes a finished task's folder
 // In a terminal (stdin is a TTY) it is a small chat instead: a line goes to the lead, "/tool <name> [json]" runs one of
 // the lead's tools, "/<command> [args]" a slash command (e.g. /symcc-init), and "/quit" ends.
+import { basename, dirname, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
+import { fileURLToPath } from 'node:url'
 import { openCursorSession, type CursorSession } from './session'
 import { cursorSdk } from './sdk'
 import { copilotSdk } from './copilot'
@@ -31,7 +33,8 @@ import type { Sdk, SdkImage, SdkModel } from './sdk'
 import type { PanelActionId, PanelMode } from './protocol'
 
 /** The symcc folder this file ships in: hosts/cursor/main.ts, or its bundle in hosts/cursor/dist/. */
-const PLUGIN_ROOT = decodeURIComponent(import.meta.url.replace(/^file:\/\//, '')).replace(/\/hosts\/cursor\/(dist\/)?[^/]*$/, '')
+const HERE = dirname(fileURLToPath(import.meta.url))
+const PLUGIN_ROOT = resolve(HERE, basename(HERE) === 'dist' ? '../../..' : '../..')
 
 /** `--name value` options; a bare option with no value after it is refused. */
 export function parseOptions(argv: readonly string[]): Record<string, string> {
