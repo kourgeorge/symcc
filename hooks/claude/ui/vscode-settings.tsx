@@ -51,7 +51,9 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
     const picks = x.kind === 'onoff' ? ['on', 'off'] : settingChoices(name, v.notify_choices)
     const choices = picks.length ? picks : null
     const key = `vs-setting-${name}`
-    const about = line(`${key}-about`, null, plain('about', x.meaning))
+    const first = x.meaning.split(/(?<=[.!?])\s/)[0]!
+    const short = first.length > 100 ? first.slice(0, 100).replace(/\s+\S*$/, '').replace(/[\s;:,]+$/, '') : first
+    const about = line(`${key}-about`, null, plain('about', `${name}  ${short}`))
     if (choices) {
       // a value this machine can't play (notify) stays in the list, marked, so the Select shows what is set
       const cantPlay = !choices.includes(now)
@@ -72,9 +74,9 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
     const shown = now === 'none' && x.kind === 'commands' ? '' : now
     const submit = (value: string) => {
       const typed = value.trim() ? value : x.kind === 'commands' ? 'none' : ''
-      if (!typed) return void ((S.settingEdit = { name, value, error: `${name} must be a whole number, ${x.range}` }), redraw())
+      if (!typed) return void ((S.settingEdit = { name, value, error: `${x.label} must be a whole number, ${x.range}` }), redraw())
       const r = parseSettingValue(name, typed)
-      if (r.ok === false) return void ((S.settingEdit = { name, value, error: r.message }), redraw())
+      if (r.ok === false) return void ((S.settingEdit = { name, value, error: r.message.replace(name, x.label) }), redraw())
       S.settingEdit = null
       ctx.save(r.input)()
     }

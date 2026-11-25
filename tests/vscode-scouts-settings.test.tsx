@@ -323,7 +323,7 @@ test('in VS Code a pick in a Select saves the setting, and a number box saves on
   expect(board().mode).toBe('review')
   // a number box: a wrong value says why and saves nothing; a good one saves
   await ui.input({ key: 'setting:max_parallel', text: 'lots' })
-  expect((await ui.find({ key: 'vs-setting-max_parallel' }))?.text).toMatch(/max_parallel must be a whole number, 1-8/)
+  expect((await ui.find({ key: 'vs-setting-max_parallel' }))?.text).toMatch(/Workers at once must be a whole number, 1-8/)
   expect(board().max_parallel).toBe(2)
   await ui.input({ key: 'setting:max_parallel', text: '5' })
   expect((await ui.find({ key: 'vs-setting-max_parallel' }))?.text).not.toMatch(/must be/)
@@ -614,7 +614,13 @@ for (const bodyColumns of [40, 64, 100])
     // one label column: every setting's label in a label Box of the same width; the meaning alone under it, no "default · range"
     const widths = new Set(elements(settings).filter(n => /^vs-setting-.*-label$/.test(String(n.props?.key))).map(n => n.props?.width))
     expect([...widths].length).toBe(1)
-    for (const x of SETTINGS.filter(x => x.name !== 'enabled')) expect(all, x.name).toContain(x.meaning)
+    for (const x of SETTINGS.filter(x => x.name !== 'enabled')) {
+      const first = x.meaning.split(/(?<=[.!?])\s/)[0]!
+      const help = all.find(t => t.startsWith(x.name + '  '))
+      expect(help, x.name).toBeDefined()
+      expect(help!.length, x.name).toBeLessThanOrEqual(x.name.length + 2 + 100)
+      expect(help!, x.name).toContain(first.slice(0, 30))
+    }
     expect(all.filter(t => t.includes('· ' + SETTINGS[0]!.range) || /^default /.test(t))).toEqual([])
     // headings are plain words (no fold, no border: the borders check above)
     for (const g of SETTING_GROUPS) expect(all, g.title).toContain(g.title)
