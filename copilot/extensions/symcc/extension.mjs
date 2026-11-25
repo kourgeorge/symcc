@@ -9866,6 +9866,9 @@ var DRIVER_IDLE_MS = 5 * 60000;
 function driverLooksIdle(tasks, nowMs) {
   return tasks.some((t) => t.status === "doing" && CLAIM_NOTES.has(t.note ?? "") && !t.runs?.some((r) => !r.ended) && nowMs - Date.parse(t.updated_at ?? "") > DRIVER_IDLE_MS);
 }
+function driveNoticeParts(tasks, nowMs, name = DEFAULT_NAME, width = Infinity, driver) {
+  return fitForm(followForms(namesFor(name).name, driver, nowMs, driverLooksIdle(tasks, nowMs)), width, "⚠ ");
+}
 function rowEndText(t, phase, note = shownNote(t)) {
   if (phase.waitsFor === "your-files")
     return fileWaitText(t);
@@ -15822,7 +15825,7 @@ This section is for the main conversation only. If you are a subagent (a ${S.N.n
 
 The project has a shared task board (${S.N.dir}/board.json) that you and the owner manage together by talking. You decide how the work runs:
 - Turn what the owner wants into tasks with ${S.N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes. Every change task's details say how the change will be tested, e.g. "Done when: tests show …" (the test that will check it). A change task whose commit edits code but no test file is flagged before merging (setting tests_with_changes: ask, the default, merges it and tells you "T-5 changed code but no test", so follow up with a test task or ask the owner; review makes it wait for the owner's review; off does nothing). Test files: in a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder (or a folder ending .Test/.Tests), or with test/spec/e2e/cy as a name part split by . _ or - (a.test.ts, a-test.ts, a.cy.ts), or a name ending in Test/Tests (FooTest.java); latest.ts and run-tests.sh are not tests. Docs: .md/.mdx, README/CHANGELOG/LICENSE names, images/video/audio/fonts, non-code files under docs/ (not docs/build.ts or Notice.tsx). A docs-only change is never flagged.
-- Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly; for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
+- Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly (when those words are a short reply like "yes", quote “<the owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<the reply>”); for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - Workers can't read the board or ${S.N.dir}/ (no board tool, and their folder is their own copy). To hand a worker an earlier task's answer, give its task from_task (that task's latest report is copied into the worker's folder and its prompt names it), or name the report file (${S.N.dir}/reports/T-n-try-N.md, or T-n-try-*.md for the latest), or paste the key facts into the details.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
@@ -15884,7 +15887,7 @@ var TOOLS = () => [
   {
     name: "add",
     description: `Add a task to the ${S.N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: "object", required: ["title", "details", "why", "origin_by"], properties: { title: { type: "string" }, details: { type: "string", description: "What to build and how we know it works." }, files: { type: "array", items: { type: "string" }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: "array", items: { type: "string" }, description: "Task IDs that must be done first." }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Like Unix nice: lower runs first. Every task starts at 0; give urgent work -1, -2…, later work 1, 2… A whole number from -20 to 19." }, needs_review: { type: "boolean", description: "Wait for the owner to approve before merging, even when the board merges on its own (mode auto)." }, backlog: { type: "boolean", description: "Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo." }, role: { type: "string", description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, kind: KIND_PARAM(), why: { type: "string", description: "Required. One line: why this task exists." }, origin_by: { type: "string", enum: ["owner", "scout", "worker", "lead"], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: "string", description: "For an owner request: the owner's words, quoted exactly." }, scout: { type: "string", description: `For a scout finding: the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs").` }, from_task: { type: "string", description: "For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12." }, how: { type: "string", enum: ["split", "follow-up"], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } }
+    inputSchema: { type: "object", required: ["title", "details", "why", "origin_by"], properties: { title: { type: "string" }, details: { type: "string", description: "What to build and how we know it works." }, files: { type: "array", items: { type: "string" }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: "array", items: { type: "string" }, description: "Task IDs that must be done first." }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Like Unix nice: lower runs first. Every task starts at 0; give urgent work -1, -2…, later work 1, 2… A whole number from -20 to 19." }, needs_review: { type: "boolean", description: "Wait for the owner to approve before merging, even when the board merges on its own (mode auto)." }, backlog: { type: "boolean", description: "Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo." }, role: { type: "string", description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, kind: KIND_PARAM(), why: { type: "string", description: "Required. One line: why this task exists." }, origin_by: { type: "string", enum: ["owner", "scout", "worker", "lead"], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: "string", description: `For an owner request: the owner's words, quoted exactly. When they are a short reply ("yes"), write: “<owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<reply>”.` }, scout: { type: "string", description: `For a scout finding: the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs").` }, from_task: { type: "string", description: "For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12." }, how: { type: "string", enum: ["split", "follow-up"], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } }
   },
   {
     name: "change",
@@ -19005,7 +19008,7 @@ async function followBoard(host) {
     });
 }
 var takeoverText = () => `the ${S.N.name} window closed · /${S.N.name}-enable to take over`;
-async function startOffHere(host) {
+async function startHere(host) {
   S.offHere = false;
   S.sawOther = false;
   S.takeoverTold = false;
@@ -19020,12 +19023,8 @@ async function startOffHere(host) {
   const live2 = liveDriver(text, Date.now());
   if (!live2 || live2 === S.me || parseLead(text)?.session === S.me)
     return;
-  S.offHere = true;
-  S.offWhy = "other";
-  S.enabledNow = false;
-  S.sawOther = true;
   seeDriver(text);
-  host.ui.toast(S.N.toast(offStatusLine(S.N.name, false, "other", S.driver, Date.now())));
+  host.ui.toast(S.N.toast(noticeText(driveNoticeParts([], Date.now(), S.N.name, Infinity, S.driver))));
 }
 async function disableHere(host) {
   if (S.offHere)
@@ -19074,7 +19073,7 @@ var onHereText = (b) => {
   const paused = m === "paused" ? ` No work starts while the board is paused; /${S.N.name}-mode auto (or review) starts it.` : "";
   return `${S.N.name} is on in this window, in mode ${settingShown("mode", m)}: ${modeText(m)}.${paused}`;
 };
-async function enableHere(host, tell) {
+async function enableHere(host, tell, command = "enable") {
   let b = await load(host);
   if (b.enabled !== false && !S.offHere)
     return setSymcc(host, true);
@@ -19096,7 +19095,7 @@ async function enableHere(host, tell) {
     });
   await claimLead(host).catch(() => false);
   pump(host);
-  tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-enable. You are a lead again; the board is in mode ${modeOf(b)}.`);
+  tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-${command}. You are a lead again; the board is in mode ${modeOf(b)}.`);
   return onHereText(b);
 }
 var GONE_REMIND_MS = 15 * 60000;
@@ -19709,7 +19708,7 @@ async function sessionStart(host) {
       await carryDriver(host, oldMe).catch(() => {
         return;
       });
-    await startOffHere(host).catch(() => {
+    await startHere(host).catch(() => {
       return;
     });
     const waits = new Promise((r) => startWait.mark = r);
@@ -19799,7 +19798,7 @@ async function refreshFresh(host) {
 async function initProject(host, tell, withGit) {
   const own = (await sessionFolder(host)).replace(/[\\/]+$/, "") || "/";
   if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false))
-    return S.offHere ? S.offWhy === "other" ? `${S.N.name} is already set up here. It runs in another window; /${S.N.name}-enable turns it on in this one too.` : `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable turns it back on.` : `${S.N.name} is already set up here.`;
+    return S.offHere ? `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable turns it back on.` : `${S.N.name} is already set up here.`;
   const hasGit = await host.fs.exists(`${own}/.git`).catch(() => false);
   const failed2 = await createBoardIn(host, own, !hasGit && withGit);
   if (failed2)
@@ -19807,14 +19806,9 @@ async function initProject(host, tell, withGit) {
   S.root = own;
   S.fresh = false;
   S.enabledNow = true;
-  await startOffHere(host).catch(() => {
+  await startHere(host).catch(() => {
     return;
   });
-  if (S.offHere) {
-    startTimers(host);
-    await publish(host, await load(host));
-    return `${S.N.name} already runs in another window. /${S.N.name}-enable turns it on in this one too.`;
-  }
   S.startupDone = false;
   try {
     await claimLead(host, true).catch(() => S.driving = false);
@@ -20190,7 +20184,7 @@ ${skipped}` : "") };
       return say(cmd.here ? await disableHere(host) : await setSymcc(host, false));
     case "drive": {
       if (S.offHere && S.offWhy !== "off") {
-        const on = await enableHere(host, (t) => tellLead(host, t));
+        const on = await enableHere(host, (t) => tellLead(host, t), "drive");
         if (S.offHere)
           return say(on);
         return say(`${on}
