@@ -3979,54 +3979,90 @@ test("a worker's Bash command reaching the owner's copy is refused; its own fold
   workers.clear()
 })
 
-test("a worker's git writes in its own folder are refused like a checker's; read-only git and the merge-it-in step still work (T-432)", async () => {
+test("T-1053: a worker may change git in its own folder on its own branch; push, other branches, worktree, config, tags and other folders stay refused (T-432)", async () => {
   S.me = 'me'
   const f = world()
   const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(f.$, b)
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
-  const bash = (command: string) => checkEdit(f.$, 'ag1', { command })
+  // the shell is in the worker's own folder (as Claude Code tells it), or a folder inside it
+  const bash = (command: string, cwd = wt5) => checkEdit(f.$, 'ag1', { command }, cwd)
+  for (const command of [
+    'git commit -am x', 'git add -A && git commit -m "x: why"', 'git merge main', 'git merge --no-edit symcc/T-7', 'git merge --abort',
+    'git merge --no-edit main 2>&1 | tail -20', 'git cherry-pick abc123', 'git revert --no-edit HEAD', 'git restore src/a.ts', 'git restore --staged .',
+    'git checkout -- src/a.ts', 'git checkout main -- src/a.ts', 'git reset --hard HEAD~1', 'git merge -s ort -X theirs main', 'git merge --strategy=ours main',
+    'git rebase main', 'git rebase --continue', 'git bisect start', 'git bisect reset', 'git bisect good', 'git fetch origin', 'git pull --no-rebase origin main',
+    'git commit -s -m x', 'git cherry-pick -s abc123',
+    `git -C ${wt5} commit -m x`, `cd ${wt5} && git commit -am x`, 'git -C src add a.ts', 'git rm -q old.ts', 'git clean -fd',
+  ]) expect([command, await bash(command)]).toEqual([command, undefined])
+  expect(await bash('git commit -am x', `${wt5}/src`)).toBeUndefined()
   for (const [command, what] of [
-    ['git commit -am x', 'git commit'],
-    ['git update-ref refs/heads/main HEAD', 'git update-ref'],
+    ['git push', 'git push'],
     ['git push . HEAD:main', 'git push'],
-    ['git merge main', 'git merge'],
-    ['git add -A && git commit -m x', 'git add'],
-    ['git reset --hard HEAD~1', 'git reset'],
-    ['git checkout main', 'git checkout'],
-    ['git switch -c x', 'git switch'],
+    ['git remote add x https://example.com/x.git', 'git remote'],
+    ['git remote set-url origin x', 'git remote'],
+    ['git branch -D symcc/T-7', 'git branch'],
+    ['git branch -m other', 'git branch'],
+    ['git branch new', 'git branch'],
     ['git branch -f main HEAD', 'git branch'],
-    ['git tag v1', 'git tag'],
-    ['git stash', 'git stash'],
-    ['git rebase main', 'git rebase'],
+    ['git checkout main', 'git checkout'],
+    ['git checkout main --', 'git checkout'],
+    ['git checkout -b x', 'git checkout'],
+    ['git checkout -B x -- a.ts', 'git checkout'],
+    ['git checkout --detach -- a.ts', 'git checkout'],
+    ['git switch main', 'git switch'],
+    ['git switch -c x', 'git switch'],
     ['git worktree add /tmp/x main', 'git worktree'],
-    ['git merge --abort', 'git merge'],
+    ['git config user.name x', 'git config'],
+    ['git tag v1', 'git tag'],
+    ['git update-ref refs/heads/main HEAD', 'git update-ref'],
+    ['git symbolic-ref HEAD refs/heads/main', 'git symbolic-ref'],
+    ['git rebase main symcc/T-7', 'git rebase'],
+    ['git rebase --update-refs main', 'git rebase'],
+    ['git fetch . HEAD:main', 'git fetch'],
+    ['git pull origin main:main', 'git pull'],
+    // every stash form: the stash is shared with the owner's folder (the owner's word, T-1053)
+    ['git stash', 'git stash'],
+    ['git stash push -m wip', 'git stash'],
+    ['git stash pop', 'git stash'],
+    ['git stash apply', 'git stash'],
+    ['git stash drop', 'git stash'],
+    ['git stash clear', 'git stash'],
+    // a git command that runs another program would get past this guard
+    ['git rebase -x "git push" main', 'git rebase'],
+    ['git rebase --exec=true main', 'git rebase'],
+    ['git rebase -ix true main', 'git rebase'],
+    ['git bisect run sh evil.sh', 'git bisect'],
+    ['git fetch --upload-pack=evil origin', 'git fetch'],
+    ['git pull --upload-pack evil origin', 'git pull'],
+    ['git merge -s evil main', 'git merge'],
+    ['git merge -sevil main', 'git merge'],
+    ['git cherry-pick --strategy=evil abc123', 'git cherry-pick'],
+    ['git merge $BR', 'git merge'],
+    ['git p', 'git p'],
+    ['git lfs push origin', 'git lfs'],
+    ['git -c core.hooksPath=x commit -m x', 'git -c'],
+    ['git --git-dir=/elsewhere/.git commit -m x', 'git commit'],
+    ['git -C /tmp/elsewhere/.. commit -m x', 'git commit'],
+    ['git -C $D commit -m x', 'git commit'],
+    ['sh -c "git commit -m x"', 'git commit'],
     ['sh -c "git update-ref refs/heads/main HEAD"', 'git update-ref'],
     ['/usr/libexec/git-core/git-update-ref refs/heads/main HEAD', 'git update-ref'],
-  ] as const) expect(await bash(command)).toBe(workerGitWriteText(what))
-  expect(workerGitWriteText('git commit')).toMatch(/^Refused: git commit may change the repository .*a worker may only read with git/)
-  expect(workerGitWriteText('git commit')).not.toMatch(/In this try you may/)
+  ] as const) expect([command, await bash(command)]).toEqual([command, workerGitWriteText(what)])
+  // a git write outside its own folder (a folder outside the project, here), or with the folder unknown, is refused
+  expect(await bash('git commit -am x', '/Users/me/other')).toBe(workerGitWriteText('git commit'))
+  expect(await checkEdit(f.$, 'ag1', { command: 'git commit -am x' })).toBe(workerGitWriteText('git commit'))
+  // a cd to a folder from a variable is refused by the path check, before git is looked at
+  expect(await bash('cd $D && git commit -m x')).toMatch(/^Refused: symcc can't check a path built from \$D/)
   for (const command of ['git status', 'git diff', 'git log --oneline -5', 'git show HEAD', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git stash list', 'bun test', 'echo "use git diff"'])
     expect(await bash(command)).toBeUndefined()
-  // a path in the owner's copy is still refused for that first
+  // a path in the owner's copy, or another task's folder, is still refused for that first
   expect(await bash(`cd ${ROOT} && git commit -m x`)).toMatch(/^Refused: this command names .* outside your own folder/)
-  // the merge-it-in try (its task conflicted with main): git merge main and --abort pass, nothing else does
-  await saveBoard(f.$, patchTask(b, 'T-1', { merge_main: true }, ISO))
-  for (const command of ['git merge main', 'git merge --no-edit main 2>&1 | tail -20', 'git merge --abort', 'git status && git diff'])
-    expect(await bash(command)).toBeUndefined()
-  for (const [command, what] of [
-    ['git merge other', 'git merge'],
-    ['git merge -m x main', 'git merge'],
-    ['git merge main && git commit -am x', 'git commit'],
-    ['git update-ref refs/heads/main HEAD', 'git update-ref'],
-    ['git add -A', 'git add'],
-  ] as const) expect(await bash(command)).toBe(workerGitWriteText(what, 'main'))
-  expect(workerGitWriteText('git commit', 'main')).toMatch(/In this try you may also run `git merge main`/)
-  // a task that merges into another branch may merge only that one
-  await saveBoard(f.$, patchTask(b, 'T-1', { merge_main: true, merge_into: 'dev' } as Partial<BoardTask>, ISO))
-  expect(await bash('git merge dev')).toBeUndefined()
-  expect(await bash('git merge main')).toBe(workerGitWriteText('git merge', 'dev'))
+  expect(await bash(`git -C ${ROOT}/.symcc/worktrees/T-7 commit -m x`)).toMatch(/^Refused: this command names .* outside your own folder/)
+  // an investigation's changes are never kept: its worker still only reads with git
+  await saveBoard(f.$, patchTask(b, 'T-1', { kind: 'investigation' } as Partial<BoardTask>, ISO))
+  expect(await bash('git commit -am x')).toBe(workerGitWriteText('git commit'))
   // no file request was recorded for any of them
   expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toBeUndefined()
   // the lead and agents that are not workers are never refused

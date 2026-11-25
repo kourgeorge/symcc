@@ -5,7 +5,7 @@
 //   host.ts; for Claude Code, its Edit, Write and NotebookEdit, and Bash: claude/tools.ts), so no tool name is read here.
 // Both are written to the task's current try on the board at once (live.ask, live.refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, type Live, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, makeAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, mergeStepAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, intoOf, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { type Board, type BoardTask, type Live, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, makeAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, workerGitAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
 import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents, rememberOnBoard, movedAgents, movedRefused, DRIVING_MOVED } from './state'
 import { drivenElsewhere } from './lead'
 import type { FileTouch, Host } from '../host'
@@ -316,21 +316,23 @@ async function checkerCheck($: Host, touch: FileTouch, worktree: string, cwd?: s
 }
 
 /**
- * Why worker `w`'s shell `command` is refused for a git write (gitWriteIn: a commit, a push, a merge, update-ref, a
- * branch, tag, stash or reset...): its branch names, tags and stash are shared with the owner's folder (main too), so
- * `git update-ref refs/heads/main HEAD` from its own folder would move main. A "merge it in" try (merge_main on its
- * task, after a clash with the branch it merges into) may still run `git merge <that branch>` and `git merge --abort`
- * (mergeStepAllow), as its prompt asks; symcc adds and commits the resolved files as for any try. Undefined: allowed.
+ * Why worker `w`'s shell `command` is refused for a git write (gitWriteIn) that changes more than its own branch in its
+ * own folder (T-1053, workerGitAllow: a push, a remote, another branch, worktree, config, a tag...): branch names,
+ * remotes, settings and tags are shared with the owner's folder (main too), so `git update-ref refs/heads/main HEAD`
+ * from its own folder would move main. In its folder it may commit, merge, reset its branch and so on; symcc still
+ * commits what is left, checks every commit of the try and merges. A scratch repository under /tmp stays allowed
+ * (scratchGitAllow). Undefined: allowed.
  */
 async function workerGitWrite($: Host, w: Worker, command: string, cwd?: string): Promise<Refusal | undefined> {
   if (!gitWriteIn(command)) return undefined
   const scratch = await scratchGit($, w.worktree)
   if (!gitWriteIn(command, scratch, cwd)) return undefined
-  // an unreadable board throws on, so the hook's .catch refuses the command (see guardFailed)
+  // an unreadable board throws on, so the hook's .catch refuses the command (see guardFailed). An investigation's
+  // changes are never kept, so its worker still only reads with git there
   const t = find(await load($), w.task)
-  const into = t?.merge_main ? intoOf(t) : undefined
-  const git = gitWriteIn(command, into ? eitherAllow(scratch, mergeStepAllow(into)) : scratch, cwd)
-  return git ? { text: workerGitWriteText(git, into), guard: 'git', what: git } : undefined
+  const own: GitAllow = t && !isInvestigation(t) && w.worktree.startsWith('/') ? workerGitAllow(await bothNames(diskLook($), w.worktree)) : () => false
+  const git = gitWriteIn(command, eitherAllow(scratch, own), cwd)
+  return git ? { text: workerGitWriteText(git), guard: 'git', what: git } : undefined
 }
 
 /**

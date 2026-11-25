@@ -406,8 +406,12 @@ How the queue works is in [States, stages and the queue](#states-stages-and-the-
 
 The steps, in this order:
 
-1. **Prep: commit.** symcc commits what the worker changed in its private copy. (Workers are
-   not allowed to commit, push or merge themselves.)
+1. **Prep: commit.** symcc commits what the worker left uncommitted in its private copy. A worker
+   may also commit, merge another branch, cherry-pick and so on itself, in its own folder and on its
+   own branch (see [A worker's git](#a-workers-git)); then its commits count as the try's work, are
+   saved with the try's commits, and symcc adds an empty commit of its own for the try when nothing
+   was left to commit. A rebase or bisect the worker left unfinished is ended first
+   (`git rebase --abort`, `git bisect reset`), so the folder is back on the task's branch.
    **Secret-looking files.** Files whose names look like secrets (`.env`, `.env.*`, `*.pem`,
    `*.key`, `id_rsa` and other SSH private keys) are left out of the commit and the merge, even if
    they are in the task's file list. After a merge they are kept in `.symcc/left-out/<task>/`.
@@ -1814,6 +1818,32 @@ timer again. The pause is kept in `.symcc/scouts.json`
 (next to each scout's last run), so it survives a restart and your scout file is never
 changed. Only you can pause or resume a scout; the lead is told a paused scout doesn't run on its timer.
 
+### A worker's git
+
+A worker (of a change task) may change git in its own folder, on its own
+branch: `commit`, `merge` (main, another task's branch, a pull request's branch), `cherry-pick`,
+`revert`, `restore`, `checkout -- <file>`, `reset`, `rebase` of its own branch,
+`bisect`, `fetch`, `pull`, `add`, `rm`, `mv`, `clean`, `am` and `apply`. The git command must run in
+its folder (the shell's folder, a plain `cd` before it, or `-C <folder>`), and its words may not
+come from a `$variable` (a `-m` message may). Still refused: `push` and any change to remotes;
+switching to, making or deleting a branch (`checkout <branch>`, `switch`, `branch -d/-D/-m`,
+`rebase main other`, `rebase --update-refs`, `fetch`/`pull` with a `src:dst` refspec or a URL);
+`worktree`; `config`; `tag`; every `stash` (the stash is shared with your own folder); a git
+command that runs another program (`rebase --exec`, `bisect run`, `--upload-pack`, a merge
+strategy that is not git's own); any other git command (an alias or an add-on such as `git lfs` may do anything); `-c` and
+`GIT_*` settings; and anything that names your copy of the project or another task's folder. An
+investigation's worker still only reads with git: its changes are never kept. symcc's checks cover
+the worker's own commits too: the scope check looks at everything the branch changes, a merged-in
+branch's files included, the secret check at every commit (merge commits too), and when a scope check fails after the worker merged
+another branch, the undo makes the branch's work one commit again, so that branch's commits never
+reach main through this task.
+
+A worker run by `claude -p` (the Node host) has no symcc guard, only Claude Code's own rules,
+which look at how a command starts, not at its folder or its words. There a worker may run
+`git commit`, `merge`, `cherry-pick`, `revert`, `restore`, `reset`, `add`, `rm`, `mv`, `clean`,
+`am`, `apply` and `bisect`; `checkout`, `rebase`, `fetch` and `pull` stay refused (their words
+may name or move another branch), as do the rest above and any `git -C` or `git -c`.
+
 ### The checker
 
 The `checker` setting is `off` by default. Turn it on with `/symcc-settings checker on` (or tell
@@ -1837,7 +1867,8 @@ under `/var/folders/...`). Every folder the command acts in must be a plain lite
 `git init /tmp/x`, `git -C /tmp/x commit -m m`, `cd /tmp/x && git commit -am m` (the `cd` joined
 by `&&`).
 
-A git write aimed at the project, `.symcc/` or any worktree, or at a folder that can't be
+For a scratch repository, a git write aimed at the project, `.symcc/` or any worktree (a worker's
+own folder follows the rule above), or at a folder that can't be
 told from the text (`$TMPDIR`, `$d`, `$(mktemp -d)`, `~`, `..`, a glob, no `-C` or `cd` while the
 shell is not in the temp folder, a `cd` with a word before it such as `builtin cd`), stays refused,
 and so does `--global` or `--system` or a shortening of them (the owner's own git settings), a
@@ -2628,7 +2659,8 @@ test, a trap, where something is).
   45 minutes. symcc then asks you for more time (see "A worker over its time limit"); to stop
   being asked, raise `max_minutes` or split the task.
 - **Finished workers in Claude Code's agent list.** After a task is done, its worker stays in the list below the prompt for a while, showing its last step (for example "◯ symcc-T-94 Splitting status strip test…"). It isn't running or using tokens; Claude Code clears it by itself later, and plugins can't remove or relabel it. The board shows the real state of each task.
-- **What workers and scouts can use.** Workers can't commit, push or merge. They use
+- **What workers and scouts can use.** Workers may change git only in their own folder and on their own branch
+  (see [A worker's git](#a-workers-git)): never push, other branches, worktree, config, tags or the stash. They use
   Read, Edit, Write, Glob, Grep and Bash, with edits accepted automatically, inside your
   normal Claude Code permission settings. Scouts can't edit or write files: they use Read,
   Glob, Grep, Bash, WebSearch and WebFetch, and their shell commands follow the same rules.

@@ -3,7 +3,7 @@
 # the folder it was started in (FAKE_EDIT, default hello.txt), saves its arguments and prompt where FAKE_LOG says, and
 # prints a stream-json system line and result line the way claude -p does, with tokens and a cost.
 # FAKE_SCRATCH set: it also writes a throwaway script under .scratch/ (T-456), which must never reach a commit (T-477).
-# FAKE_SLEEP (seconds) makes it wait first, like a slow model: a stop while it waits must mean the file never changes.
+# FAKE_GIT: see below. FAKE_SLEEP (seconds) makes it wait first, like a slow model: a stop while it waits must mean the file never changes.
 # FAKE_PID set: it first writes its process id there (its process group's id too: symcc starts it detached), so a
 # test can check the group is gone instead of waiting out the sleep on the clock (T-509).
 # Started with --resume <session> (T-656, the debrief after a hand-back): it edits nothing, saves its arguments and
@@ -28,6 +28,9 @@ file=${FAKE_EDIT:-hello.txt}
 mkdir -p "$(dirname "$file")"
 echo "hello from the fake worker" > "$file"
 if [ -n "${FAKE_SCRATCH:-}" ]; then mkdir -p .scratch && echo 'print(1)' > .scratch/edit.py; fi
+# FAKE_GIT (T-1053): a shell line run in the worker's folder after the edit, as a worker's own git commands (a
+# commit, a merge of another branch); the run fails when it does
+if [ -n "${FAKE_GIT:-}" ]; then sh -c "$FAKE_GIT" >&2 || exit 1; fi
 if [ -n "${FAKE_LOG:-}" ]; then
   for a in "$@"; do printf '%s\n' "$a"; done > "$FAKE_LOG.args"
   printf '%s' "$prompt" > "$FAKE_LOG.prompt"

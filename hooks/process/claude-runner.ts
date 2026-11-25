@@ -29,10 +29,21 @@ const GIT_DENIED_SUBCOMMANDS = [
 const GIT_DENIED_OPTIONS = ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--bare', '--no-pager', '-P', '-p', '--paginate']
 const GIT_WRAPPERS = ['env', 'command', 'exec', 'xargs', 'nohup', 'time']
 
-/** The deny rules for git writes, given to every `claude -p` agent (a deny rule beats any allow rule). */
-export function gitDeniedRules(): string[] {
+/**
+ * T-1053: the git writes a worker may run in its own folder, on its own branch. Claude Code's rules only see how a
+ * command starts, so only commands whose words can't move or name another branch are let through: checkout, rebase,
+ * fetch and pull (`git checkout main`, `git rebase main other`, `git fetch . HEAD:main`) stay refused, as does stash
+ * (shared with the owner's folder).
+ */
+const WORKER_GIT_ALLOWED = new Set(['commit', 'merge', 'cherry-pick', 'revert', 'restore', 'reset', 'add', 'rm', 'mv', 'clean', 'am', 'apply', 'bisect'])
+
+/**
+ * The deny rules for git writes, given to every `claude -p` agent (a deny rule beats any allow rule). A worker
+ * (`worker` true) is not denied WORKER_GIT_ALLOWED; `git -C`, `-c` and the wrappers stay denied for it too.
+ */
+export function gitDeniedRules(worker = false): string[] {
   return [
-    ...GIT_DENIED_SUBCOMMANDS.map(c => `Bash(git ${c}:*)`),
+    ...GIT_DENIED_SUBCOMMANDS.filter(c => !(worker && WORKER_GIT_ALLOWED.has(c))).map(c => `Bash(git ${c}:*)`),
     'Bash(git -*)',
     ...GIT_DENIED_OPTIONS.map(o => `Bash(git ${o}:*)`),
     'Bash(git --git-dir=*)', 'Bash(git --work-tree=*)', 'Bash(git --namespace=*)', 'Bash(git --exec-path=*)', 'Bash(git --config-env=*)',
@@ -53,7 +64,7 @@ export function editRule(file: string): string[] {
 /**
  * Claude Code's permission flags for agent `a` (claude -p has no symcc tool hook, so its own rules are the edit
  * guard; the merge-time scope check stays the backstop): every tool not allowed is refused (--permission-mode dontAsk).
- * A worker may read, search and run commands (no git writes), and edit its task's files only (a.files; none given:
+ * A worker may read, search and run commands (git writes on its own branch only, WORKER_GIT_ALLOWED), and edit its task's files only (a.files; none given:
  * anywhere in its folder); a role's `web` adds WebSearch and WebFetch. A scout or checker only reads and runs commands
  * (a checker, T-551: it never runs the project's full tests itself, those run in the merge line after it).
  * `scratch` (T-456): the folder uses its throwaway SCRATCH_DIR (the project keeps no file there in git, see
@@ -62,7 +73,7 @@ export function editRule(file: string): string[] {
 export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'tools'>, scratch = false): { allowed: string[]; denied: string[] } {
   const read = ['Read', 'Glob', 'Grep', 'Bash']
   const web = a.tools?.includes('web') ? ['WebSearch', 'WebFetch'] : []
-  const denied = gitDeniedRules()
+  const denied = gitDeniedRules(a.kind === 'worker')
   const scratchRules = scratch && a.kind !== 'scout' ? editRule(`${SCRATCH_DIR}/`) : []
   if (a.kind !== 'worker') {
     // a deny rule beats an allow rule, so a checker with scratch rules gets no blanket Edit/Write deny (dontAsk still refuses every other edit)
