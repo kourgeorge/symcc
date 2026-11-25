@@ -1295,15 +1295,15 @@ words as bold headings with the same spacing):
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
-  then `waits`. The waiting train's id is in the accent color (orange) and the rest of the row
+  then `waits` and its task type (dim). The waiting train's id is in the accent color (orange) and the rest of the row
   is dim gray. Topic labels in the organizational memory rows and topic grid are blue:
 
   ```
-   ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
-     try 1/3 · ⏱ 2m · ⌀ at hand-back               bug
-     └─◇ T-713 Task files: no si…  waits
-        └─◇ T-714 Help: /symcc-h…  waits
-     └─◇ T-716 Live deps…  waits  + also T-690
+   ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m  bug
+     try 1/3 · ⏱ 2m · ⌀ at hand-back
+     └─◇ T-713 Task files: no si…  waits  change
+        └─◇ T-714 Help: /symcc-h…  waits  docs
+     └─◇ T-716 Live deps…  waits  + also T-690  feature
   ```
 
   A task that waits only for another todo task hangs under that task's train, one step further in
