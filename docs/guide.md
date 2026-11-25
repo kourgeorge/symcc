@@ -2969,3 +2969,43 @@ Limits:
 ### Building the extension
 
 Copilot runs one JavaScript file per extension, so symcc's TypeScript is bundled: `sh scripts/build-copilot.sh` builds `copilot/entry.ts` (which gives the Node parts and the Copilot SDK to `hooks/copilot/`) into `copilot/extensions/symcc/extension.mjs`. The SDK (`@microsoft/copilot-sdk` and `@microsoft/copilot-sdk/extension`) is left out of the bundle: Copilot gives it to every extension. The built file is committed, since an install from GitHub copies the repository as it is and runs no build step. So rebuild it after engine changes, before a release: `sh scripts/build-copilot.sh --check` says whether the committed file is out of date. `sh tests/copilot-bundle.sh` builds it into a scratch folder, runs it against a stand-in SDK, and checks the manifest and the marketplace file. The manifest's `"hooks": "copilot/hooks.json"` points Copilot at an empty hooks file; without it Copilot would read Claude Code's `hooks/hooks.json` and log "Invalid hooks config" on every start. Paths in `.github/plugin/plugin.json` are read from the repository root.
+
+## Using symcc in VS Code and Cursor
+
+The symcc extension (`kourgeorge.symcc`, on the VS Code Marketplace and Open VSX) shows the board, a sidebar and the lead's chat in VS Code or Cursor. The agents are Cursor's or GitHub Copilot's. The extension brings no symcc of its own: it runs the symcc you installed with Claude Code, Copilot CLI or OpenCode. Nothing changes for those harnesses.
+
+### Install in VS Code or Cursor
+
+1. Install symcc with a harness, if you haven't: [Install](../README.md#install), [Install in Copilot CLI](#install-in-copilot-cli), or [Using symcc in OpenCode](#using-symcc-in-opencode). A clone of the repository works too.
+2. Install the extension: search for **symcc** in the editor's Extensions view, or run `code --install-extension kourgeorge.symcc` (`cursor --install-extension kourgeorge.symcc` in Cursor).
+3. Open a project folder that is a git repository, and click the symcc icon in the activity bar.
+
+It needs VS Code 1.101 or newer, or a Cursor built on it: symcc needs Node 22.13 or newer, and these editors bring it. With an older editor, set `symcc.nodePath` to a Node 22.13 or newer.
+
+### How it finds symcc
+
+- First the folder in `symcc.pluginPath`, when you set one.
+- Else the copies the harnesses installed: Claude Code's installed plugins, Copilot CLI's installed plugins and a folder you added as its marketplace, then OpenCode's plugin link and its plugin cache.
+- It runs the newest copy whose editor files speak its protocol number (see [Engine and clients](engine-and-clients.md#the-contract-and-its-number)). The status bar item's tooltip says which, for example "symcc 0.5.42 from Claude Code". **symcc: Show the log** lists every copy it found.
+- When it finds none, the sidebar shows the install commands, **Look again**, and **Choose the symcc folder**.
+- When the copy is too old (from before symcc had editor files) or too new for the extension, one message says what to update: the plugin, with your harness's update command, or the extension.
+
+After you update symcc, run **symcc: Restart symcc**.
+
+### The agents
+
+- **Cursor's** (`"symcc.agents": "cursor"`, the default): set `CURSOR_API_KEY`, or use a login the Cursor SDK saved in `~/.cursor/sdk/auth.json`. The Cursor SDK's license keeps it out of symcc, so the first run downloads it from npm (pinned versions, each checked against its hash) into a cache folder: `~/.cache/symcc` on Linux, `~/Library/Caches/symcc` on macOS, `%LOCALAPPDATA%\symcc\Cache` on Windows. `SYMCC_CACHE` moves it, and `SYMCC_NPM_REGISTRY` names an npm mirror.
+- **GitHub Copilot's** (`"symcc.agents": "copilot"`): install the Copilot CLI and run `copilot login` once (or set `GH_TOKEN`). symcc runs that CLI. If the CLI speaks another protocol than symcc's Copilot SDK, symcc says so, with the command that updates the CLI or symcc.
+- You can also pick the agents in the board's model menu. symcc restarts with them.
+- Behind a proxy: `symcc.proxy`, else the editor's `http.proxy`, else `HTTPS_PROXY`.
+
+### Using it
+
+- **symcc: Set up symcc in this project** (or `/symcc-init` to the lead) creates the board. Then tell the lead what you want done.
+- The panel has the Now, Board, Worktrees, Scouts and Memory pages. The sidebar shows the board at a glance, and its badge counts what needs you.
+- **symcc: Message the lead** sends the lead a message from anywhere.
+- The settings are `symcc.agents`, `symcc.leadModel`, `symcc.workerModel`, `symcc.pluginPath`, `symcc.nodePath`, `symcc.proxy` and `symcc.notify`.
+
+### Building it
+
+The extension runs the plugin's `editor/serve.mjs` and shows its `editor/webview/`. Both are built from `hosts/cursor/` and committed, like the Copilot CLI extension: `sh scripts/build-editor.sh` rebuilds them, and `--check` says whether the committed files are out of date. To work on the extension, open the repository in VS Code or Cursor and press F5 (**symcc: Cursor extension**): it runs this clone's `hosts/cursor/dist/engine.mjs` and its own webview build. How the extension and the plugin are released: [Releasing](releasing.md).

@@ -7,7 +7,7 @@ For people who change symcc's code. symcc is split into two sides: the **engine*
 | Side | What it is | Where it lives |
 |---|---|---|
 | Engine | Board logic, prompts, the entry functions, the `Host` interface, the process runner, and the screen helpers that need no host | `hooks/core/`, `hooks/app/`, `hooks/process/`, `hooks/host.ts`, `hooks/board.ts`, `hooks/name.ts`, `prompts/`, `kinds/`, `types/`, `hooks/opencode/board-view.ts`, and `hooks/engine.ts` |
-| Client (host adapter) | Code that knows one program: its tools, screens, hooks and plugin files | `hooks/claude/`, `hooks/register.tsx`, `hooks/opencode/` (except `board-view.ts`), `opencode/`, `hosts/node/`, `hosts/cursor/`, `hooks/copilot/` |
+| Client (host adapter) | Code that knows one program: its tools, screens, hooks and plugin files | `hooks/claude/`, `hooks/register.tsx`, `hooks/opencode/` (except `board-view.ts`), `opencode/`, `hosts/node/`, `hosts/cursor/` (built into `editor/`), `hooks/copilot/` |
 
 `hooks/copilot/` is the GitHub Copilot CLI host (started in T-957, not usable yet): an extension that joins the Copilot session with symcc's lead tools and `/symcc` commands, shows the text board with `session.log`, and wakes the lead with `session.send`. Its file, command and timer parts are given in, so it imports no Node and is type-checked with the rest of `hooks/`; its tests are `tests/copilot-host.test.ts`. Agents, the edit guard, the band and the bundled `extension.mjs` come later.
 
@@ -29,6 +29,59 @@ For people who change symcc's code. symcc is split into two sides: the **engine*
 - `tests/engine.test.ts` checks that each name in `hooks/engine.ts` is the same value as in its source file.
 
 Run the first one alone with `sh tests/host-free.sh`.
+
+For the editor entry:
+
+- `tests/editor-contract.sh` (run by `sh scripts/typecheck.sh`) fails when `hosts/cursor/contract.ts` changed and its
+  number wasn't reconsidered (see [The contract and its number](#the-contract-and-its-number)).
+- `tests/editor-bundle.sh` builds `editor/` into a scratch folder and checks it: serve imports only Node, starts with
+  the ready line, and answers the webview on both kinds of agents.
+- `sh scripts/build-editor.sh --check` says whether the committed `editor/` is up to date. `sh scripts/typecheck.sh`
+  prints it as a note and never fails on it, so an engine change doesn't force a rebuild in every task.
+
+## The editor extension
+
+The VS Code and Cursor extension (`hosts/cursor/extension/`) is a client of the plugin. It holds no engine and no
+board. It finds the symcc a harness installed (`hosts/cursor/extension/src/find.ts`), starts that copy's
+`editor/serve.mjs`, and shows that copy's `editor/webview/` in its panel and sidebar. It passes lines between the
+webview and serve without reading them. It only does what needs the editor: open a file at a line, diffs, terminals,
+open a folder, reveal a file, the clipboard, confirms and notifications, the status bar and the badge, read-only
+session documents, the proxy settings, restart, and the log. It is released on its own track
+([Releasing](releasing.md)).
+
+`editor/` is the plugin's built editor entry. It is committed, like the Copilot CLI host's `extension.mjs`:
+
+| File | What it is |
+|---|---|
+| `editor/serve.mjs` | `hosts/cursor/main.ts` built into one file that imports only Node: the engine, serve's board logic and the agents |
+| `editor/serve.json` | the contract's number, `{"protocol":1}` |
+| `editor/webview/` | `hosts/cursor/extension/webview/` built: `webview.js`, `webview.css` and the codicons |
+| `editor/THIRD-PARTY-NOTICES.md` | the licenses of the packages built in |
+
+`sh scripts/build-editor.sh` rebuilds it. The Cursor SDK isn't in it: its license keeps it out of symcc, so serve
+fetches it from npm on first use (`hosts/cursor/sdk-fetch.ts`). For Copilot, serve runs the owner's `copilot` CLI.
+
+In development (F5 in this repository), the extension runs the clone's `hosts/cursor/dist/engine.mjs` and its own
+webview build instead.
+
+## The contract and its number
+
+`hosts/cursor/contract.ts` is all the extension and serve agree on: serve's command line and environment, its ready
+line, the lines each side writes, the files in `editor/`, and the page the webview fills. What the webview and serve
+say to each other is internal (`hosts/cursor/protocol.ts`), and can change in any plugin release.
+
+The contract has a number, `PROTOCOL`. serve's ready line carries it with symcc's version,
+`{"event":"ready","version":"0.5.42","protocol":1}`, and `editor/serve.json` repeats it, so the extension can choose a
+copy without starting it. The extension says which range it speaks and runs only a copy in that range.
+
+Raise the number when an extension that speaks the current one couldn't follow the change: a field, action or line
+renamed or removed, a new line the extension must answer, or a change to the files in `editor/` or to the page. Keep
+it when such an extension can still follow: a new editor action that needs no answer (the extension ignores actions it
+doesn't know), a new optional field, or a comment.
+
+`hosts/cursor/contract.sha256` records the number and the file's hash it was last looked at with.
+`tests/editor-contract.sh` fails when the file changed and the record didn't, so each change makes someone decide.
+Either way, write the line it prints into the record. How to release a raised number: [Releasing](releasing.md#the-protocol-number).
 
 ## What is done and what is next
 

@@ -183,14 +183,16 @@ The Copilot half of `editor/serve.mjs` can ship. The Cursor half can't be commit
 be combined, for example A with D.
 
 - **A. Serve fetches the Cursor SDK on first use.** `editor/serve.mjs` holds the Copilot SDK and the open packages. The
-  first time a Cursor agent is used, serve downloads `@cursor/sdk` and its five open dependencies from the npm registry
-  into a cache, such as `~/.cache/symcc/cursor-sdk/1.3.1/node_modules/`. Versions and sha512 hashes are pinned from
+  first time a Cursor agent is used, serve downloads `@cursor/sdk` and the six open packages it imports from the npm
+  registry into a cache, such as `~/.cache/symcc/cursor-sdk/1.3.1/node_modules/`. The six are `@bufbuild/protobuf`,
+  `@connectrpc/connect`, `@connectrpc/connect-web`, the two `@statsig` packages, and `zod`, a peer dependency that the
+  SDK's ESM entry imports at the top. Versions and sha512 hashes are pinned from
   `package-lock.json`. Serve then imports the SDK from there. The user gets the SDK from Anysphere's own npm release, as
   with `npm install`.
   - Cost: serve needs its own fetch and untar code, because the editor's Node has no npm. It needs the proxy (the
     registry was reachable here through `HTTPS_PROXY`) and a clear offline error.
-  - Size: six tarballs, the SDK about 20 MB unpacked.
-  - The SDK alone doesn't load: "Cannot find package '@bufbuild/protobuf'". It needs the five others in the same
+  - Size: seven tarballs, the SDK about 20 MB unpacked (34 MB for all seven).
+  - The SDK alone doesn't load: "Cannot find package '@bufbuild/protobuf'". It needs the six others in the same
     `node_modules` (checked).
 - **B. A one-time setup command in the plugin.** It runs `npm install --omit=dev` in the installed copy's
   `hosts/cursor`. It is simple, but needs npm. Each harness update replaces the copy, and Claude Code keeps one folder per
@@ -209,3 +211,13 @@ the update command. Another is to fetch the matching Copilot runtime package int
   Not checked: Windsurf (not on this machine), and the first VS Code with Node 22.13 or later (no web access).
 - The build changes from sections 1 and 2: load `.d.ts` and `.map` files as empty, keep `bun:sqlite` external, use a
   literal Copilot SDK import, stub `koffi`, and add a notices file.
+
+## 7. What was chosen
+
+- Option A: serve fetches the Cursor SDK on first use (`hosts/cursor/sdk-fetch.ts`), into
+  `<cache>/cursor-sdk-1.3.1-<hash>/node_modules/`.
+- Copilot: serve uses `COPILOT_CLI_PATH`, else the SDK's own runtime when it is installed, else the owner's `copilot`
+  CLI (on the `PATH`, or where its installers put it). A CLI on another protocol gets a plain message with the command
+  that updates it, or symcc.
+- The setup view: `viewsWelcome` only shows in a tree view, not in a webview view. So the extension has an empty tree
+  view, `symcc.setup`, shown while no symcc is found, and the board's webview view is shown once one is.
