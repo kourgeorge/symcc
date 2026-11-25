@@ -627,7 +627,12 @@ export async function settingsPage($: $, pane: PaneParts) {
   const stacked = pane.width - 4 - padWidth < 12
   // the help for the focused row: a setting's meaning, then its name, default and range; a heading's hint; the first heading before any focus
   const helpOf = (): { lines: string[]; name: string } => {
-    const k = focusedKey ?? row(`group:${SETTING_GROUPS[0]!.title}`)
+    const editing = S.settingEdit?.name ?? S.settingPick?.name
+    const k = focusedKey === 'setting-edit' || focusedKey?.startsWith('pick:') || focusedKey === 'setting-cancel' ? (editing ? row(`setting:${editing}`) : undefined) : focusedKey
+    const first = row(`group:${SETTING_GROUPS[0]!.title}`)
+    return helpFor(k && (k.startsWith('setting:') || k.startsWith('group:') || k.startsWith('settings-r') || k.startsWith('settings-k')) ? k : first)
+  }
+  const helpFor = (k: string): { lines: string[]; name: string } => {
     if (k.startsWith('setting:')) {
       const x = SETTINGS.find(s => s.name === k.slice(8))
       if (x) return { name: x.label, lines: [x.meaning, `${x.name} · default ${x.default} · ${x.range}`] }
@@ -643,7 +648,7 @@ export async function settingsPage($: $, pane: PaneParts) {
       {header('settings')}
       {SETTING_GROUPS.flatMap((g, gi) => {
         const open = S.settingsOpen.includes(g.title)
-        const sum = groupSummaryParts(g, viewAsBoard(v), stacked ? pane.width - 4 : pane.width - 4 - padWidth + g.title.length, { roles: rolesCount, kinds: kindsCount })
+        const sum = groupSummaryParts(g, viewAsBoard(v), stacked ? pane.width - 4 : pane.width - 4 - padWidth + g.title.length + 3, { roles: rolesCount, kinds: kindsCount })
         const gKey = `group:${g.title}`
         const shortSum = stacked ? '' : sum.values.replace(/^ · /, '')
         const label = open ? `▾ ${g.title}` : `▸ ${sum.title}${sum.values}`

@@ -1289,6 +1289,9 @@ test('"c" and the Settings tab show one row per setting: label, dot leaders, val
   // Enter on a number opens an edit box; on mode a pick list of paused / approve merge / auto merge (stored review / auto)
   await ui.press({ key: 'setting:max_parallel' })
   expect(await ui.find({ key: 'setting-edit' })).toBeDefined()
+  // the help stays on the setting being edited while its box has the focus
+  await focusKeys.focus('setting-edit')
+  expect(await ui.find({ type: 'Text', text: help.facts })).toBeDefined()
   await ui.press({ key: 'setting:mode' })
   expect(await ui.find({ key: 'setting-edit' })).toBeUndefined()
   expect(await ui.find({ key: 'pick:paused' })).toBeDefined()
@@ -1380,9 +1383,9 @@ test('Settings groups start closed with the first heading focused; Enter opens a
   expect(work?.props.plain).toBe(true)
   expect(work?.props.autoFocus).toBe(true)
   expect((await ui.find({ key: 'group:Scouts' }))?.props.autoFocus).toBeUndefined()
-  expect(work?.props.label).toBe('▸ Work · auto merge · 3 at…')
+  expect(work?.props.label).toBe('▸ Work · auto merge · 3 at onc…')
   expect(await ui.find({ type: 'Text', text: /^▸ Work\s+$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: 'auto merge · 3 at…' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'auto merge · 3 at onc…' })).toBeDefined()
   expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles?/)
   expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
   // Enter opens Work: its rows show under "▾ Work"; ↑↓ go from its last row to the next heading, past nothing hidden

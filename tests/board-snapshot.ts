@@ -1808,31 +1808,31 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at…","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at onc…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Work                    "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 3 at…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 3 at onc…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands ·…","plain":true},
+        "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands · tes…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Checks before merging   "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands ·…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands · tes…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task t…","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Workers                 "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task t…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -1848,11 +1848,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · ope…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open o…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Board and alerts        "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · ope…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · open o…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -2506,31 +2506,31 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at…","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at onc…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work                    "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 3 at…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 3 at onc…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands ·…","plain":true},
+        "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands · tes…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Checks before merging   "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands ·…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands · tes…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task t…","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers                 "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task t…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -2546,11 +2546,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · ope…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open o…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts        "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · ope…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · open o…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -3824,31 +3824,31 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at…","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at onc…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work                    "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 3 at…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 3 at onc…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands ·…","plain":true},
+        "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands · tes…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Checks before merging   "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands ·…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands · tes…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task t…","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers                 "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task t…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -3864,11 +3864,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · ope…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open o…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts        "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · ope…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · open o…"]}
         ]
       },
       {"type":"Text","children":[" "]},
