@@ -9242,7 +9242,6 @@ function todayLines(d, width, triesOnly = false) {
   return out.map((l) => fitText(l, Math.max(1, Math.floor(width))));
 }
 var TODAY_WHO = ["lead", "workers", "checkers", "scouts"];
-var TODAY_WHO_CELL = { workers: "█", checkers: "▓", scouts: "▒", lead: "░" };
 var TODAY_BAR = 16;
 var SPARK = "▁▂▃▄▅▆▇█";
 var HOUR = 3600000;
@@ -9343,7 +9342,7 @@ function todayBar(who, n = TODAY_BAR) {
       cells[big]--;
       cells[i] = 1;
     }
-  return who.flatMap((w, i) => cells[i] > 0 ? [{ text: TODAY_WHO_CELL[w.who].repeat(cells[i]), tone: w.who }] : []);
+  return who.flatMap((w, i) => cells[i] > 0 ? [{ text: "█".repeat(cells[i]), tone: w.who }] : []);
 }
 function sparkline(hours) {
   const max = Math.max(0, ...hours);
