@@ -38,7 +38,7 @@ function world(files = new Map<string, string>()) {
   S.root = ROOT
   S.writing = Promise.resolve()
   S.enabledNow = true
-  return { ...w, files, toasts }
+  return { ...w, files, toasts, runs: [] as string[][] }
 }
 
 const words = (n: number, seed: string) => Array.from({ length: n }, (_, i) => `${seed}${i % 7 ? 'work' : 'check'}`).join(' ')
@@ -440,4 +440,18 @@ test('T-675: leftover temp files of archive-2.json and of the parts files in .sy
   await cleanLeftoverTmp(w.host)
   expect(gone.filter(f => w.files.has(f))).toEqual([])
   expect(keep.filter(f => w.files.has(f))).toEqual(keep)
+})
+
+test('T-1056: the tasks folder is made once per session, and again after a write fails because it was deleted', async () => {
+  resetStore()
+  const w = world()
+  const inner = w.host.run
+  w.host.run = async (argv, o) => (w.runs.push([...argv]), inner(argv, o))
+  const mkdirs = () => w.runs.filter(r => r[0] === 'mkdir').length
+  const b = bigBoard()
+  await saveBoard(w.host, b)
+  expect(mkdirs()).toBe(1)
+  await saveBoard(w.host, b)
+  await saveBoard(w.host, b)
+  expect(mkdirs()).toBe(1)
 })
