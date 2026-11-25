@@ -7,7 +7,7 @@ import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'
-import { S, type CheckerEnd, checkerRuns, halt, stopped } from './state'
+import { S, type CheckerEnd, checkerRuns, adoptedCheckers, halt, stopped } from './state'
 import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
 import { change, now } from './store'
@@ -61,11 +61,17 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
   // where the task's branch is now (the committed work): put back after the checker if it moved it
   const saved = await gitPlace($, dir, taskBranch(t))
   let agentId: string
+  // T-1068: a checker that kept running over a plugin reload is waited for again instead of started again
+  const adopted = adoptedCheckers.get(t.id)
+  adoptedCheckers.delete(t.id)
   try {
-    // queued: it starts at the next turn's start or end, where Claude Code keeps symcc's hooks (see starts.ts)
-    const spawned = await startAgent($, { kind: 'checker', prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
-    if (!spawned.agentId) throw new Error('the checker did not start')
-    agentId = spawned.agentId
+    if (adopted) agentId = adopted
+    else {
+      // queued: it starts at the next turn's start or end, where Claude Code keeps symcc's hooks (see starts.ts)
+      const spawned = await startAgent($, { kind: 'checker', prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
+      if (!spawned.agentId) throw new Error('the checker did not start')
+      agentId = spawned.agentId
+    }
   } catch (err) {
     const why = `the checker couldn't start: ${cutLine((err as Error)?.message ?? String(err), 200)}`
     if (notReadyYet(err) && tryLater?.()) return { verdict: null, why, again: true }

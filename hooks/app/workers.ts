@@ -12,7 +12,7 @@ import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
 import { runChecker, checkerName, cleanFolder, STOPPED_AGAIN } from './checker'
 import { loadKinds } from './kinds'
-import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
+import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, adoptedCheckers, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, startCancelled, claimNote, rewakeStarts } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait, holdPublish } from './store'
@@ -1103,7 +1103,7 @@ export async function restartCheckers(host: Host, agents: HostAgent[]) {
   const live = liveDriver(await readLeadText(host), Date.now())
   const running = new Set([...checkerRuns.values()].map(r => r.task))
   const checkerAlive = (id: string) => agents.some(a => a.name === checkerName(S.N.name, id) && !stopped.has(a.id) && !ENDED_STATUSES.includes(a.status))
-  const lost = b.tasks.filter(t => t.status === 'doing' && t.live?.phase === 'checker' && handedBack(t) && ownedHere(t, S.me, live) && !finishing.has(t.id) && !approving.has(t.id) && !starting.has(t.id) && !running.has(t.id) && !onPurpose.has(t.id) && ![...workers.values()].some(w => w.task === t.id) && !checkerAlive(t.id))
+  const lost = b.tasks.filter(t => t.status === 'doing' && t.live?.phase === 'checker' && handedBack(t) && ownedHere(t, S.me, live) && !finishing.has(t.id) && !approving.has(t.id) && !starting.has(t.id) && !running.has(t.id) && !onPurpose.has(t.id) && ![...workers.values()].some(w => w.task === t.id) && (!checkerAlive(t.id) || adoptedCheckers.has(t.id)))
   for (const t of lost) void checkAgain(host, t).catch(() => undefined)
 }
 
@@ -1139,7 +1139,7 @@ async function checkAgain(host: Host, t0: BoardTask) {
     if (await folderGone(host, t0, note, `${id} "${t.title}": its checker stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next try goes on from the same branch. This is not counted as a retry.`)) return
     await markFinishing(host, id, tryNo).catch(() => undefined)
     // told once: a start tried again because the agent type wasn't loaded yet is the same restart
-    if (!checkerNotReady.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
+    if (!checkerNotReady.has(id) && !adoptedCheckers.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
     go = { b, t, dir }
   } finally {
     if (!go) await endFinishing(host, id, tryNo)
@@ -1174,7 +1174,7 @@ async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string,
   const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
   const made: string[] = []
   const why = fromChecker ? stop() : undefined
-  if (fromChecker && !why) await cleanFolder(host, dir)
+  if (fromChecker && !why && !adoptedCheckers.has(t.id)) await cleanFolder(host, dir)
   const checker = fromChecker || (checkerOn(b) && !t.history.some(h => h.text === checkerLine(tryLabel(t), { ok: true })))
   const r: CheckResult = why
     ? taskWasResult(why)

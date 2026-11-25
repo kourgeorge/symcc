@@ -957,23 +957,55 @@ async function reloadDuringChecker(w: ReturnType<typeof world>, status: string) 
   return agents
 }
 
-test('T-386: a reload stops the running checker; at the next check the task gets a new checker on the same work, no retry counted, and the lead is told once', async () => {
+test('T-1068: a checker still running after a reload is adopted, not stopped; its OK is used, nothing new starts, no retry counted', async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
   const sha = w.git.head
   await check(w.$)
-  // the old checker (unknown to this copy) was told to stop, and a new one started at once
-  expect(w.sends.map(m => m.to)).toEqual(['chk1'])
-  await until(() => checkerRuns.size > 0)
-  expect(w.spawns.length).toBe(2)
-  expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
+  // the checker (unknown to this copy) is not told to stop and no new one starts; this copy waits for it
+  await until(() => checkerRuns.has('chk1'))
+  expect(w.sends).toEqual([])
+  expect(w.spawns.length).toBe(1)
   const mid = find(await load(w.$), 'T-1')!
   expect(mid.status).toBe('doing')
   expect(mid.live?.checking?.step).toBe('checker')
   expect(w.git.head).toBe(sha)
-  const told = leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded'))
-  expect(told.length).toBe(1)
-  // a check meanwhile does not start a third one
+  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(0)
+  // a check meanwhile does not start another
+  await check(w.$)
+  expect(w.spawns.length).toBe(1)
+  checkerFinished('chk1', 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  expect(w.spawns.length).toBe(1)
+})
+
+test('T-1068: an adopted checker that finds problems: its verdict is used (the task goes back to its worker)', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await check(w.$)
+  await until(() => checkerRuns.has('chk1'))
+  checkerFinished('chk1', 'PROBLEMS: src/a.ts breaks on empty input')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.history.some(h => h.text.includes('the checker found problems') || h.text.includes('checker: problems') || h.text.includes('PROBLEMS'))).toBe(true)
+  expect(t.status).not.toBe('done')
+  expect(w.spawns.length).toBe(1)
+})
+
+test('T-386: a checker symcc stopped over the reload (its agent is in stopped) gets a new checker at the next check, no retry counted, the lead told once', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
+  await check(w.$)
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
+  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
   await check(w.$)
   expect(w.spawns.length).toBe(2)
   checkerFinished([...checkerRuns.keys()][0]!, 'OK')
@@ -981,14 +1013,12 @@ test('T-386: a reload stops the running checker; at the next check the task gets
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(t.attempts).toBe(1)
-  expect(t.test_tries ?? 0).toBe(0)
-  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
-  expect(leadQueue.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
 })
 
 test("T-386: a checker that ended over the reload, or whose stopped hand-back arrives, gets a new run without waiting for a check", async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
   // the reload's own look for orphans (session start) stops the old checker; its "stopped" answer then comes in
   await stopOrphans(w.$)
   expect(w.spawns.length).toBe(1)
@@ -1061,6 +1091,7 @@ function scoutNotLoaded(w: ReturnType<typeof world>, n: number) {
 test("T-386: a restarted checker whose agent type isn't loaded yet: the task stays doing, and the next check starts a checker", async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
   scoutNotLoaded(w, 1)
   await stopOrphans(w.$)
   await stoppedHandBack(w.$, 'chk1')
@@ -1085,6 +1116,7 @@ test("T-386: a restarted checker whose agent type isn't loaded yet: the task sta
 test("T-386: a restarted checker whose agent type is still not loaded after 3 starts: the task goes to review with no verdict", async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
   scoutNotLoaded(w, 99)
   await stopOrphans(w.$)
   await stoppedHandBack(w.$, 'chk1')
