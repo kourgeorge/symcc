@@ -1138,6 +1138,8 @@ function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
   const all = defsIn(f, list)
   const noun = list === 'roles' ? 'role' : 'kind'
   const rows = all.map(x => viewDefRow(list, x))
+  const nav = navRow('settings', '', w)
+  b.add([...nav.left, { text: ' '.repeat(nav.pad) }].map(p => ({ text: p.text, color: 'go' in p && p.go ? PILL_COLOR : 'inactive', ...('go' in p && p.go ? { hit: { key: 'back' } as PanelHit } : {}) })))
   b.add([{ text: `▍${list === 'roles' ? 'Roles' : 'Task types'}`, color: 'suggestion', bold: true }, { text: `  ${defsCountText(noun, rows)}`, color: 'inactive' }])
   const layout = defLayout(rows, list === 'roles' ? ROLE_COLS : KIND_COLS, w)
   if (!all.length) b.add([{ text: `  (none in the board's view yet)`, color: 'inactive' }])
@@ -1161,7 +1163,7 @@ function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
   b.blank()
   // T-706: Claude Code's "+ New role" / "+ New kind" (n), one plain line
   b.add([{ text: `  ${newDefText(noun)}`, color: 'text' }], { key: 'n' })
-  return { ...b, ids, selected, head: 2 }
+  return { ...b, ids, selected, head: 3 }
 }
 
 /** One role's or kind's page: its name, where it comes from and whether it is off, what it is for; a role's model,
