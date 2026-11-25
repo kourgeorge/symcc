@@ -7,7 +7,7 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { emptyBoard, leadText, parseLead, beatText, handRequest, noHandRequest, handedText, statusLine, statusRoom, offStatusLine, offHereAnswer, driveWarning } from '../hooks/board'
 import { agoShort, driverFacts, startedText } from '../hooks/core/driver-notice'
-import { claimLead, startOffHere, disableHere } from '../hooks/app/lead'
+import { claimLead, startHere, disableHere } from '../hooks/app/lead'
 import { runCommand } from '../hooks/app/symcc'
 import { takeBoardUpdate } from '../hooks/app/tell'
 import { S } from '../hooks/app/state'
@@ -149,8 +149,10 @@ test('T-952: /symcc-drive in a window that started off because another window dr
   const b = world('b')
   await saveBoard(b.host, emptyBoard())
   b.files.set(b.lead, leadText('a', Date.now()))
-  await startOffHere(b.host)
-  expect([S.offHere, S.offWhy]).toEqual([true, 'other'])
+  await startHere(b.host)
+  expect(S.offHere).toBe(false)
+  await disableHere(b.host)
+  S.offWhy = 'other'
   const r = await runCommand(b.host, 'symcc-drive', '')
   expect(S.offHere).toBe(false)
   expect(r?.text).toContain('Asked session a to hand over')

@@ -6,7 +6,7 @@ import type { Host } from '../host'
 import { moveOldOrgMem } from './org-mem'
 import { migrateIfOld } from './migrate-data'
 import { gitReady, initGitIn, recheckGit } from './git'
-import { claimLead, carryDriver, publish, handOver, releaseLead, startOffHere, offHereBeat } from './lead'
+import { claimLead, carryDriver, publish, handOver, releaseLead, startHere, offHereBeat } from './lead'
 import { loadRoles } from './roles'
 import { loadKinds } from './kinds'
 import { scoutOriginsFixed, scheduleScouts, seedExampleScouts } from './scouts'
@@ -98,7 +98,7 @@ export async function sessionStart(host: Host) {
     }
     // T-793: another live window with symcc on makes this one start off here (plain), before it can claim the lead
     if (wasDriving && oldMe !== S.me) await carryDriver(host, oldMe).catch(() => undefined)
-    await startOffHere(host).catch(() => undefined)
+    await startHere(host).catch(() => undefined)
     // Become the driver if nobody drives the board. As the driver, old workers still running
     // from before a reload are stopped first and their tasks go back to "todo".
     const waits = new Promise<void>(r => (startWait.mark = r))
@@ -191,12 +191,12 @@ export async function refreshFresh(host: Host) {
  * lead is told it is the lead now. Where a board is found (here or above) it changes nothing. A folder with no .git of its
  * own still gets its board (T-861): the board shows a "no git" notice with a Set up git button (never a parent folder's
  * repo), and no worker starts until git is set up. /<name>-init git sets git up here first, then makes the board.
- * If another window already runs symcc here, this one stays off (see startOffHere).
+ * If another window already runs symcc here, this one follows it (see startHere).
  */
 export async function initProject(host: Host, tell: (text: string) => void, withGit: boolean): Promise<string> {
   const own = (await sessionFolder(host)).replace(/[\\/]+$/, '') || '/'
   // like git init: only a board in this exact folder stops it; one in a folder above does not
-  if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return S.offHere ? (S.offWhy === 'other' ? `${S.N.name} is already set up here. It runs in another window; /${S.N.name}-enable turns it on in this one too.` : `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable turns it back on.`) :`${S.N.name} is already set up here.`
+  if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return S.offHere ? `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable turns it back on.` : `${S.N.name} is already set up here.`
   const hasGit = await host.fs.exists(`${own}/.git`).catch(() => false)
   // T-861: plain init always makes the board; with no git the board shows a notice and its Set up git button does the git part
   const failed = await createBoardIn(host, own, !hasGit && withGit)
@@ -205,12 +205,7 @@ export async function initProject(host: Host, tell: (text: string) => void, with
   S.root = own
   S.fresh = false
   S.enabledNow = true
-  await startOffHere(host).catch(() => undefined)
-  if (S.offHere) {
-    startTimers(host)
-    await publish(host, await load(host))
-    return `${S.N.name} already runs in another window. /${S.N.name}-enable turns it on in this one too.`
-  }
+  await startHere(host).catch(() => undefined)
   S.startupDone = false
   try {
     await claimLead(host, true).catch(() => (S.driving = false))

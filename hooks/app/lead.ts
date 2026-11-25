@@ -1,4 +1,4 @@
-import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, beatText, driverTimes, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
+import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, beatText, driverTimes, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, driveNoticeParts, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
 import { homeBranch } from './git'
 import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, fitView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
@@ -11,7 +11,7 @@ import { haltAll, haltWorkers, dropLeadUpdates, setSymcc } from './board-mode'
 import { stopOrphans } from './cleanup'
 import { branchFacts, taskBranchesView } from './branches'
 import type { StatusView } from '../core/live-text'
-import { type DriverFacts, driverFacts } from '../core/driver-notice'
+import { type DriverFacts, driverFacts, noticeText } from '../core/driver-notice'
 
 // ---------------- who drives the board ----------------
 // Only one session (the driver) starts workers, merges, runs scouts and the regular check.
@@ -249,8 +249,8 @@ async function followBoard(host: Host) {
 /** The text of the take-over notice (a window off here tells it once when the window with symcc on is gone). */
 const takeoverText = () => `the ${S.N.name} window closed · /${S.N.name}-enable to take over`
 
-/** At session start: when another window with symcc on is live (a fresh heartbeat in lead.json), this window starts off here. */
-export async function startOffHere(host: Host) {
+/** At session start: this window starts on. When another window with symcc on is live (a fresh heartbeat in lead.json), it follows: a lead that does not drive (claimLead leaves driving to the other window). */
+export async function startHere(host: Host) {
   S.offHere = false
   S.sawOther = false
   S.takeoverTold = false
@@ -264,12 +264,8 @@ export async function startOffHere(host: Host) {
   const text = await readLeadText(host)
   const live = liveDriver(text, Date.now())
   if (!live || live === S.me || parseLead(text)?.session === S.me) return
-  S.offHere = true
-  S.offWhy = 'other'
-  S.enabledNow = false
-  S.sawOther = true
   seeDriver(text)
-  host.ui.toast(S.N.toast(offStatusLine(S.N.name, false, 'other', S.driver, Date.now())))
+  host.ui.toast(S.N.toast(noticeText(driveNoticeParts([], Date.now(), S.N.name, Infinity, S.driver))))
 }
 
 /** /<name>-disable here: this window works as plain ${S.W.app}; if it drove the board it hands driving over. Answers what happened. */
@@ -320,7 +316,7 @@ const onHereText = (b: Board) => {
  * window on if it was off here; this window is then a lead and may drive again by the normal rules. "already enabled"
  * only when both were on already.
  */
-export async function enableHere(host: Host, tell: (text: string) => void): Promise<string> {
+export async function enableHere(host: Host, tell: (text: string) => void, command: 'enable' | 'drive' = 'enable'): Promise<string> {
   let b = await load(host)
   if (b.enabled !== false && !S.offHere) return setSymcc(host, true)
   if (b.enabled === false) {
@@ -338,7 +334,7 @@ export async function enableHere(host: Host, tell: (text: string) => void): Prom
   if (openOnStart(b)) await openPane(host, { tab: 'live', focus: false, quiet: true }).catch(() => undefined)
   await claimLead(host).catch(() => false)
   void pump(host)
-  tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-enable. You are a lead again; the board is in mode ${modeOf(b)}.`)
+  tell(`The owner turned ${S.N.name} on in this window with /${S.N.name}-${command}. You are a lead again; the board is in mode ${modeOf(b)}.`)
   return onHereText(b)
 }
 

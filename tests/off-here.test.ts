@@ -4,7 +4,7 @@
 // symcc window is gone.
 import { expect } from 'claude-code/testing'
 import { emptyBoard, leadText, parseLead, parseCommand, offStatusLine, offHereAnswer, LEAD_STALE_MS, addTask, patchTask, find, type Board } from '../hooks/board'
-import { claimLead, disableHere, enableHere, offHereBeat, handOver, GONE_REMIND_MS, GONE_GRACE_MS, startOffHere, driveHere } from '../hooks/app/lead'
+import { claimLead, disableHere, enableHere, offHereBeat, handOver, GONE_REMIND_MS, GONE_GRACE_MS, startHere, driveHere } from '../hooks/app/lead'
 import { S, sayQueue, toolName, workers } from '../hooks/app/state'
 import { leadBeat, leadGuideText, sessionStart, toolCall, runCommand, COMMANDS } from '../hooks/app/symcc'
 import { saveBoard } from '../hooks/app/store'
@@ -40,6 +40,14 @@ function world(id: string) {
     ui: { toast: (text: string) => void toasts.push(text), open: (async (a: { id: string }) => (opened.push(a.id), { isPlaced: true })) as never },
   })
   return { ...w, files, toasts, opened, lead: `${ROOT}/${S.N.leadFile}`, board: `${ROOT}/${S.N.boardFile}` }
+}
+
+/** A window that is off here while another window drives (the state a disabled window is in once its driver is back after the take-over line). */
+const startOff = async (host: Parameters<typeof startHere>[0]) => {
+  await startHere(host)
+  await disableHere(host)
+  S.offWhy = 'other'
+  S.sawOther = true
 }
 
 const boardOf = (w: ReturnType<typeof world>) => JSON.parse(w.files.get(w.board)!) as Board
@@ -182,7 +190,7 @@ test('/symcc-enable through the real command tells the lead with one message', a
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOffHere(w.host)
+  await startOff(w.host)
   expect(S.offHere).toBe(true)
   await runCommand(w.host, 'symcc-enable', '')
   expect(S.offHere).toBe(false)
@@ -197,7 +205,7 @@ test('handOver (after /clear) does not open the panel in an off-here window', as
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOffHere(w.host)
+  await startOff(w.host)
   await handOver(w.host)
   expect(w.opened).toEqual([])
 })
@@ -209,7 +217,7 @@ test('the take-over line waits a grace so a second on-window can claim lead.json
   await saveBoard(w.host, emptyBoard())
   const t0 = Date.now()
   w.files.set(w.lead, leadText('a', t0))
-  await startOffHere(w.host)
+  await startOff(w.host)
   w.toasts.length = 0
   w.files.delete(w.lead)
   await offHereBeat(w.host, t0 + 1000)
@@ -265,7 +273,7 @@ test('T-875: plain /symcc-enable in an off-here window turns this window on; the
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOffHere(w.host)
+  await startOff(w.host)
   expect(S.offHere).toBe(true)
   // T-952: started off because another window drives: the answer names it
   expect(S.driver !== undefined).toBe(true)
@@ -285,7 +293,7 @@ test('T-880: turning enabled on from Settings in an off-here window works like /
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOffHere(w.host)
+  await startOff(w.host)
   expect(S.offHere).toBe(true)
   const said = await ownerSettings(w.host, { enabled: true }, 'from the board')
   expect(said.startsWith('symcc is on in this window, in mode ')).toBe(true)
@@ -306,25 +314,36 @@ test('T-880: turning enabled on from Settings in an off-here window works like /
   expect(S.offHere).toBe(false)
 })
 
-test('a second live window starts off here with a short notice; board.json is unchanged and its panel does not open', async () => {
+test('a second live window starts as a follower: on, a lead, not driving, with the follower notice; board.json is unchanged', async () => {
   S.root = ROOT
   const w = world('b')
   await saveBoard(w.host, { ...emptyBoard(), open_on_start: true })
   w.files.set(w.lead, leadText('a', Date.now()))
   const before = w.files.get(w.board)
   await sessionStart(w.host)
-  expect(S.offHere).toBe(true)
+  expect(S.offHere).toBe(false)
   expect(S.driving).toBe(false)
   expect(w.files.get(w.board)).toBe(before)
   expect(parseLead(w.files.get(w.lead)!)?.session).toBe('a')
-  expect(w.toasts.some(t => t.includes('another window drives this board (checked in just now) · /symcc-drive to drive from here · /symcc-enable to follow it'))).toBe(true)
-  expect(w.opened).toEqual([])
-  expect(w.panel.view()).toMatchObject({ on_here: false, off_here: 'other' })
-  expect(offStatusLine('symcc', true, 'other')).toBe('another window drives this board · /symcc-drive to drive from here · /symcc-enable to follow it')
-  expect(await leadGuideText(w.host)).toBeUndefined()
-  // /symcc-enable opens the panel as on start and makes it a lead
-  await enableHere(w.host, () => undefined)
+  expect(w.toasts.some(t => t.includes('this window follows (') && t.includes('/symcc-drive to drive from here'))).toBe(true)
+  expect(w.toasts.some(t => t.includes('/symcc-enable'))).toBe(false)
   expect(w.opened.length).toBe(1)
+  expect(w.panel.view()).toMatchObject({ on_here: true, driving: false })
+  expect(await leadGuideText(w.host)).toBeDefined()
+})
+
+test('T-1041: /symcc-drive from a window that is off here tells the lead /symcc-drive, not /symcc-enable', async () => {
+  S.root = ROOT
+  S.me = 'b'
+  const w = world('b')
+  await saveBoard(w.host, emptyBoard())
+  w.files.set(w.lead, leadText('a', Date.now()))
+  await startOff(w.host)
+  await runCommand(w.host, 'symcc-drive', '')
+  expect(S.offHere).toBe(false)
+  const update = takeBoardUpdate()
+  expect(update).toContain('with /symcc-drive.')
+  expect(update).not.toContain('/symcc-enable')
 })
 
 test('the first window starts with symcc on, and opens its panel', async () => {
@@ -343,7 +362,7 @@ test('a stale first window (old driving marker) does not make a new window start
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now() - LEAD_STALE_MS - 5_000))
-  await startOffHere(w.host)
+  await startHere(w.host)
   expect(S.offHere).toBe(false)
   expect(w.toasts).toEqual([])
   expect(await claimLead(w.host, true)).toBe(true)
@@ -355,7 +374,7 @@ test('a project disabled as a whole does not start a window off here', async () 
   const w = world('b')
   await saveBoard(w.host, { ...emptyBoard(), enabled: false })
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOffHere(w.host)
+  await startHere(w.host)
   expect(S.offHere).toBe(false)
 })
 
@@ -365,7 +384,7 @@ test('when the only window with symcc on goes away, an off-here window says so o
   const w = world('b')
   await saveBoard(w.host, emptyBoard())
   w.files.set(w.lead, leadText('a', Date.now()))
-  await startOffHere(w.host)
+  await startOff(w.host)
   expect(S.offHere).toBe(true)
   w.toasts.length = 0
   // a still drives: nothing to tell
@@ -397,7 +416,7 @@ test('nobody takes over: "needs you" plays once, 15 minutes after the take-over 
   await saveBoard(w.host, emptyBoard())
   const t0 = Date.now()
   w.files.set(w.lead, leadText('a', t0))
-  await startOffHere(w.host)
+  await startOff(w.host)
   w.files.delete(w.lead)
   await offHereBeat(w.host, t0 + 1000) // first missed
   const t1 = t0 + 1000 + GONE_GRACE_MS
@@ -422,7 +441,7 @@ test('the reminder does not play when a window took over first, or when notify i
   await saveBoard(w.host, emptyBoard())
   const t0 = Date.now()
   w.files.set(w.lead, leadText('a', t0))
-  await startOffHere(w.host)
+  await startOff(w.host)
   w.files.delete(w.lead)
   await offHereBeat(w.host, t0 + 1000)
   // another window takes over before the time is up
@@ -449,7 +468,7 @@ test('T-984: a window that starts while lead.json names its own session (stale o
     await saveBoard(w.host, emptyBoard())
     w.files.set(w.lead, leadText('me', Date.now() - age))
     S.me = 'session-made-up' // the host could not answer at first
-    await startOffHere(w.host)
+    await startHere(w.host)
     expect(S.offHere).toBe(false)
     expect(S.me).toBe('me')
     expect(w.toasts).toEqual([])
@@ -504,7 +523,7 @@ test('T-984: a made-up id is swapped for the real one on the next beat, so the w
     if (!up) throw new Error('not yet')
     return 'me'
   }
-  await startOffHere(w.host)
+  await startHere(w.host)
   up = true
   w.toasts.length = 0 // the host could not name this window at start, so the start notice cannot know it is itself
   await offHereBeat(w.host, t0 + 1000)

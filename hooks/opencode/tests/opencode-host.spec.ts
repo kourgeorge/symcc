@@ -473,10 +473,9 @@ test('a lead.json left by an OpenCode server stopped without its cleanup (T-467)
     expect(S.beat !== null).toBe(true)
     // ...and its own heartbeat (every 30 s) takes over once nobody refreshed lead.json for LEAD_STALE_MS
     await writeFile(leadFile, symccLeadText('opencode-gone', Date.now() - LEAD_STALE_MS - 1000))
-    // T-793: that copy started while another window was live, so it is off here: it takes over only on /symcc-enable
-    expect(S.offHere).toBe(true)
-    expect(await claimLead(next.host)).toBe(false)
-    await enableHere(next.host, () => undefined)
+    // T-1041: that copy started while another window was live, so it follows (on, not off here): its heartbeat takes over
+    expect(S.offHere).toBe(false)
+    expect(await claimLead(next.host)).toBe(true)
     expect(S.driving).toBe(true)
     expect((await lead())?.session).toBe('opencode-next')
     // a Claude Code session in the same project sees the same file the same way (whoDrives is shared)
