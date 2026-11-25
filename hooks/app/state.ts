@@ -324,8 +324,12 @@ export async function halt(host: Host, agentId: string, why: string) {
 }
 /** failed tasks the lead has already been reminded about (task id → its updated_at then) */
 export const reminded = new Map<string, string>()
-/** the board health findings already told to the lead (their keys; see newFindings) */
-export const healthTold = new Set<string>()
+/** the board health findings already told to the lead (their keys; see newFindings), kept on globalThis so a plugin reload keeps them */
+export const healthTold: Set<string> = (() => {
+  const g = globalThis as unknown as Record<string, unknown>
+  if (!(g.__symccHealthTold instanceof Set)) g.__symccHealthTold = new Set<string>()
+  return g.__symccHealthTold as Set<string>
+})()
 /** T-675: the data files close to the 4 MB read limit (their name as the owner knows it → the warning), shown on the board */
 export const sizeNotes = new Map<string, string>()
 export const scoutState = new Map<string, SymccScout>()
