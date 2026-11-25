@@ -119,6 +119,10 @@ export const startS = () => ({
   leadUrgent: false,
   /** a board update whose send failed waits for this timer (or the next update) to try again (see tellLead) */
   leadRetry: null as { cancel(): void } | null,
+  /** the board health findings already told to the lead (their keys; see newFindings); kept per project, and saved in the data folder so a reload keeps them */
+  healthTold: new Set<string>(),
+  /** the read of that saved list (started once per load) */
+  healthLoad: null as Promise<void> | null,
   writing: Promise.resolve() as Promise<unknown>,
   /** this session's id, and whether it drives the board (only the driver starts work; see .<name>/lead.json) */
   me: '',
@@ -324,12 +328,6 @@ export async function halt(host: Host, agentId: string, why: string) {
 }
 /** failed tasks the lead has already been reminded about (task id → its updated_at then) */
 export const reminded = new Map<string, string>()
-/** the board health findings already told to the lead (their keys; see newFindings), kept on globalThis so a plugin reload keeps them */
-export const healthTold: Set<string> = (() => {
-  const g = globalThis as unknown as Record<string, unknown>
-  if (!(g.__symccHealthTold instanceof Set)) g.__symccHealthTold = new Set<string>()
-  return g.__symccHealthTold as Set<string>
-})()
 /** T-675: the data files close to the 4 MB read limit (their name as the owner knows it → the warning), shown on the board */
 export const sizeNotes = new Map<string, string>()
 export const scoutState = new Map<string, SymccScout>()

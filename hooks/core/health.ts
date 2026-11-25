@@ -129,10 +129,14 @@ function readyAt(b: Board, t: BoardTask): number {
   return times.length ? Math.max(...times) : NaN
 }
 
-/** When task `t` last moved to todo (from the backlog, or back after a failure or pause); else when it was made. */
+/**
+ * When task `t` last moved to todo (from the backlog, or back after a failure or pause); else when it was made.
+ * A retry, a reject and an "asked more" write no history line, so a task that already had a try counts from its last change.
+ */
 function todoSince(t: BoardTask): number {
   const moves = (t.history ?? []).filter(e => (e.kind === 'moved-backlog' && !e.backlog) || e.kind === 'retried' || e.kind === 'resumed').map(e => Date.parse(e.at || ''))
-  return Math.max(Date.parse(t.created_at || ''), ...moves.filter(Number.isFinite))
+  const back = t.runs?.length ? Date.parse(t.updated_at || '') : NaN
+  return Math.max(Date.parse(t.created_at || ''), ...[...moves, back].filter(Number.isFinite))
 }
 
 /** When task `t` started (its first try, else its last change). */

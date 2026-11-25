@@ -168,3 +168,10 @@ test('health: a told pushed-back problem is told again only when the after list 
   const changed = newFindings(boardHealth(board([{ ...t, after: ['T-4', 'T-5'] }, task('T-4', { status: 'doing' }), ...newer], full), NOW), retry.told)
   expect(changed.fresh.length).toBe(1)
 })
+
+test('health: a task retried after a failure counts its wait from the retry', () => {
+  const full = { max_parallel: 1 }
+  const newer = [task('T-5', { status: 'doing' }), task('T-6', { status: 'review' })]
+  const retried = task('T-1', { created_at: iso(600), updated_at: iso(1), after: ['T-4'], runs: [{ started: iso(500), ended: iso(400) }] as BoardTask['runs'] })
+  expect(reasons(board([retried, task('T-4', { status: 'doing' }), ...newer], full))).toEqual([])
+})
