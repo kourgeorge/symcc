@@ -239,7 +239,10 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     }
     return { ok: false, reason: 'nochange', detail: 'the worker made no change' }
   }
-  const bad = outOfScope(changed, t.files, S.N.dir)
+  // T-1053: every file any commit of the branch changed counts, not only its net change: a worker may merge another
+  // branch in and then delete its file outside the task, and that branch's commits would still reach the target
+  const touched = [...new Set([...changed, ...(await touchedSince($, base, head))])]
+  const bad = outOfScope(touched, t.files, S.N.dir)
   if (bad.length) {
     // On approve the owner's edits stay in the folder: once the files are allowed, approving again merges them.
     if (mode !== 'finish') return withSecrets({ ok: false, reason: 'scope', detail: outOfScopeText(bad, t.files) })
@@ -250,7 +253,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // the scope check the same way, so such a role can never merge code; and its prose-only change skips the tests
   const role = findRole(await loadRoles($).catch(() => S.roles), roleOf(t))
   const prose = isProseRole(role)
-  const code = prose ? notProse(changed) : []
+  const code = prose ? notProse(touched) : []
   if (code.length) {
     if (mode !== 'finish') return withSecrets({ ok: false, reason: 'scope', detail: notProseText(role!.name, code) })
     const undo = await undoOutOfScope($, t, dir, base, code, made)
@@ -354,33 +357,27 @@ async function dropFromBranch($: Host, t: SymccTask, dir: string, base: string, 
 }
 
 /**
- * After a try failed the scope check: puts the files outside the task (`bad`) on the task's branch
- * back to how they are at `base` (the merge base) and commits that, so the next try in the same
- * folder starts clean and keeps the work inside the task's files. Returns '' when done, or a note
- * to add to the failure when it could not be undone.
+ * After a try failed the scope check: the branch's work since `base` (the merge base) is made one commit on `base`
+ * again (git reset --soft), with the files outside the task (`bad`) put back to how they are at `base`, so the next
+ * try in the same folder starts clean and keeps the work inside the task's files. Always one commit (T-1053): a
+ * worker's merge (also a fast-forward one) may have brought in another branch's commits, which would otherwise still
+ * reach the target later, and a file a commit changed and a later one undid would fail every next try's scope check.
+ * Returns '' when done, or a note to add to the failure when it could not be undone.
  */
 async function undoOutOfScope($: Host, t: SymccTask, dir: string, base: string, bad: string[], made: string[]): Promise<string> {
+  const head = (await git($, ['rev-parse', 'HEAD'], dir)).stdout.trim()
+  // only files the branch changed in the end are put back; one only a commit in between changed goes with the squash
+  const net = new Set(head ? await changedSince($, base, head).catch(() => bad) : bad)
+  const back = bad.filter(f => net.has(f))
+  const r = await git($, ['reset', '-q', '--soft', base], dir)
+  if (r.exitCode !== 0) return `. Could not undo them on the task's branch: ${gitFailText(r)}`
   // :(literal): names are taken as they are, never as patterns.
-  for (let i = 0; i < bad.length; i += 100) {
-    const r = await git($, ['restore', `--source=${base}`, '--staged', '--worktree', '--', ...bad.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
+  for (let i = 0; i < back.length; i += 100) {
+    const r = await git($, ['restore', `--source=${base}`, '--staged', '--worktree', '--', ...back.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
     if (r.exitCode !== 0) return `. Could not undo them on the task's branch: ${(r.stderr || r.stdout).trim().slice(0, 200)}`
-  }
-  // T-1053: a worker's merge brought in another branch's commits: undone files alone would still take those commits
-  // to the target later, where their own merge would then find them already in and bring nothing. The branch's work
-  // is made one commit on `base` instead (the files as they are now, the undone ones back), so none of them stay in its history.
-  if (await foreignCommits($, dir, base)) {
-    const r = await git($, ['reset', '-q', '--soft', base], dir)
-    if (r.exitCode !== 0) return `. Could not take the merged-in commits off the task's branch: ${gitFailText(r)}`
   }
   const c = await commitTry($, t, dir, made, `${t.id}: undo changes outside the task`)
   return c ? `. Could not undo them on the task's branch: ${c}` : ''
-}
-
-/** T-1053: whether the branch in folder `dir` has commits since `base` off its first-parent line (brought in by a merge of another branch). */
-async function foreignCommits($: Host, dir: string, base: string): Promise<boolean> {
-  const all = await git($, ['rev-list', '--count', `${base}..HEAD`], dir)
-  const line = await git($, ['rev-list', '--count', '--first-parent', `${base}..HEAD`], dir)
-  return all.exitCode === 0 && line.exitCode === 0 && Number(all.stdout.trim()) > Number(line.stdout.trim())
 }
 
 /**

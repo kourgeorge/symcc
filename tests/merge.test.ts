@@ -3992,7 +3992,7 @@ test("T-1053: a worker may change git in its own folder on its own branch; push,
     'git commit -am x', 'git add -A && git commit -m "x: why"', 'git merge main', 'git merge --no-edit symcc/T-7', 'git merge --abort',
     'git merge --no-edit main 2>&1 | tail -20', 'git cherry-pick abc123', 'git revert --no-edit HEAD', 'git restore src/a.ts', 'git restore --staged .',
     'git checkout -- src/a.ts', 'git checkout main -- src/a.ts', 'git reset --hard HEAD~1', 'git merge -s ort -X theirs main', 'git merge --strategy=ours main',
-    'git rebase main', 'git rebase --continue', 'git bisect start', 'git bisect reset', 'git bisect good', 'git fetch origin', 'git pull --no-rebase origin main',
+    'git rebase main', 'git rebase --continue', 'git rebase --root', 'git rebase --onto main HEAD~2', 'git merge --no-autostash main', 'git bisect start', 'git bisect reset', 'git bisect good', 'git fetch origin', 'git pull --no-rebase origin main',
     'git commit -s -m x', 'git cherry-pick -s abc123',
     `git -C ${wt5} commit -m x`, `cd ${wt5} && git commit -am x`, 'git -C src add a.ts', 'git rm -q old.ts', 'git clean -fd',
   ]) expect([command, await bash(command)]).toEqual([command, undefined])
@@ -4020,6 +4020,15 @@ test("T-1053: a worker may change git in its own folder on its own branch; push,
     ['git symbolic-ref HEAD refs/heads/main', 'git symbolic-ref'],
     ['git rebase main symcc/T-7', 'git rebase'],
     ['git rebase --update-refs main', 'git rebase'],
+    // with --root the name is the branch to rebase: the folder would switch to it
+    ['git rebase --root other', 'git rebase'],
+    ['git rebase --root --onto main other', 'git rebase'],
+    // ends the bisect on another branch
+    ['git bisect reset other', 'git bisect'],
+    // --autostash leaves changes in the shared stash
+    ['git merge --autostash main', 'git merge'],
+    ['git rebase --autostash main', 'git rebase'],
+    ['git pull --autostash origin main', 'git pull'],
     ['git fetch . HEAD:main', 'git fetch'],
     ['git pull origin main:main', 'git pull'],
     // every stash form: the stash is shared with the owner's folder (the owner's word, T-1053)

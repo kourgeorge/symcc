@@ -160,3 +160,30 @@ test('T-1053: a merged-in file outside the task\'s files fails the scope check; 
     await rm(r.repo, { recursive: true, force: true })
   }
 }, 600_000)
+
+// A fast-forward merge leaves no merge commit (side's commits sit on the branch's first-parent line), and a merge whose
+// file is deleted again leaves no net change: both must still fail the scope check, and the undo must take side's
+// commits off the branch, so a retry never brings them to main with their work undone.
+for (const [name, fakeGit] of [
+  ['a fast-forward merge of another branch', `${W} merge -q --ff-only side`],
+  ['a merge of another branch whose file outside the task is deleted again', `git add -A && ${W} commit -qm "worker: hello" && ${W} merge -q --no-ff --no-edit side && git rm -q out.txt && ${W} commit -qm "worker: drop it"`],
+] as const) {
+  test(`T-1053: ${name} fails the scope check; the undo takes that branch's commits off, and the retry merges without them`, async () => {
+    const r = await scratchRepo('wscope2', 'out.txt', 'test -f hello.txt\n')
+    try {
+      expect((await r.cli({}, 'add', 'Say hello', 'Write hello.txt', '--files', 'hello.txt')).stdout).toContain('added T-1')
+      await r.cli({ FAKE_GIT: fakeGit }, 'tick')
+      const t = await r.task('T-1')
+      expect(t.status).toBe('failed')
+      expect(JSON.stringify(t.history)).toContain('out.txt')
+      expect((await r.git('merge-base', '--is-ancestor', 'side', 'symcc/T-1')).exitCode).toBe(1)
+      expect((await r.git('ls-tree', '-r', '--name-only', 'symcc/T-1')).stdout).not.toContain('out.txt')
+      expect((await r.cli({}, 'tool', 'retry', JSON.stringify({ task: 'T-1' }))).stdout).toContain('T-1')
+      expect((await r.cli({}, 'tick')).stdout).toMatch(/T-1 "Say hello" merged into main/)
+      expect((await r.git('show', 'main:hello.txt')).stdout).toBe('hello from the fake worker\n')
+      expect((await r.git('merge-base', '--is-ancestor', 'side', 'main')).exitCode).toBe(1)
+    } finally {
+      await rm(r.repo, { recursive: true, force: true })
+    }
+  }, 600_000)
+}

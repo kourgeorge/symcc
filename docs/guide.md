@@ -1827,21 +1827,20 @@ branch: `commit`, `merge` (main, another task's branch, a pull request's branch)
 its folder (the shell's folder, a plain `cd` before it, or `-C <folder>`), and its words may not
 come from a `$variable` (a `-m` message may). Still refused: `push` and any change to remotes;
 switching to, making or deleting a branch (`checkout <branch>`, `switch`, `branch -d/-D/-m`,
-`rebase main other`, `rebase --update-refs`, `fetch`/`pull` with a `src:dst` refspec or a URL);
-`worktree`; `config`; `tag`; every `stash` (the stash is shared with your own folder); a git
+`rebase main other`, `rebase --root other`, `rebase --update-refs`, `bisect reset other`, `fetch`/`pull` with a `src:dst` refspec or a URL);
+`worktree`; `config`; `tag`; every `stash` and `--autostash` on merge, rebase or pull (the stash is shared with your own folder); a git
 command that runs another program (`rebase --exec`, `bisect run`, `--upload-pack`, a merge
 strategy that is not git's own); any other git command (an alias or an add-on such as `git lfs` may do anything); `-c` and
 `GIT_*` settings; and anything that names your copy of the project or another task's folder. An
 investigation's worker still only reads with git: its changes are never kept. symcc's checks cover
-the worker's own commits too: the scope check looks at everything the branch changes, a merged-in
-branch's files included, the secret check at every commit (merge commits too), and when a scope check fails after the worker merged
-another branch, the undo makes the branch's work one commit again, so that branch's commits never
-reach main through this task.
+the worker's own commits too: the scope check looks at every file any commit of the branch changed, a merged-in
+branch's files included (even ones deleted again later), the secret check at every commit (merge commits too), and when a scope check fails, the undo always makes the branch's work one commit again, so a
+merged-in branch's commits (also after a fast-forward merge) never reach main through this task.
 
 A worker run by `claude -p` (the Node host) has no symcc guard, only Claude Code's own rules,
 which look at how a command starts, not at its folder or its words. There a worker may run
 `git commit`, `merge`, `cherry-pick`, `revert`, `restore`, `reset`, `add`, `rm`, `mv`, `clean`,
-`am`, `apply` and `bisect`; `checkout`, `rebase`, `fetch` and `pull` stay refused (their words
+`am`, `apply` and `bisect` (not `bisect run` or `bisect reset <branch>`, and no `merge --autostash`); `checkout`, `rebase`, `fetch` and `pull` stay refused (their words
 may name or move another branch), as do the rest above and any `git -C` or `git -c`.
 
 ### The checker

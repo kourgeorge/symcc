@@ -321,7 +321,8 @@ const longStart = (a: string, name: string) => {
  * own option but --no-pager) is inside `own`, and none of whose words expand (`$x`, apart from a `-m` message), so what
  * it does can be told. Then: `checkout` only with `--` (files, as `git checkout -- a.ts` or `git checkout main -- a.ts`)
  * and without -b, -B, --orphan or --detach; `rebase` of the current branch only (at most one name: `git rebase main`,
- * not `git rebase main other`) and without --update-refs, which moves other branches; `fetch` and `pull` without a `:`
+ * not `git rebase main other`, and no name with --root) and without --update-refs, which moves other branches; `bisect
+ * reset` only plain; no --autostash on merge, rebase or pull (it uses the shared stash); `fetch` and `pull` without a `:`
  * (a refspec that writes a local branch, `git fetch . HEAD:main`, or a URL); none that runs another program
  * (runsProgram: `rebase --exec`, `bisect run`, `--upload-pack`, a strategy not git's own). Refused, as for every agent: `-c`, --exec-path and GIT_* settings (gitWriteIn checks them first).
  */
@@ -361,17 +362,24 @@ export const workerGitAllow =
     }
     args = words
     if (runsProgram(sub, args)) return false
+    // --autostash keeps the folder's changes in the stash, which is shared with the owner's folder
+    if ((sub === 'merge' || sub === 'rebase' || sub === 'pull') && args.some(a => longStart(a, 'autostash'))) return false
+    // `git bisect reset other` ends the bisect on another branch; plain `git bisect reset` goes back to this one
+    if (sub === 'bisect' && args[0] === 'reset') return args.length === 1
     // `git checkout main --` (nothing after the `--`) still switches to main
     if (sub === 'checkout') return args.indexOf('--') >= 0 && args.indexOf('--') < args.length - 1 && !args.slice(0, args.indexOf('--')).some(a => /^-[a-zA-Z]*[bB]/.test(a) || longStart(a, 'orphan') || longStart(a, 'detach'))
     if (sub === 'rebase') {
       let names = 0
+      let root = false
       for (let i = 0; i < args.length; i++) {
         const a = args[i]!
         if (longStart(a, 'update-refs')) return false
+        if (longStart(a, 'root')) root = true
         if (REBASE_VALUE.has(a)) i++
         else if (!a.startsWith('-')) names++
       }
-      return names <= 1
+      // with --root the one name is the branch to rebase (`git rebase --root other` switches to other)
+      return names <= (root ? 0 : 1)
     }
     if (sub === 'fetch' || sub === 'pull') return !args.some(a => a.includes(':'))
     return true
