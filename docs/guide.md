@@ -1827,8 +1827,8 @@ branch: `commit`, `merge` (main, another task's branch, a pull request's branch)
 its folder (the shell's folder, a plain `cd` before it, or `-C <folder>`), and its words may not
 come from a `$variable` (a `-m` message may). Still refused: `push` and any change to remotes;
 switching to, making or deleting a branch (`checkout <branch>`, `switch`, `branch -d/-D/-m`,
-`rebase main other`, `rebase --root other`, `rebase --update-refs`, `bisect reset other`, `fetch`/`pull` with a `src:dst` refspec or a URL);
-`worktree`; `config`; `tag`; every `stash` and `--autostash` on merge, rebase or pull (the stash is shared with your own folder); a git
+`rebase main other`, `rebase --root other`, `rebase --update-refs`, `rebase --quit` (it leaves the folder off the branch), `bisect reset other`, `fetch`/`pull` with a `src:dst` refspec or a URL);
+`worktree`; `config` (also `fetch`/`pull --set-upstream`); `tag` (also `fetch`/`pull --tags`, `fetch origin tag <name>` and `--prune-tags`); every `stash` and `--autostash` on merge, rebase or pull (the stash is shared with your own folder); a git
 command that runs another program (`rebase --exec`, `bisect run`, `--upload-pack`, a merge
 strategy that is not git's own); any other git command (an alias or an add-on such as `git lfs` may do anything); `-c` and
 `GIT_*` settings; and anything that names your copy of the project or another task's folder. An

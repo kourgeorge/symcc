@@ -321,9 +321,10 @@ const longStart = (a: string, name: string) => {
  * own option but --no-pager) is inside `own`, and none of whose words expand (`$x`, apart from a `-m` message), so what
  * it does can be told. Then: `checkout` only with `--` (files, as `git checkout -- a.ts` or `git checkout main -- a.ts`)
  * and without -b, -B, --orphan or --detach; `rebase` of the current branch only (at most one name: `git rebase main`,
- * not `git rebase main other`, and no name with --root) and without --update-refs, which moves other branches; `bisect
- * reset` only plain; no --autostash on merge, rebase or pull (it uses the shared stash); `fetch` and `pull` without a `:`
- * (a refspec that writes a local branch, `git fetch . HEAD:main`, or a URL); none that runs another program
+ * not `git rebase main other`, and no name with --root) and without --update-refs, which moves other branches, or
+ * --quit, which leaves HEAD detached; `bisect reset` only plain; no --autostash on merge, rebase or pull (it uses the
+ * shared stash); `fetch` and `pull` without a `:` (a refspec that writes a local branch, `git fetch . HEAD:main`, or a
+ * URL), tags (--tags, -t, `tag <name>`, --prune-tags, -P) or --set-upstream (it writes config); none that runs another program
  * (runsProgram: `rebase --exec`, `bisect run`, `--upload-pack`, a strategy not git's own). Refused, as for every agent: `-c`, --exec-path and GIT_* settings (gitWriteIn checks them first).
  */
 export const workerGitAllow =
@@ -373,7 +374,8 @@ export const workerGitAllow =
       let root = false
       for (let i = 0; i < args.length; i++) {
         const a = args[i]!
-        if (longStart(a, 'update-refs')) return false
+        // --quit stops the rebase but leaves HEAD detached, off the task's branch, with no way back for a worker
+        if (longStart(a, 'update-refs') || longStart(a, 'quit')) return false
         if (longStart(a, 'root')) root = true
         if (REBASE_VALUE.has(a)) i++
         else if (!a.startsWith('-')) names++
@@ -381,7 +383,9 @@ export const workerGitAllow =
       // with --root the one name is the branch to rebase (`git rebase --root other` switches to other)
       return names <= (root ? 0 : 1)
     }
-    if (sub === 'fetch' || sub === 'pull') return !args.some(a => a.includes(':'))
+    // fetch and pull may not write a local branch or a URL (`:`), tags (--tags/-t, the word `tag`; --prune-tags/-P
+    // deletes local ones) or config (--set-upstream writes branch.<name>.remote and .merge)
+    if (sub === 'fetch' || sub === 'pull') return !args.some(a => a.includes(':') || a === 'tag' || longStart(a, 'tags') || /^--prune-/.test(a) || longStart(a, 'set-upstream') || /^-[^-sXoj][^sXoj]*[tP]|^-[tP]/.test(a))
     return true
   }
 

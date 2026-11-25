@@ -224,6 +224,8 @@ test('T-1053: a claude -p worker may change git on its own branch; push, other b
     'git tag v1', 'git update-ref refs/heads/main HEAD', 'git -C /r commit -m x', 'git -C . merge main', 'git --git-dir=/r/.git commit', 'git -c core.hooksPath=x commit',
     'git init', 'env git commit', 'xargs git commit',
     'git bisect run sh evil.sh', 'git bisect reset other', 'git merge --autostash main', 'git merge --no-edit --autostash main', 'git rebase --root other',
+    // git takes a start of --autostash (down to --au)
+    'git merge --autost main', 'git merge --no-edit --au origin/side', 'git rebase --quit', 'git fetch -p -P origin', 'git pull --set-upstream origin main',
   ]
   for (const p of [claudePermissions({ kind: 'worker', files: ['tests/'] }), claudePermissions({ kind: 'worker' }, true)]) {
     for (const c of own) expect(`${c}: ${p.denied.some(r => bashRuleMatches(r, c))}`).toBe(`${c}: false`)

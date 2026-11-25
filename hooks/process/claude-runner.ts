@@ -45,8 +45,9 @@ export function gitDeniedRules(worker = false): string[] {
   return [
     ...GIT_DENIED_SUBCOMMANDS.filter(c => !(worker && WORKER_GIT_ALLOWED.has(c))).map(c => `Bash(git ${c}:*)`),
     // a worker's bisect may not run a program or end on another branch (symcc's prep runs `git bisect reset` itself),
-    // and its merge may not leave changes in the shared stash (--autostash)
-    ...(worker ? ['Bash(git bisect run:*)', 'Bash(git bisect reset *)', 'Bash(git merge *--autostash*)'] : []),
+    // and its merge may not leave changes in the shared stash (--autostash; git also takes a start of it, down to
+    // `--au`, which no other merge option starts with)
+    ...(worker ? ['Bash(git bisect run:*)', 'Bash(git bisect reset *)', 'Bash(git merge *--au*)'] : []),
     'Bash(git -*)',
     ...GIT_DENIED_OPTIONS.map(o => `Bash(git ${o}:*)`),
     'Bash(git --git-dir=*)', 'Bash(git --work-tree=*)', 'Bash(git --namespace=*)', 'Bash(git --exec-path=*)', 'Bash(git --config-env=*)',
