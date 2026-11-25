@@ -531,6 +531,30 @@ export async function dropIfSame(host: Host, file: string, text: string) {
   if ((await host.fs.read(file).catch(() => null)) === text) await host.run(['rm', '-f', file]).catch(() => undefined)
 }
 
+/** The parts folders known to exist this session (a failed write forgets it, see safeWriteIn). */
+const partsDirsMade = new WeakMap<Host, Set<string>>()
+
+/** Makes the parts folder when it is missing; asks the disk only once per session. */
+async function ensurePartsDir(host: Host) {
+  const dir = path(`${S.N.dir}/${PARTS_DIR}`)
+  const made = partsDirsMade.get(host) ?? new Set<string>()
+  partsDirsMade.set(host, made)
+  if (made.has(dir)) return
+  if (!(await host.fs.exists(dir).catch(() => false))) await host.run(['mkdir', '-p', dir]).catch(() => undefined)
+  made.add(dir)
+}
+
+/** safeWrite into the parts folder; when it fails the folder may have been deleted, so make it again and try once more. */
+async function safeWriteIn(host: Host, file: string, text: string, what: string) {
+  try {
+    await safeWrite(host, file, text, what)
+  } catch (e) {
+    partsDirsMade.delete(host)
+    await ensurePartsDir(host)
+    await safeWrite(host, file, text, what).catch(() => { throw e })
+  }
+}
+
 /**
  * Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. Done and
  * dropped tasks keep only a stub in board.json; the rest goes to their parts files (T-675, see core/board-parts.ts),
@@ -554,18 +578,18 @@ export async function saveBoard(host: Host, b: Board) {
     const tasks = Object.fromEntries(Object.entries(all).filter(([id]) => !gone || !stubbed.has(id) || id in seen))
     if (Object.keys(tasks).length) want.set(file, tasks)
   }
-  if (want.size) await host.run(['mkdir', '-p', path(`${S.N.dir}/${PARTS_DIR}`)]).catch(() => undefined)
+  if (want.size) await ensurePartsDir(host)
   const first = new Map<string, string>()
   for (const [file, tasks] of want) {
     const seen = partsSeen.get(file)
     const text = partsText({ ...(seen?.tasks ?? {}), ...tasks })
-    if (text !== seen?.text) await safeWrite(host, file, text, `the board's ${fileName(file)}`)
+    if (text !== seen?.text) await safeWriteIn(host, file, text, `the board's ${fileName(file)}`)
     first.set(file, text)
   }
   await safeWrite(host, path(S.N.boardFile), JSON.stringify(slim, null, 2) + '\n', 'the board')
   for (const [file, tasks] of want) {
     const text = partsText(tasks)
-    if (text !== first.get(file)) await safeWrite(host, file, text, `the board's ${fileName(file)}`)
+    if (text !== first.get(file)) await safeWriteIn(host, file, text, `the board's ${fileName(file)}`)
     partsSeen.set(file, { text, tasks, stamp: await stampOf(host, file) })
   }
   const dir = path(`${S.N.dir}/${PARTS_DIR}/`)
