@@ -19,7 +19,7 @@ test('each moved name lives in its new file', () => {
   for (const name of ['rawWords', 'braceLit', 'hasBrace', 'sedScriptSafe', 'shellPieces']) expect(typeof (shell as Record<string, unknown>)[name]).toBe('function')
   for (const name of ['editOutsideFolder', 'blockedEdit', 'bashOutsideFolder', 'bashPathsToCheck', 'resolvePath', 'realPathOf', 'guardReason', 'spawnFailedText']) expect(typeof (pathGuard as Record<string, unknown>)[name]).toBe('function')
   expect(pathGuard.SCRATCH_DIR).toBe('.scratch')
-  for (const name of ['gitWriteIn', 'scratchGitAllow', 'mergeStepAllow', 'gitWriteText']) expect(typeof (gitGuard as Record<string, unknown>)[name]).toBe('function')
+  for (const name of ['gitWriteIn', 'scratchGitAllow', 'workerGitAllow', 'gitWriteText']) expect(typeof (gitGuard as Record<string, unknown>)[name]).toBe('function')
 })
 
 test('the guards still work through the board', () => {

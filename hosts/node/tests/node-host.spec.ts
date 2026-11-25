@@ -167,7 +167,8 @@ test('claude -p gets the task\'s files as its permission rules, and its result l
   expect(editRule('tests/')).toEqual(['Edit(./tests/**)', 'Write(./tests/**)'])
   const w = claudePermissions({ kind: 'worker', files: ['tests/'] })
   expect(w.allowed).toEqual(['Read', 'Glob', 'Grep', 'Bash', 'Edit(./tests/**)', 'Write(./tests/**)'])
-  expect(w.denied).toContain('Bash(git commit:*)')
+  expect(w.denied).toContain('Bash(git push:*)')
+  expect(w.denied).not.toContain('Bash(git commit:*)')
   expect(claudePermissions({ kind: 'worker' }).allowed).toContain('Edit(./**)')
   expect(claudePermissions({ kind: 'worker', tools: ['web'] }).allowed).toContain('WebFetch')
   expect(claudePermissions({ kind: 'scout' }).allowed).not.toContain('Edit(./**)')
@@ -209,9 +210,26 @@ test('T-496: claude -p deny rules refuse every git write for a worker and a chec
     'git config user.name x', 'git am p', 'git pull', 'env git commit', 'xargs git commit', 'command git push',
   ]
   const good = ['git status', 'git diff', 'git log -3', 'git show HEAD', 'git blame a.ts', 'git ls-files', 'git rev-parse HEAD', 'git grep x', 'bun test', 'sh scripts/test-node-host.sh']
-  for (const p of [claudePermissions({ kind: 'worker', files: ['tests/'] }), claudePermissions({ kind: 'checker' }), claudePermissions({ kind: 'worker' }, true), claudePermissions({ kind: 'checker' }, true)]) {
+  for (const p of [claudePermissions({ kind: 'checker' }), claudePermissions({ kind: 'checker' }, true), claudePermissions({ kind: 'scout' })]) {
     for (const c of bad) expect(`${c}: ${p.denied.some(r => bashRuleMatches(r, c))}`).toBe(`${c}: true`)
     for (const c of good) expect(`${c}: ${p.denied.some(r => bashRuleMatches(r, c))}`).toBe(`${c}: false`)
+  }
+})
+
+test('T-1053: a claude -p worker may change git on its own branch; push, other branches, stash, worktree, config, tags and -C stay refused', () => {
+  const own = ['git commit -m x', 'git merge main', 'git merge --no-edit symcc/T-7', 'git cherry-pick abc', 'git revert HEAD', 'git restore .', 'git reset --hard', 'git add -A', 'git rm a.ts', 'git clean -fd', 'git am p', 'git apply p.diff', 'git bisect start', 'git bisect run sh check.sh']
+  const bad = [
+    'git push', 'git push . HEAD:main', 'git remote add x y', 'git branch -D x', 'git branch -f main HEAD', 'git checkout main', 'git checkout -- a.ts',
+    'git switch main', 'git rebase main', 'git fetch . HEAD:main', 'git pull', 'git stash', 'git stash pop', 'git worktree add x', 'git config user.name x',
+    'git tag v1', 'git update-ref refs/heads/main HEAD', 'git -C /r commit -m x', 'git -C . merge main', 'git --git-dir=/r/.git commit', 'git -c core.hooksPath=x commit',
+    'git init', 'env git commit', 'xargs git commit',
+    'git bisect reset other', 'git merge --autostash main', 'git merge --no-edit --autostash main', 'git rebase --root other',
+    // git takes a start of --autostash (down to --au)
+    'git merge --autost main', 'git merge --no-edit --au origin/side', 'git rebase --quit', 'git fetch -p -P origin', 'git pull --set-upstream origin main',
+  ]
+  for (const p of [claudePermissions({ kind: 'worker', files: ['tests/'] }), claudePermissions({ kind: 'worker' }, true)]) {
+    for (const c of own) expect(`${c}: ${p.denied.some(r => bashRuleMatches(r, c))}`).toBe(`${c}: false`)
+    for (const c of bad) expect(`${c}: ${p.denied.some(r => bashRuleMatches(r, c))}`).toBe(`${c}: true`)
   }
 })
 

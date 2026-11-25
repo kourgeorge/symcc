@@ -147,14 +147,15 @@ const shaTimes = (stdout: string): BranchCommit[] =>
 
 /**
  * Reads task `t`'s branch with read-only git (in the project's main folder). A merged task (done, with `merged`): its
- * commits are the first-parent line down from the merged commit while they carry its Symcc-Task line, and the commit
+ * commits are the first-parent line down from the merged commit while they carry its Symcc-Task line or are among the
+ * commits its runs saved (a worker's own commits, T-1053), and the commit
  * under them is the fork. An open one: `git rev-list --left-right --count <into>...<branch>` (behind, ahead) and
  * `git log --first-parent <into>..<branch>` (its commits; a merge is a catch-up), the fork the first parent of the
  * oldest (else `git merge-base`). Then into's commits since the fork (`git log <fork>..<into>`), the newest one its tip;
  * for a merged task, into's commits between the fork and the merge (`git log <fork>..<merged>`) and the first few after.
  * Null when the branch can't be read (none yet, deleted) or git fails.
  */
-export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history'>, into: string, nowMs: number): Promise<TaskBranchFacts | null> {
+export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs: number): Promise<TaskBranchFacts | null> {
   if (!safe(into)) return null
   const run = (args: string[]) => git(host, args, S.root, GIT_MS).then(r => (r.exitCode === 0 ? String(r.stdout ?? '') : null), () => null)
   const branch = typeof t.branch === 'string' ? t.branch : ''
@@ -167,7 +168,9 @@ export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'stat
     const out = await run(['log', '--first-parent', `-${TASK_BRANCH_COMMITS + 1}`, logFormat(), merged, '--'])
     if (out === null) return null
     const lines = logLines(out)
-    const n = lines.findIndex(l => l.task !== t.id)
+    // T-1053: a worker's own commits carry no Task line; the ones its tries saved still count as the task's
+    const saved = new Set((t.runs ?? []).flatMap(r => (Array.isArray(r?.commits) ? r.commits : [])))
+    const n = lines.findIndex(l => l.task !== t.id && !saved.has(l.sha))
     commits = lines.slice(0, n < 0 ? lines.length : n)
     if (!commits.length) return null
     const under = n >= 0 ? lines[n] : undefined
@@ -235,7 +238,7 @@ export const hasTaskBranch = (t: Pick<SymccTask, 'status' | 'branch' | 'merged'>
  * and starts a read in the background when they are stale (see above); `onRead` is called once that read is done.
  * `done` (tests) is the read started, if any.
  */
-export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history' | 'attempts'>, into: string, nowMs = Date.now(), onRead?: () => void): { facts: TaskBranchFacts | undefined; done?: Promise<void> } {
+export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history' | 'attempts'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs = Date.now(), onRead?: () => void): { facts: TaskBranchFacts | undefined; done?: Promise<void> } {
   if (S.gitState !== 'ok' || !S.root || !hasTaskBranch(t)) return { facts: undefined }
   const key = [into, t.status, t.branch ?? '', t.merged ?? '', t.attempts].join(' ')
   const got = taskCache.get(t.id)

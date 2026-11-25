@@ -695,13 +695,13 @@ const NESTED_MAX = 8
 const COPIES = new Set(['cp', 'ln', 'install', 'rsync', 'scp'])
 
 /** Commands that change every file they are given. */
-const CHANGES = new Set(['mv', 'rm', 'rmdir', 'unlink', 'shred', 'touch', 'mkdir', 'truncate', 'tee', 'chmod', 'chown', 'chgrp', 'cd', 'pushd'])
+const CHANGES = new Set(['mv', 'rm', 'rmdir', 'unlink', 'shred', 'touch', 'mkdir', 'truncate', 'tee', 'chmod', 'chown', 'chgrp', 'cd', 'chdir', 'pushd'])
 
 /**
  * The first write target (or cd target) in shell `command` that holds something the shell works out only when it
  * runs (`$X`, `${X}`, `$(...)`, backticks), as written; undefined when there is none (T-963). Write targets are files
  * after `>`, `>>`, `&>`, `<>`..., the target of cp, ln, install, rsync and scp (last plain word, or `-t`), every file of
- * mv, rm, touch, mkdir, tee, chmod... and cd or pushd, the files of `sed -i` and `perl -i`, and dd's `of=`. Commands
+ * mv, rm, touch, mkdir, tee, chmod... and cd (zsh's chdir) or pushd, the files of `sed -i` and `perl -i`, and dd's `of=`. Commands
  * inside `$(...)` and backticks are checked too. Variables anywhere else (`echo $X`, `ls $DIR`, `cat $F > out`) are
  * not. A best effort, not a shell parser.
  */
