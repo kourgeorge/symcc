@@ -283,6 +283,9 @@ const REBASE_VALUE = new Set(['--onto', '-s', '--strategy', '-X', '--strategy-op
 
 /** git's own merge strategies; any other `-s <name>` runs a program `git-merge-<name>` found on the PATH. */
 const BUILTIN_STRATEGIES = new Set(['ort', 'recursive', 'resolve', 'octopus', 'ours', 'subtree'])
+/** Short options of merge, pull and rebase that take a value (the rest of the word or the next word), so a later
+ * `s` in the same word is part of that value, not the strategy option. */
+const SHORT_VALUE = new Set(['m', 'F', 'X', 'S', 'C', 'x', 'j', 'o'])
 /** The git commands that take a merge strategy. */
 const STRATEGY_SUBS = new Set(['merge', 'pull', 'rebase', 'cherry-pick', 'revert'])
 
@@ -302,8 +305,18 @@ function runsProgram(sub: string, args: string[]): boolean {
     const short = sub === 'merge' || sub === 'pull' || sub === 'rebase'
     let strategy: string | undefined
     if (longStart(a, 'strategy')) strategy = a.includes('=') ? a.slice(a.indexOf('=') + 1) : (args[++i] ?? '')
-    else if (short && a === '-s') strategy = args[++i] ?? ''
-    else if (short && /^-s./.test(a)) strategy = a.slice(2)
+    else if (short && /^-[a-zA-Z]/.test(a)) {
+      // a short option bundle: git reads `-ns foo` and `-nsfoo` as -n plus strategy foo. Scan the letters up to the
+      // first one that takes a value (the rest of the word, or the next word, is that value)
+      for (let k = 1; k < a.length; k++) {
+        const c = a[k]!
+        if (c === 's') {
+          strategy = k + 1 < a.length ? a.slice(k + 1) : (args[++i] ?? '')
+          break
+        }
+        if (!/[a-zA-Z]/.test(c) || SHORT_VALUE.has(c)) break
+      }
+    }
     if (strategy !== undefined && !BUILTIN_STRATEGIES.has(strategy)) return true
   }
   return false
