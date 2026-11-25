@@ -1272,7 +1272,7 @@ words as bold headings with the same spacing):
   and Tests rows; Organizational memory is one line with an `All notes` link. When nothing runs: `All done`, `Up next
   from the backlog`, and one primary `Tell the lead` button. On a narrow panel the train and header shrink together.
 - The second row has no bar, only numbers about this task:
-  `try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6×median) · worker 5.4M · checker 1.9M · ⌕ × 2` and, at the right end of the row, `bug`. That is
+  `try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6×median) · worker 5.4M · checker 1.9M · ⌕ × 2`. That is
   the try (`try 2/3`, auto retries after failing tests included), the task's working
   time so far (all tries; time when Claude Code was closed is left out), the whole task's tokens
   (every try so far), how many times the board's median tokens per merged task that is (yellow
