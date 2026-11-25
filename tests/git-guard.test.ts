@@ -7,6 +7,8 @@ import { checkEdit } from '../hooks/app/ask'
 import { gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, bashOutsideText, BASH_UNRESOLVED, unresolvedTarget } from '../hooks/board'
 import { S, scoutRuns, workers, checkerRuns } from '../hooks/app/state'
 import { fakeHost } from './fake-host'
+import { workerGitAllow } from '../hooks/core/git-guard'
+import { bashOutsideFolder } from '../hooks/core/path-guard'
 import { bestPairMsOf, growsSlowly } from './timing'
 
 const ROOT = '/repo'
@@ -359,9 +361,8 @@ test('the git write reasons keep their exact text, and quoted braces stay text (
     `Refused: git stash may change the repository or run another program, and ${who} may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings).`
   const tmp = 'A scratch repository under /tmp with a plain path is fine (e.g. git init /tmp/x, git -C /tmp/x commit -m m); no $TMPDIR, $(mktemp), ~ or ..'
   expect(gitWriteText('git stash')).toBe(`${head('the checker')} Check the work without changing any branch, commit, tag or the stash. ${tmp}`)
-  const worker = `${head('a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work. ${tmp}`
-  expect(workerGitWriteText('git stash')).toBe(worker)
-  expect(workerGitWriteText('git stash', 'main')).toBe(`${worker} In this try you may also run \`git merge main\` (or \`git merge --abort\`) to merge main in; then resolve the conflicts in the files and don't commit.`)
+  // T-1053: a worker may change git in its own folder, on its own branch; the reason says what stays refused
+  expect(workerGitWriteText('git push')).toBe(`Refused: git push may change more than your own branch. In your own folder you may change git on your own branch (commit, merge, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect, add, rm). Not allowed: push, fetch, pull or changing remotes; switching to, making or deleting a branch (checkout or switch to a branch, branch -d/-D/-m); worktree; config; tag; stash (it is shared with the owner's folder); a git command in another folder, through a $variable, or with -c or GIT_* settings. ${tmp}`)
   expect(scoutGitWriteText('git stash')).toBe(`${head('a scout')} You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`)
   // quoted or backslashed braces are text; bare ones may spell git; an inner bash -c or a word holding a command is folded in
   expect(gitWriteIn(`git log --format='{"h":"%h"}'`)).toBeUndefined()
@@ -408,5 +409,17 @@ test('braces in paths after `--` of a read-only git, and in echo, printf or `x=`
     expect(await checkEdit($, 'w1', { command }, WT)).toBe(firstRefusal(command, workerGitWriteText('git with {braces}')))
     expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText('git with {braces}'))
     expect(await checkEdit($, 'c1', { command }, WT)).toBe(gitWriteText('git with {braces}'))
+  }
+})
+
+test("T-1053: zsh's chdir is a folder change like cd, for the git guard and the path guard (checker, try 10)", () => {
+  const own = '/Users/u/p/.symcc/worktrees/T-9'
+  for (const verb of ['cd', 'chdir']) {
+    for (const command of [`${verb} \${PWD%/.symcc*} && git commit -am x`, `true | ${verb} \${PWD%/.symcc*}; git commit -am x`]) {
+      expect([command, typeof gitWriteIn(command, workerGitAllow([own]), own)]).toEqual([command, 'string'])
+      expect([command, typeof bashOutsideFolder(command, [own], ['/Users/u/p'], '/Users/u', own)]).toEqual([command, 'string'])
+    }
+    // a plain one inside its own folder is still fine
+    expect(gitWriteIn(`${verb} ${own}/src && git commit -am x`, workerGitAllow([own]), own)).toBe(undefined)
   }
 })

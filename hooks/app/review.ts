@@ -168,6 +168,17 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // the branch this task merges into: the one checked out when it was made
   const target = intoOf(t)
   await markStep($, t, 'prep', stopped)
+  // T-1053: a worker may change git in its own folder; a rebase or bisect it left unfinished is ended first, so the
+  // folder is on the task's branch again and symcc's commit lands there
+  const onBranch = await backOnBranch($, dir, taskBranch(t))
+  if (onBranch) return { ok: false, reason: 'other', detail: onBranch }
+  // T-1053: a merge or cherry-pick (revert, am) it left stopped on a conflict is aborted, so no conflict markers get
+  // committed; one it resolved but did not commit is finished by symcc's commit below
+  const unfinished = await endUnfinished($, dir)
+  if (unfinished) return { ok: false, reason: 'other', detail: unfinished }
+  // T-1053: the worker's own commits of this try (a commit, a merge of another branch), saved with the try's commits
+  const own = await workerCommits($, t, dir, target)
+  made.push(...own)
   // The worker's throwaway folder (T-456) is kept out by its info/exclude line. It is not named in the add: git add
   // fails on a pathspec naming an ignored path (T-477). As a second safeguard, anything under it that still got staged
   // is unstaged below, but not where the project keeps files there in git (scratchOn false): those are staged as usual.
@@ -187,7 +198,11 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   }
   const unstaged = await unstage($, dir, left)
   if (unstaged) return { ok: false, reason: 'other', detail: `symcc could not leave out files that look like secrets (${nameList(left)}): ${unstaged}` }
-  const committed = await commitTry($, t, dir, made)
+  const before = made.length
+  let committed = await commitTry($, t, dir, made)
+  // T-1053: the worker committed everything itself: an empty commit of symcc's for this try still ends the branch, so
+  // its tip names the task and try (a reload finds the try merged, see alreadyMerged; the task page reads its commits)
+  if (!committed && own.length && made.length === before) committed = await commitTry($, t, dir, made, undefined, true)
   if (committed) return { ok: false, reason: 'other', detail: `symcc could not commit the work: ${committed}` }
   if (!(await branchExists($, target))) return goneResult(target)
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
@@ -228,7 +243,10 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     }
     return { ok: false, reason: 'nochange', detail: 'the worker made no change' }
   }
-  const bad = outOfScope(changed, t.files, S.N.dir)
+  // T-1053: every file any commit of the branch changed counts, not only its net change: a worker may merge another
+  // branch in and then delete its file outside the task, and that branch's commits would still reach the target
+  const touched = [...new Set([...changed, ...(await touchedSince($, base, head))])]
+  const bad = outOfScope(touched, t.files, S.N.dir)
   if (bad.length) {
     // On approve the owner's edits stay in the folder: once the files are allowed, approving again merges them.
     if (mode !== 'finish') return withSecrets({ ok: false, reason: 'scope', detail: outOfScopeText(bad, t.files) })
@@ -239,7 +257,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // the scope check the same way, so such a role can never merge code; and its prose-only change skips the tests
   const role = findRole(await loadRoles($).catch(() => S.roles), roleOf(t))
   const prose = isProseRole(role)
-  const code = prose ? notProse(changed) : []
+  const code = prose ? notProse(touched) : []
   if (code.length) {
     if (mode !== 'finish') return withSecrets({ ok: false, reason: 'scope', detail: notProseText(role!.name, code) })
     const undo = await undoOutOfScope($, t, dir, base, code, made)
@@ -310,11 +328,12 @@ async function changedSince($: Host, base: string, head: string, noDeleted = fal
 
 /**
  * Every file added or changed by any single commit from `base` to `head` (not just the net change: a file
- * added and later deleted again is listed too). Commits that only delete a file don't list it (--diff-filter=d);
- * merge commits list nothing (git log's default).
+ * added and later deleted again is listed too, and so is a file a commit only deletes);
+ * a merge commit lists the files it changed against every parent (--cc: what the merge itself added, T-1053), not
+ * the ones it only brought in from one side (those are listed by their own commits).
  */
 async function touchedSince($: Host, base: string, head: string): Promise<string[]> {
-  const d = await git($, ['log', '--format=', '--name-only', '--no-renames', '--diff-filter=d', '-z', `${base}..${head}`])
+  const d = await git($, ['log', '--cc', '--format=', '--name-only', '--no-renames', '-z', `${base}..${head}`])
   if (d.exitCode !== 0) throw new Error(`git log --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
   return [...new Set(d.stdout.split('\0').map(f => f.replace(/^\n+/, '')).filter(Boolean))]
 }
@@ -342,19 +361,91 @@ async function dropFromBranch($: Host, t: SymccTask, dir: string, base: string, 
 }
 
 /**
- * After a try failed the scope check: puts the files outside the task (`bad`) on the task's branch
- * back to how they are at `base` (the merge base) and commits that, so the next try in the same
- * folder starts clean and keeps the work inside the task's files. Returns '' when done, or a note
- * to add to the failure when it could not be undone.
+ * After a try failed the scope check: the branch's work since `base` (the merge base) is made one commit on `base`
+ * again (git reset --soft), with the files outside the task (`bad`) put back to how they are at `base`, so the next
+ * try in the same folder starts clean and keeps the work inside the task's files. Always one commit (T-1053): a
+ * worker's merge (also a fast-forward one) may have brought in another branch's commits, which would otherwise still
+ * reach the target later, and a file a commit changed and a later one undid would fail every next try's scope check.
+ * Returns '' when done, or a note to add to the failure when it could not be undone.
  */
 async function undoOutOfScope($: Host, t: SymccTask, dir: string, base: string, bad: string[], made: string[]): Promise<string> {
+  const head = (await git($, ['rev-parse', 'HEAD'], dir)).stdout.trim()
+  // only files the branch changed in the end are put back; one only a commit in between changed goes with the squash
+  const net = new Set(head ? await changedSince($, base, head).catch(() => bad) : bad)
+  const back = bad.filter(f => net.has(f))
+  const r = await git($, ['reset', '-q', '--soft', base], dir)
+  if (r.exitCode !== 0) return `. Could not undo them on the task's branch: ${gitFailText(r)}`
   // :(literal): names are taken as they are, never as patterns.
-  for (let i = 0; i < bad.length; i += 100) {
-    const r = await git($, ['restore', `--source=${base}`, '--staged', '--worktree', '--', ...bad.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
+  for (let i = 0; i < back.length; i += 100) {
+    const r = await git($, ['restore', `--source=${base}`, '--staged', '--worktree', '--', ...back.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
     if (r.exitCode !== 0) return `. Could not undo them on the task's branch: ${(r.stderr || r.stdout).trim().slice(0, 200)}`
   }
   const c = await commitTry($, t, dir, made, `${t.id}: undo changes outside the task`)
   return c ? `. Could not undo them on the task's branch: ${c}` : ''
+}
+
+/**
+ * T-1053: the commits the worker made itself on task `t`'s branch in folder `dir` (its first-parent line since
+ * `target`, oldest first): those that carry no Task line of `t`'s (symcc's own commits do) and that no earlier try
+ * saved. A worker may commit and merge in its own folder; these are saved with the try's commits.
+ */
+async function workerCommits($: Host, t: SymccTask, dir: string, target: string): Promise<string[]> {
+  const r = await git($, ['log', '--first-parent', '--reverse', '-z', '--format=%H%n%B', `refs/heads/${target}..HEAD`], dir)
+  if (r.exitCode !== 0) return []
+  const saved = new Set((t.runs ?? []).flatMap(x => (Array.isArray(x?.commits) ? x.commits : [])))
+  return r.stdout
+    .split('\0')
+    .map(e => ({ sha: e.slice(0, e.indexOf('\n') < 0 ? e.length : e.indexOf('\n')).trim(), body: e.slice(e.indexOf('\n') + 1) }))
+    .filter(e => /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(e.sha) && !saved.has(e.sha) && !isTaskCommit(e.body, t.id, S.N.name))
+    .map(e => e.sha)
+}
+
+/**
+ * T-1053: puts folder `dir` back on `branch` when the worker left it off (a rebase or bisect not finished: HEAD is
+ * detached): `git bisect reset` and `git rebase --abort` (the branch as it was before that rebase). '' when it is on
+ * the branch (or git can't tell), else why not.
+ */
+async function backOnBranch($: Host, dir: string, branch: string): Promise<string> {
+  const ref = `refs/heads/${branch}`
+  const off = async () => {
+    const r = await git($, ['symbolic-ref', '-q', 'HEAD'], dir)
+    return r.exitCode === 1 || (r.exitCode === 0 && !!r.stdout.trim() && r.stdout.trim() !== ref)
+  }
+  if (!(await off())) return ''
+  await git($, ['bisect', 'reset'], dir)
+  if (await off()) await git($, ['rebase', '--abort'], dir)
+  return (await off()) ? `the worker left its folder off the task's branch ${branch} (HEAD is elsewhere), so symcc could not commit the work there` : ''
+}
+
+/**
+ * T-1053: ends a merge, cherry-pick, revert or `git am` the worker left stopped on a conflict in folder `dir`, so its
+ * conflict markers are never staged and committed: while files are still unmerged, each is aborted, which puts the
+ * files back as they were before it; files still unmerged with nothing to abort (`cherry-pick -n`, `merge --squash`)
+ * are reset with `git reset --merge`. One the worker fully resolved but did not commit is kept: symcc's own commit
+ * then finishes it (a merge becomes a merge commit), as the merge_main prompt allows. A `git am` is always aborted
+ * (a commit does not end it). '' when fine, else why symcc can't commit (files still unmerged after that).
+ */
+async function endUnfinished($: Host, dir: string): Promise<string> {
+  const pending = async (ref: string) => {
+    const r = await git($, ['rev-parse', '-q', '--verify', ref], dir)
+    return r.exitCode === 0 && !!r.stdout.trim()
+  }
+  const unmerged = async () => {
+    const r = await git($, ['ls-files', '-u', '-z'], dir)
+    return r.exitCode === 0 && !!r.stdout.trim()
+  }
+  if (await unmerged()) {
+    for (const [ref, cmd] of [['MERGE_HEAD', 'merge'], ['CHERRY_PICK_HEAD', 'cherry-pick'], ['REVERT_HEAD', 'revert']] as const) {
+      if (await pending(ref)) await git($, [cmd, '--abort'], dir)
+    }
+    // a conflict with nothing to abort (cherry-pick -n, merge --squash, revert -n): put the files back to HEAD's, so
+    // the folder isn't stuck for this try and every later one
+    if (await unmerged()) await git($, ['reset', '-q', '--merge'], dir)
+  }
+  const apply = (await git($, ['rev-parse', '--path-format=absolute', '--git-path', 'rebase-apply'], dir)).stdout.trim()
+  if (apply && (await $.fs.exists(apply).catch(() => false))) await git($, ['am', '--abort'], dir)
+  if (await unmerged()) return 'the worker left files with unresolved merge conflicts in its folder, so symcc did not commit them'
+  return ''
 }
 
 /** Git's error in a few words: the first lines of its error output, plus a hint when it is about commit signing. */
@@ -371,10 +462,10 @@ function gitFailText(r: { stdout: string; stderr: string }): string {
  * unchanged); only a new HEAD counts as a commit of this try and is added to `made`.
  * Returns '' when fine, or git's error when the commit failed for another reason (e.g. signing).
  */
-async function commitTry($: Host, t: SymccTask, dir: string, made: string[], subject?: string): Promise<string> {
+async function commitTry($: Host, t: SymccTask, dir: string, made: string[], subject?: string, empty = false): Promise<string> {
   const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
-  // The message ends with trailers (task, origin, why, try); see commitMessage.
-  const c = await git($, [...asSymcc(), 'commit', '-q', '--no-verify', '-m', commitMessage(t, { name: S.N.name, ...(subject ? { subject } : {}) })], dir)
+  // The message ends with trailers (task, origin, why, try); see commitMessage. `empty`: commit even with nothing staged.
+  const c = await git($, [...asSymcc(), 'commit', '-q', '--no-verify', ...(empty ? ['--allow-empty'] : []), '-m', commitMessage(t, { name: S.N.name, ...(subject ? { subject } : {}) })], dir)
   const head = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
   if (head && head !== before) {
     made.push(head)

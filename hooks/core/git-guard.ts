@@ -268,29 +268,92 @@ export const scratchGitAllow =
     return true
   }
 
-/** Options a "merge it in" try's `git merge` may have: none of them commits anything the plain merge wouldn't. */
-const MERGE_STEP_OPTIONS = new Set(['--no-edit', '--no-ff', '--no-commit'])
+/**
+ * T-1053: the git commands that change something which a worker may run in its own folder, on its own branch (see
+ * workerGitAllow). Only git's own commands: a name not listed may be an alias or an add-on program (`git p` set to
+ * push, `git lfs push`), so it stays refused. Not listed, so refused: push, remote, branch, switch, worktree, config,
+ * tag, stash (every form: the stash is shared with the owner's folder), update-ref, symbolic-ref, notes, replace,
+ * submodule, gc, prune, init, clone... (each changes what the owner's folder shares: other branches, remotes, settings,
+ * tags, the stash, or the whole repository).
+ */
+const WORKER_GIT = new Set(['add', 'rm', 'mv', 'restore', 'checkout', 'commit', 'merge', 'cherry-pick', 'revert', 'reset', 'rebase', 'bisect', 'clean', 'am', 'apply'])
+
+/** `git rebase` options that take the next word as their value. */
+const REBASE_VALUE = new Set(['--onto', '-s', '--strategy', '-X', '--strategy-option', '-x', '--exec'])
+
+/** Whether long option word `a` is `--<name>` or a unique start of it (git takes `--upd` for `--update-refs`). */
+const longStart = (a: string, name: string) => {
+  const long = /^--([^=]+)/.exec(a)?.[1]
+  return !!long && long.length > 1 && name.startsWith(long)
+}
 
 /**
- * The git writes a worker may run in a "merge it in" try (a task whose branch conflicts with `into`, see merge_main):
- * `git merge <into>` (with only --no-edit, --no-ff or --no-commit) and `git merge --abort`. Nothing else: the worker
- * resolves the conflicts in the files, and symcc adds and commits them (git add -A) as for any try.
+ * T-1053: the git writes a worker may run in its own folder `own` (both its names), on its own branch: a command of
+ * WORKER_GIT run at the top of the line (GitPlace), whose folder (the shell's, a `cd` before it, or `-C <dir>`; no other
+ * own option but --no-pager) is inside `own`, and none of whose words expand (`$x`, apart from a `-m` message), so what
+ * it does can be told. Then: `checkout` only with `--` (files, as `git checkout -- a.ts` or `git checkout main -- a.ts`)
+ * and without -b, -B, --orphan or --detach; `rebase` of the current branch only (at most one name: `git rebase main`,
+ * not `git rebase main other`, and no name with --root) and without --update-refs, which moves other branches, or
+ * --quit, which leaves HEAD detached; `bisect reset` only plain; no --autostash on merge or rebase (it uses the
+ * shared stash). A git command that runs another program (`rebase --exec`, `bisect run`, a merge strategy) is not
+ * refused: a worker can run any program from Bash anyway. fetch and pull are refused (a fetch writes tags and other refs; symcc brings the branch up to date itself). Refused, as for every agent: `-c`, --exec-path and GIT_* settings (gitWriteIn checks them first).
  */
-export const mergeStepAllow =
-  (into: string): GitAllow =>
-  (sub, args) => {
-    if (sub !== 'merge') return false
-    // output redirections (`2>&1`, `> log`) don't change what git does; their target is checked as a path elsewhere
-    const rest: string[] = []
-    for (let i = 0; i < args.length; i++) {
-      const a = args[i]!
-      const redir = /^(\d*|&)>>?(&\d+)?(.*)$/.exec(a)
-      if (!redir) rest.push(a)
-      else if (!redir[2] && !redir[3]) i++
+export const workerGitAllow =
+  (own: Folders): GitAllow =>
+  (sub, args, place) => {
+    if (!place || !WORKER_GIT.has(sub)) return false
+    const mine = folderList(own)
+    let dir = place.dir
+    for (let i = 0; i < place.pre.length; i++) {
+      const o = place.pre[i]!.raw
+      if (o === '-C') {
+        const to = place.pre[++i]?.raw ?? ''
+        // an absolute plain path, or a plain relative one from the folder git is in
+        dir = to.startsWith('/') || /^["']\//.test(to) ? literalPath(to) : dir !== undefined && /^[\w.@%+,=-][\w./@%+,=-]*$/.test(to) && !to.split('/').includes('..') ? resolvePath(dir, to) : undefined
+      } else if (o !== '--no-pager') return false
     }
-    if (rest.length === 1 && rest[0] === '--abort') return true
-    const names = rest.filter(a => !MERGE_STEP_OPTIONS.has(a))
-    return names.length === 1 && names[0] === into
+    if (dir === undefined || insideAny(resolvePath('/', dir), mine, true) === undefined) return false
+    // the command's own words: output redirections (`2>&1`, `> log`) don't change what git does (their target is
+    // checked as a path elsewhere)
+    const words: string[] = []
+    for (let i = 0; i < place.args.length; i++) {
+      const a = place.args[i]!
+      const redir = REDIRECT.exec(a.raw)
+      if (redir) {
+        if (!redir[4] && !redir[3]) i++
+        continue
+      }
+      // a message (`-m "$why"`) may expand: it is only text
+      if (MESSAGE_SUBS.has(sub) && (a.raw === '--message' || /^-[aqsvnS]*m$/.test(a.raw))) {
+        i++
+        continue
+      }
+      if (MESSAGE_SUBS.has(sub) && /^(-[aqsvnS]*m|--message=)/.test(a.raw)) continue
+      if (a.expands) return false
+      words.push(a.w)
+    }
+    args = words
+    // --autostash keeps the folder's changes in the stash, which is shared with the owner's folder
+    if ((sub === 'merge' || sub === 'rebase') && args.some(a => longStart(a, 'autostash'))) return false
+    // `git bisect reset other` ends the bisect on another branch; plain `git bisect reset` goes back to this one
+    if (sub === 'bisect' && args[0] === 'reset') return args.length === 1
+    // `git checkout main --` (nothing after the `--`) still switches to main
+    if (sub === 'checkout') return args.indexOf('--') >= 0 && args.indexOf('--') < args.length - 1 && !args.slice(0, args.indexOf('--')).some(a => /^-[a-zA-Z]*[bB]/.test(a) || longStart(a, 'orphan') || longStart(a, 'detach'))
+    if (sub === 'rebase') {
+      let names = 0
+      let root = false
+      for (let i = 0; i < args.length; i++) {
+        const a = args[i]!
+        // --quit stops the rebase but leaves HEAD detached, off the task's branch, with no way back for a worker
+        if (longStart(a, 'update-refs') || longStart(a, 'quit')) return false
+        if (longStart(a, 'root')) root = true
+        if (REBASE_VALUE.has(a)) i++
+        else if (!a.startsWith('-')) names++
+      }
+      // with --root the one name is the branch to rebase (`git rebase --root other` switches to other)
+      return names <= (root ? 0 : 1)
+    }
+    return true
   }
 
 /**
@@ -564,15 +627,29 @@ function braceTextArgs(p: { words: string[] }): Set<number> {
  * shell's folder `cwd` (when it is a plain literal path) until a `cd` or `pushd`; after a `cd <plain literal absolute
  * path>` (literalPath) that folder, but only for the commands joined to that cd by `&&` alone, so a cd that fails
  * stops them (`cd /tmp/x; git commit` would commit in the shell's folder when /tmp/x is missing). A cd after `||`,
- * a cd to anything else (a variable, `$(mktemp -d)`, `~`, a relative path), any other operator after a cd, and a
- * pipe, a group or a subshell anywhere in the line leave the folder unknown (no entry).
+ * a cd to anything else (a variable, `$(mktemp -d)`, `~`, a relative path), any other operator after a cd, a
+ * here-document, and a pipe, a group or a subshell anywhere in the line leave the folder unknown (no entry); a line
+ * with a pipe, group or subshell but no word that may change folder (FOLDER_WORDS, or a command run from a variable)
+ * runs every command in the shell's folder (T-1053).
  */
 /** Words that may change the shell's folder when they are not the first word of a command (gitFolders). */
-const FOLDER_WORDS = new Set(['cd', 'pushd', 'popd', 'eval', 'source', '.'])
+const FOLDER_WORDS = new Set(['cd', 'chdir', 'pushd', 'popd', 'eval', 'source', '.'])
 
 function gitFolders(pieces: ShellPiece[], cwd?: string): Map<ShellPiece, string | undefined> {
   const out = new Map<ShellPiece, string | undefined>()
-  if (pieces.some(p => ('op' in p && (p.op === '|' || p.op === '(' || p.op === ')')) || (!('op' in p) && p.doc))) return out
+  if (pieces.some(p => !('op' in p) && p.doc)) return out
+  if (pieces.some(p => 'op' in p && (p.op === '|' || p.op === '(' || p.op === ')'))) {
+    // T-1053: with no word anywhere that may change folder (cd, eval, source... or a command run from a variable),
+    // every command of a pipe or group runs in the shell's folder (`git merge main 2>&1 | tail -20`)
+    const dir = cwd ? literalPath(cwd) : undefined
+    const moves = pieces.some(p => {
+      if ('op' in p) return false
+      const words = rawWords(p.text)
+      return !!words[0]?.expands || words.some(x => FOLDER_WORDS.has(x.w))
+    })
+    if (!moves && dir !== undefined) for (const p of pieces) if (!('op' in p)) out.set(p, dir)
+    return out
+  }
   let dir = cwd ? literalPath(cwd) : undefined
   let moved = false
   let prev: string | undefined
@@ -585,7 +662,8 @@ function gitFolders(pieces: ShellPiece[], cwd?: string): Map<ShellPiece, string 
     out.set(p, dir)
     const words = rawWords(p.text)
     const name = words[0]?.raw
-    if (name === 'cd' || name === 'pushd' || name === 'popd') {
+    if (name === 'cd' || name === 'chdir' || name === 'pushd' || name === 'popd') {
+      // zsh's chdir is the same as cd (T-1053)
       moved = true
       dir = name !== 'popd' && prev !== '||' && words.length === 2 ? literalPath(words[1]!.raw) : undefined
     } else if (words[0]?.expands || (!isGit(words[0]?.w ?? '') && words.some(x => FOLDER_WORDS.has(x.w)))) {
@@ -740,12 +818,12 @@ export const gitWriteText = (what: string) =>
   `${gitReadOnlyText(what, 'the checker')} Check the work without changing any branch, commit, tag or the stash. ${SCRATCH_GIT_TEXT}`
 
 /**
- * The reason a worker reads when its Bash command runs git command `what` (from gitWriteIn), which may change
- * something: its branch names, tags and stash are shared with the owner's folder (main too), and symcc commits, tests
- * and merges the work. `into`: the branch a "merge it in" try may merge (mergeStepAllow), named in the reason.
+ * The reason a worker reads when its Bash command runs git command `what` (from gitWriteIn) that workerGitAllow
+ * doesn't let through (T-1053): a worker may change git only in its own folder, on its own branch, since branch
+ * names, remotes, settings and tags are shared with the owner's folder (main too).
  */
-export const workerGitWriteText = (what: string, into?: string) =>
-  `${gitReadOnlyText(what, 'a worker')} Don't commit, push, merge, reset, switch branches, stash or move any branch or tag: just change the files in your folder; symcc commits, tests and merges your work. ${SCRATCH_GIT_TEXT}${into ? ` In this try you may also run \`git merge ${into}\` (or \`git merge --abort\`) to merge ${into} in; then resolve the conflicts in the files and don't commit.` : ''}`
+export const workerGitWriteText = (what: string) =>
+  `Refused: ${what} may change more than your own branch. In your own folder you may change git on your own branch (commit, merge, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect, add, rm). Not allowed: push, fetch, pull or changing remotes; switching to, making or deleting a branch (checkout or switch to a branch, branch -d/-D/-m); worktree; config; tag; stash (it is shared with the owner's folder); a git command in another folder, through a $variable, or with -c or GIT_* settings. ${SCRATCH_GIT_TEXT}`
 
 /**
  * The reason a scout reads when its Bash command runs git command `what` (from gitWriteIn), which may change

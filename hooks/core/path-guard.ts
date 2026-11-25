@@ -128,19 +128,19 @@ export const outsideFolderText = (rel: string, worktree: string, dataDir = '.sym
 }
 
 /**
- * Where a simple command `text` that changes folder (`cd` or `pushd`) goes: a path as written (absolute, or relative to
+ * Where a simple command `text` that changes folder (`cd`, zsh's `chdir`, or `pushd`) goes: a path as written (absolute, or relative to
  * the folder it runs in), `home` (when known) for `cd`, `cd ~` and `~/...`, or null when it can't be followed (a
  * variable, `$(...)`, `cd -`, options, `popd`, odd characters). Undefined when `text` does not change folder.
  */
 function cdTarget(text: string, home: string | undefined): string | null | undefined {
-  const m = /^(cd|pushd|popd)(?:\s+([^]*))?$/.exec(text.trim())
+  const m = /^(cd|chdir|pushd|popd)(?:\s+([^]*))?$/.exec(text.trim())
   if (!m) return undefined
   if (m[1] === 'popd') return null
   let arg = (m[2] ?? '').trim()
   const quoted = /^'([^']*)'$/.exec(arg) ?? /^"([^"$`\\]*)"$/.exec(arg)
   if (quoted) arg = quoted[1]!
   const homeOk = home?.startsWith('/') ? home : undefined
-  if (!arg) return m[1] === 'cd' ? (homeOk ?? null) : null
+  if (!arg) return m[1] === 'cd' || m[1] === 'chdir' ? (homeOk ?? null) : null
   // spaces only inside quotes ("cd '/a b'"); a quoted "~" is no home folder
   if (!(quoted ? /^[\w./+@%, -]+$/ : /^[\w./~+@%,-]+$/).test(arg) || arg.startsWith('-')) return null
   if (arg === '~' || arg.startsWith('~/')) return homeOk ? resolvePath(homeOk, arg.slice(1).replace(/^\/+/, '') || '.') : null
