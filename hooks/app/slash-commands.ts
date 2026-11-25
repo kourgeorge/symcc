@@ -238,7 +238,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       // T-952: a window that is off only because another window drives (its notice offers /<name>-drive) turns on here
       // first, then asks to drive; one turned off on purpose (/<name>-disable here) stays off
       if (S.offHere && S.offWhy !== 'off') {
-        const on = await enableHere(host, t => tellLead(host, t))
+        const on = await enableHere(host, t => tellLead(host, t), 'drive')
         if (S.offHere) return say(on)
         return say(`${on}\n\n${await driveHere(host)}`)
       }

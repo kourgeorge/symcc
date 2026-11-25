@@ -2194,22 +2194,21 @@ folders and branches. A task stopped this way does not use up a try; its history
 "restarted: the owner moved driving to another session". There are never two drivers at
 once. If the other window doesn't answer within 3 minutes, yours takes over anyway.
 
-**Only one window with symcc.** A window you open while another live window already has symcc
-on starts with symcc off *here*: it works as plain Claude, the panel does not open, and the board
-and status line name the window that drives:
+**Only one window with symcc.** A window you open while another live window already drives the
+board starts with symcc on, as a *follower*: the panel opens, it is a lead (you can add, change and
+approve tasks there), but it starts no workers, scouts or merges; those stay in the driving window. Its
+banner and status line say so:
 
-    another window drives this board (started Nov 23 09:26, active 3 min ago) · /symcc-drive to drive from here · /symcc-enable to follow it
+    this window follows (driver started Nov 23 09:26, active 3 min ago); /symcc-drive to drive from here
 
-(on the narrow status line: `another window drives this board (active 3 min ago) · /symcc-drive`).
-The symcc tools answer the same line. Type `/symcc-enable` to make it a second lead on purpose
-that follows the driver (driving still follows the one-driver rules above), or `/symcc-drive` to drive from it. A window that
-crashed and left an old marker does not count: "live" uses the same stale rule as the hand-over.
-If the symcc window closes and only off-here windows remain, none takes over by itself: each says
-once `the symcc window closed · /symcc-enable to take over`, and no worker runs until you do.
-If nobody has done so 15 minutes later, one of them (never all) plays the "needs you" notice once
-(your notify setting; nothing when notify is off).
-You can also turn one window off yourself with `/symcc-disable here` (see
-[Disabling symcc](#disabling-symcc)).
+Type `/symcc-drive` to drive from it. A window that crashed and left an old marker does not count:
+"live" uses the same stale rule as the hand-over.
+A window you turned off yourself with `/symcc-disable here` (see [Disabling symcc](#disabling-symcc))
+stays off, even when it was driving. If the driving window closes and only windows turned off here remain,
+none takes over by itself: each says once `the symcc window closed · /symcc-enable to take over`, and no
+worker runs until you do. If nobody has done so 15 minutes later, one of them (never all) plays the
+"needs you" notice once (your notify setting; nothing when notify is off). `/symcc-drive` in such a
+window turns it on and asks to drive, and tells the lead you typed `/symcc-drive`.
 
 ### How the lead keeps the board in order
 
@@ -2501,11 +2500,11 @@ nothing else). `/symcc-init` and help work; every other symcc command and tool a
 /symcc-init to create one here". Nothing is written (no `.symcc/` folder). Type `/symcc-init` (it works like the command that starts a repo): it creates the board in the
 folder Claude started in, even when a parent folder has a `.symcc`; a parent's board never matters. A task's worker folder
 (under `.symcc/worktrees/`) is the one exception: it only guards, using the main project's board. Where `.symcc/` already exists it changes nothing and says "already set up
-here" (when another window drives it, it adds that `/symcc-enable` turns symcc on in this window too). If this folder has no repository of its own, it still makes the board, which then shows a "No git repo here" notice with a **Set up git** button (a parent's repository is never used); `/symcc-init git` sets up the
+here" (it also says so when this window is off here). If this folder has no repository of its own, it still makes the board, which then shows a "No git repo here" notice with a **Set up git** button (a parent's repository is never used); `/symcc-init git` sets up the
 repository and a first commit here first, then makes the board. It turns symcc on, opens the board panel by itself on the Live tab (unless `open_on_start` is off, and not again if it is already open), and tells the lead it is the lead now. `/symcc-enable` and
 `/symcc-disable` only switch an existing board on or off; with no board they point to `/symcc-init`. Projects
 that already have a board start on as before. With several windows (see above), the first window
-you enable is the lead and later windows start off here.
+you open drives the board; later windows start as followers.
 
 **Off in one window only.** `/symcc-disable here` turns symcc off in the window you type it in; the
 other windows on the project keep symcc fully on and see no change. From your next message that
