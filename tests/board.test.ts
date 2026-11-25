@@ -2788,7 +2788,7 @@ test('T-966: the task page Priority row: the number, and a to do task its place 
   b = patchTask(b, 'T-5', { priority: 3, status: 'done' }, T)
   const rowOf = (id: string) => {
     const rows = detailRows(b.tasks.find(t => t.id === id)!, { roles: [], all: b.tasks, when: s => s, nowMs: 0 })
-    expect(rows[rows.findIndex(r => r.label === 'Priority') - 1]?.label).toBe('Added')
+    expect(rows[rows.length - 1]?.label).toBe('Priority')
     return rows.find(r => r.label === 'Priority')!
   }
   const text = (id: string) => rowOf(id).segs.map(s => s.text).join('')

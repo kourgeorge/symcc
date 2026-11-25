@@ -1417,10 +1417,6 @@ export const BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
-          },
-          {
-            "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["general"]}
@@ -1451,6 +1447,10 @@ export const BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -2074,13 +2074,6 @@ export const BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["general"]}
             ]
@@ -2112,6 +2105,13 @@ export const BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -3392,13 +3392,6 @@ export const BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["general"]}
             ]
@@ -3430,6 +3423,13 @@ export const BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]

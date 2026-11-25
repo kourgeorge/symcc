@@ -1100,8 +1100,8 @@ only; the Organizational memory page has the same header shape, see below):
    counted); then where it came from (`♟ from you`, `⌕ scout bugs`, `◆ lead`, `↳ from T-5`,
    `▸ from T-5` for a worker's report); then its note, dim, when it has one. There are no
    Status, Stage or Now rows in Details any more: Details starts with the **Steps** row (the
-   way to the merge) and the **Added** row (when it was added and last changed), then the
-   **Priority** row: the task's priority number (bold when it is not 0) and, in grey, for a
+   way to the merge) and the **Added** row (when it was added and last changed). The
+   **Priority** row comes last, after Tries: the task's priority number (bold when it is not 0) and, in grey, for a
    to do task its place in line: `next to start`, `2nd in line`, `3rd in line`… among the to do
    tasks that are free to start, in the order they start (lowest priority first, then the lower
    task number), or `waits on T-n first` (the first task it waits for that is not done yet).
@@ -1521,8 +1521,8 @@ unchanged.
   failed** (red `✗`); **Waiting for your files** (yellow). The Run now question and the role
   list have no box either. Only a text box you type in keeps its own frame.
   Then the sections, each under a plain bold heading: **Details**, the same labelled rows as the
-  terminal and OpenCode task pages (Steps, Added, Priority, Role, Type, From, Why, Files, Into,
-  After, …, Tries) as a label and value list that wraps (its labels share the 11 character column), each task it waits for a link that
+  terminal and OpenCode task pages (Steps, Added, Role, Type, From, Why, Files, Into,
+  After, …, Tries, Priority) as a label and value list that wraps (its labels share the 11 character column), each task it waits for a link that
   opens it; the **Branch** (the task's branch against main, as on the terminal, in the
   monospaced font); the **Answer** of an investigation; **What to do** (the details, drawn as
   Markdown); the **Changes** of a task in review; **History**, a timeline with the newest

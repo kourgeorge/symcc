@@ -1611,7 +1611,7 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   const badge = (await ui.findAll({ type: 'Text', text: /^◆ ready for review$/ })).find(t => t.props.color)
   expect(badge?.props.color).toBe('warning')
   expect(badge?.props.bold).toBe(true)
-  for (const label of ['Steps', 'Added', 'Priority', 'Role', 'From', 'Why', 'Request', 'Seen', 'Files', 'After', 'Branch', 'Tries']) {
+  for (const label of ['Steps', 'Added', 'Role', 'From', 'Why', 'Request', 'Seen', 'Files', 'After', 'Branch', 'Tries', 'Priority']) {
     const row = L.find(l => l.startsWith(`${label}:`))
     expect(row).toBeDefined()
     // every value starts in the same column
@@ -1638,6 +1638,8 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   expect(L.some(l => /^Tries:\s+2$/.test(l))).toBe(true)
   // T-966: a task in review shows only its priority number
   expect(L.some(l => /^Priority:\s+-?\d+$/.test(l))).toBe(true)
+  // T-1044: the Priority row comes last, after Tries
+  expect(L.findIndex(l => l.startsWith('Priority:'))).toBeGreaterThan(L.findIndex(l => l.startsWith('Tries:')))
   // the section headings, in order
   const heads = L.filter(l => /^▍/.test(l))
   expect(heads[0]).toBe('▍Details')
