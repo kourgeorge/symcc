@@ -50,6 +50,7 @@ function world(over: { tasks?: BoardTask[]; folders?: string[] } = {}) {
   }
   const dirty = new Set([`${D}/worktrees/T-6`, `${D}/worktrees/T-7`])
   const branches = new Map([['symcc/T-2', sha('a')], ['symcc/T-3', sha('b')], ['symcc/T-5', sha('c')], ['symcc/T-6', sha('d')], ['symcc/T-494', sha('e')], ['symcc/T-7', sha('f')]])
+  const statusOf = new Map<string, string>()
   const inMain = new Set([sha('a'), sha('b'), sha('c'), sha('d')])
   /** HEAD commits of folders that are not on their task's branch (a detached HEAD) */
   const heads = new Map<string, string>()
@@ -85,7 +86,7 @@ function world(over: { tasks?: BoardTask[]; folders?: string[] } = {}) {
       return h ? done({ stdout: `${h}\n` }) : done({ exitCode: 1 })
     }
     if (g[0] === 'branch' && g[1] === '--contains') return done({ stdout: [...branches].filter(([, h]) => h === g[2]).map(([b]) => `${b}\n`).join('') })
-    if (s === 'status --porcelain') return done({ stdout: dirty.has(init?.cwd ?? '') ? ' M a.txt\n' : '' })
+    if (s === 'status --porcelain --untracked-files=all') return done({ stdout: statusOf.get(init?.cwd ?? '') ?? (dirty.has(init?.cwd ?? '') ? ' M a.txt\n' : '') })
     if (s === 'worktree prune --dry-run -v') return done({ stderr: stale ? 'Removing worktrees/T-9: gitdir file points to non-existent location\n' : '' })
     if (s === 'worktree prune') return (writes.push(j), (stale = 0), done())
     if (g[0] === 'worktree' && g[1] === 'remove') {
@@ -137,7 +138,7 @@ function world(over: { tasks?: BoardTask[]; folders?: string[] } = {}) {
   S.root = ROOT
   S.me = 'me'
   S.writing = Promise.resolve()
-  return { ...w, files, dirs, branches, writes, heads, later, setMerging: (on: boolean) => void (merging = on) }
+  return { ...w, files, dirs, branches, writes, heads, later, statusOf, setMerging: (on: boolean) => void (merging = on) }
 }
 
 test('T-676: the doctor lists each case it finds, with sizes, and changes nothing without fix', async () => {
@@ -375,4 +376,18 @@ test('T-1031: fix with ids removes a dropped tasks folder with changes and its u
   expect(await doctor(v.host, 'fix w-T-6 b-T-494')).toContain('Not offered any more')
   expect(v.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
   expect(v.branches.has('symcc/T-494')).toBe(true)
+})
+
+test('T-1031: an archived dropped task is offered and removed too; an untracked folder counts every file in it', async () => {
+  const w = world({ tasks: [task('T-2', 'done'), task('T-7', 'doing', { runs: [{ started: iso(30) }] })] })
+  const arch = [task('T-6', 'dropped'), task('T-494', 'dropped')]
+  w.files.set(`${D}/archive.json`, { size: 500, text: JSON.stringify({ version: 1, tasks: arch }) })
+  w.statusOf.set(`${D}/worktrees/T-6`, '?? d/a\n?? d/b\n?? d/c\n?? d/d\n?? d/e\n')
+  const text = await doctor(w.host, '')
+  expect(text).toContain('deletes 5 uncommitted changed files')
+  const said = await doctor(w.host, 'fix w-T-6 b-T-6 b-T-494')
+  expect(said).toContain('cleaned up 3 of 3')
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(false)
+  expect(w.branches.has('symcc/T-6')).toBe(false)
+  expect(w.branches.has('symcc/T-494')).toBe(false)
 })

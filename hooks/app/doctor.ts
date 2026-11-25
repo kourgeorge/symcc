@@ -50,7 +50,7 @@ async function dirty(host: Host, dir: string): Promise<boolean> {
 
 /** How many files folder `dir` has changed and not committed, or null when git can't tell. */
 async function changedFiles(host: Host, dir: string): Promise<number | null> {
-  const st = await git(host, ['status', '--porcelain'], dir).catch(() => null)
+  const st = await git(host, ['status', '--porcelain', '--untracked-files=all'], dir).catch(() => null)
   return st?.exitCode === 0 ? st.stdout.split('\n').filter(l => l.trim()).length : null
 }
 
@@ -209,9 +209,9 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
       fix: async () => {
         const nb = await load(host).catch(() => null)
         if (!nb) return "the board can't be read now"
-        const nt = nb.tasks.find(x => x.id === id)
+        const nt = nb.tasks.find(x => x.id === id) ?? taskOf(id)
         if (nt && !isFinished(nt)) return `${id} is ${nt.status} now`
-        if (inUse(id, nt ?? taskOf(id), await agentsNow(host))) return 'an agent may still use it'
+        if (inUse(id, nt, await agentsNow(host))) return 'an agent may still use it'
         // only a dropped task's folder may go with its changes; for any other git itself refuses (no --force)
         if (!(lose && nt?.status === 'dropped') && (await dirty(host, wt))) return 'it has uncommitted changes now'
         if (!(await headKept(host, wt, into))) return 'it holds commits on no branch now'
