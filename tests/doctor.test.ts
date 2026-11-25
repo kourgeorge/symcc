@@ -7,7 +7,7 @@ import { oldBackups, parseDoctorArgs, backupIds } from '../hooks/core/doctor'
 import { doctor } from '../hooks/app/doctor'
 import { runCommand, COMMANDS } from '../hooks/app/symcc'
 import { runTool, TOOLS } from '../hooks/app/tools'
-import { S, finishing } from '../hooks/app/state'
+import { S, finishing, workers, starting } from '../hooks/app/state'
 import type { HostFileEntry, HostRunResult } from '../hooks/host'
 import { test } from './reset'
 import { fakeHost, done } from './fake-host'
@@ -390,4 +390,65 @@ test('T-1031: an archived dropped task is offered and removed too; an untracked 
   expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(false)
   expect(w.branches.has('symcc/T-6')).toBe(false)
   expect(w.branches.has('symcc/T-494')).toBe(false)
+})
+
+test('T-1032: a live worker of a dropped task keeps its dirty folder, never removed with --force; other dropped items still go', async () => {
+  const w = world()
+  w.host.agents.list = async () => [{ id: 'ag-6', kind: 'worker', status: 'running', description: 'T-6 fix the thing' }]
+  const text = await doctor(w.host, '')
+  expect(text).toContain('- folder .symcc/worktrees/T-6/ (T-6 is dropped): an agent may still use it, kept')
+  expect(text).not.toContain('w-T-6')
+  expect(text).toContain('b-T-494  branch symcc/T-494 (T-494 is dropped): deletes 3 commits not in main')
+  await doctor(w.host, 'fix all')
+  expect(w.writes).not.toContain(`git worktree remove --force ${D}/worktrees/T-6`)
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
+  expect(w.branches.has('symcc/T-494')).toBe(false)
+})
+
+test('T-1032: when the agent list fails, no task folder or dropped branch is offered or deleted, and nothing is forced', async () => {
+  const w = world()
+  w.host.agents.list = async () => {
+    throw new Error('agents unknown')
+  }
+  const text = await doctor(w.host, '')
+  expect(text).not.toContain('w-T-')
+  expect(text).not.toContain('b-T-494')
+  expect(text).not.toContain('b-T-6')
+  expect(text).not.toContain('b-T-3')
+  expect(text).toContain('- branch symcc/T-494 (T-494 is dropped): an agent may still use it, kept')
+  await doctor(w.host, 'fix all')
+  for (const id of ['T-5', 'T-6']) expect(w.dirs.has(`${D}/worktrees/${id}`)).toBe(true)
+  for (const id of ['T-3', 'T-6', 'T-494']) expect(w.branches.has(`symcc/${id}`)).toBe(true)
+  expect(w.writes.some(x => x.includes('--force') || x.includes('branch -D') || x.includes('worktree remove'))).toBe(false)
+})
+
+test('T-1032: a worker of this window started between the list and the fix keeps a dropped branch', async () => {
+  const w = world()
+  // the doctor asks for the agents once for the list and again right before the fix: this window's worker starts in between
+  let asked = 0
+  w.host.agents.list = async () => {
+    if (++asked === 2) workers.set('ag-494', { task: 'T-494', worktree: `${D}/worktrees/T-494`, branch: 'symcc/T-494', since: 0 })
+    return []
+  }
+  const said = await doctor(w.host, 'fix b-T-494')
+  expect(said).toContain('cleaned up 0 of 1')
+  expect(said).toContain('✗ b-T-494')
+  expect(said).toContain('kept, an agent may still use it')
+  expect(w.branches.has('symcc/T-494')).toBe(true)
+  expect(w.writes.some(x => x.includes('branch -D'))).toBe(false)
+})
+
+test('T-1032: a worker of this window keeps its dropped task folder and branch out of the list', async () => {
+  const w = world()
+  workers.set('ag-6', { task: 'T-6', worktree: `${D}/worktrees/T-6`, branch: 'symcc/T-6', since: 0 })
+  starting.add('T-494')
+  const text = await doctor(w.host, '')
+  expect(text).toContain('- folder .symcc/worktrees/T-6/ (T-6 is dropped): an agent may still use it, kept')
+  expect(text).not.toContain('w-T-6')
+  expect(text).not.toContain('b-T-494')
+  expect(text).toContain('b-T-3  branch symcc/T-3')
+  await doctor(w.host, 'fix all')
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
+  expect(w.branches.has('symcc/T-494')).toBe(true)
+  expect(w.branches.has('symcc/T-3')).toBe(false)
 })

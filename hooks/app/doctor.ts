@@ -253,6 +253,11 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
       continue
     }
     if (!t || !isFinished(t)) continue
+    // as for folders (T-1032): a branch an agent may still use is only listed, never offered
+    if (inUse(id, t, agents)) {
+      listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}): an agent may still use it, kept` })
+      continue
+    }
     const into = intoOf(t)
     const anc = await git(host, ['merge-base', '--is-ancestor', sha, `refs/heads/${into}`]).catch(() => null)
     if (anc?.exitCode === 0) {
