@@ -162,7 +162,7 @@ test('health: a told pushed-back problem is told again only when the after list 
   const first = newFindings(boardHealth(board([t, task('T-4', { status: 'doing', updated_at: iso(200) }), ...newer], full), NOW), new Set())
   expect(first.fresh.length).toBe(1)
   // the task it waits for got a new try (updated_at changed): not told again
-  const retry = newFindings(boardHealth(board([t, task('T-4', { status: 'doing', updated_at: iso(1), attempts: 2 }), ...newer], full), NOW), first.told)
+  const retry = newFindings(boardHealth(board([{ ...t, updated_at: iso(5) }, task('T-4', { status: 'doing', updated_at: iso(1), attempts: 2 }), ...newer], full), NOW), first.told)
   expect(retry.fresh).toEqual([])
   // its after list changed: told again
   const changed = newFindings(boardHealth(board([{ ...t, after: ['T-4', 'T-5'] }, task('T-4', { status: 'doing' }), ...newer], full), NOW), retry.told)
