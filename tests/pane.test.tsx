@@ -160,7 +160,6 @@ test('T-776: the band\'s first line has the brand, the board summary and the but
       version: 1,
     },
   }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
     const lines = await bandLines(ui)
@@ -185,7 +184,6 @@ test('T-776: running scouts show on the band\'s first line, and a narrow band dr
       version: 1,
     },
   }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const wide = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   expect((await bandLines(wide))[0]).toMatch(/⏵ auto merge · 1\/3 agents busy · 1 task waiting · 0 completed today · ⌕ 1 scout +\[ open board \]$/)
   await wide.unmount()
@@ -215,7 +213,6 @@ test('T-748: the band lists the questions for you and the NEEDS YOU tasks in the
   let tasks = [task('T-6', 'review', 'Ready one'), task('T-7', 'failed', 'Broke', { note: 'tests failed' }), task('T-1', 'done', 'Parser')]
   let mode = 'auto'
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode, test_commands: [], questions, driving: true } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   const q = await ui.find({ type: 'Text', text: /^ ⚠ 1 question for you: Q-71 Raise the version\?$/ })
   expect(q?.props.color).toBe('warning')
@@ -251,7 +248,6 @@ test('T-643, T-952: the band of a session that does not drive has a yellow "this
   const view = (driving: boolean, ago: number) => ({ tasks: [task('T-3', 'doing', 'Search command', { note: 'starting at the next turn', updated_at: iso(T0 - ago) }), task('T-4', 'todo', 'Docs')], working: [], scouts: [], mode: 'auto', test_commands: [], driving })
   let v = view(false, 60_000)
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: v }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const band = async (columns = 80) => {
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: columns }, surface: 'terminal' })
     const all = await ui.findAll({ type: 'Text' })
@@ -296,7 +292,6 @@ test("T-748: a running row shows its stage's icon (no stage name, T-893), the ti
     task('T-44', 'doing', 'Third try', { note: 'worker on it', attempts: 3, runs: [{ started: iso(T0 - 5 * 60_000) }] }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   // "⌕" + "checker 8m · try 2": the checker started when the try handed back, 8 minutes ago
   // one line each, the one that started first at the top
@@ -337,7 +332,6 @@ test("T-542: the band shows symcc's own pre-merge step as its icon with its plai
     task('T-51', 'doing', 'Checked one', { note: CHECKER_NOTE, attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], live: { checking: { step: 'checker', at: fresh } }, }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 }, surface: 'terminal' })
   // the step's icon, no stage name (T-893); the note still says the step
   expect(await ui.find({ type: 'Text', text: new RegExp(`^ ✎ T-50 10s +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
@@ -356,7 +350,6 @@ test('T-648: a task in the queue shows ⧗ and one in the test step ⊛, on the 
     task('T-72', 'doing', 'Tested one', { note: 'running the tests', attempts: 1, runs: ran, live: { checking: { step: 'testing', at: fresh } }, }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   // the list's row is keyed by its id, with the total work time; the band's is one Text line, with the stage's time (no stage name, T-893); one space before the title
   const want = { pane: [/^T-71 ⧗ 20m Queued one/, /^T-72 ⊛ 20m Tested one/], band: [/^ ⧗ T-71 10s Queued one/, /^ ⊛ T-72 10s Tested one/] }
   for (const [name, where] of [['pane', { ...PANE, props: { ...PANE.props, bodyColumns: 160 } }], ['band', { ...BAND, props: { ...BAND.props, bodyColumns: 160 } }]] as const) {
@@ -374,7 +367,6 @@ test('T-787: a running band row has its id in the accent color, its stage part i
   mock.clock(on, { now: T0 })
   const tasks = [task('T-73', 'doing', 'Run title', { note: 'worker on it', attempts: 4, runs: [{ started: new Date(T0 - 7 * 60_000).toISOString() }] })]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   const colorOf = async (text: RegExp) => (await ui.find({ type: 'Text', text }))?.props?.color
   expect(await colorOf(/^T-73$/)).toBe('claude')
@@ -391,7 +383,6 @@ test('T-939: a band row shows a later try as "↺3" right after its time, nothin
     task('T-81', 'doing', 'Third try', { note: 'worker on it', attempts: 3, runs: [{ started: new Date(T0 - 3 * 60_000).toISOString() }] }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   for (const surface of ['terminal', 'vscode'] as const) {
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface })
     const rows = (await bandLines(ui)).slice(1)
@@ -414,7 +405,6 @@ test("every band row lines up in one title column: running rows, then the rows t
     task('T-59', 'failed', 'Fail one', { note: 'tests failed' }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   const leads = [['T-62', '12m'], ['T-63', '3m ↺2'], ['T-60', 'waiting'], ['T-61', 'review'], ['T-59', 'failed']].map(([id, state]) => `${id} ${state!.padEnd(7)} `)
   for (const lead of leads) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(lead)}$`, 'u') }), lead).toBeDefined()
@@ -440,7 +430,6 @@ test("the band hides only the notes a doing row's state says; other notes stay a
     task('T-53', 'doing', 'Starting', { note: 'worker starting', attempts: 1, runs: [{ started: iso(T0 - 60_000) }] }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^ — time is up: the worker was told to hand back$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^T-50 1h2m *$/ })).toBeDefined()
@@ -452,7 +441,6 @@ test("the band hides only the notes a doing row's state says; other notes stay a
 })
 
 test('with an empty board the band shows nothing of its own', async ($, on) => {
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /symcc board/ })).toBeUndefined()
   await ui.unmount()
@@ -2498,7 +2486,8 @@ test('the ↑↓ stops of a drawn page are only its list rows: the tabs, search,
  *  are checked on arrowTarget and rowStops above. */
 function arrowKeys($: Engine, on: On) {
   const seen = { focused: undefined as string | undefined, scrolls: [] as { by: number; offset: number }[] }
-  on('ui.focus', (_, e) => ((seen.focused = e.element), {}))
+  on('ui.focus', { plugin: '*' }, (_, e) => ((seen.focused = e.element), {}))
+  on('ui.log', () => ({ value: undefined }))
   on('ui.scroll', (_, e) => (seen.scrolls.push({ by: e.by, offset: e.offset }), {}))
   on('ui.toast', () => ({ value: undefined }))
   const focus = (element: string) => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, plugin: 'symcc', element, origin: { kind: 'person' } })
@@ -2634,7 +2623,6 @@ test('T-615: the band ends each row with the same text as OpenCode\'s band and t
   // the band shows six rows at most, so one task at a time
   let shown = tasks
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks: shown, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   for (const t of tasks) {
     shown = [t]
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 200 }, surface: 'terminal' })
