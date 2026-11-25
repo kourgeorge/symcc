@@ -51,12 +51,14 @@ export const statusHeadings = (text: string): string[] =>
     return m ? [m[1]!] : []
   })
 
-/** The lines of section `name` (from its heading to the next blank line), heading left out. */
+/** The lines of section `name`, heading left out: up to the blank line before the next unindented line (a heading, the
+ *  hint). T-1071: a blank line inside a section (TODAY's blank line above the yesterday / last 7 days lines, which show
+ *  just after midnight) is kept, with the lines after it. */
 export function statusSection(text: string, name: string): string[] {
   const lines = text.split('\n')
   const i = lines.findIndex(l => l.startsWith(`─── ❯ ${name}`))
   if (i < 0) return []
-  const end = lines.findIndex((l, j) => j > i && l === '')
+  const end = lines.findIndex((l, j) => j > i && l === '' && !(lines[j + 1] ?? '').startsWith(LIVE_INDENT))
   return lines.slice(i + 1, end < 0 ? undefined : end)
 }
 
