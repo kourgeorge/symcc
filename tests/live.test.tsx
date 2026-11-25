@@ -158,8 +158,15 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
     '     └─◇ T-717 Waits for a todo and a …  waits  + also T-690  change',
     '  └─◇ T-716 Live deps drawn as trai…  waits  + also T-690  change',
   ])
-  // T-1058: the kind ends every row, even narrow, and takes room from the title first
-  for (const w of [40, 32, 28]) for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, segText(r.segs).endsWith('change')]).toEqual([w, true])
+  // T-1058: the kind ends every row and takes only title characters ("waits" and "+ also" come first)
+  for (const w of [60, 50]) for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, segText(r.segs).endsWith('change')]).toEqual([w, true])
+  const long = [{ id: 'T-690', title: 'Waiting one with a long title here', kind: 'investigation', also: ['T-700'], trains: [] }] as never
+  for (const w of [30, 40]) {
+    const text = segText(trainRows(long, w)[0]!.segs)
+    expect([w, text.includes('waits') || text.includes('+1'), textWidth(text) <= w]).toEqual([w, true, true])
+    if (text.includes('investigation')) expect(text).toContain('T-690 Wai')
+  }
+  expect(segText(trainRows(long, 30)[0]!.segs)).not.toContain('investigation')
   const kinds = trainRows(t.lanes['T-712']!, 40).map(r => r.segs.at(-1)!)
   expect(kinds.every(k => k.tone === 'dim')).toBe(true)
   expect(rows.map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
@@ -220,6 +227,15 @@ test('T-690: lane lines fit the width with nothing cut, and the current station 
         if (lk.kindW) expect(segText(first).endsWith(kind) && first.at(-1)!.tone === 'dim').toBe(true)
       }
     }
+  // the kind dropped from the first row is on no second line either
+  for (const kind of ['bug', 'investigation', 'docs']) {
+    const ks = liveLanes(view(true), T0).map(x => ({ ...x, kind }))
+    const lk = liveLayout(ks, liveStations(true), 30, true)
+    for (const lane of ks) {
+      const [first, second] = laneLines(lane, lk, { nowMs: T0, frame: 0 })
+      expect([kind, segText(first).includes(kind), segText(second).includes(kind)]).toEqual([kind, !!lk.kindW, false])
+    }
+  }
   expect(liveLayout(liveLanes(view(true), T0).map(x => ({ ...x, kind: 'change' })), liveStations(true), 100, true).kindW).toBe(8)
   expect(liveLayout(liveLanes(view(true), T0).map(x => ({ ...x, kind: 'investigation' })), liveStations(true), 20, true).kindW).toBe(undefined)
   // T-867: the tokens against the median per merged task: from twice it, "(n×median)" in the warning tone

@@ -643,7 +643,7 @@ export const liveHeading = (name: string, width: number): LiveSeg[] => {
 export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE_INDENT, tone: 'text' }, ...xs]
 
 /** How the lanes are laid out at a width: the id and title columns, the gap between stations, the station names, the right column. */
-export type LiveLayout = { width: number; idW: number; titleW: number; gap: number; labels: string[]; rightW: number; sep: number; stations: LiveStation[]; kindW?: number }
+export type LiveLayout = { width: number; idW: number; titleW: number; gap: number; labels: string[]; rightW: number; sep: number; stations: LiveStation[]; kindW?: number; kindDropped?: boolean }
 
 const LABELS: Record<LiveStation, string>[] = [
   { work: 'work✧', check: 'check✧', queue: 'queue', tests: 'tests', you: 'you', done: 'done' },
@@ -675,7 +675,7 @@ export function liveLayout(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Par
   const longest = Math.max(3, ...lanes.map(l => textWidth(l.title)))
   const make = (titleW: number, gap: number, sep: number, rightW = RIGHT_W): LiveLayout => {
     // the layout never goes below its minimum width: when the kind then does not fit beside it, the kind goes
-    if (kindW && laneWidth(idW, titleW, k, gap, sep, rightW) + kindW > fullWidth) return liveLayout(lanes, stations, fullWidth, false)
+    if (kindW && laneWidth(idW, titleW, k, gap, sep, rightW) + kindW > fullWidth) return { ...liveLayout(lanes, stations, fullWidth, false), kindDropped: true }
     const set = LABELS.find(s => stations.slice(0, -1).every(st => textWidth(s[st]) <= gap)) ?? LABELS[LABELS.length - 1]!
     return { width: fullWidth, idW, titleW, gap, labels: stations.map(s => set[s]), rightW, sep, stations: [...stations], ...(kindW ? { kindW } : {}) }
   }
@@ -815,7 +815,7 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
     return [...xs, { text: ' '.repeat(gap) + lane.kind, tone: 'dim' as const }]
   }
   // each level with the kind, then without it, before a part of the meta text goes
-  const tries: LiveSeg[][] = [4, 3, 2, 1, 0].flatMap(n => (o.noKind || l.kindW ? [line(n)] : [withKind(line(n)), line(n)]))
+  const tries: LiveSeg[][] = [4, 3, 2, 1, 0].flatMap(n => (o.noKind || l.kindW || l.kindDropped ? [line(n)] : [withKind(line(n)), line(n)]))
   tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
   const second = tries.find(fits) ?? tries[tries.length - 1]!
   // T-771: a finished lane's second line is dim throughout
@@ -944,15 +944,25 @@ function trainLine(x: LiveTrain, depth: number, width: number): LiveSeg[] {
   for (const waits of ['  waits', '']) for (const also of alsos) tries.push({ also, waits })
   const make = (t: { also: string; waits: string }, titleW: number, kind = ''): LiveSeg[] =>
     segs({ text: lead, tone: 'dim' }, { text: x.id, tone: 'run' }, titleW > 0 && { text: ` ${cutTitle(x.title, titleW)}`, tone: 'wait' }, { text: t.waits, tone: 'dim' }, { text: t.also, tone: 'dim' }, !!kind && { text: `  ${kind}`, tone: 'dim' })
-  // T-1058: the kind (dim) ends the row and keeps its place before the title's characters; it goes only when nothing else fits
-  for (const kind of x.kind ? [`  ${x.kind}`, ''] : ['']) {
+  // the row without the kind: the first layout that fits ("waits" and the "+ also" list come before the title's characters)
+  const base = (): { t: { also: string; waits: string }; titleW: number } | undefined => {
     for (const least of [8, 3])
       for (const t of tries) {
-        const room = width - textWidth(lead + x.id + t.waits + t.also + kind) - 1
-        if (room >= Math.min(least, textWidth(x.title))) return make(t, Math.min(room, TRAIN_TITLE), kind.trim())
+        const room = width - textWidth(lead + x.id + t.waits + t.also) - 1
+        if (room >= Math.min(least, textWidth(x.title))) return { t, titleW: Math.min(room, TRAIN_TITLE) }
       }
-    for (const t of tries) if (textWidth(lead + x.id + t.waits + t.also + kind) <= width) return make(t, 0, kind.trim())
+    for (const t of tries) if (textWidth(lead + x.id + t.waits + t.also) <= width) return { t, titleW: 0 }
+    return undefined
   }
+  const b = base()
+  // T-1058: the kind (dim) ends the row but may only take title characters: with the same "waits" and "+ also" it must
+  // leave the title at least its minimum (3), otherwise the kind is dropped
+  if (b && b.titleW > 0 && x.kind) {
+    const kind = `  ${x.kind}`
+    const room = width - textWidth(lead + x.id + b.t.waits + b.t.also + kind) - 1
+    if (room >= Math.min(3, textWidth(x.title))) return make(b.t, Math.min(room, b.titleW), x.kind)
+  }
+  if (b) return make(b.t, b.titleW)
   // narrower than its lead and id: cut
   return [{ text: fitText(lead + x.id, width), tone: 'dim' }]
 }
