@@ -5,7 +5,8 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { type Board, addTask, emptyBoard, patchTask, find } from '../hooks/board'
 import { S, workers, finishing } from '../hooks/app/state'
-import { load, resetStore, saveBoard } from '../hooks/app/store'
+import { change, load, resetStore, saveBoard } from '../hooks/app/store'
+import { PREP_NOTE } from '../hooks/core/panel'
 import { workerFinished } from '../hooks/app/workers'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -38,23 +39,30 @@ function world() {
   })
   const update = w.panel.updateView
   // one publish also moves the logo and the status; only the board's own view write (called by publish) counts
-  w.panel.updateView = async f => (new Error().stack!.split('\n')[3]!.includes('publish') && views++, update(f))
+  // (T-1038: each of those views is kept in `drawn`, in order)
+  const drawn: ReturnType<typeof w.panel.view>[] = []
+  w.panel.updateView = async f => {
+    const mine = new Error().stack!.split('\n')[3]!.includes('publish')
+    if (mine) views++
+    await update(f)
+    if (mine) drawn.push(w.panel.view())
+  }
   S.root = ROOT
   S.me = 'me'
   S.writing = Promise.resolve()
   S.enabledNow = true
-  return { ...w, files, reads, writes, views: () => views }
+  return { ...w, files, reads, writes, drawn, views: () => views }
 }
 
 /** A board with a done task (its parts go to a parts file) and a task being worked on that asked a question. */
-function board(): Board {
+function board(asked = true): Board {
   let b = emptyBoard()
   let t
   ;[b, t] = addTask(b, { origin: { why: 'a test' }, title: 'Old', details: 'Done when: done.', files: ['src/'] }, ISO)
   b = patchTask(b, t.id, { status: 'done', history: [{ at: ISO, kind: 'step', text: 'merged' }] }, ISO)
   ;[b, t] = addTask(b, { origin: { why: 'a test' }, title: 'Now', details: 'Do it.\nDone when: done.', files: ['src/'] }, ISO)
   const run = { started: ISO, agents: [{ id: 'w1', kind: 'worker' as const, started: ISO }] }
-  return patchTask(b, t.id, { status: 'doing', attempts: 1, branch: 'symcc/T-2', runs: [run], live: { session: 'me', ask: { text: 'Which one?', asked_at: ISO, by: 'worker' } as never } }, ISO)
+  return patchTask(b, t.id, { status: 'doing', attempts: 1, branch: 'symcc/T-2', runs: [run], live: { session: 'me', ...(asked ? { ask: { text: 'Which one?', asked_at: ISO, by: 'worker' } as never } : {}) } }, ISO)
 }
 
 test('T-1029: a second load reads no parts file that did not change, and reads one that did', async () => {
@@ -120,4 +128,88 @@ test('T-1029: a step of the hand-back that throws still draws the view once', as
   await expect(workerFinished(w.host, 'w1', 'Done, but which one?')).rejects.toThrow('disk full')
   expect(n).toBeGreaterThan(2)
   expect(w.views() - before).toBe(1)
+})
+
+// ---------------- T-1038: the view hold with two hand-backs at once, a long check, and early returns ----------------
+
+const workerOf = (task: string) => ({ task, worktree: `${ROOT}/.symcc/worktrees/${task}`, branch: `symcc/${task}`, since: Date.now() })
+/** One unrelated board change: T-1's title. */
+const touch = (w: ReturnType<typeof world>, title = 'Old, renamed') => change(w.host, b => patchTask(b, 'T-1', { title }, ISO))
+const viewStatus = (w: ReturnType<typeof world>, id: string) => w.panel.view().tasks.find(t => t.id === id)?.status
+
+test('T-1038: two hand-backs at once draw the view at most twice, both tasks waiting, and the hold count is back at 0', async () => {
+  resetStore()
+  const w = world()
+  let b = board()
+  let t
+  ;[b, t] = addTask(b, { origin: { why: 'a test' }, title: 'Also now', details: 'Do it.\nDone when: done.', files: ['src/'] }, ISO)
+  const run = { started: ISO, agents: [{ id: 'w2', kind: 'worker' as const, started: ISO }] }
+  b = patchTask(b, t.id, { status: 'doing', attempts: 1, branch: 'symcc/T-3', runs: [run], live: { session: 'me', ask: { text: 'This or that?', asked_at: ISO, by: 'worker' } as never } }, ISO)
+  await saveBoard(w.host, b)
+  workers.set('w1', workerOf('T-2'))
+  workers.set('w2', workerOf('T-3'))
+  const before = w.views()
+  await Promise.all([workerFinished(w.host, 'w1', 'a'), workerFinished(w.host, 'w2', 'b')])
+  const after = await load(w.host)
+  expect([find(after, 'T-2')!.status, find(after, 'T-3')!.status]).toEqual(['waiting', 'waiting'])
+  expect([viewStatus(w, 'T-2'), viewStatus(w, 'T-3')]).toEqual(['waiting', 'waiting'])
+  const drawn = w.views() - before
+  expect(drawn >= 1 && drawn <= 2).toBe(true)
+  // nothing is held any more: one plain change draws the view straight away
+  const n = w.views()
+  await touch(w)
+  expect(w.views() - n).toBe(1)
+})
+
+test('T-1038: the view is drawn before a long check starts, and a lead change during the check draws at once', async () => {
+  resetStore()
+  const w = world()
+  const b = { ...board(false), test_commands: ['npm test'] }
+  expect(find(b, 'T-2')!.live?.ask).toBeUndefined()
+  await saveBoard(w.host, b)
+  w.files.set(`${ROOT}/.symcc/worktrees/T-2/.git`, 'gitdir: x')
+  let reached = () => {}
+  const atTest = new Promise<void>(r => (reached = r))
+  let release = () => {}
+  const gate = new Promise<void>(r => (release = r))
+  const run = w.host.run
+  w.host.run = async (argv, o) => {
+    // the merge's test command waits until the test lets it go
+    if (argv[0] === '/bin/sh') {
+      reached()
+      await gate
+      return done()
+    }
+    if (argv[0] === 'git' && argv.includes('diff') && argv.includes('--name-only')) return done({ stdout: argv.includes('-z') ? 'src/a.ts' : 'src/a.ts\n' })
+    return run(argv, o)
+  }
+  workers.set('w1', workerOf('T-2'))
+  const before = w.views()
+  const handBack = workerFinished(w.host, 'w1', 'made the change')
+  await atTest
+  try {
+    // the hand-back's quick steps were drawn before the check (its own steps then draw as usual)
+    expect(w.views() - before).toBeGreaterThan(0)
+    const first = w.drawn[before]?.tasks.find(t => t.id === 'T-2')
+    expect([first?.status, first?.note]).toEqual(['doing', PREP_NOTE])
+    const n = w.views()
+    await change(w.host, x => addTask(x, { origin: { why: 'the lead' }, title: 'New one', details: 'Done when: done.', files: ['src/'] }, ISO))
+    expect(w.views() - n).toBe(1)
+    expect(w.panel.view().tasks.map(t => t.title)).toContain('New one')
+  } finally {
+    release()
+    await handBack
+  }
+})
+
+test('T-1038: a task dropped during its hand-back lets go of the hold: a later change draws the view', async () => {
+  resetStore()
+  const w = world()
+  await saveBoard(w.host, patchTask(board(), 'T-2', { status: 'dropped' }, ISO))
+  workers.set('w1', workerOf('T-2'))
+  await workerFinished(w.host, 'w1', 'Done, but which one?')
+  expect(find(await load(w.host), 'T-2')!.status).toBe('dropped')
+  const n = w.views()
+  await touch(w)
+  expect(w.views() - n).toBe(1)
 })
