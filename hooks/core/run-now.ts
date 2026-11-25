@@ -40,8 +40,20 @@ export const runNowQuestion = (id: string, waits: readonly RunNowWait[]): string
   `${id} waits on ${waits.map(w => `${w.id} (${w.state})`).join(', ')}. Start anyway?`
 
 /** The running tasks (other than `t`) whose files may overlap `t`'s (core/health.ts shareFiles: no list = anywhere). */
-export const runNowShares = (all: readonly Pick<SymccTask, 'id' | 'status' | 'files'>[], t: Pick<SymccTask, 'id' | 'files'>): string[] =>
-  all.filter(x => x.id !== t.id && x.status === 'doing' && shareFiles(x.files ?? [], t.files ?? [])).map(x => x.id)
+export const runNowShares = (all: readonly Pick<SymccTask, 'id' | 'status' | 'files'>[], t: Pick<SymccTask, 'id' | 'files'>, statuses: readonly SymccStatus[] = ['doing']): string[] =>
+  all.filter(x => x.id !== t.id && statuses.includes(x.status) && shareFiles(x.files ?? [], t.files ?? [])).map(x => x.id)
+
+const OPEN_STATUSES: readonly SymccStatus[] = ['todo', 'doing', 'review', 'waiting', 'paused', 'failed']
+
+/** The reply to moving a task from the backlog: its id, the open tasks sharing its files that are not in its after list, and its priority. */
+export function backlogMovedText(all: readonly Pick<SymccTask, 'id' | 'status' | 'files'>[], t: Pick<SymccTask, 'id' | 'files' | 'after' | 'priority'>): string {
+  const after = t.after ?? []
+  const ids = runNowShares(all, t, OPEN_STATUSES).filter(id => !after.includes(id))
+  const shared = ids.map(id => `${id} (${all.find(x => x.id === id)!.status})`)
+  return `${t.id} moved from the backlog to todo` +
+    (shared.length ? `; shares files with ${shared.join(', ')}; not in its after list` : '') +
+    `; priority ${t.priority ?? 0}`
+}
 
 /** The warning line on the page of a task Run now started while running tasks share its files:
  *  "started now while T-3 runs; they share files, so their changes may clash at the merge". */
