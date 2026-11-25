@@ -297,6 +297,10 @@ let worktrees: PanelWorktree[] = [
   { path: '/home/dana/orca/billing-service/pricing-page', where: '~/orca/billing-service/pricing-page', kind: 'other', branch: 'dana/pricing-page', head: '5566778', base: 'origin/dana/pricing-page', ahead: 0, behind: 0, files: [], dirty: 0, untracked: 0, commits: [], lastCommitMs: m(60 * 5) },
 ]
 
+const AGENTS = [
+  { id: 'cursor', name: 'Cursor' },
+  { id: 'copilot', name: 'GitHub Copilot' },
+]
 const send = (msg: ToWebview) => window.dispatchEvent(new MessageEvent('message', { data: msg }))
 const later = (ms: number, fn: () => void) => setTimeout(fn, ms)
 let busy = state === 'busy'
@@ -313,10 +317,13 @@ window.acquireVsCodeApi = () => ({
       send({ type: 'lead', settings: lead })
       send({ type: 'models', models: copilot ? copilotList : models })
       send({ type: 'slash', items: slash })
+      send({ type: 'agents', list: AGENTS, current: copilot ? 'copilot' : 'cursor' })
       if (net) send({ type: 'network', problem: { text: 'the lead could not run: Network request failed', proxy: '', service: copilot ? 'GitHub Copilot' : 'Cursor' } })
       return
     }
     if (msg.type === 'restart' || msg.type === 'log' || msg.type === 'session' || msg.type === 'open-file' || msg.type === 'open-board') return
+    // serve restarts with the other agents: here, the page reloads with them
+    if (msg.type === 'agents-set') return void location.assign(`?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(location.search)), agents: msg.agents })}`)
     if (msg.type === 'worktrees') return void later(250, () => send({ type: 'worktrees', list: worktrees, atMs: Date.now() }))
     if (msg.type === 'worktree') {
       const w = worktrees.find(x => x.path === msg.path)

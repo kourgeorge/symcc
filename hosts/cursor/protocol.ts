@@ -1,18 +1,14 @@
-// What the Cursor extension's board panel draws and sends: the panel view the engine process works out from the board
-// (./view.ts), and the messages between the webview, the extension and the engine. Plain data only: the webview
-// bundle imports this file too, so nothing here may pull in the engine.
+// What the board's webview draws and sends: the panel view serve works out from the board (./view.ts), and the
+// messages between the webview and serve (./board.ts), which pass through the editor extension unread. Internal: serve
+// and the webview ship together, so these change freely; what the extension relies on is ./contract.ts. Plain data
+// only: the webview bundle imports this file too, so nothing here may pull in the engine.
 import type { SdkImage, SdkModel, SdkModelInfo } from './sdk'
+import type { BoardPage, EngineState, ExtensionToWebview, WebviewToExtension } from './contract'
 
+export type { BoardPage, EngineState } from './contract'
 export type ChatImage = SdkImage
 export type LeadModel = SdkModel
 export type ModelInfo = SdkModelInfo
-
-/** The number of the contract between the engine process and an editor extension: raise it when an extension that
- *  speaks the old number would break. */
-export const PROTOCOL = 1
-
-/** The engine process's first line: which symcc it is and which contract it speaks. */
-export type ReadyEvent = { event: 'ready'; version: string; protocol: number }
 
 export type PanelMode = 'paused' | 'review' | 'auto'
 
@@ -211,8 +207,6 @@ export type PanelWorktree = {
 /** What the owner can do with a worktree on the Worktrees page. */
 export type WorktreeAction = 'window' | 'terminal' | 'reveal' | 'copy' | 'changes' | 'file' | 'remove'
 
-export type EngineState = { state: 'starting' | 'ready' | 'stopped' | 'failed'; text?: string }
-
 /** One step of an agent's turn (hosts/cursor/sdk.ts SdkStep), with when it happened. */
 export type PanelStep = { atMs: number; kind: 'text' | 'thinking' | 'tool' | 'status'; text: string; tool?: string; callId?: string; status?: 'running' | 'completed' | 'error' }
 
@@ -222,14 +216,14 @@ export type PanelStep = { atMs: number; kind: 'text' | 'thinking' | 'tool' | 'st
  */
 export type NetworkProblem = { text: string; proxy: string; service: string }
 
-/** A page of the board panel. */
-export type BoardPage = 'now' | 'board' | 'trees' | 'scouts' | 'memory'
+/** Whose agents serve can run the lead and the workers on (`id` is what symcc.agents holds). */
+export type AgentChoice = { id: string; name: string }
 
-/** From the extension to the webview (the board panel and the sidebar alike; `go` only to the panel). */
+/** To the webview: from serve, and the extension's own (`go` only to the panel). */
 export type ToWebview =
+  | ExtensionToWebview
   | { type: 'view'; view: PanelView }
   | { type: 'chat'; items: ChatItem[]; busy: boolean }
-  | { type: 'engine'; engine: EngineState }
   | { type: 'network'; problem: NetworkProblem | null }
   | { type: 'steps'; all: Record<string, PanelStep[]> }
   | { type: 'step'; agent: string; step: PanelStep }
@@ -239,11 +233,11 @@ export type ToWebview =
   | { type: 'slash'; items: SlashItem[] }
   | { type: 'lead'; settings: LeadSettings }
   | { type: 'worktrees'; list: PanelWorktree[]; atMs: number; error?: string }
-  | { type: 'go'; page: BoardPage; task?: string }
+  | { type: 'agents'; list: AgentChoice[]; current: string }
 
-/** From the webview to the extension; `id` comes back on the reply, to the webview that asked. */
+/** From the webview: to serve, and the few the extension handles; `id` comes back on the reply, to the webview that asked. */
 export type FromWebview =
-  | { type: 'ready' }
+  | WebviewToExtension
   | { type: 'send'; id: number; text: string; images?: ChatImage[] }
   | { type: 'lead-set'; settings: LeadSettings }
   | { type: 'lead-stop' }
@@ -255,10 +249,8 @@ export type FromWebview =
   | { type: 'scout'; id: number; name: string }
   | { type: 'forget'; id: number; n: number }
   | { type: 'proxy'; id: number; proxy: string }
-  | { type: 'log' }
+  | { type: 'agents-set'; agents: string }
   | { type: 'session'; agent: string; title: string }
-  | { type: 'restart' }
   | { type: 'open-file'; path: string; line?: number }
   | { type: 'worktrees' }
   | { type: 'worktree'; id: number; path: string; action: WorktreeAction; file?: string }
-  | { type: 'open-board'; page?: BoardPage; task?: string }

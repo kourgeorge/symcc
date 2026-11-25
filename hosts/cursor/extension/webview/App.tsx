@@ -2,7 +2,7 @@
 // what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
 // with the message box under it, and the running work beside it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
+import type { AgentChoice, BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
 import { LEAD_AGENT, addStep } from '../../steps'
 import { ask, onMessage, tell } from './bridge'
 import { Icon, IdleNote, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
@@ -14,13 +14,13 @@ type Page = BoardPage
 type Notice = { text: string; bad: boolean; at: number }
 export type Say = (text: string, bad?: boolean) => void
 export type Steps = Record<string, PanelStep[]>
-/** The lead chat's model and mode, the account's models, and the slash commands. */
-type Lead = { settings: LeadSettings; models: ModelInfo[]; slash: SlashItem[] }
+/** The lead chat's model and mode, the account's models, the slash commands, and whose agents run. */
+type Lead = { settings: LeadSettings; models: ModelInfo[]; slash: SlashItem[]; agents: { list: AgentChoice[]; current: string } }
 
 /** The words of the board's empty list (hooks/core/panel.ts ALL_CLEAR). */
 const ALL_CLEAR = ['All clear. Nothing running or waiting.', 'Tell the lead what you want next.'] as const
 
-/** What the extension sends, kept as it comes: the board, the lead's chat, the engine, every agent's steps. */
+/** What serve and the extension send, kept as it comes: the board, the lead's chat, serve's state, every agent's steps. */
 export function useSymcc(onGo?: (page: Page, task?: string) => void) {
   const [view, setView] = useState<PanelView | null>(null)
   const [chat, setChat] = useState<ChatItem[]>([])
@@ -28,7 +28,7 @@ export function useSymcc(onGo?: (page: Page, task?: string) => void) {
   const [engine, setEngine] = useState<EngineState>({ state: 'starting' })
   const [network, setNetwork] = useState<NetworkProblem | null>(null)
   const [steps, setSteps] = useState<Steps>({})
-  const [lead, setLead] = useState<Lead>({ settings: { mode: 'agent' }, models: [], slash: [] })
+  const [lead, setLead] = useState<Lead>({ settings: { mode: 'agent' }, models: [], slash: [], agents: { list: [], current: '' } })
   const [trees, setTrees] = useState<WorktreeList | null>(null)
   const go = useRef(onGo)
   go.current = onGo
@@ -44,6 +44,7 @@ export function useSymcc(onGo?: (page: Page, task?: string) => void) {
       else if (m.type === 'lead') setLead(l => ({ ...l, settings: m.settings }))
       else if (m.type === 'models') setLead(l => ({ ...l, models: m.models }))
       else if (m.type === 'slash') setLead(l => ({ ...l, slash: m.items }))
+      else if (m.type === 'agents') setLead(l => ({ ...l, agents: { list: m.list, current: m.current } }))
       else if (m.type === 'worktrees') setTrees({ list: m.list, atMs: m.atMs, ...(m.error ? { error: m.error } : {}) })
       else if (m.type === 'go') go.current?.(m.page, m.task)
     })
@@ -348,7 +349,7 @@ function Now({ view, chat, busy, steps, lead, ready, onSay, onTask, onMemory }: 
     <div className="now">
       <div className="center">
         <Needs needs={view.needs} tasks={view.tasks} onSay={onSay} onTask={onTask} />
-        <LeadChat chat={chat} news={view.news} lanes={view.lanes} busy={busy} lead={steps[LEAD_AGENT] ?? []} ready={ready} settings={lead.settings} models={lead.models} slash={lead.slash} onSay={onSay} onTask={onTask} />
+        <LeadChat chat={chat} news={view.news} lanes={view.lanes} busy={busy} lead={steps[LEAD_AGENT] ?? []} ready={ready} settings={lead.settings} models={lead.models} slash={lead.slash} agents={lead.agents} onSay={onSay} onTask={onTask} />
       </div>
       <Side view={view} steps={steps} onTask={onTask} onMemory={onMemory} />
     </div>

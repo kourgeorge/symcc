@@ -1,43 +1,17 @@
-// symcc in Cursor: one engine process per window (./engine.ts) for the first workspace folder, the board panel (a
-// webview tab, ../webview/), the sidebar in the activity bar (the same webview, narrow; its badge counts what needs
-// you) and a status bar item that says what needs you. Both views only draw what the engine sends; every press goes
-// back to the engine as the owner's own command.
+// symcc in VS Code and Cursor: a client of the symcc plugin. It runs the plugin's serve (./engine.ts) for the first
+// workspace folder and shows the plugin's board webview twice: as a panel (an editor tab) and in the sidebar. It passes
+// the webview's messages to serve and back without reading them, and does what only the editor can
+// (../../contract.ts EditorAction): files, diffs, terminals, windows, confirms, notices, the status bar and the badge.
 import * as vscode from 'vscode'
 import * as path from 'node:path'
 import * as fs from 'node:fs'
-import * as os from 'node:os'
 import { Engine } from './engine'
-import type { BoardPage, ChatItem, EngineState, FromWebview, LeadSettings, ModelInfo, NetworkProblem, PanelStep, PanelView, PanelWorktree, SlashItem, ToWebview, WorktreeAction } from '../../protocol'
-import { LEAD_AGENT, addStep, readSteps, sessionMarkdown, sessionPath, turnSteps } from '../../steps'
+import type { BoardPage, EditorAction, EngineState, ExtensionToWebview, Surface } from '../../contract'
 
-/** A lead error that means the engine could not reach its agents' servers. */
-const NETWORK_ERROR = /network request failed|fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|getaddrinfo|socket hang up|proxy/i
-
-/** How many chat lines are kept (per project, in the workspace state). */
-const CHAT_KEPT = 300
-const CHAT_KEY = 'symcc.chat'
-const LEAD_KEY = 'symcc.lead'
-const SESSION_SCHEME = 'symcc-session'
+/** Text serve shows read-only (a diff, an agent's session): closing it never asks to save. */
+const TEXT_SCHEME = 'symcc-text'
 /** A file as it was where a worktree is compared from (the left side of its diff). */
 const BASE_SCHEME = 'symcc-base'
-/** A lead answer keeps its turn's newest steps, each at most this long; only the newest answers keep them when saved. */
-const TURN_STEPS_KEPT = 120
-const STEP_TEXT_KEPT = 4000
-const ANSWERS_WITH_STEPS = 40
-
-/** The chat as it is saved: no pictures (only how many), the steps of the newest answers only. */
-function savedChat(chat: readonly ChatItem[]): ChatItem[] {
-  let withSteps = 0
-  return chat
-    .slice()
-    .reverse()
-    .map(c => {
-      const { images, steps, ...rest } = c
-      const keep = steps && withSteps++ < ANSWERS_WITH_STEPS
-      return { ...rest, ...(images?.length ? { pictures: images.length } : {}), ...(keep ? { steps } : {}) }
-    })
-    .reverse()
-}
 
 export function activate(ctx: vscode.ExtensionContext) {
   const folder = vscode.workspace.workspaceFolders?.[0]
@@ -47,326 +21,154 @@ export function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(out, status)
 
   const conf = () => vscode.workspace.getConfiguration('symcc')
-  const enginePath = () => conf().get<string>('enginePath') || path.join(ctx.extensionPath, '..', 'dist', 'engine.mjs')
-  // the engine is a separate Node process, so the editor's own proxy handling never reaches it
+  const servePath = () => conf().get<string>('enginePath') || path.join(ctx.extensionPath, '..', 'dist', 'engine.mjs')
+  // serve is a separate Node process, so the editor's own proxy handling never reaches it
   const http = () => vscode.workspace.getConfiguration('http')
   const proxy = () => conf().get<string>('proxy')?.trim() || http().get<string>('proxy')?.trim() || process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || ''
-  const proxyEnv = (): Record<string, string> => {
+  const serveEnv = (): Record<string, string> => {
     const p = proxy()
     out.appendLine(`proxy: ${p ? p.replace(/\/\/[^@/]*@/, '//***@') : 'none'}`)
     if (!p) return {}
     const no = (http().get<string[]>('noProxy') ?? []).join(',') || process.env.NO_PROXY || process.env.no_proxy || ''
     return { HTTPS_PROXY: p, https_proxy: p, HTTP_PROXY: p, http_proxy: p, ...(no ? { NO_PROXY: no, no_proxy: no } : {}) }
   }
-  /** Whose agents the engine runs: Cursor's, or GitHub Copilot's. */
-  const agents = () => (conf().get<string>('agents') === 'copilot' ? 'copilot' : 'cursor')
-  // each one keeps its own choice of the lead's model: a Cursor model is no Copilot one
-  const leadKey = () => (agents() === 'copilot' ? `${LEAD_KEY}.copilot` : LEAD_KEY)
-  const engineArgs = (): string[] => {
+  const serveArgs = (): string[] => {
+    const agents = conf().get<string>('agents')?.trim()
     const lead = conf().get<string>('leadModel')
     const worker = conf().get<string>('workerModel')
-    return [...(agents() === 'copilot' ? ['--agents', 'copilot'] : []), ...(lead ? ['--lead-model', lead] : []), ...(worker ? ['--worker-model', worker] : [])]
+    const state = ctx.storageUri?.fsPath
+    return [...(agents ? ['--agents', agents] : []), ...(lead ? ['--lead-model', lead] : []), ...(worker ? ['--worker-model', worker] : []), ...(state ? ['--state-dir', state] : [])]
   }
-  let network: NetworkProblem | null = null
-  const setNetwork = (n: NetworkProblem | null) => ((network = n), post({ type: 'network', problem: n }))
 
-  let view: PanelView | undefined
-  // each agent's newest steps (the lead's agent is "lead"); kept over engine restarts, the whole sessions are on disk
-  let steps: Record<string, PanelStep[]> = {}
-  let chat: ChatItem[] = ctx.workspaceState.get<ChatItem[]>(CHAT_KEY) ?? []
-  let busy = false
-  // when the lead's newest turn started, so its answer keeps only that turn's steps
-  let turnAtMs = 0
-  let lead: LeadSettings = ctx.workspaceState.get<LeadSettings>(leadKey()) ?? { mode: 'agent' }
-  let models: ModelInfo[] = []
-  let slash: SlashItem[] = []
   let panel: vscode.WebviewPanel | undefined
   let side: vscode.WebviewView | undefined
-  // where the board panel goes once its page is up (the sidebar opened it at a task)
-  let panelGo: ToWebview | undefined
-  const seenNeeds = new Set<string>()
-  let firstView = true
+  // where the board panel goes once its page is up (the sidebar or serve opened it at a page)
+  let panelGo: ExtensionToWebview | undefined
+  // the status bar item and badge serve asked for, shown while it runs
+  let served: Extract<EditorAction, { do: 'status' }> | undefined
+  let waiting: (() => void)[] = []
 
-  const post = (m: ToWebview) => {
-    for (const w of [panel?.webview, side?.webview]) void w?.postMessage(m)
-  }
-  const addChat = (who: ChatItem['who'], text: string, more: Partial<ChatItem> = {}) => {
-    const atMs = Date.now()
-    chat = [...chat, { key: `${atMs}-${chat.length}`, who, text, atMs, ...more }].slice(-CHAT_KEPT)
-    void ctx.workspaceState.update(CHAT_KEY, savedChat(chat))
-    post({ type: 'chat', items: chat, busy })
-  }
-  const leadTurn = (): Partial<ChatItem> => {
-    const turn = turnSteps(steps[LEAD_AGENT] ?? [], turnAtMs)
-      .slice(-TURN_STEPS_KEPT)
-      .map(x => (x.text.length > STEP_TEXT_KEPT ? { ...x, text: `…${x.text.slice(-STEP_TEXT_KEPT)}` } : x))
-    return { ...(turn.length ? { steps: turn } : {}), ...(lead.modelLabel ? { model: lead.modelLabel } : {}) }
-  }
-  /** Sends the owner's message to the lead; a /command that answered the owner itself adds its answer. */
-  const sendLead = async (text: string, images: { data: string; mimeType: string }[] = []) => {
-    addChat('owner', text, images.length ? { images: images.map(i => `data:${i.mimeType};base64,${i.data}`) } : {})
-    const a = await engine.request({ op: 'message', text, ...(images.length ? { images } : {}) })
-    if (typeof a.said === 'string') addChat('note', a.said)
-    return typeof a.said === 'string' ? a.said : ''
-  }
-  const setLead = (next: LeadSettings) => {
-    lead = next
-    void ctx.workspaceState.update(leadKey(), lead)
-    post({ type: 'lead', settings: lead })
-    if (engine.state.state === 'ready') void engine.request({ op: 'lead-set', model: lead.model ?? null, mode: lead.mode }).catch(err => out.appendLine(`couldn't set the lead's model: ${(err as Error).message}`))
-  }
-  /** What the engine knows of the lead chat once it is up: its model and mode, the account's models, the slash commands. */
-  const leadReady = () => {
-    void engine.request({ op: 'lead-set', model: lead.model ?? null, mode: lead.mode }).catch(() => undefined)
-    void engine.request({ op: 'models' }).then(
-      a => {
-        models = (a.models as ModelInfo[]) ?? []
-        post({ type: 'models', models })
-        // a model the account no longer has: the lead goes back to its default
-        if (lead.model && models.length && !models.some(m => m.id === lead.model!.id)) setLead({ mode: lead.mode })
-      },
-      err => out.appendLine(`couldn't list the models: ${(err as Error).message}`),
-    )
-    void engine.request({ op: 'slash' }).then(
-      a => ((slash = (a.slash as SlashItem[]) ?? []), post({ type: 'slash', items: slash })),
-      () => undefined,
-    )
+  const surfaces = (): [Surface, vscode.Webview | undefined][] => [
+    ['panel', panel?.webview],
+    ['side', side?.webview],
+  ]
+  const post = (m: unknown, surface?: Surface) => {
+    for (const [s, w] of surfaces()) if (!surface || surface === s) void w?.postMessage(m)
   }
 
   const drawStatus = (s: EngineState) => {
-    status.show()
     status.backgroundColor = undefined
     if (!folder) return void status.hide()
+    status.show()
     if (s.state === 'starting') return void ((status.text = '$(loading~spin) symcc'), (status.tooltip = 'symcc is starting'))
     if (s.state === 'failed') return void ((status.text = '$(error) symcc'), (status.tooltip = s.text ?? 'symcc stopped'), (status.backgroundColor = new vscode.ThemeColor('statusBarItem.errorBackground')))
-    if (s.state === 'stopped' || !view) return void ((status.text = 'symcc'), (status.tooltip = 'Open the symcc board'))
-    if (!view.on) return void ((status.text = 'symcc: off'), (status.tooltip = view.off ?? 'symcc is off in this project'))
-    const n = view.counts.needs
-    if (n) {
-      status.text = `$(bell-dot) symcc: ${n} need${n === 1 ? 's' : ''} you`
-      status.tooltip = new vscode.MarkdownString(view.needs.map(x => `**${x.id}** ${x.title}`).join('  \n'))
-      status.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
-      return
-    }
-    const r = view.counts.running
-    status.text = r ? `$(pulse) symcc: ${r} running` : 'symcc'
-    status.tooltip = r ? view.lanes.map(l => `${l.id} ${l.title}`).join('\n') : 'Nothing needs you. Open the board'
+    if (s.state === 'stopped' || !served) return void ((status.text = 'symcc'), (status.tooltip = 'Open the symcc board'))
+    status.text = served.text
+    status.tooltip = new vscode.MarkdownString(served.tooltip)
+    if (served.tone === 'warning') status.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground')
   }
+  const drawBadge = () => {
+    const n = engine.state.state === 'ready' ? (served?.needs ?? 0) : 0
+    if (side) side.badge = n ? { value: n, tooltip: `${n} thing${n === 1 ? ' needs' : 's need'} you` } : undefined
+  }
+  const boardInView = () => (panel?.visible && panel.active) || side?.visible
 
-  const notifyNew = (v: PanelView) => {
-    const fresh = v.needs.filter(x => !seenNeeds.has(x.id))
-    for (const x of v.needs) seenNeeds.add(x.id)
-    for (const id of [...seenNeeds]) if (!v.needs.some(x => x.id === id)) seenNeeds.delete(id)
-    // the needs there at the start were seen on the board's first draw; a board in view needs no notice
-    if (firstView || !fresh.length || !conf().get<boolean>('notify') || (panel?.visible && panel.active) || side?.visible) return
-    const first = fresh[0]!
-    const text = fresh.length === 1 ? `${first.id} needs you: ${first.title}` : `${fresh.length} things need you, first ${first.id}: ${first.title}`
-    void vscode.window.showInformationMessage(text, 'Open board').then(pick => pick && openPanel())
+  // read-only text from serve, by its tab's path
+  const texts = new Map<string, string>()
+  const textChanged = new vscode.EventEmitter<vscode.Uri>()
+
+  /** Does what serve asked of the editor. */
+  async function editor(a: EditorAction) {
+    if (a.do === 'open-file') {
+      const uri = vscode.Uri.file(a.path)
+      if (a.folder) return void (await vscode.commands.executeCommand('revealInExplorer', uri))
+      const at = a.line ? new vscode.Position(a.line - 1, 0) : undefined
+      return void (await vscode.window.showTextDocument(uri, { viewColumn: vscode.ViewColumn.Beside, preview: true, ...(at ? { selection: new vscode.Range(at, at) } : {}) }))
+    }
+    if (a.do === 'show-text') {
+      const uri = vscode.Uri.from({ scheme: TEXT_SCHEME, path: `/${a.name}` })
+      texts.set(uri.path, a.content)
+      textChanged.fire(uri)
+      let doc = await vscode.workspace.openTextDocument(uri)
+      if (doc.languageId !== a.language) doc = await vscode.languages.setTextDocumentLanguage(doc, a.language)
+      return void (await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true }))
+    }
+    if (a.do === 'diff') {
+      const base = vscode.Uri.from({ scheme: BASE_SCHEME, path: `/${a.file}`, query: JSON.stringify({ dir: a.dir }) })
+      if (a.gone) return void (await vscode.window.showTextDocument(base, { viewColumn: vscode.ViewColumn.Beside, preview: true }))
+      return void (await vscode.commands.executeCommand('vscode.diff', base, vscode.Uri.file(path.join(a.dir, a.file)), a.title, { viewColumn: vscode.ViewColumn.Beside, preview: true }))
+    }
+    if (a.do === 'terminal') return vscode.window.createTerminal({ name: a.name, cwd: a.cwd }).show()
+    if (a.do === 'open-folder') return void (await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(a.path), { forceNewWindow: true }))
+    if (a.do === 'reveal') return void (await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(a.path)))
+    if (a.do === 'copy') return vscode.env.clipboard.writeText(a.text)
+    if (a.do === 'toast') return void vscode.window.setStatusBarMessage(a.text, 6000)
+    if (a.do === 'status') {
+      served = a
+      drawStatus(engine.state)
+      return drawBadge()
+    }
+    if (a.do === 'open-board') return openBoard(a.page, a.task, a.quiet)
+    if (a.do === 'notify') {
+      if (a.board) {
+        // a board in view shows it already
+        if (!conf().get<boolean>('notify') || boardInView()) return
+        const pick = await vscode.window.showInformationMessage(a.text, 'Open board')
+        return pick && openBoard(a.board.page, a.board.task)
+      }
+      return void (a.level === 'warning' ? vscode.window.showWarningMessage(a.text) : vscode.window.showInformationMessage(a.text))
+    }
+    if (a.do === 'confirm') {
+      const pick = await vscode.window.showWarningMessage(a.text, { modal: true, ...(a.detail ? { detail: a.detail } : {}) }, a.button)
+      return engine.send({ op: 'confirmed', id: a.id, ok: pick === a.button })
+    }
+    if (a.do === 'setting') {
+      // a changed setting restarts serve (onDidChangeConfiguration below); the same one restarts it here
+      if (a.value === (conf().get<string>(a.key) ?? '').trim()) return void engine.restart()
+      return void (await conf().update(a.key, a.value, vscode.ConfigurationTarget.Global))
+    }
   }
 
   const engine = new Engine(
-    { root: folder?.uri.fsPath ?? '', engine: enginePath(), node: conf().get<string>('nodePath') || undefined, args: engineArgs, env: proxyEnv },
+    { root: folder?.uri.fsPath ?? '', serve: servePath, node: conf().get<string>('nodePath') || undefined, args: serveArgs, env: serveEnv },
     {
       state: s => {
+        if (s.state !== 'ready') served = undefined
         drawStatus(s)
-        post({ type: 'engine', engine: s })
-        if (s.state === 'ready') {
-          void engine.request({ op: 'view' }).then(a => onView(a.view as PanelView), () => undefined)
-          void engine.request({ op: 'steps' }).then(a => ((steps = { ...steps, ...(a.steps as Record<string, PanelStep[]>) }), post({ type: 'steps', all: steps })), () => undefined)
-          leadReady()
-        }
+        drawBadge()
+        post({ type: 'engine', engine: s } satisfies ExtensionToWebview)
+        if (s.state === 'ready') for (const w of waiting.splice(0)) w()
       },
-      view: v => onView(v),
-      lead: e => {
-        if (e.type === 'busy') {
-          if (e.busy && !busy) turnAtMs = Date.now()
-          return void ((busy = e.busy), post({ type: 'chat', items: chat, busy }))
-        }
-        // the owner's messages are in the chat from when they were sent; symcc's updates aren't shown
-        if (e.type === 'message') return
-        if (e.type === 'stopped') return addChat('note', 'You stopped the lead.', leadTurn())
-        if (e.type === 'summarized') return addChat('note', 'The lead summarized the chat so far to free its memory. The summary is in its session.')
-        if (e.type === 'error' && NETWORK_ERROR.test(e.text)) setNetwork({ text: e.text, proxy: proxy(), service: agents() === 'copilot' ? 'GitHub Copilot' : 'Cursor' })
-        if (e.type === 'answer' && network) setNetwork(null)
-        if (e.type === 'answer') return addChat('lead', e.text, leadTurn())
-        addChat('error', e.text, leadTurn())
-      },
-      toast: text => void vscode.window.setStatusBarMessage(text, 6000),
-      open: () => openPanel(true),
-      step: (agent, step) => ((steps = { ...steps, [agent]: addStep(steps[agent] ?? [], step) }), post({ type: 'step', agent, step })),
+      ready: r => out.appendLine(`symcc ${r.version} is up, speaking protocol ${r.protocol}`),
+      webview: (m, surface) => post(m, surface),
+      editor: a => void editor(a).catch(err => out.appendLine(`couldn't ${a.do}: ${(err as Error).message}`)),
       log: line => out.appendLine(line),
     },
   )
-  function onView(v: PanelView) {
-    view = v
-    notifyNew(v)
-    firstView = false
-    drawStatus(engine.state)
-    drawBadge()
-    post({ type: 'view', view: v })
-  }
-  const drawBadge = () => {
-    const n = view?.on ? view.counts.needs : 0
-    if (side) side.badge = n ? { value: n, tooltip: `${n} thing${n === 1 ? ' needs' : 's need'} you` } : undefined
-  }
+  /** Resolves once serve is up (starting it if it isn't). */
+  const up = () =>
+    new Promise<void>(resolve => {
+      if (engine.state.state === 'ready') return resolve()
+      waiting = [...waiting, resolve]
+      if (engine.state.state === 'stopped') engine.start()
+    })
 
-  /** Answers the request `m` of the webview `from` (its reply carries the engine's text, or the error). */
-  async function handle(m: FromWebview, from: vscode.Webview) {
-    const to = (x: ToWebview) => void from.postMessage(x)
-    if (m.type === 'ready') {
-      to({ type: 'engine', engine: engine.state })
-      to({ type: 'chat', items: chat, busy })
-      to({ type: 'network', problem: network })
-      to({ type: 'steps', all: steps })
-      to({ type: 'lead', settings: lead })
-      if (models.length) to({ type: 'models', models })
-      if (slash.length) to({ type: 'slash', items: slash })
-      if (view) to({ type: 'view', view })
-      if (panelGo && from === panel?.webview) {
-        to(panelGo)
-        panelGo = undefined
-      }
-      return
-    }
-    if (m.type === 'open-board') return openBoard(m.page ?? 'now', m.task)
-    if (m.type === 'lead-set') return setLead(m.settings)
-    if (m.type === 'lead-stop') return void engine.request({ op: 'lead-stop' }).catch(() => undefined)
-    if (m.type === 'session') return void openSession(m.agent, m.title)
+  /** A message from webview `surface`: the few that are the editor's are done here, the rest go to serve unread. */
+  function fromWebview(m: { type?: unknown; page?: BoardPage; task?: string }, surface: Surface, from: vscode.Webview) {
     if (m.type === 'restart') return void engine.restart()
     if (m.type === 'log') return out.show()
-    if (m.type === 'open-file') return void openFile(m.path, m.line).catch(err => vscode.window.showWarningMessage((err as Error).message))
-    if (m.type === 'worktrees') return void sendWorktrees()
-    const reply = (ok: boolean, text: string) => to({ type: 'reply', id: m.id, ok, text })
-    try {
-      if (m.type === 'proxy') {
-        const p = m.proxy.trim()
-        setNetwork(null)
-        // a changed setting restarts the engine (onDidChangeConfiguration below); the same one restarts it here
-        if (p === (conf().get<string>('proxy') ?? '').trim()) void engine.restart()
-        else await conf().update('proxy', p, vscode.ConfigurationTarget.Global)
-        return reply(true, p ? 'symcc restarts with the new proxy.' : 'symcc restarts without a proxy.')
-      }
-      if (m.type === 'send') return reply(true, await sendLead(m.text, m.images))
-      if (m.type === 'summarize') {
-        const said = await engine.text({ op: 'summarize' })
-        if (said !== 'summarizing') addChat('note', `${said.charAt(0).toUpperCase()}${said.slice(1)}${/[.!?]$/.test(said) ? '' : '.'}`)
-        return reply(true, '')
-      }
-      if (m.type === 'answer') return reply(true, await engine.text({ op: 'answer', need: m.need, text: m.text }))
-      if (m.type === 'mode') return reply(true, await engine.text({ op: 'mode', mode: m.mode }))
-      if (m.type === 'scout') return reply(true, await engine.text({ op: 'scout', name: m.name }))
-      if (m.type === 'forget') {
-        const note = view?.orgMem.notes.find(x => x.n === m.n)
-        if (!note) return reply(false, `Note ${m.n} is gone from organizational memory.`)
-        const pick = await vscode.window.showWarningMessage(note.ask, { modal: true, detail: note.text }, 'Delete')
-        return reply(true, pick === 'Delete' ? await engine.text({ op: 'forget', n: note.n, key: note.key }) : '')
-      }
-      if (m.type === 'command') return reply(true, await engine.text({ op: 'command', name: m.name, args: m.args ?? '' }))
-      if (m.type === 'worktree') return reply(true, await worktreeAction(m.path, m.action, m.file))
-      if (m.type === 'act') {
-        const act = (words?: string) => engine.text({ op: 'act', task: m.task, action: m.action, ...(words ? { text: words } : {}) })
-        const text = await act(m.text)
-        if (m.action === 'show-changes') {
-          const doc = await vscode.workspace.openTextDocument({ language: 'diff', content: text })
-          await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true })
-          return reply(true, '')
-        }
-        // Run now on a task that waits on unfinished tasks starts nothing and asks first: "T-5 waits on T-3 (running). Start anyway?"
-        const waits = m.action === 'run-now' ? /[^\n]*?Start anyway\?/.exec(text)?.[0] : undefined
-        if (waits) {
-          const yes = await vscode.window.showWarningMessage(waits, { modal: true }, 'Start anyway')
-          return reply(true, yes ? await act('anyway') : `Nothing started; ${m.task} waits its turn.`)
-        }
-        return reply(true, text)
-      }
-    } catch (err) {
-      reply(false, (err as Error).message)
+    if (m.type === 'open-board') return openBoard(m.page ?? 'now', m.task)
+    if (m.type === 'ready') {
+      void from.postMessage({ type: 'engine', engine: engine.state } satisfies ExtensionToWebview)
+      if (panelGo && surface === 'panel') void from.postMessage(panelGo)
+      if (surface === 'panel') panelGo = undefined
     }
+    engine.send({ op: 'webview', surface, message: m })
   }
 
-  /** Reads the project's worktrees and hands them to the page. */
-  async function sendWorktrees() {
-    const atMs = Date.now()
-    if (engine.state.state !== 'ready') return post({ type: 'worktrees', list: [], atMs, error: 'symcc is starting' })
-    await engine.request({ op: 'worktrees' }).then(
-      a => post({ type: 'worktrees', list: (a.worktrees as PanelWorktree[]) ?? [], atMs }),
-      err => post({ type: 'worktrees', list: [], atMs, error: (err as Error).message }),
-    )
-  }
-
-  /** Does `action` on worktree `path`; answers a word for the owner ('' when what happened shows by itself). */
-  async function worktreeAction(dir: string, action: WorktreeAction, file?: string): Promise<string> {
-    const uri = vscode.Uri.file(dir)
-    const name = path.basename(dir)
-    if (action === 'window') await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: true })
-    else if (action === 'terminal') vscode.window.createTerminal({ name: `${name} worktree`, cwd: dir }).show()
-    else if (action === 'reveal') await vscode.commands.executeCommand('revealFileInOS', uri)
-    else if (action === 'copy') {
-      await vscode.env.clipboard.writeText(dir)
-      return "Copied the folder's path."
-    }
-    if (action === 'changes') {
-      const doc = await vscode.workspace.openTextDocument({ language: 'diff', content: await engine.text({ op: 'worktree-diff', path: dir }) })
-      await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true })
-      return ''
-    }
-    if (action === 'file' && file) {
-      const here = vscode.Uri.file(path.join(dir, file))
-      const base = vscode.Uri.from({ scheme: BASE_SCHEME, path: `/${file}`, query: JSON.stringify({ dir }) })
-      const there = await fs.promises.stat(here.fsPath).then(() => true, () => false)
-      if (there) await vscode.commands.executeCommand('vscode.diff', base, here, `${file} (${name}: its base ↔ now)`, { viewColumn: vscode.ViewColumn.Beside, preview: true })
-      else await vscode.window.showTextDocument(base, { viewColumn: vscode.ViewColumn.Beside, preview: true })
-      return ''
-    }
-    if (action === 'remove') {
-      const w = ((await engine.request({ op: 'worktrees' })).worktrees as PanelWorktree[] | undefined)?.find(x => x.path === dir)
-      if (!w) return `${dir} is not one of this project's worktrees any more.`
-      const lose = w.dirty ? ` Its ${w.dirty} uncommitted file${w.dirty === 1 ? '' : 's'} will be lost.` : ''
-      const pick = await vscode.window.showWarningMessage(`Remove the folder ${w.where}?${lose}`, { modal: true, detail: w.branch ? `Its branch ${w.branch} stays, with its commits.` : undefined }, 'Remove')
-      if (pick !== 'Remove') return ''
-      const said = await engine.text({ op: 'worktree-remove', path: dir })
-      void sendWorktrees()
-      return said
-    }
-    return ''
-  }
-
-  /** Opens a file the lead named: in the project, else in the one worker's folder that has it; at its line. */
-  async function openFile(name: string, line?: number) {
-    const root = folder?.uri.fsPath ?? ''
-    const full = name.startsWith('~/') ? path.join(os.homedir(), name.slice(2)) : path.isAbsolute(name) ? name : path.join(root, name)
-    let found = (await fs.promises.stat(full).catch(() => null)) ? full : undefined
-    if (!found && !path.isAbsolute(name) && !name.startsWith('~/')) {
-      const dir = path.join(root, view?.dir ?? '.symcc', 'worktrees')
-      const ids = await fs.promises.readdir(dir).catch(() => [] as string[])
-      const there = (await Promise.all(ids.map(async id => ((await fs.promises.stat(path.join(dir, id, name)).catch(() => null)) ? path.join(dir, id, name) : null)))).filter((x): x is string => !!x)
-      if (there.length === 1) found = there[0]
-    }
-    if (!found) throw new Error(`There's no ${name} in this project.`)
-    const uri = vscode.Uri.file(found)
-    if ((await fs.promises.stat(found)).isDirectory()) {
-      await vscode.commands.executeCommand('revealInExplorer', uri)
-      return
-    }
-    const at = line ? new vscode.Position(line - 1, 0) : undefined
-    await vscode.window.showTextDocument(uri, { viewColumn: vscode.ViewColumn.Beside, preview: true, ...(at ? { selection: new vscode.Range(at, at) } : {}) })
-  }
-
-  /** Opens agent `agent`'s whole session as a page beside the board (what the engine saved, else what came here). */
-  async function openSession(agent: string, title: string) {
-    const file = path.join(folder?.uri.fsPath ?? '', sessionPath(view?.dir ?? '.symcc', agent))
-    const saved = await fs.promises.readFile(file, 'utf8').then(readSteps, () => [] as PanelStep[])
-    const uri = vscode.Uri.from({ scheme: SESSION_SCHEME, path: `/${agent}.md` })
-    sessions.set(uri.path, sessionMarkdown(title, saved.length ? saved : (steps[agent] ?? [])))
-    sessionChanged.fire(uri)
-    const doc = await vscode.workspace.openTextDocument(uri)
-    await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true })
-  }
-  // sessions open read-only, so closing one never asks to save it
-  const sessions = new Map<string, string>()
-  const sessionChanged = new vscode.EventEmitter<vscode.Uri>()
-  ctx.subscriptions.push(sessionChanged, vscode.workspace.registerTextDocumentContentProvider(SESSION_SCHEME, { onDidChange: sessionChanged.event, provideTextDocumentContent: uri => sessions.get(uri.path) ?? '' }))
   ctx.subscriptions.push(
+    textChanged,
+    vscode.workspace.registerTextDocumentContentProvider(TEXT_SCHEME, { onDidChange: textChanged.event, provideTextDocumentContent: uri => texts.get(uri.path) ?? '' }),
     vscode.workspace.registerTextDocumentContentProvider(BASE_SCHEME, {
       provideTextDocumentContent: async uri => {
         const { dir } = JSON.parse(uri.query) as { dir: string }
@@ -382,16 +184,18 @@ export function activate(ctx: vscode.ExtensionContext) {
     panel.iconPath = vscode.Uri.file(path.join(ctx.extensionPath, 'media', 'symcc.svg'))
     const webview = panel.webview
     webview.html = boardHtml(webview, ctx.extensionPath, 'panel')
-    webview.onDidReceiveMessage((m: FromWebview) => void handle(m, webview))
+    webview.onDidReceiveMessage(m => fromWebview(m as { type?: unknown }, 'panel', webview))
     panel.onDidDispose(() => (panel = undefined))
     if (engine.state.state === 'stopped') engine.start()
   }
   /** Opens the board panel at `page` (the board at task `task`); a panel still loading goes there once it's up. */
-  function openBoard(page: BoardPage, task?: string) {
-    const go: ToWebview = { type: 'go', page, ...(task ? { task } : {}) }
-    if (panel) void panel.webview.postMessage(go)
-    else panelGo = go
-    openPanel()
+  function openBoard(page?: BoardPage, task?: string, quiet = false) {
+    if (page) {
+      const go: ExtensionToWebview = { type: 'go', page, ...(task ? { task } : {}) }
+      if (panel) void panel.webview.postMessage(go)
+      else panelGo = go
+    }
+    openPanel(quiet)
   }
 
   ctx.subscriptions.push(
@@ -402,7 +206,7 @@ export function activate(ctx: vscode.ExtensionContext) {
           side = v
           v.webview.options = { enableScripts: true, localResourceRoots: [vscode.Uri.file(path.join(ctx.extensionPath, 'dist'))] }
           v.webview.html = boardHtml(v.webview, ctx.extensionPath, 'side')
-          v.webview.onDidReceiveMessage((m: FromWebview) => void handle(m, v.webview))
+          v.webview.onDidReceiveMessage(m => fromWebview(m as { type?: unknown }, 'side', v.webview))
           v.onDidDispose(() => side === v && (side = undefined))
           drawBadge()
           if (folder && engine.state.state === 'stopped') engine.start()
@@ -416,23 +220,22 @@ export function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('symcc.open', () => openPanel()),
     vscode.commands.registerCommand('symcc.message', async () => {
       const text = await vscode.window.showInputBox({ prompt: 'Message the symcc lead', placeHolder: 'What do you want done next?' })
-      if (text?.trim()) await sendLead(text).catch(err => vscode.window.showErrorMessage((err as Error).message))
+      if (!text?.trim()) return
+      if (engine.state.state === 'stopped') engine.start()
+      engine.send({ op: 'say', text })
     }),
     vscode.commands.registerCommand('symcc.init', async () => {
       openPanel()
-      const said = await engine.text({ op: 'command', name: 'symcc-init', args: '' }).catch(err => (err as Error).message)
+      await up()
+      const said = await engine.request({ op: 'command', name: 'symcc-init', args: '' }).then(
+        a => (typeof a.text === 'string' ? a.text : ''),
+        err => (err as Error).message,
+      )
       void vscode.window.showInformationMessage(said.split('\n')[0] ?? said)
     }),
     vscode.commands.registerCommand('symcc.restart', () => engine.restart()),
     vscode.commands.registerCommand('symcc.showLog', () => out.show()),
     vscode.workspace.onDidChangeConfiguration(e => {
-      if (e.affectsConfiguration('symcc.agents')) {
-        lead = ctx.workspaceState.get<LeadSettings>(leadKey()) ?? { mode: lead.mode }
-        models = []
-        post({ type: 'lead', settings: lead })
-        post({ type: 'models', models })
-        setNetwork(null)
-      }
       const restart = ['symcc.agents', 'symcc.leadModel', 'symcc.workerModel', 'symcc.proxy', 'http.proxy'].some(k => e.affectsConfiguration(k))
       if (restart && engine.state.state !== 'stopped') void engine.restart()
     }),
@@ -440,14 +243,14 @@ export function activate(ctx: vscode.ExtensionContext) {
   )
 
   drawStatus(engine.state)
-  // a project where symcc was set up starts its engine with the window; elsewhere it starts when the board opens
+  // a project where symcc was set up starts serve with the window; elsewhere it starts when the board opens
   if (folder && fs.existsSync(path.join(folder.uri.fsPath, '.symcc'))) engine.start()
 }
 
 export function deactivate() {}
 
 /** The webview's page: the built script and styles, codicons, and a content policy that allows nothing else. */
-function boardHtml(webview: vscode.Webview, root: string, surface: 'panel' | 'side'): string {
+function boardHtml(webview: vscode.Webview, root: string, surface: Surface): string {
   const uri = (...p: string[]) => webview.asWebviewUri(vscode.Uri.file(path.join(root, 'dist', ...p)))
   const nonce = Array.from({ length: 32 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'.charAt(Math.floor(Math.random() * 62))).join('')
   const csp = [`default-src 'none'`, `img-src ${webview.cspSource} data:`, `style-src ${webview.cspSource}`, `font-src ${webview.cspSource}`, `script-src 'nonce-${nonce}'`].join('; ')

@@ -1,24 +1,12 @@
-// symcc on Cursor as one long-running process per project: the engine with its agents and lead chat on the Cursor SDK
-// (./session.ts), or on GitHub Copilot's (--agents copilot, ./copilot.ts), for an editor extension to start and talk
-// to. It speaks JSON lines: requests on stdin, answers and events on stdout; debug lines go to stderr (with SYMCC_DEBUG set).
-//   node dist/engine.mjs --root <project> [--plugin-root <symcc>] [--agents cursor|copilot] [--worker-model <id>] [--lead-model <id>]
-// Requests: {"id":1,"op":"tool","name":"add","input":{...}}   {"id":2,"op":"command","name":"symcc-init","args":""}
-//           {"id":3,"op":"message","text":"..."}               {"id":4,"op":"stop"}
-//           the board panel's: {"op":"view"}  {"op":"act","task":"T-5","action":"approve","text":"..."}
-//           {"op":"answer","need":"T-5","text":"..."}  {"op":"mode","mode":"review"}  {"op":"scout","name":"..."}
-// Answers:  {"id":1,"ok":true,"text":"..."}  or  {"id":1,"ok":false,"error":"..."} (op view: "view" instead of "text")
-// Events:   {"event":"ready","version":"0.5.42","protocol":1}  {"event":"lead",...LeadEvent}  {"event":"toast","text":"..."}  {"event":"status","text":"..."}
-//           {"event":"view","view":PanelView}  {"event":"open"} (show the board panel)
-//           {"event":"step","agent":"cursor-1-...","step":PanelStep} (a step of an agent's turn; the lead's agent is "lead")
-//           and {"op":"steps"} answers {"steps":{agent: PanelStep[]}}, the newest steps of each agent
-// The lead chat's: {"op":"message","text":"...","images":[{"data":"<base64>","mimeType":"image/png"}]} answers
-//           {"said":"..."} when a /command answered the owner itself (nothing went to the lead), else {"said":null};
-//           {"op":"slash"} answers {"slash":SlashItem[]}; {"op":"models"} answers {"models":ModelInfo[]};
-//           {"op":"lead-set","model":{"id":...,"params":[...]}|null,"mode":"agent"|"plan"} answers {"lead":LeadChoice};
-//           {"op":"lead-stop"} ends the lead's running turn; {"op":"summarize"} condenses the lead's chat
-// The Worktrees page's: {"op":"worktrees"} answers {"worktrees":PanelWorktree[]}; {"op":"worktree-diff","path":"..."}
-//           its changes as diff text; {"op":"worktree-base","path":"...","file":"src/a.ts"} answers {"text","ref"}, the
-//           file where it is compared from; {"op":"worktree-remove","path":"..."} removes a finished task's folder
+// serve: symcc for an editor, one long-running process per project. The engine with its agents and lead chat on the
+// Cursor SDK (./session.ts), or on GitHub Copilot's (--agents copilot, ./copilot.ts), and the board's serve side
+// (./board.ts). It speaks JSON lines with the editor extension that starts it: what the extension may rely on is
+// ./contract.ts (the command line, the ready line, the webview messages it passes on unread, the editor actions).
+// Built to editor/serve.mjs by scripts/build-editor.sh.
+// For tests and debugging it also answers these (not part of the contract):
+//   {"id":1,"op":"tool","name":"add","input":{...}}  {"id":2,"op":"message","text":"..."}  {"id":3,"op":"view"}
+//   {"id":4,"op":"steps"}  {"id":5,"op":"act","task":"T-5","action":"approve"}  {"op":"answer"|"mode"|"scout"|"forget",...}
+//   {"op":"slash"|"models"|"worktrees"|"lead-set"|"lead-stop"|"summarize"|"worktree-diff"|"worktree-remove",...}
 // In a terminal (stdin is a TTY) it is a small chat instead: a line goes to the lead, "/tool <name> [json]" runs one of
 // the lead's tools, "/<command> [args]" a slash command (e.g. /symcc-init), and "/quit" ends.
 import { basename, dirname, resolve } from 'node:path'
@@ -28,9 +16,11 @@ import { openCursorSession, type CursorSession } from './session'
 import { cursorSdk } from './sdk'
 import { copilotSdk } from './copilot'
 import { copilotGuard } from './guard'
+import { MODES, PANEL_ACTIONS, openBoard } from './board'
 import type { LeadChoice, LeadEvent } from './lead'
 import type { Sdk, SdkImage, SdkModel } from './sdk'
-import { PROTOCOL, type PanelActionId, type PanelMode, type ReadyEvent } from './protocol'
+import { PROTOCOL, type EditorAction, type ReadyEvent, type ServeLine, type Surface } from './contract'
+import type { AgentChoice, FromWebview, PanelActionId, PanelMode, ToWebview } from './protocol'
 import { manifestVersion } from '../../hooks/host'
 import { nodeFs } from '../node/host'
 
@@ -52,17 +42,21 @@ export function parseOptions(argv: readonly string[]): Record<string, string> {
   return opts
 }
 
+/** Whose agents serve can run the lead and the workers on; the first when nothing says. */
+export const AGENT_CHOICES: readonly AgentChoice[] = [
+  { id: 'cursor', name: 'Cursor' },
+  { id: 'copilot', name: 'GitHub Copilot' },
+]
+
 /** Whose agents run the lead and the workers: Cursor's when nothing says. */
 export function sdkFor(agents: string | undefined): Sdk {
   if (agents === undefined || agents === 'cursor') return cursorSdk()
   if (agents === 'copilot') return copilotSdk({ guard: copilotGuard })
-  throw new Error(`--agents is cursor or copilot, not ${agents}`)
+  throw new Error(`--agents is one of ${AGENT_CHOICES.map(c => c.id).join(', ')}, not ${agents}`)
 }
 
-type Request = { id?: unknown; op?: unknown; name?: unknown; input?: unknown; args?: unknown; text?: unknown; task?: unknown; action?: unknown; need?: unknown; mode?: unknown; model?: unknown; images?: unknown; path?: unknown; file?: unknown; n?: unknown; key?: unknown }
+type Request = { id?: unknown; op?: unknown; name?: unknown; input?: unknown; args?: unknown; text?: unknown; task?: unknown; action?: unknown; need?: unknown; mode?: unknown; model?: unknown; images?: unknown; path?: unknown; file?: unknown; n?: unknown; key?: unknown; surface?: unknown; message?: unknown; ok?: unknown }
 
-const PANEL_ACTIONS: readonly PanelActionId[] = ['approve', 'reject', 'done', 'keep-note', 'ask-more', 'retry', 'run-now', 'drop', 'pause', 'resume', 'show-changes', 'to-todo', 'merge-now']
-const MODES: readonly PanelMode[] = ['paused', 'review', 'auto']
 const word = (v: unknown, what: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw new Error(`${what} is missing`)
   return v.trim()
@@ -141,27 +135,44 @@ function leadLine(e: LeadEvent): string | undefined {
 async function main() {
   const opts = parseOptions(process.argv.slice(2))
   const tty = process.stdin.isTTY === true
-  const out = (o: Record<string, unknown>) => void process.stdout.write(`${JSON.stringify(o)}\n`)
+  const out = (o: ServeLine | Record<string, unknown>) => void process.stdout.write(`${JSON.stringify(o)}\n`)
   const say = (line: string) => void process.stdout.write(`${line}\n`)
   const debug = process.env.SYMCC_DEBUG ? (line: string) => void process.stderr.write(`[symcc] ${line}\n`) : undefined
   const sdk = sdkFor(opts.agents)
+  const root = opts.root ?? process.cwd()
   const pluginRoot = opts['plugin-root'] ?? PLUGIN_ROOT
   const ready: ReadyEvent = { event: 'ready', version: await manifestVersion(nodeFs, pluginRoot), protocol: PROTOCOL }
-  const s = await openCursorSession({
-    root: opts.root ?? process.cwd(),
+  const env = process.env
+  let session: CursorSession | undefined
+  const board = openBoard({
+    session: () => {
+      if (!session) throw new Error('symcc is still starting')
+      return session
+    },
+    root,
+    agents: opts.agents ?? AGENT_CHOICES[0]!.id,
+    choices: AGENT_CHOICES,
+    proxy: env.HTTPS_PROXY || env.https_proxy || env.HTTP_PROXY || env.http_proxy || '',
+    ...(opts['state-dir'] ? { stateDir: opts['state-dir'] } : {}),
+    toWebview: (message: ToWebview, surface?: Surface) => out({ event: 'webview', message, ...(surface ? { surface } : {}) }),
+    editor: (action: EditorAction) => out({ event: 'editor', action }),
+    ...(debug ? { log: debug } : {}),
+  })
+  const s = (session = await openCursorSession({
+    root,
     sdk,
     pluginRoot,
     ...(opts['worker-model'] ? { workerModel: opts['worker-model'] } : {}),
     ...(opts['lead-model'] ? { leadModel: opts['lead-model'] } : {}),
     sessionId: `cursor-${process.pid}`,
-    onLead: e => (tty ? void (leadLine(e) && say(leadLine(e)!)) : out({ event: 'lead', ...e })),
-    onToast: text => (tty ? say(`* ${text}`) : out({ event: 'toast', text })),
-    onStatus: text => (tty ? text && say(`[status] ${text}`) : out({ event: 'status', text: text ?? null })),
-    onView: view => (tty ? undefined : out({ event: 'view', view })),
-    onOpen: () => (tty ? undefined : out({ event: 'open' })),
-    onStep: (agent, step) => (tty ? undefined : out({ event: 'step', agent, step })),
+    onLead: e => (tty ? void (leadLine(e) && say(leadLine(e)!)) : board.onLead(e)),
+    onToast: text => (tty ? say(`* ${text}`) : board.onToast(text)),
+    onStatus: text => (tty ? text && say(`[status] ${text}`) : undefined),
+    onView: view => (tty ? undefined : board.onView(view)),
+    onOpen: () => (tty ? undefined : board.onOpen()),
+    onStep: (agent, step) => (tty ? undefined : board.onStep(agent, step)),
     ...(debug ? { log: debug } : {}),
-  })
+  }))
   let stopping: Promise<void> | undefined
   const stop = (why?: string) =>
     void (stopping ??= s
@@ -175,6 +186,7 @@ async function main() {
   lines.on('close', () => stop('the editor closed symcc'))
   if (!tty) {
     out(ready)
+    void board.start().catch(err => debug?.(`the board didn't start: ${(err as Error).message}`))
     lines.on('line', line => {
       if (!line.trim()) return
       let r: Request
@@ -182,6 +194,15 @@ async function main() {
         r = JSON.parse(line) as Request
       } catch {
         return out({ ok: false, error: 'not JSON' })
+      }
+      if (r.op === 'webview') {
+        if ((r.surface !== 'panel' && r.surface !== 'side') || !r.message || typeof r.message !== 'object') return
+        return void board.fromWebview(r.message as FromWebview, r.surface).catch(err => debug?.(`a webview message failed: ${(err as Error).message}`))
+      }
+      if (r.op === 'confirmed') return typeof r.id === 'number' && board.confirmed(r.id, r.ok === true)
+      if (r.op === 'say') {
+        if (typeof r.text !== 'string' || !r.text.trim()) return
+        return void board.say(r.text).catch(err => out({ event: 'editor', action: { do: 'notify', level: 'warning', text: (err as Error).message } }))
       }
       if (r.op === 'view') return out({ id: r.id ?? null, ok: true, view: s.view() })
       if (r.op === 'steps') return out({ id: r.id ?? null, ok: true, steps: s.steps() })
