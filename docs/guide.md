@@ -1517,8 +1517,8 @@ unchanged.
   failed** (red `✗`); **Waiting for your files** (yellow). The Run now question and the role
   list have no box either. Only a text box you type in keeps its own frame.
   Then the sections, each under a plain bold heading: **Details**, the same labelled rows as the
-  terminal and OpenCode task pages (Steps, Added, Priority, Role, Type, From, Why, Files, Into,
-  After, …, Tries) as a label and value list that wraps (its labels share the 11 character column), each task it waits for a link that
+  terminal and OpenCode task pages (Steps, Added, Role, Type, From, Why, Files, Into,
+  After, …, Tries, Priority) as a label and value list that wraps (its labels share the 11 character column), each task it waits for a link that
   opens it; the **Branch** (the task's branch against main, as on the terminal, in the
   monospaced font); the **Answer** of an investigation; **What to do** (the details, drawn as
   Markdown); the **Changes** of a task in review; **History**, a timeline with the newest
