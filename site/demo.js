@@ -54,7 +54,6 @@
   }
   // the scouts' tokens on top of the tries, so Σ is everyone's total (the bar's 530.1M at the end)
   const OTHERS_TOKENS = 530.1e6 - END_TODAY.tokens
-  const WHO_CELL = { workers: '█', scouts: '▒' }
 
   // ---------- the state ----------
   function start() {
@@ -206,7 +205,7 @@
     // (T-809) line 2: the bar alone (16 cells in the board colors) with the scouts' share; line 3: the medians per merged task, first try,
     // tries and the checker's send-backs; line 4: the agent work time, then the tokens per hour over the whole day, 00 to 24, at the very end (hours to come are dim dots)
     const cells = Math.round((TODAY_MORE.scoutsPct / 100) * 16)
-    const bar = sp(WHO_CELL.workers.repeat(16 - cells), 'who-workers') + sp(WHO_CELL.scouts.repeat(cells), 'who-scouts')
+    const bar = sp('█'.repeat(16 - cells), 'who-workers') + sp('█'.repeat(cells), 'who-scouts')
     const shares = ' ' + sp(`workers and checkers ${100 - TODAY_MORE.scoutsPct}%`, 'who-workers') + sp(' · ', 'dim') + sp(`scouts ${TODAY_MORE.scoutsPct}%`, 'who-scouts') + sp(` (⌀ ${TODAY_MORE.scoutsTokens})`, 'dim')
     L.push(' ' + sp('⌀ ', 'dim') + bar + shares)
     L.push(' ' + sp('avg ', 'dim') + sp(`⌀ ${TODAY_MORE.perTask.replace(' · ', '/task · ')}`, 'text') + sp(`   first try ${TODAY_MORE.firstTry}% · avg ${TODAY_MORE.avgTries} tries/task   ⌕ ${d.back} sent back by the checker`, 'dim'))
