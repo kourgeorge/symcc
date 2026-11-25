@@ -1176,10 +1176,14 @@ async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string,
   const made: string[] = []
   const why = fromChecker ? stop() : undefined
   if (fromChecker && !why && !adoptedCheckers.has(t.id)) await cleanFolder(host, dir)
+  // T-1068: a checker that kept running over the reload is only waited for (no prep, no folder clean: its try's prep ran before);
+  // its verdict then goes on as a fresh checker's would, through the merge line's prep
+  const adoptedWas = fromChecker && !why && adoptedCheckers.has(t.id)
+  const waited = adoptedWas ? await afterChecker(host, t, b, dir, made, stop, true) : undefined
   const checker = fromChecker || (checkerOn(b) && !t.history.some(h => h.text === checkerLine(tryLabel(t), { ok: true })))
   const r: CheckResult = why
     ? taskWasResult(why)
-    : await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, release, limit, checker ? checkerFirst(host, t, b, dir, made, stop, true) : undefined).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    : await checkAndMerge(host, t, dir, b, 'finish', made, stop, false, release, limit, adoptedWas ? async () => waited : checker ? checkerFirst(host, t, b, dir, made, stop, true) : undefined).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
   // the checker's agent type isn't loaded yet (just after a reload): the task stays "doing" in its checker step, and the next check starts it again (restartCheckers)
   if (r.again) return
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, workerIdOf(t), gaveUp)
@@ -1253,7 +1257,7 @@ const checkerFirst = (host: Host, t: SymccTask, b: Board, dir: string, made: str
  */
 async function afterChecker(host: Host, t: SymccTask, b: Board, dir: string, made: string[], stop: () => string | undefined, restarted = false): Promise<BeforeLine> {
   // the try's commits are saved now, before the checker runs: a reload meanwhile loses `made`, and the checker step started again (checkerStepAgain) only knows the board
-  await recordCommits(host, t.id, made)
+  if (!adoptedCheckers.has(t.id)) await recordCommits(host, t.id, made)
   // `restarted` (a checker started again after a reload): a start that fails only because the agent type isn't
   // loaded yet is tried again at the next check, up to MAX_NOT_READY starts; after that it goes to review as below
   const tryLater = () => {

@@ -985,6 +985,23 @@ test('T-1068: a checker still running after a reload is adopted, not stopped; it
   expect(w.spawns.length).toBe(1)
 })
 
+test('T-1068: while an adopted checker works, a look for orphans leaves it, and no folder commit runs before its verdict', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  const before = w.calls.length
+  await check(w.$)
+  await until(() => checkerRuns.has('chk1'))
+  await stopOrphans(w.$)
+  await check(w.$)
+  for (let i = 0; i < 100; i++) await turn()
+  expect(w.sends).toEqual([])
+  expect(find(await load(w.$), 'T-1')!.live?.phase).toBe('checker')
+  expect(w.calls.slice(before).filter(c => /^git (add|commit)\b/.test(c))).toEqual([])
+  checkerFinished('chk1', 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  expect(w.spawns.length).toBe(1)
+})
+
 test('T-1068: an adopted checker that finds problems: its verdict is used (the task goes back to its worker)', async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')

@@ -40,44 +40,44 @@ export const checkerName = (name: string, id: string) => agentSafeName(`${name}-
  * reload); when it says yes, nothing is written and the outcome is `again` (the caller tries again at the next check).
  */
 export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, stop: () => string | undefined = () => undefined, tryLater?: () => boolean): Promise<CheckerOutcome> {
-  await markStep($, t, 'checker', () => undefined)
-  const into = intoOf(t)
-  const roles = await loadRoles($).catch(() => S.roles)
-  const role = findRole(roles, CHECKER_ROLE)
-  const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
-  const n = await git($, ['diff', '--name-only', '--no-renames', '-z', `refs/heads/${into}...HEAD`], dir).catch(() => null)
-  const changed = n && n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : []
-  // T-551: the project's tests run once, in the merge line, after the checker: it is told not to run them
-  const tests = checkerTestsText(S.N.name, b.test_commands)
-  // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, kind, ...); its {{test_command}} is the checker's own tests line
-  const facts = { ...changeValues(t, b, dir), test_command: tests }
-  const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, t), kind_name: t.kind ?? 'change', diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) }, t)
-  const early = stop()
-  if (early) {
-    const why = `not started: the task was ${early}`
-    await record($, t, null, why)
-    return { verdict: null, why }
-  }
-  // where the task's branch is now (the committed work): put back after the checker if it moved it
-  const saved = await gitPlace($, dir, taskBranch(t))
-  let agentId: string
-  // T-1068: a checker that kept running over a plugin reload is waited for again instead of started again
+  // T-1068: a checker that kept running over a plugin reload is only waited for: its prep and prompt were done before the reload
   const adopted = adoptedCheckers.get(t.id)
   adoptedCheckers.delete(t.id)
   const held = adopted ? checkerRuns.get(adopted.id)?.held : undefined
-  try {
-    if (adopted) agentId = adopted.id
-    else {
+  let agentId = adopted?.id ?? ''
+  let saved: Awaited<ReturnType<typeof gitPlace>> = null
+  if (!adopted) {
+    await markStep($, t, 'checker', () => undefined)
+    const into = intoOf(t)
+    const roles = await loadRoles($).catch(() => S.roles)
+    const role = findRole(roles, CHECKER_ROLE)
+    const d = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', `refs/heads/${into}...HEAD`], dir).catch(() => null)
+    const n = await git($, ['diff', '--name-only', '--no-renames', '-z', `refs/heads/${into}...HEAD`], dir).catch(() => null)
+    const changed = n && n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : []
+    // T-551: the project's tests run once, in the merge line, after the checker: it is told not to run them
+    const tests = checkerTestsText(S.N.name, b.test_commands)
+    // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, kind, ...); its {{test_command}} is the checker's own tests line
+    const facts = { ...changeValues(t, b, dir), test_command: tests }
+    const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, t), kind_name: t.kind ?? 'change', diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) }, t)
+    const early = stop()
+    if (early) {
+      const why = `not started: the task was ${early}`
+      await record($, t, null, why)
+      return { verdict: null, why }
+    }
+    // where the task's branch is now (the committed work): put back after the checker if it moved it
+    saved = await gitPlace($, dir, taskBranch(t))
+    try {
       // queued: it starts at the next turn's start or end, where Claude Code keeps symcc's hooks (see starts.ts)
       const spawned = await startAgent($, { kind: 'checker', prompt, name: checkerName(S.N.name, t.id), description: `${S.N.name} checker for ${t.id}`, cwd: dir, ...(role?.model ? { model: role.model } : {}) })
       if (!spawned.agentId) throw new Error('the checker did not start')
       agentId = spawned.agentId
+    } catch (err) {
+      const why = `the checker couldn't start: ${cutLine((err as Error)?.message ?? String(err), 200)}`
+      if (notReadyYet(err) && tryLater?.()) return { verdict: null, why, again: true }
+      await record($, t, null, why)
+      return { verdict: null, why }
     }
-  } catch (err) {
-    const why = `the checker couldn't start: ${cutLine((err as Error)?.message ?? String(err), 200)}`
-    if (notReadyYet(err) && tryLater?.()) return { verdict: null, why, again: true }
-    await record($, t, null, why)
-    return { verdict: null, why }
   }
   // checkerRuns is set at once (in the promise below, before any await), and the board then names the checker too, so
   // the guards of another session's copy of the plugin know it (T-471); it is taken off when the checker ends
