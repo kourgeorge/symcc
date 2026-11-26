@@ -248,8 +248,12 @@ export const isCheckerAsk = (q: string | null | undefined): boolean => /^T-\d+ w
 /** The owner's answer to that question: which choice it names (its words at the start, any case), or undefined. */
 export function parseCheckerAnswer(answer: string): 'merge' | 'fix' | 'drop' | undefined {
   const a = String(answer ?? '').trim().toLowerCase()
-  if (a.startsWith('merge')) return 'merge'
-  if (a.startsWith('keep') || a.startsWith('fix')) return 'fix'
-  if (a.startsWith('drop')) return 'drop'
-  return undefined
+  const words = a.match(/[a-z]+/g) ?? []
+  const picks = new Set<'merge' | 'fix' | 'drop'>()
+  for (const w of words) {
+    if (w === 'merge' || w === 'merged') picks.add('merge')
+    else if (w === 'keep' || w === 'fix') picks.add('fix')
+    else if (w === 'drop' || w === 'dropped') picks.add('drop')
+  }
+  return picks.size === 1 ? [...picks][0] : undefined
 }
