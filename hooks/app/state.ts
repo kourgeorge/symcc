@@ -2,7 +2,7 @@
 // other modules change. They all use these (S, the maps and sets) directly, never a copy, so a change made in one
 // module is seen by all.
 import type { SymccView, SymccScout, SymccTokens } from '../../types'
-import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type OwnerQuestion, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, useAssistantWord, type OffHere } from '../board'
+import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type OwnerQuestion, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, type OffHere } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { DriverFacts } from '../core/driver-notice'
 import type { Players } from './voice'
@@ -217,7 +217,6 @@ export function useName(host: Pick<Host, 'plugin' | 'words'>) {
   if (S.named) return
   S.named = true
   S.W = wordsOf(host.words)
-  useAssistantWord(S.W.assistant)
   const name = cleanName(host.plugin.name)
   if (name === S.N.name) return
   S.N = namesFor(name)

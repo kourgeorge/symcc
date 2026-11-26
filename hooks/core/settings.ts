@@ -293,7 +293,6 @@ export const testMinutesRefusal = (v: unknown): string =>
 export const MAX_TEST_COMMANDS = 5
 
 /** Kept so hosts can still say who answers in the chat; the settings words no longer use it (they come from setting-notes). */
-export function useAssistantWord(_word: string) {}
 
 export const SETTINGS: SettingInfo[] = [
   { name: 'test_commands', label: 'Test commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines' },
