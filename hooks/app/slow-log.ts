@@ -22,7 +22,8 @@ let queue: Promise<void> = Promise.resolve()
 
 /** Adds one line to the file (never throws, never waits for the caller). */
 function addLine(host: Host, line: string): Promise<void> {
-  if (!S.root) return Promise.resolve()
+  // T-1119: no board here (fresh or guard only): write nothing, so no stray .symcc/ folder appears.
+  if (!S.root || S.fresh || S.guardOnly) return Promise.resolve()
   const file = `${S.root}/${S.N.dir}/${SLOW_LOG_FILE}`
   queue = queue.then(async () => {
     const old = await host.fs.read(file).catch(() => '')
