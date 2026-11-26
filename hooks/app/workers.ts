@@ -1044,7 +1044,7 @@ async function finishTryBody(host: Host, agentId: string, w: Pick<Worker, 'task'
     tellLead(host, `${t.id} "${t.title}": ${why}, so nothing was checked or merged and the task failed.${limited ? ` This is a usage or provider limit: a retry will likely fail the same way until the owner fixes the provider (or switches models), so tell the owner instead of retrying.` : ''} Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`)
   } else if (end.background?.length && !answer.trim()) {
     // The host saw a background command of it still running when its turn ended with no report: its work isn't done.
-    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: ENDED_EARLY_NOTE, history: withHistory(cur.history, now(), resultEntry(t, 'failed', cutLine(summary, 300), `${ENDED_EARLY_NOTE}; nothing was checked or merged`, { reason: 'other' })), ...endedBy(cur, now(), 'stopped', ENDED_EARLY_NOTE) }))) return false
+    if (await writeIfSame(host, t, cur => ({ status: 'failed', note: ENDED_EARLY_NOTE, history: withHistory(cur.history, now(), resultEntry(t, 'failed', cutLine(summary, 300), `${ENDED_EARLY_NOTE}; nothing was checked or merged`, { reason: 'other', agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), 'stopped', ENDED_EARLY_NOTE) }))) return false
     tellLead(host, `${t.id} "${t.title}": ${ENDED_EARLY_NOTE} (something it started was still running, but ending its turn ends its work), so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch; ${S.N.name} retry ${t.id} starts a fresh try that continues from there.`)
   } else if (isInvestigation(t)) {
     if (gaveUp()) return false
@@ -1082,7 +1082,7 @@ async function finishTail(host: Host, t: SymccTask, b: Board, r: CheckResult, ma
   await recordCommits(host, t.id, made, r.merged)
   // T-440: the branch it merges into was deleted during the tests, the merge-line wait or the checker: it waits with the "branch is gone" question, its work kept, no failed try
   if (r.gone && (await waitIfBranchGone(host, b, t, 'merge'))) return
-  if (r.blocked) await holdForFiles(host, t, b, r, resultEntry(t, 'try-result', cutLine(summary, 300), r.detail), worktree, agentId)
+  if (r.blocked) await holdForFiles(host, t, b, r, resultEntry(t, 'try-result', cutLine(summary, 300), r.detail, { agent: workerName(S.N.name, t.id) }), worktree, agentId)
   else
     await settle(host, t, b, r, summary, worktree, agentId).catch(async (e: unknown) => {
       // Merged, but the outcome could not be written: the work is on its branch, so it still ends done.
@@ -1339,7 +1339,7 @@ async function answered(host: Host, t: SymccTask, answer: string, summary: strin
   const late = limit !== undefined
   // An errand ends done on its own (nothing for the owner to read first): same end as the owner's Done on an investigation.
   const errand = isErrand(t)
-  if (await writeIfSame(host, t, cur => ({ status: 'review', note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: undefined, test_output: undefined, time_ask: undefined, wrap_up: undefined, history: withHistory(cur.history, now(), tryEntry(t, 'answered', `answered${late ? ` (time ran out after ${limit} min)` : ''}: ${cutLine(summary, 300)}`)), ...endedBy(cur, now(), late ? 'timed out' : 'finished', late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: '', answered: true })) }))) return
+  if (await writeIfSame(host, t, cur => ({ status: 'review', note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: undefined, test_output: undefined, time_ask: undefined, wrap_up: undefined, history: withHistory(cur.history, now(), tryEntry(t, 'answered', `answered${late ? ` (time ran out after ${limit} min)` : ''}: ${cutLine(summary, 300)}`, { agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), late ? 'timed out' : 'finished', late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: '', answered: true })) }))) return
   if (errand) {
     await endInvestigation(host, t, false, agentId)
     tellLead(host, `${t.id} "${t.title}" (errand) is done${late ? ` (its time of ${limit} minutes ran out, so this is what it had)` : ''}; nothing was merged. Its report is on the task (${S.N.name} board task ${t.id}). Tell the owner what it did.`)

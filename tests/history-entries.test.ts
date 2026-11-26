@@ -3,7 +3,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { addTask, afterChanges, emptyBoard, mergedHow, patchTask, promoteTask, readArchive, archiveText, readBoard, rejectTask, stashTask, statsReport, find, type Board } from '../hooks/board'
-import { tryEntry, type HistoryAdd, type HistoryKind, HISTORY_KINDS, historyEntry, historyLineText, historyTime, notUsedEntry, resultEntry, stoppedEntry, withHistory, workerHandedBackEntry, workerStartedEntry } from '../hooks/core/history'
+import { changeLines, tryEntry, type HistoryAdd, type HistoryKind, HISTORY_KINDS, historyEntry, historyLineText, historyTime, notUsedEntry, resultEntry, stoppedEntry, withHistory, workerHandedBackEntry, workerStartedEntry } from '../hooks/core/history'
 import { taskWasResult } from '../hooks/core/review'
 import { oldDataRows, guessHistoryKind, migrateHistory, oldHistoryFacts, oldHistoryEntry, upgradeArchiveTask } from '../hooks/core/old-data'
 import { readOld, stillOld } from './old-data-fixture'
@@ -192,4 +192,14 @@ test('T-1079: merge lines name who started the merge, and the checker line shows
   const rep = (s: string) => firstProblemOf(s)
   expect(rep('I checked by importing x from /tmp.\n\nProblems:\n\n- a.ts:3 — real bug')).toBe('a.ts:3 — real bug')
   expect(rep('I checked x.\n\n## Problems\n- a.ts:3 — real bug')).toBe('a.ts:3 — real bug')
+})
+
+test('T-1079: the lead\'s change and question lines say "lead:", and every worker hand-back names its worker', () => {
+  const t = { role: 'coder', attempts: 2, files: ['a.ts'], after: [] as string[], merge_into: 'main', history: [] }
+  const lead = (l: HistoryAdd) => (l[0] === 'answer' ? l : [l[0], l[1], { ...l[2], by: 'lead' as const }] as HistoryAdd)
+  const lines = changeLines(t, { files: ['a.ts', 'b.ts'], after: ['T-9'], merge_into: 'dev' }, true, undefined, 'please do Y').map(lead)
+  expect(lines.length > 3).toBe(true)
+  for (const [k, x, f] of lines) expect(historyLineText(historyEntry(k, x, T, f)).includes('lead:')).toBe(true)
+  const [k, x, f] = resultEntry({ role: 'coder', attempts: 2 }, 'failed', 'I did it', 'worker ended early', { reason: 'other', agent: 'symcc-T-1' })
+  expect(historyLineText(historyEntry(k, x, T, f)).includes('worker symcc-T-1:')).toBe(true)
 })

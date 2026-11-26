@@ -31,7 +31,10 @@ const TOPIC_RULES = 'reuse an existing topic when it fits (a new one only when n
 // ---------------- the lead's tools ----------------
 
 /** T-1024: an add with the title and details of a task added within this long answers that task instead of adding another. */
-const sameJson = (x: unknown, y: unknown): boolean => JSON.stringify(x) === JSON.stringify(y)
+/** T-1079: a history line the lead's change or question wrote is the lead's ("lead: ..."); the owner's answer stays the owner's. */
+const leadLine = (l: HistoryAdd): HistoryAdd => (l[0] === 'answer' ? l : [l[0], l[1], { ...l[2], by: 'lead' }])
+const leadLines = (ls: HistoryAdd[]): HistoryAdd[] => ls.map(leadLine)
+const sameJson =(x: unknown, y: unknown): boolean => JSON.stringify(x) === JSON.stringify(y)
 const ADD_AGAIN_MS = 5 * 60_000
 
 /** The latest saved report of task `t` (see taskReports): its file and text; text null when the file can't be read. Null when there is none. */
@@ -804,7 +807,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         const p = fields()
         // No restart line, but a changed after-list still gets its "waits on changed" line (the health check counts them).
         await change($, x => {
-          const lines = changeLines(t, p, false)
+          const lines = leadLines(changeLines(t, p, false))
           return patchTask(x, t.id, { ...p, ...(lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {}) }, now(), S.N.dir)
         })
         return `${t.id} updated (its worker keeps running; this counts from its next try)`
@@ -823,7 +826,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ''}: ${answer}`
       await change($, x => {
         const cur = find(x, t.id) ?? t
-        const lines = changeLines(t, patch, wasDoing && !fresh, answer, note)
+        const lines = leadLines(changeLines(t, patch, wasDoing && !fresh, answer, note))
         const end = fresh ? { attempts: Math.max(0, cur.attempts - 1), runs: withoutOpenRun(cur.runs) } : wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {}
         return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: withHistory(cur.history, now(), ...lines) } : {}) }, now(), S.N.dir)
       })
@@ -859,7 +862,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       const asked = t.status === 'doing' && !checkingNow(t.id)
       // T-732: a to-do task asked about gets a line too, so the stats count the wait as waiting for the owner
-      const line: HistoryAdd | null = asked ? stoppedEntry(t, 'the lead asked the owner a question') : t.status === 'todo' ? ['asked', 'the lead asked the owner a question'] : null
+      const line: HistoryAdd | null = asked ? leadLine(stoppedEntry(t, 'the lead asked the owner a question')) : t.status === 'todo' ? ['asked', 'the lead asked the owner a question', { by: 'lead' }] : null
       await change($, x => patchTask(x, t.id, { status: 'waiting', ask: makeAsk('lead', (str(a.question) ?? '').slice(0, 1000), now()), note: 'waiting for you', ...(failedOnClash(t) ? { merge_main: true } : {}), ...(line ? { history: withHistory((find(x, t.id) ?? t).history, now(), line) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
       await haltChecker($, t.id, 'the task was sent to the owner')
       return `${t.id} now waits for the owner`
