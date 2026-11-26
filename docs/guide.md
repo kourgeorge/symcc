@@ -2742,6 +2742,13 @@ the same mode):
 - **Questions are numbered text.** The lead never opens a pop-up there (you can't see it): it asks
   in one sentence, numbers the choices and says "reply with the number or your own words".
   The question is still on the board too.
+- **Short views.** The tasks list, the status, the board text and one task's page use one short
+  shape there: plain lines (no columns, rules or bars), one task per line like
+  `T-5 running: test, try 2, 12m: title`, "Needs you" first, the backlog only as a count, and at
+  most 3,500 characters (a "+N more" line says what was left out).
+- **Plain words work.** Slash commands may not reach symcc from a chat app, so the lead has the
+  same views as a tool: ask "status", "tasks", "what's running" or "show T-5" and it posts the same
+  text as `/symcc-status`, `/symcc-tasks` or `/symcc-task T-5`.
 - **Back at the terminal.** When you next type at the terminal, chat mode goes off.
 
 ---

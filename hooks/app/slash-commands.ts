@@ -5,7 +5,7 @@ import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { findArchived } from './archive'
 import { deleteOrgMem, orgMemNow } from './org-mem'
 import { setupGit, recheckGit } from './git'
-import { publish, statusView, driveHere, disableHere, enableHere } from './lead'
+import { publish, driveHere, disableHere, enableHere } from './lead'
 import { changedFiles, changesText, DIFF_GONE, mergedChanges, mergedDiff } from './review'
 import { changeRole } from './roles'
 import { changeKind } from './kinds'
@@ -14,10 +14,9 @@ import { S, workers, scoutState } from './state'
 import { load, findRoot, startingText } from './store'
 import { noteForLead, tellLead, brief } from './tell'
 import { playable } from './voice'
-import { runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
+import { chatTaskText } from '../core/chat-text'
+import { runTool, viewText, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
-import { tasksListText } from '../core/task-list'
-import { liveStatusText } from '../core/live-text'
 import { setSymcc, setBoardMode } from './board-mode'
 import { doctor } from './doctor'
 import { guardOnlyText, refreshFresh, initProject } from './session-start'
@@ -150,17 +149,17 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       return say(manual(cmd.topic, host.features))
     case 'tasks':
       // T-901: every client prints the open tasks as a short list in the chat; no panel opens
-      return say(tasksListText(b, Date.now(), S.N.name))
+      return say(await viewText(host, b, 'tasks'))
     case 'status':
       // T-902: the Live tab's picture as text in the chat, in every client; no panel opens
-      return say(liveStatusText(await statusView(host, b), (await orgMemNow(host)).notes, Date.now(), S.N.name))
+      return say(await viewText(host, b, 'status'))
     case 'board':
       if (!host.features.panel) return say(noPanelText())
       await openPane(host, { tab: 'live' })
       return say(boardOpened())
     case 'open':
       // a host with no panel: the text board, as the board tool answers it (or why the board can't be read)
-      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving }, S.version) : `${loaded.broken} Then try again.`)
+      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving, chat: !!S.chat }, S.version) : `${loaded.broken} Then try again.`)
       await openPane(host, { tab: 'live' })
       return say(boardOpened())
     case 'scouts': {
@@ -251,9 +250,11 @@ export async function runCommand(host: Host, command: string, args: string): Pro
         // not on the board: it may have been moved to archive.json (read-only, shown as text)
         const old = await findArchived(host, cmd.id)
         if (!old) return say(`${cmd.id} is not on the board.`)
+        if (S.chat) return say(`${old.id} is archived (read-only).\n${chatTaskText(old, undefined, Date.now())}`)
         return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).\n${taskText(old, false, b.tasks, undefined, b.archived_done)}`)
       }
       await openPane(host, { tab: 'tasks', task: t.id })
+      if (S.chat) return say(chatTaskText(t, await latestReport(host, t), Date.now()))
       return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport(host, t), b.archived_done))
     }
     case 'task-do': {
