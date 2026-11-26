@@ -4,21 +4,42 @@
 // every commit of a try is the backstop for files, T-1053).
 import { folderList, insideAny, joinLines, resolvePath, type Folders } from './path-guard'
 
-/** git commands that write a commit, a ref, the index, the config, the stash, the files, or a repository. Scouts and checkers may run none. */
-const GIT_WRITES = new Set([
-  'commit', 'merge', 'init', 'clone', 'push', 'pull', 'fetch', 'reset', 'checkout', 'switch', 'restore', 'branch',
-  'tag', 'stash', 'rebase', 'cherry-pick', 'revert', 'am', 'apply', 'add', 'rm', 'mv', 'clean', 'update-ref',
-  'symbolic-ref', 'update-index', 'read-tree', 'write-tree', 'commit-tree', 'hash-object', 'mktag', 'mktree',
-  'fast-import', 'worktree', 'config', 'remote', 'submodule', 'notes', 'replace', 'reflog', 'gc', 'prune', 'repack',
-  'pack-refs', 'maintenance', 'filter-branch', 'bisect', 'sparse-checkout', 'merge-file', 'merge-tree', 'lfs',
-])
+/** Every git command (`git --list-cmds=main` of git 2.55, and lfs), so none is missed (`send-pack` is a push by another name). */
+const GIT_ALL = `add am annotate apply archimport archive backfill bisect blame branch bugreport bundle cat-file check-attr
+check-ignore check-mailmap check-ref-format checkout checkout--worker checkout-index cherry cherry-pick clean
+clone column commit commit-graph commit-tree config count-objects credential credential-cache
+credential-cache--daemon credential-netrc credential-osxkeychain credential-store cvsexportcommit cvsimport
+cvsserver daemon describe diagnose diff diff-files diff-index diff-pairs diff-tree difftool difftool--helper
+fast-export fast-import fetch fetch-pack filter-branch fmt-merge-msg for-each-ref for-each-repo format-patch
+format-rev fsck fsck-objects fsmonitor--daemon gc get-tar-commit-id grep hash-object help history hook
+http-backend http-fetch http-push imap-send index-pack init init-db instaweb interpret-trailers jump
+last-modified log ls-files ls-remote ls-tree mailinfo mailsplit maintenance merge merge-base merge-file
+merge-index merge-octopus merge-one-file merge-ours merge-recursive merge-recursive-ours
+merge-recursive-theirs merge-resolve merge-subtree merge-tree mergetool mktag mktree multi-pack-index mv
+name-rev notes p4 pack-objects pack-redundant pack-refs patch-id pickaxe prune prune-packed pull push
+quiltimport range-diff read-tree rebase receive-pack reflog refs remote remote-ext remote-fd remote-ftp
+remote-ftps remote-http remote-https repack replace replay repo request-pull rerere reset restore rev-list
+rev-parse revert rm send-email send-pack sh-i18n--envsubst shell shortlog show show-branch show-index
+show-ref sparse-checkout stage stash status stripspace submodule submodule--helper subtree switch
+symbolic-ref tag unpack-file unpack-objects update-index update-ref update-server-info upload-archive
+upload-archive--writer upload-pack url-parse var verify-commit verify-pack verify-tag version web--browse
+whatchanged worktree write-tree lfs`.split(/\s+/)
+
+/** The git commands that only read (and write no file, run no program, reach no other repository). */
+const GIT_READS = new Set(`annotate blame cat-file check-attr check-ignore check-mailmap check-ref-format cherry column
+count-objects describe diff diff-files diff-index diff-pairs diff-tree fmt-merge-msg for-each-ref get-tar-commit-id grep
+help last-modified log ls-files ls-tree merge-base name-rev patch-id range-diff rev-list rev-parse shortlog show
+show-branch show-index show-ref status stripspace var verify-commit verify-pack verify-tag version whatchanged`.split(/\s+/))
+
+/** Every other git command: it may write a commit, a ref, the index, the config, the stash, a file, or another repository. Scouts and checkers may run none. */
+const GIT_WRITES = new Set(GIT_ALL.filter(c => !GIT_READS.has(c)))
 
 /**
  * The writes a worker may run on its own branch (T-1053). Everything else in GIT_WRITES stays refused: push, fetch,
  * pull, remote, tag, config, stash (shared with the owner's folder), update-ref, symbolic-ref, branch, switch,
  * worktree... each changes what the owner's folder shares.
  */
-const WORKER_GIT = new Set(['commit', 'merge', 'cherry-pick', 'revert', 'restore', 'reset', 'add', 'rm', 'mv', 'clean', 'am', 'apply', 'bisect', 'rebase', 'checkout', 'init'])
+const WORKER_GIT = new Set(['commit', 'merge', 'cherry-pick', 'revert', 'restore', 'reset', 'add', 'stage', 'rm', 'mv', 'clean', 'am', 'apply', 'bisect', 'rebase', 'checkout', 'init'])
 
 /** Whether option word `a` is `--<name>` or a start of it (git takes `--upd` for `--update-refs`). */
 const longStart = (a: string, name: string) => {

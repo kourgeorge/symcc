@@ -1834,7 +1834,7 @@ is refused. Still refused, from one deny list: `push`, `fetch`, `pull` (a fetch 
 switching to, making or deleting a branch (`checkout <branch>`, `switch`, `branch -d/-D/-m`,
 `rebase main other`, `rebase --root other`, `rebase --update-refs`, `rebase --quit` (it leaves the folder off the branch), `bisect reset other`);
 `rebase -x`/`--exec` and `bisect run` (they run a program, which could be another git command);
-`worktree`; `config`; `tag`; `update-ref`; `symbolic-ref`; every `stash` and `--autostash` on merge or rebase (the stash is shared with your own folder);
+`worktree`; `config`; `tag`; `update-ref`; `symbolic-ref`; every other git command that is not a plain read (`send-pack`, `checkout-index`, `archive`, `format-patch`...); every `stash` and `--autostash` on merge or rebase (the stash is shared with your own folder);
 any git option before the command (`-C`, `-c`, `--git-dir`, `--work-tree`...), `GIT_*` settings, `core.hooksPath`,
 a look-up of git's own folder (`--git-dir`, `--git-common-dir`), and anything that names your copy of the project or another task's folder.
 The check reads the command's plain text: a git command named anywhere in it counts, even inside
@@ -1860,8 +1860,9 @@ It cannot edit files. It reads the task and the diff and tries to break the chan
 throwaway probes, for example by running it with odd input. It never runs the project's own
 tests: they run once, in the merge queue, after it.
 
-The checker may only read with git. Any git command that changes something (commit, checkout,
-switch, reset, stash, branch or tag changes, merge, rebase, push and so on) is refused, also in a
+The checker may only read with git. Any git command that is not a plain read (commit, checkout,
+switch, reset, stash, branch or tag changes, merge, rebase, push, send-pack and so on: every git command but
+`status`, `diff`, `log`, `show`, `blame`, `grep`, `rev-parse`, `ls-files` and the like) is refused, also in a
 throwaway repository under `/tmp`; only listing branches (`git branch --list`, `-a`) is fine. git
 options before the command (`-c`, `-C`...) and `GIT_*` settings are refused too. This check works on the
 command text, with the same deny list as a worker's.

@@ -37,6 +37,8 @@ const WORKER_REFUSED = [
   'git branch -D symcc/T-7', 'git branch new', 'git switch main', 'git checkout main', 'git worktree add /tmp/x main', 'git stash', 'git stash pop',
   'git fetch origin', 'git pull', 'git remote add x y', `git -C ${ROOT} commit -m x`, 'git -c user.name=x commit -m x', 'git --git-dir=/x/.git commit -m x',
   'git rebase main other', 'git rebase --exec=true main', "git rebase -x 'git push origin main' HEAD~1", 'git bisect run git push', 'git bisect reset other', 'git merge --autostash main',
+  // git commands by other names: send-pack is a push, checkout-index overwrites files, any not known to only read
+  'git send-pack --force . HEAD:refs/heads/x', 'git checkout-index -f -a', 'git receive-pack .', 'git http-push x', 'git replay --onto main a..b', 'git archive -o x.zip HEAD',
 ]
 
 /** Allowed for a worker (in its own folder) by both. */
@@ -63,7 +65,7 @@ test('T-1062: the worker deny list refuses the same commands in the hook guard a
 
 test("T-1062: a scout's and a checker's git writes are refused in the hook guard and in the Node rules", () => {
   const node = gitDeniedRules(false)
-  for (const c of [...WORKER_REFUSED, 'git commit -am x', 'git merge main', 'git cherry-pick abc', 'git restore a.ts', 'git checkout -- a.ts', 'git rebase main', 'git add -A', 'git init /tmp/x']) {
+  for (const c of [...WORKER_REFUSED, 'git commit -am x', 'git merge main', 'git cherry-pick abc', 'git restore a.ts', 'git checkout -- a.ts', 'git rebase main', 'git add -A', 'git stage .', 'git init /tmp/x']) {
     expect([c, typeof gitWriteIn(c)]).toEqual([c, 'string'])
     expect([c, nodeRefuses(node, c)]).toEqual([c, true])
   }
@@ -101,7 +103,7 @@ test('T-1062: the git text is read whole: git inside quotes, after a wrapper, or
   ] as const)
     expect([c, gitWriteIn(c, 'worker')]).toEqual([c, what])
   // file names with git in them are no git call; a pipe or redirection ends git's words
-  for (const c of ['cat hooks/core/git-guard.ts', 'ls .git', 'cat .gitignore', 'git merge main 2>&1 | tail -20', 'git log > /tmp/log', 'cd "$(git rev-parse --show-toplevel)"', 'tee -a "$LOG"', 'echo "use git"'])
+  for (const c of ['cat hooks/core/git-guard.ts', 'ls .git', 'cat .gitignore', 'git merge main 2>&1 | tail -20', 'git log > /tmp/log', 'cd "$(git rev-parse --show-toplevel)"', 'tee -a "$LOG"', 'echo "use git"', 'git commit -m "make git handling simpler"'])
     expect([c, gitWriteIn(c, 'worker')]).toEqual([c, undefined])
 })
 
@@ -144,7 +146,8 @@ test("T-1062: the shell path rule refuses the owner's folder in the text (any na
   // '..' anywhere: "use full paths"
   for (const c of ['cd .. && ls', 'cat ../x', 'cat a/../../b', 'echo x > ../../README.md', 'make --prefix=../src', `bun -e "import('../x')"`, `cd ${WT}/src && cat ../a`]) expect([c, no(c)]).toEqual([c, BASH_DOTDOT])
   // a cd above the project, from where a relative path reaches it
-  for (const c of ['cd / && echo x > Users/o/repo/README.md', 'cd && cat repo/README.md', 'cd ~ && ls', 'pushd /Users', 'true | cd /; rm x', 'chdir ~/'])
+  // (also behind option words: `cd -P /Users/o`, `cd -- /Users`)
+  for (const c of ['cd / && echo x > Users/o/repo/README.md', 'cd && cat repo/README.md', 'cd ~ && ls', 'pushd /Users', 'true | cd /; rm x', 'chdir ~/', 'cd -P /Users/o && cat repo/README.md', 'cd -- /Users && cat o/repo/x', 'cd -L -P / && ls'])
     expect([c, no(c)]).toEqual([c, BASH_ABOVE])
   // the worker's own folder, other folders, ranges and plain commands
   for (const c of [`cat ${WT}/src/a.ts`, `cd ${WT} && git status`, 'cat ~/repo/.symcc/worktrees/T-1/a.ts', `ls ${ROOT}2/x /Users/o/repository`, 'echo x > /tmp/a', 'cd /tmp/x && ls', `cd ${WT}/src && ls`, 'cd src', 'git diff main..HEAD', 'git log main...HEAD', 'echo {1..3}', 'bun test', 'cd "$(git rev-parse --show-toplevel)"', 'tee -a "$LOG"'])
