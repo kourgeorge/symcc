@@ -374,7 +374,7 @@ export function historyActor(e: Pick<HistoryEntry, 'kind' | 'step' | 'result' | 
   if (LEAD_KINDS.includes(kind)) return 'lead'
   if (OWNER_KINDS.includes(kind)) return 'you'
   if (kind === 'stage' && (e.step === 'worker-start' || e.step === 'handed-back')) return 'worker'
-  if (kind === 'answered' || kind === 'out-of-time') return 'worker'
+  if (kind === 'answered') return 'worker'
   if ((RESULT_KINDS as readonly string[]).includes(kind) && e.result) return 'worker'
   return ''
 }
