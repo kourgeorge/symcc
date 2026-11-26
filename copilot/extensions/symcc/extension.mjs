@@ -589,8 +589,9 @@ Use absolute paths under that folder for every {{file_tools}}. Never touch the m
   tests: `{{test_command}}
 Add or update a test that checks your change, unless the change only touches docs (README, docs/, *.md, comments). Say in your report which test covers it.`,
   rules: `Make code changes with the Edit tool; put any throwaway script or note under .scratch/ in your folder (never commit it); /tmp also works.
-Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch/ (or /tmp), then run them in a separate command; don't write them with a here-document in Bash: the guard refuses those when they mention git or paths outside your folder.
-In your folder you may change git on your own branch: commit, merge another branch, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect. Refused: push, fetch, pull or remotes; switching to, making or deleting branches; worktree; config; tags; stash; git in any other folder. Anything you leave uncommitted is committed for you. A throwaway repository under /tmp is fine too, named by a plain path (git init /tmp/x, git -C /tmp/x commit -m m, cd /tmp/x && git add .; no $variables, ~ or ..), where the host allows it. {{name}} commits, tests and merges your work.
+Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch/ (or /tmp), then run them in a separate command; don't write them with a here-document in Bash: the guard reads the whole command text, so one that mentions git commands or the main project folder is refused.
+In Bash, use full paths: a ".." path piece, or a cd above the project, is refused.
+In your folder you may change git on your own branch: commit, merge another branch, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect. Refused: push, fetch, pull or remotes; switching to, making or deleting branches; worktree; config; tags; stash; rebase -x and bisect run; git options before the command (-C, -c); git in any other folder. A git command counts wherever a command starts (also after &&, ;, | or inside sh -c "..."). Only git init of a new folder under /tmp, with no options. Anything you leave uncommitted is committed for you. A throwaway repository under /tmp is fine too (git init /tmp/x, then cd /tmp/x && git add . && git commit -m m), where the host allows it. {{name}} commits, tests and merges your work.
 Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.`,
   done: `Start your report with one line beginning "Done:" followed by 1-2 plain sentences on what the WHOLE task has done so far (not only this try). It is kept on the task and shown to the owner.
 When you are done, answer in one or two plain sentences: what you changed.
@@ -610,7 +611,8 @@ var TEXT2 = {
   {{folder}}
 Read whatever you need. {{may_run}} any file changes you make in the project are not kept. Never touch the main project folder. Do not run git commit, push or merge.`,
   rules: `Make code changes with the Edit tool; put any throwaway script or note under .scratch/ in your folder (never commit it); /tmp also works.
-Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch/ (or /tmp), then run them in a separate command; don't write them with a here-document in Bash: the guard refuses those when they mention git or paths outside your folder.
+Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch/ (or /tmp), then run them in a separate command; don't write them with a here-document in Bash: the guard reads the whole command text, so one that mentions git commands or the main project folder is refused.
+In Bash, use full paths: a ".." path piece, or a cd above the project, is refused.
 Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.`,
   done: `When you are done, {{hand_back}}{{ask_more}}
 {{ask}}
@@ -638,8 +640,8 @@ Everything you need is in that folder or below: the task, its changed files and 
 \`\`\``,
   rules: `You may read anything there and run commands. Do NOT edit, create or delete files in that folder (outside .scratch/) or anywhere in the project; anything you change there is thrown away.
 Put any throwaway script or note under .scratch/ in that folder (never commit it); /tmp also works.
-Probe with bun -e "…" (or node -e "…") run from /tmp, importing the code by its absolute path in your folder (for example: cd /tmp && bun -e "const m = await import('{{folder}}/hooks/board.ts'); console.log(m)"); if you need a file, a here-document is fine only when its text has no git command and no path outside your folder (build such words from pieces, like 'gi'+'t').
-Do NOT run git commands that change anything (commit, reset, checkout, switch, stash, rebase, merge, branch, tag, push...): the branch must stay where the worker left it, and if you move it, it is put back. Read-only ones like git diff, git log, git show and git status are fine. A throwaway repository under /tmp for a probe is fine too, named by a plain path (git init /tmp/x, git -C /tmp/x commit -m m, cd /tmp/x && git add .; no $variables, ~ or ..), where the host allows it.
+Probe with bun -e "…" (or node -e "…") run from /tmp, importing the code by its absolute path in your folder (for example: cd /tmp && bun -e "const m = await import('{{folder}}/hooks/board.ts'); console.log(m)"); if you need a file, a here-document is fine only when its text has no git command and no path into the main project folder (build such words from pieces, like 'gi'+'t'). In Bash, use full paths: a ".." path piece, or a cd above the project, is refused.
+Do NOT run git commands that change anything (commit, reset, checkout, switch, stash, rebase, merge, branch, tag, push...), not even in a throwaway repository: the branch must stay where the worker left it, and if you move it, it is put back. Read-only ones like git diff, git log, git show and git status are fine. A git command counts wherever a command starts (also after &&, ;, | or inside sh -c "...").
 Don't run long commands in the background. Run your own probes with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.`,
   done: `End your answer with exactly one of these (only optional "Learned:" lines, when asked for below, may come after it):
 - the single word OK on its own last line, when you found no real problem;
@@ -2106,6 +2108,7 @@ var MODES = ["paused", "review", "auto"];
 var isMode = (m) => typeof m === "string" && MODES.includes(m);
 var modeOf = (b) => isMode(b?.mode) ? b.mode : "auto";
 var isSha = (x) => typeof x === "string" && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(x);
+var hasMergedChanges = (t) => t.status === "done" && !isInvestigation(t) && isSha(t.merged);
 function cleanCommitFields(t) {
   if (!t || typeof t !== "object")
     return t;
@@ -3050,813 +3053,6 @@ The earlier answer (try ${t.attempts})`;
 ${body}` : `${head}${where || " was not saved"}.`;
   return patchTask(b, t.id, { status: "todo", note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, test_output: undefined, merge_main: undefined, history: withHistory(t.history, now, ["asked", `try ${t.attempts}: the owner asked more: ${q}`, { try: Number(t.attempts) || 0 }]) }, now);
 }
-// hooks/core/shell-words.ts
-var SHELL_SPLIT = /[\s'"`;&|<>(){}$=:,]+/;
-var WORD_END = /[;&|<>(){}$=:,`]/;
-function shellWords(text) {
-  const out = [];
-  let w = "";
-  let q = false;
-  let quote2 = "";
-  const cut = () => {
-    if (w)
-      out.push({ w, q });
-    w = "";
-    q = false;
-  };
-  for (let i = 0;i < text.length; i++) {
-    let c = text[i];
-    if (c === "\\" && quote2 !== "'") {
-      c = text[++i] ?? "";
-      if (c === `
-` || c === "'" || c === '"')
-        continue;
-      if (/\s/.test(c)) {
-        w += c;
-        continue;
-      }
-    } else if (quote2) {
-      if (c === quote2) {
-        quote2 = "";
-        continue;
-      }
-    } else if (c === "'" || c === '"') {
-      quote2 = c;
-      continue;
-    } else if (/\s/.test(c)) {
-      cut();
-      continue;
-    }
-    if (WORD_END.test(c))
-      cut();
-    else
-      w += c, q ||= !!quote2;
-  }
-  cut();
-  return out;
-}
-function quoteMask(text) {
-  const mask = [];
-  let quote2 = "";
-  for (let i = 0;i < text.length; i++) {
-    const c = text[i];
-    if (c === "\\" && quote2 !== "'") {
-      mask[i] = mask[i + 1] = !!quote2;
-      i++;
-    } else if (quote2) {
-      if (c === quote2)
-        quote2 = "";
-      else
-        mask[i] = true;
-    } else if (c === "'" || c === '"')
-      quote2 = c;
-  }
-  return mask;
-}
-function pieceWords(p) {
-  const words = new Map;
-  const add = (word, q) => {
-    const w = word.replace(/\\/g, "");
-    if (w)
-      words.set(w, (words.get(w) ?? true) && (q || !!p.doc));
-  };
-  const mask = quoteMask(p.text);
-  let at = 0;
-  for (const part of p.text.split(SHELL_SPLIT_KEEP)) {
-    if (part && !SHELL_SPLIT_KEEP.test(part))
-      add(part, mask[at] === true);
-    at += part.length;
-  }
-  for (const { w, q } of shellWords(p.text))
-    add(w, q);
-  return words;
-}
-var SHELL_SPLIT_KEEP = new RegExp(`(${SHELL_SPLIT.source})`);
-var reEscape = (s) => s.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&");
-var HEREDOC = /^<<(-?)[ \t]*(?:'([^'\n]*)'|"([^"\n]*)"|\\?([^\s;&|<>()'"`]+))/;
-function shellPieces(command, doc = false) {
-  const out = [];
-  let text = "";
-  let quote2 = "";
-  let tick = false;
-  const docs = [];
-  const op = (o, sub = true) => {
-    out.push(doc ? { text, doc } : { text }, o === "(" ? { op: o, sub } : { op: o });
-    text = "";
-  };
-  for (let i = 0;i < command.length; i++) {
-    const c = command[i];
-    const n = command[i + 1];
-    const hereString = !doc && !quote2 && c === "<" && n === "<" && command[i + 2] === "<";
-    const here = !doc && !quote2 && !hereString && c === "<" && n === "<" ? HEREDOC.exec(command.slice(i)) : null;
-    if (hereString)
-      text += "<<<", i += 2;
-    else if (quote2) {
-      if (c === "\\" && quote2 === '"')
-        text += c + (n ?? ""), i++;
-      else {
-        text += c;
-        if (c === quote2)
-          quote2 = "";
-      }
-    } else if (c === "\\")
-      text += c + (n ?? ""), i++;
-    else if (!doc && (c === "'" || c === '"'))
-      quote2 = c, text += c;
-    else if (here) {
-      docs.push({ end: here[2] ?? here[3] ?? here[4], tabs: here[1] === "-", by: out.length, lit: here[4] === undefined || here[0].includes("\\") });
-      text += here[0];
-      i += here[0].length - 1;
-    } else if ((c === "&" || c === "|") && n === c)
-      op(c === "&" ? "&&" : "||"), i++;
-    else if (c === "|")
-      op("|"), n === "&" && i++;
-    else if (c === "&" && n !== ">" && !/[<>]$/.test(text))
-      op("&");
-    else if (c === `
-` && docs.length) {
-      op(";");
-      let j = i + 1;
-      for (const d of docs.splice(0)) {
-        const lines = [];
-        while (j < command.length) {
-          const e = command.indexOf(`
-`, j);
-          const line = command.slice(j, e < 0 ? command.length : e);
-          j = e < 0 ? command.length : e + 1;
-          if ((d.tabs ? line.replace(/^\t+/, "") : line) === d.end)
-            break;
-          lines.push(line);
-        }
-        const body = lines.join(`
-`);
-        const lit = d.lit || !/\$\(|`/.test(body);
-        out.push(...shellPieces(body, true).map((x) => ("op" in x) ? x : { ...x, by: d.by, lit }), { op: ";" });
-      }
-      i = j - 1;
-    } else if (c === ";" || c === `
-`)
-      op(";");
-    else if (c === "{" && !text.trim() && (n === undefined || /\s/.test(n)))
-      op("(", false);
-    else if (c === "}" && !text.trim() && (n === undefined || /[\s;&|)<>]/.test(n)))
-      op(")");
-    else if (c === "(")
-      op("(");
-    else if (c === ")")
-      op(")");
-    else if (c === "`")
-      (tick = !tick) ? op("(") : op(")");
-    else
-      text += c;
-  }
-  out.push(doc ? { text, doc } : { text });
-  return out;
-}
-function rawWords(text, lit = (c) => c) {
-  const out = [];
-  let cur;
-  let quote2 = "";
-  const add = (raw, w, expands = false) => {
-    cur ??= { raw: "", w: "", expands: false };
-    cur.raw += raw;
-    cur.w += w;
-    cur.expands ||= expands;
-  };
-  for (let i = 0;i < text.length; i++) {
-    const c = text[i];
-    if (quote2 === "'")
-      c === "'" ? (quote2 = "", add(c, "")) : add(c, lit(c));
-    else if (c === "\\")
-      add(c + (text[i + 1] ?? ""), lit(text[i + 1] ?? "")), i++;
-    else if (quote2 === '"')
-      c === '"' ? (quote2 = "", add(c, "")) : add(c, lit(c), c === "$" || c === "`");
-    else if (c === "'" || c === '"')
-      quote2 = c, add(c, "");
-    else if (/\s/.test(c)) {
-      if (cur)
-        out.push(cur);
-      cur = undefined;
-    } else {
-      add(c, c, c === "$" || c === "`");
-      if (/[<>|&;(){}]/.test(c))
-        cur.sign = true;
-    }
-  }
-  if (cur)
-    out.push(cur);
-  return out;
-}
-var SHADOWS = /\b(alias|function|hash|enable|eval|source|PATH|BASH_ENV|ENV|exec)\b|(^|[\s;&|(){}])\.\s/;
-var SHADOW_FUNCTION = /\b(cat|tee|echo|printf|sed|gsed|grep|egrep|fgrep)\s*\(\s*\)/;
-var REDIRECT = /^(\d*|&)(>>?|>\||<<<|<<-?|<>|<)(&?)(.*)$/;
-function printsToFile(words) {
-  let file = false;
-  for (let i = 0;i < words.length; i++) {
-    const m = REDIRECT.exec(words[i].raw);
-    if (!m && words[i].sign)
-      return false;
-    if (!m)
-      continue;
-    const [, fd, op, amp, rest] = m;
-    if (amp || fd === "&")
-      return false;
-    if (!op.startsWith(">"))
-      continue;
-    if (fd && fd !== "1")
-      continue;
-    const target = rest ? { ...words[i], w: rest, raw: rest } : words[i + 1];
-    if (!target || target.expands || !target.w || /^[&<>]/.test(target.raw))
-      return false;
-    if (/^\/(dev|proc)\//i.test(target.w) && target.w !== "/dev/null")
-      return false;
-    file = true;
-  }
-  return file;
-}
-function commandOf(words) {
-  let i = 0;
-  while (i < words.length && /^[A-Za-z_]\w*=/.test(words[i].raw))
-    i++;
-  return { name: words[i]?.raw, args: words.slice(i + 1) };
-}
-function docOnlyWritten(text) {
-  const words = rawWords(text);
-  const { name } = commandOf(words);
-  return (name === "cat" || name === "tee") && printsToFile(words);
-}
-function sedScriptSafe(s) {
-  let i = 0;
-  const part = (d) => {
-    for (;i < s.length; i++) {
-      if (s[i] === "\\")
-        i++;
-      else if (s[i] === d)
-        return ++i, true;
-    }
-    return false;
-  };
-  const addr = () => {
-    if (/\d/.test(s[i] ?? ""))
-      while (/\d/.test(s[i] ?? ""))
-        i++;
-    else if (s[i] === "$")
-      i++;
-    else if (s[i] === "/" || s[i] === "\\") {
-      const d = s[i] === "\\" ? s[++i] : "/";
-      i++;
-      if (!d || d === `
-` || !part(d))
-        return false;
-      while (s[i] === "I" || s[i] === "M")
-        i++;
-    }
-    return true;
-  };
-  while (i < s.length) {
-    if (/[\s;]/.test(s[i])) {
-      i++;
-      continue;
-    }
-    if (!addr())
-      return false;
-    if (s[i] === ",") {
-      i++;
-      if (!addr())
-        return false;
-    }
-    while (s[i] === " " || s[i] === "!")
-      i++;
-    const c = s[i++];
-    if (c === "s" || c === "y") {
-      const d = s[i++];
-      if (!d || d === "\\" || d === `
-` || !part(d) || !part(d))
-        return false;
-      if (c === "s")
-        while (/[gpiImM\d]/.test(s[i] ?? ""))
-          i++;
-    } else if (!c || !"dDpPgGhHxnNz={}".includes(c))
-      return false;
-    if (i < s.length && !/[\s;}]/.test(s[i]))
-      return false;
-  }
-  return true;
-}
-function dropTextWords(text) {
-  const words = rawWords(text);
-  const { name, args } = commandOf(words);
-  const sed = name === "sed" || name === "gsed";
-  const grep = name === "grep" || name === "egrep" || name === "fgrep";
-  const print = (name === "echo" || name === "printf") && printsToFile(words);
-  if (!sed && !grep && !print)
-    return { text, whole: [] };
-  const skip = new Set;
-  args.forEach((a, j) => {
-    const after = j > 0 && REDIRECT.exec(args[j - 1].raw)?.[4] === "";
-    if (a.expands || a.sign || after || REDIRECT.test(a.raw) || a.w.startsWith("-") || !a.w)
-      return;
-    if (sed && !sedScriptSafe(a.w))
-      return;
-    skip.add(a);
-  });
-  if (!skip.size)
-    return { text, whole: [] };
-  return { text: words.map((w) => skip.has(w) ? "''" : w.raw).join(" "), whole: [...skip].map((w) => w.w) };
-}
-var braceLit = (c) => /[{},]/.test(c) ? "_" : c;
-var hasBrace = (w) => w.replace(/[@$]\{[^{}]*\}/g, "").replace(/\{\}/g, "").includes("{");
-function closeAt(s, from, open, close) {
-  let depth = 1;
-  for (let i = from;i < s.length; i++) {
-    const c = s[i];
-    const n = s[i + 1];
-    if (c === "\\")
-      i++;
-    else if (c === "'") {
-      const e = s.indexOf("'", i + 1);
-      i = e < 0 ? s.length : e;
-    } else if (c === '"')
-      i = dquoteEnd(s, i + 1);
-    else if (c === "`")
-      i = tickEnd(s, i + 1);
-    else if (c === "$" && (n === "(" || n === "{"))
-      i = closeAt(s, i + 2, n, n === "(" ? ")" : "}");
-    else if (c === "#" && open === "(" && (i === from || /[\s;&|()]/.test(s[i - 1]))) {
-      const e = s.indexOf(`
-`, i);
-      i = e < 0 ? s.length : e;
-    } else if (c === open)
-      depth++;
-    else if (c === close && --depth === 0)
-      return i;
-  }
-  return s.length;
-}
-function dquoteEnd(s, from) {
-  for (let i = from;i < s.length; i++) {
-    const c = s[i];
-    const n = s[i + 1];
-    if (c === "\\")
-      i++;
-    else if (c === '"')
-      return i;
-    else if (c === "`")
-      i = tickEnd(s, i + 1);
-    else if (c === "$" && (n === "(" || n === "{"))
-      i = closeAt(s, i + 2, n, n === "(" ? ")" : "}");
-  }
-  return s.length;
-}
-function testEnd(s, from) {
-  for (let i = from;i < s.length; i++) {
-    const c = s[i];
-    const n = s[i + 1];
-    if (c === "\\")
-      i++;
-    else if (c === "'") {
-      const e = s.indexOf("'", i + 1);
-      i = e < 0 ? s.length : e;
-    } else if (c === '"')
-      i = dquoteEnd(s, i + 1);
-    else if (c === "`")
-      i = tickEnd(s, i + 1);
-    else if (c === "$" && (n === "(" || n === "{"))
-      i = closeAt(s, i + 2, n, n === "(" ? ")" : "}");
-    else if (c === "]" && n === "]" && /\s/.test(s[i - 1]) && !/[^\s;&|)]/.test(s[i + 2] ?? ""))
-      return i;
-  }
-  return s.length;
-}
-function substCommands(s, out, bad) {
-  for (let i = 0;i < s.length; i++) {
-    const c = s[i];
-    const n = s[i + 1];
-    if (c === "\\")
-      i++;
-    else if (c === "'") {
-      const e = s.indexOf("'", i + 1);
-      i = e < 0 ? s.length : e;
-    } else if (c === "`") {
-      const e = tickEnd(s, i + 1);
-      expandCommands(s.slice(i + 1, e), out, bad);
-      i = e;
-    } else if (c === "$" && (n === "(" || n === "{")) {
-      const e = closeAt(s, i + 2, n, n === "(" ? ")" : "}");
-      const inner = s.slice(i + 2, e);
-      if (n === "(" && s[i + 2] !== "(")
-        expandCommands(inner, out, bad);
-      else
-        substCommands(inner, out, bad);
-      i = e;
-    }
-  }
-}
-function tickEnd(s, from) {
-  for (let i = from;i < s.length; i++) {
-    if (s[i] === "\\")
-      i++;
-    else if (s[i] === "`")
-      return i;
-  }
-  return s.length;
-}
-function expandCommands(s, out = [], bad = []) {
-  let cmd = [];
-  let cur;
-  let quote2 = false;
-  let wantDelim = false;
-  const pending = [];
-  const endWord = () => {
-    if (cur) {
-      if (wantDelim)
-        pending.push({ end: cur.raw.replace(/['"\\]/g, ""), lit: /['"\\]/.test(cur.raw) });
-      else
-        cmd.push(cur);
-      wantDelim = false;
-    }
-    cur = undefined;
-  };
-  const endCmd = () => {
-    endWord();
-    if (cmd.length)
-      out.push(cmd);
-    cmd = [];
-  };
-  const add = (t, x = false) => {
-    cur ??= { raw: "", expands: false };
-    cur.raw += t;
-    cur.expands ||= x;
-  };
-  for (let i = 0;i < s.length; i++) {
-    const c = s[i];
-    const n = s[i + 1];
-    if (c === "\\") {
-      add(c + (n ?? ""));
-      i++;
-      continue;
-    }
-    if (quote2) {
-      if (c === '"') {
-        quote2 = false;
-        add(c);
-        continue;
-      }
-    } else {
-      if (c === "'") {
-        const e = s.indexOf("'", i + 1);
-        const end = e < 0 ? s.length - 1 : e;
-        add(s.slice(i, end + 1));
-        i = end;
-        continue;
-      }
-      if (c === '"') {
-        quote2 = true;
-        add(c);
-        continue;
-      }
-      if (c === "#" && !cur) {
-        const e = s.indexOf(`
-`, i);
-        i = (e < 0 ? s.length : e) - 1;
-        continue;
-      }
-      if (c === `
-`) {
-        endCmd();
-        let j = i + 1;
-        for (const d of pending.splice(0)) {
-          while (j < s.length) {
-            const e = s.indexOf(`
-`, j);
-            const line = s.slice(j, e < 0 ? s.length : e);
-            j = e < 0 ? s.length : e + 1;
-            if (line.replace(/^\t+/, "") === d.end)
-              break;
-            if (!d.lit && /\$\(|`/.test(line))
-              bad.push(line.trim());
-          }
-        }
-        i = j - 1;
-        continue;
-      }
-      if (/\s/.test(c)) {
-        endWord();
-        continue;
-      }
-      if ((c === "<" || c === ">") && n === "(") {
-        const e = closeAt(s, i + 2, "(", ")");
-        expandCommands(s.slice(i + 2, e), out, bad);
-        add(s.slice(i, e + 1), true);
-        i = e;
-        continue;
-      }
-      if (c === "<" || c === ">" || c === "&" && n === ">") {
-        if (cur && /^\d+$/.test(cur.raw))
-          cur = undefined;
-        else
-          endWord();
-        const m = /^(&>>|&>|>>|>\||>&|<<<|<<-|<<|<>|<&|>|<)/.exec(s.slice(i));
-        cmd.push({ redir: m[1] });
-        i += m[1].length - 1;
-        if (m[1] === "<<" || m[1] === "<<-")
-          wantDelim = true;
-        continue;
-      }
-      if (c === "(" && n === "(") {
-        const e = closeAt(s, i + 2, "(", ")");
-        if (s[e + 1] === ")") {
-          endWord();
-          substCommands(s.slice(i + 2, e), out, bad);
-          i = e + 1;
-          continue;
-        }
-      }
-      if (c === "[" && n === "[" && !cur && /\s/.test(s[i + 2] ?? "")) {
-        const e = testEnd(s, i + 2);
-        substCommands(s.slice(i + 2, e), out, bad);
-        i = e + 1;
-        continue;
-      }
-      if (";&|()".includes(c)) {
-        endCmd();
-        continue;
-      }
-    }
-    if (c === "`") {
-      const e = tickEnd(s, i + 1);
-      expandCommands(s.slice(i + 1, e), out, bad);
-      add(s.slice(i, e + 1), true);
-      i = e;
-      continue;
-    }
-    if (c === "$") {
-      if (n === "(") {
-        const e = closeAt(s, i + 2, "(", ")");
-        if (s[i + 2] !== "(")
-          expandCommands(s.slice(i + 2, e), out, bad);
-        else
-          substCommands(s.slice(i + 2, e), out, bad);
-        add(s.slice(i, e + 1), true);
-        i = e;
-        continue;
-      }
-      if (n === "[") {
-        const e = closeAt(s, i + 2, "[", "]");
-        substCommands(s.slice(i + 2, e), out, bad);
-        add(s.slice(i, e + 1), true);
-        i = e;
-        continue;
-      }
-      if (n === "{") {
-        const e = closeAt(s, i + 2, "{", "}");
-        substCommands(s.slice(i + 2, e), out, bad);
-        add(s.slice(i, e + 1), true);
-        i = e;
-        continue;
-      }
-      if (n !== undefined && /[A-Za-z_0-9@*#?$!-]/.test(n)) {
-        let j = i + 2;
-        if (/[A-Za-z_]/.test(n))
-          while (j < s.length && /\w/.test(s[j]))
-            j++;
-        add(s.slice(i, j), true);
-        i = j - 1;
-        continue;
-      }
-      if (!quote2 && (n === "'" || n === '"')) {
-        add(c, true);
-        continue;
-      }
-    }
-    add(c);
-  }
-  endCmd();
-  return out;
-}
-var WRITE_REDIRECTS = new Set([">", ">>", ">|", ">&", "&>", "&>>", "<>"]);
-var RUNNERS = new Set(["{", "}", "!", "then", "do", "else", "elif", "if", "while", "until", "time", "command", "builtin", "exec", "nohup", "sudo", "doas", "env", "nice", "xargs", "timeout", "gtimeout", "setsid", "stdbuf", "coproc", "busybox", "ionice", "caffeinate", "unbuffer", "noglob", "nocorrect"]);
-var RUNNER_VALUED = {
-  sudo: /^(-[ugCDhpRrtUT]|--(user|group|close-from|chdir|host|prompt|chroot|role|type|other-user|command-timeout))$/,
-  doas: /^-[uC]$/,
-  env: /^(-[uCS]|--(unset|chdir|split-string))$/,
-  nice: /^(-n|--adjustment)$/,
-  timeout: /^(-[sk]|--(signal|kill-after))$/,
-  gtimeout: /^(-[sk]|--(signal|kill-after))$/,
-  ionice: /^-[cnp]$/,
-  caffeinate: /^-[tw]$/,
-  xargs: /^(-[ILnPdEsa]|--(replace|max-lines|max-args|max-procs|delimiter|eof|max-chars|arg-file|process-slot-var))$/,
-  exec: /^-a$/,
-  time: /^(-[fo]|--(format|output))$/,
-  stdbuf: /^-[ioe]$/
-};
-var RUNNER_CHDIR = {
-  env: { short: /^-[A-Za-z]*C$/, long: /^--chdir$/, joined: /^(-[A-Za-z]*C.|--chdir=)/ },
-  sudo: { short: /^-[A-Za-z]*D$/, long: /^--chdir$/, joined: /^(-[A-Za-z]*D.|--chdir=)/ }
-};
-var SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "mksh", "fish"]);
-var C_RUNNERS = new Set(["su", "runuser", "script", "flock"]);
-var EVALS = new Set(["eval", "trap", "watch", "parallel"]);
-var hasDollar = (raw) => /[$`]/.test(raw);
-function unquote(raw) {
-  let out = "";
-  let quote2 = "";
-  for (let i = 0;i < raw.length; i++) {
-    const c = raw[i];
-    if (quote2 === "'") {
-      if (c === "'")
-        quote2 = "";
-      else
-        out += c;
-    } else if (c === "\\")
-      out += raw[++i] ?? "";
-    else if (c === quote2)
-      quote2 = "";
-    else if (!quote2 && (c === "'" || c === '"'))
-      quote2 = c;
-    else
-      out += c;
-  }
-  return out;
-}
-var NESTED_MAX = 8;
-var COPIES = new Set(["cp", "ln", "install", "rsync", "scp"]);
-var CHANGES = new Set(["mv", "rm", "rmdir", "unlink", "shred", "touch", "mkdir", "truncate", "tee", "chmod", "chown", "chgrp", "cd", "chdir", "pushd"]);
-function unresolvedTarget(command, depth = 0) {
-  if (depth > NESTED_MAX)
-    return command;
-  const bad = [];
-  const cmds = expandCommands(command, [], bad);
-  if (bad.length)
-    return bad[0];
-  const nested = (w) => hasDollar(w.raw) ? w.raw : unresolvedTarget(unquote(w.raw), depth + 1);
-  for (const cmd of cmds) {
-    const words = [];
-    for (let k = 0;k < cmd.length; k++) {
-      const t = cmd[k];
-      if ("redir" in t) {
-        const target = cmd[k + 1];
-        if (target && !("redir" in target)) {
-          k++;
-          if (WRITE_REDIRECTS.has(t.redir) && target.expands)
-            return target.raw;
-        }
-        continue;
-      }
-      words.push(t);
-    }
-    let i = 0;
-    let runner;
-    let duration = false;
-    while (i < words.length) {
-      const w = words[i];
-      if (RUNNERS.has(w.raw)) {
-        runner = w.raw;
-        duration = runner === "timeout" || runner === "gtimeout";
-        i++;
-        if (runner === "coproc" && words[i + 1]?.raw === "{" && /^[A-Za-z_]\w*$/.test(words[i]?.raw ?? ""))
-          i++;
-      } else if (/^[A-Za-z_]\w*=/.test(w.raw))
-        i++;
-      else if (runner && w.raw.startsWith("-") && w.raw !== "-") {
-        const chdir = RUNNER_CHDIR[runner];
-        const value = RUNNER_VALUED[runner]?.test(w.raw) || chdir?.short.test(w.raw) ? words[i + 1] : undefined;
-        if (chdir && (chdir.short.test(w.raw) || chdir.long.test(w.raw) ? value?.expands : chdir.joined.test(w.raw) && w.expands))
-          return (chdir.joined.test(w.raw) ? w : value).raw;
-        if (runner === "time" && (/^(-o|--output)$/.test(w.raw) ? value?.expands : /^--output=/.test(w.raw) && w.expands))
-          return (value ?? w).raw;
-        if (runner === "env" && (/^(-S|--split-string)$/.test(w.raw) || /^(-S.|--split-string=)/.test(w.raw))) {
-          const hit = value ? nested(value) : hasDollar(w.raw) ? w.raw : unresolvedTarget(unquote(w.raw).replace(/^(-S|--split-string=)/, ""), depth + 1);
-          if (hit !== undefined)
-            return hit;
-        }
-        i += value ? 2 : 1;
-      } else if (duration) {
-        duration = false;
-        i++;
-      } else
-        break;
-    }
-    const head = words[i];
-    if (!head)
-      continue;
-    const args = words.slice(i + 1);
-    if (head.expands) {
-      if (args.some((a) => hasDollar(a.raw)))
-        return head.raw;
-      continue;
-    }
-    const name = head.raw.replace(/['"\\]/g, "").replace(/^.*\//, "");
-    if (EVALS.has(name)) {
-      const hit = args.find((a) => hasDollar(a.raw));
-      if (hit)
-        return hit.raw;
-      const own = name === "eval" ? args : args.filter((a) => !a.raw.startsWith("-"));
-      const inner = unresolvedTarget(own.map((a) => unquote(a.raw)).join(" "), depth + 1);
-      if (inner !== undefined)
-        return inner;
-      continue;
-    }
-    if (name === "source" || name === ".") {
-      const file = args.find((a) => a.raw !== "--");
-      if (file && (file.expands || /^['"]?(-|\/dev\/(stdin|fd\/)|\/proc\/)/.test(file.raw)))
-        return file.raw;
-      continue;
-    }
-    if (C_RUNNERS.has(name)) {
-      for (let j = 0;j < args.length; j++) {
-        const a = args[j];
-        const joined = /^--command=/.test(a.raw);
-        if (!joined && !/^(-c|--command)$/.test(a.raw))
-          continue;
-        const script = joined ? undefined : args[j + 1];
-        const hit = script ? nested(script) : hasDollar(a.raw) ? a.raw : unresolvedTarget(unquote(a.raw).replace(/^--command=/, ""), depth + 1);
-        if (hit !== undefined)
-          return hit;
-      }
-      continue;
-    }
-    if (SHELLS.has(name)) {
-      const c = args.findIndex((a) => /^-[A-Za-z]*c[A-Za-z]*$/.test(a.raw));
-      if (c >= 0) {
-        for (let j = c + 1;j < args.length; j++) {
-          const a = args[j];
-          if (a.raw === "--" || a.raw === "-")
-            continue;
-          if (/^[-+]/.test(a.raw) && !hasDollar(a.raw))
-            continue;
-          const hit = nested(a);
-          if (hit !== undefined)
-            return hit;
-        }
-      } else if (args.every((a) => a.raw.startsWith("-")) || args.some((a) => /^-[A-Za-z]*s[A-Za-z]*$/.test(a.raw))) {
-        const hit = /[^\s;&|<>()]*[$`][^\s;&|<>()]*/.exec(command);
-        if (hit)
-          return hit[0];
-      }
-      continue;
-    }
-    if (name === "find") {
-      for (let j = 0;j < args.length; j++) {
-        if (!/^-(exec|execdir|ok|okdir)$/.test(args[j].raw))
-          continue;
-        let e = j + 1;
-        while (e < args.length && !/^(\\;|';'|";"|\+)$/.test(args[e].raw))
-          e++;
-        const inner = unresolvedTarget(args.slice(j + 1, e).map((a) => a.raw).join(" "), depth + 1);
-        if (inner !== undefined)
-          return inner;
-        j = e;
-      }
-      continue;
-    }
-    const split = (valued, args2 = words.slice(i + 1)) => {
-      const plain = [];
-      const values = [];
-      let ended = false;
-      for (let j = 0;j < args2.length; j++) {
-        const a = args2[j];
-        if (ended || !a.raw.startsWith("-") || a.raw === "-")
-          plain.push(a);
-        else if (a.raw === "--")
-          ended = true;
-        else if (valued.test(a.raw)) {
-          if (args2[j + 1])
-            values.push(args2[++j]);
-        } else
-          values.push(a);
-      }
-      return { plain, values };
-    };
-    if (COPIES.has(name)) {
-      const { plain, values } = split(/^(-t|--target-directory)$/);
-      const last = plain[plain.length - 1];
-      const hit = values.find((v) => v.expands) ?? (plain.length > 1 && last?.expands ? last : undefined);
-      if (hit)
-        return hit.raw;
-    } else if (CHANGES.has(name)) {
-      const { plain, values } = split(/^(-t|--target-directory)$/);
-      const hit = [...plain, ...values].find((v) => v.expands);
-      if (hit)
-        return hit.raw;
-    } else if (name === "dd") {
-      const hit = args.find((a) => /^["']?of=/.test(a.raw) && a.expands);
-      if (hit)
-        return hit.raw;
-    } else if (name === "sed" || name === "gsed" || name === "perl") {
-      if (!args.some((a) => /^-[A-Za-z]*i/.test(a.raw) || a.raw.startsWith("--in-place")))
-        continue;
-      const own = args.filter((a, j) => !(j > 0 && args[j - 1].raw === "-i" && /^(''|""|['"]?\.)/.test(a.raw) && name !== "perl"));
-      const { plain } = split(/^(-e|-f|--expression|--file)$/, own);
-      const scripted = args.some((a) => /^(-e|-f|--expression|--file)/.test(a.raw) || name === "perl" && /^-\w*e$/.test(a.raw));
-      const files = scripted ? plain : plain.slice(1);
-      const hit = files.find((v) => v.expands);
-      if (hit)
-        return hit.raw;
-    }
-  }
-  return;
-}
 // hooks/core/path-guard.ts
 function editTarget(path) {
   return typeof path === "string" && path.trim() ? path.trim() : undefined;
@@ -3946,226 +3142,53 @@ var outsideFolderText = (rel, worktree, dataDir2 = ".symcc") => {
   }
   return `Refused: ${rel || "that path"} is in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: edit ${worktree.replace(/\/+$/, "")}/${rel || "..."} instead.`;
 };
-function cdTarget(text, home) {
-  const m = /^(cd|chdir|pushd|popd)(?:\s+([^]*))?$/.exec(text.trim());
-  if (!m)
-    return;
-  if (m[1] === "popd")
-    return null;
-  let arg = (m[2] ?? "").trim();
-  const quoted = /^'([^']*)'$/.exec(arg) ?? /^"([^"$`\\]*)"$/.exec(arg);
-  if (quoted)
-    arg = quoted[1];
-  const homeOk = home?.startsWith("/") ? home : undefined;
-  if (!arg)
-    return m[1] === "cd" || m[1] === "chdir" ? homeOk ?? null : null;
-  if (!(quoted ? /^[\w./+@%, -]+$/ : /^[\w./~+@%,-]+$/).test(arg) || arg.startsWith("-"))
-    return null;
-  if (arg === "~" || arg.startsWith("~/"))
-    return homeOk ? resolvePath(homeOk, arg.slice(1).replace(/^\/+/, "") || ".") : null;
-  return arg.includes("~") ? null : arg;
-}
-var BASH_FOLDERS_MAX = 16;
-var BASH_TOO_MANY = "\x00too many";
-var CWD_LOST = "\x00lost:";
-var BASH_LOST = "\x00lost path:";
-var BASH_UNRESOLVED = "\x00unresolved:";
-var UNRESOLVED_SHOWN = 80;
-function climbParts(w) {
-  const kept = [];
-  let ups = 0;
-  for (const part of w.split("/")) {
-    if (part === "" || part === ".")
-      continue;
-    if (part !== "..")
-      kept.push(part);
-    else if (kept.length > 0)
-      kept.pop();
-    else
-      ups++;
-  }
-  return { ups, rest: kept.join("/") };
-}
-var PLAIN_PATH = /^(?!-)[\w.@%+~/-]+$/;
-function plainPathWords(p) {
-  const out = new Set;
-  if (!p.doc) {
-    const words = shellWords(p.text);
-    words.forEach(({ w, q }, i) => {
-      if (i > 0 && GLOB_PATH.test(w)) {
-        const head = globFolder(w);
-        if (head)
-          out.add(head);
-        return;
-      }
-      if (!PLAIN_PATH.test(w) || i === 0 && !w.includes("/"))
-        return;
-      if (!q || w.includes("/") || p.text.includes(`"${w}"`) || p.text.includes(`'${w}'`))
-        out.add(w);
-    });
-  }
-  for (const w of pieceWords(p).keys())
-    if (w.includes("/") && PLAIN_PATH.test(w))
-      out.add(w);
-  return out;
-}
-var GLOB_PATH = /^(?!-)(?=[^*?[]*[*?[])[\w.@%+~/*?[\]!^-]+$/;
-var globFolder = (w) => {
-  const parts = w.split("/");
-  const at = parts.findIndex((part) => /[*?[]/.test(part));
-  return parts.slice(0, at).join("/");
-};
-function walkBash(command, wts, home, cwd, visit, opts = {}) {
-  const wt = wts[0];
-  const tops = opts.tops ?? [];
-  const lost = cwd === CWD_LOST;
-  const sh = !lost && cwd?.startsWith("/") ? resolvePath("/", cwd) : undefined;
-  const away = sh !== undefined && tops.length > 0 && insideAny(sh, tops, false) === undefined && !tops.some((t) => inside(t, sh, false) !== undefined);
-  const start = [sh !== undefined && (away || insideAny(sh, wts, true) !== undefined) ? sh : wt];
-  let over = false;
-  const join = (...lists) => {
-    const all = [...new Set(lists.flat())];
-    if (all.length <= BASH_FOLDERS_MAX)
-      return all;
-    over = true;
-    return all.slice(0, BASH_FOLDERS_MAX);
-  };
-  const union = (...lists) => [...new Set(lists.flat())];
-  let here = start;
-  let seen = start;
-  const groups = [];
-  const pieces = shellPieces(command);
-  const shadowed = SHADOW_FUNCTION.test(command) || pieces.some((p) => ("text" in p) && !p.doc && SHADOWS.test(p.text));
-  for (let i = 0;i < pieces.length; i++) {
-    const p = pieces[i];
-    if ("op" in p) {
-      if (p.op === "(")
-        groups.push({ here });
-      else if (p.op === ")") {
-        const g = groups.pop();
-        here = join(g?.here ?? start, here);
-      } else if (p.op === "||")
-        here = join(here, seen);
-      continue;
-    }
-    if (p.doc && p.lit && p.by !== undefined && !shadowed) {
-      const by = pieces[p.by];
-      if (by && "text" in by && docOnlyWritten(by.text))
-        continue;
-    }
-    const { text, whole } = p.doc || shadowed ? { text: p.text, whole: [] } : dropTextWords(p.text);
-    const q = { text, doc: p.doc };
-    const plain = opts.plain ? new Set([...plainPathWords(q), ...whole]) : new Set;
-    for (const w of new Set([...pieceWords(q).keys(), ...whole, ...plain])) {
-      const climbs = w.split("/").includes("..");
-      const homeWord = (w === "~" || w.startsWith("~/")) && home?.startsWith("/");
-      if (!w.startsWith("/") && !homeWord && !climbs && !plain.has(w))
-        continue;
-      const relative = !homeWord && (!w.startsWith("/") || climbs);
-      if (relative && over)
-        return BASH_TOO_MANY;
-      const dirs = here;
-      const tries = homeWord ? [resolvePath(home, w.slice(1).replace(/^\/+/, "") || ".")] : dirs.map((d) => resolvePath(d, w));
-      if (climbs && w.startsWith("/"))
-        tries.push(...dirs.map((d) => resolvePath(d, w.replace(/^\/+/, ""))));
-      for (const abs of tries) {
-        const rel = visit(abs);
-        if (rel !== undefined)
-          return lost && climbs && rel !== BASH_TOO_MANY ? BASH_LOST + rel : rel;
-      }
-      if (lost && climbs && !opts.plain) {
-        const { ups, rest } = climbParts(w);
-        for (const d of dirs) {
-          const depth = d.split("/").filter(Boolean).length;
-          for (let j = Math.min(ups - 1, depth);j >= 1; j--) {
-            const rel = visit(resolvePath(d, `${"../".repeat(j)}${rest || "."}`));
-            if (rel !== undefined)
-              return BASH_LOST + rel;
-          }
-        }
-      }
-    }
-    const first = rawWords(p.text, braceLit).map((x) => x.w)[0];
-    if (first !== undefined && hasBrace(first)) {
-      const guess = cdTarget(`cd ${p.text.trim().replace(/^\S+\s*/, "")}`, home);
-      const moved2 = [wt, ...guess ? here.map((d) => resolvePath(d, guess)) : []];
-      here = join(here, moved2);
-      seen = union(seen, here);
-      continue;
-    }
-    const to = cdTarget(p.text, home);
-    if (to === undefined)
-      continue;
-    if (p.doc) {
-      if (to !== null) {
-        here = join(here, here.map((d) => resolvePath(d, to)));
-        seen = union(seen, here);
-      }
-      continue;
-    }
-    const before = pieces[i - 1];
-    const after = pieces[i + 1];
-    const op = (x) => x && ("op" in x) ? x.op : undefined;
-    if (op(before) === "|" || op(after) === "|" || op(after) === "&")
-      continue;
-    const moved = to === null ? [wt] : here.map((d) => resolvePath(d, to));
-    here = op(after) === "&&" ? moved : join(here, moved);
-    seen = union(seen, moved);
-  }
-  return;
-}
-function bashOutsideFolder(command, worktree, root, home, cwd) {
+var BASH_DOTDOT = "\x00..";
+var BASH_ABOVE = "\x00above";
+var PATH_END = String.raw`\s;&|<>(){}=:,\``;
+var joinLines = (s) => s.replace(/\\\r?\n/g, "");
+var reEscape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function bashOutsideFolder(command, worktree, root, home) {
   const wts = folderList(worktree);
-  const tops = folderList(root);
+  const tops = folderList(root).filter((t) => t !== "/");
   if (typeof command !== "string" || !wts.length || !tops.length)
     return;
-  const check = (abs) => insideAny(abs, wts, true) !== undefined ? undefined : insideAny(abs, tops, false);
-  const found = walkBash(command, wts, home, cwd, check, { tops });
-  if (found !== undefined)
-    return found;
-  const flat = command.replace(/\\\n/g, "").replace(/["'\\]/g, "");
-  const homeDir = home?.startsWith("/") ? resolvePath("/", home) : undefined;
-  const B = String.raw`\s;&|<>(){}$=:,\``;
-  for (const top of tops) {
-    if (top === "/")
-      continue;
-    const fromHome = homeDir ? inside(top, homeDir, false) : undefined;
-    const starts = [[reEscape(top), "/"]];
-    if (fromHome)
-      starts.push([`~/${reEscape(fromHome)}`, homeDir]);
-    for (const [start, base] of starts) {
-      for (const m of flat.matchAll(new RegExp(`(?<=^|[${B}])${start}(?:/[^${B}]*)?(?=$|[${B}])`, "gi"))) {
-        const rel = check(resolvePath(base, m[0].replace(/^~\/?/, "")));
-        if (rel !== undefined)
-          return rel;
-      }
+  const plain = joinLines(command).replace(/["'\\]/g, "");
+  if (/(?:^|[\s/=:(<>&|;,{])\.\.(?=$|[\s/`;&|)<>,}])/.test(plain))
+    return BASH_DOTDOT;
+  if (/(?<![^\s;&|<>(){}=:,`])~(?:-\d*|\+?\d+)(?=$|[\/\s;&|<>(){}:,`])|\$\{?OLDPWD\b|(?<![\w.-])(?:cd|chdir|pushd|popd)[^\S\n]+[+-]\d/.test(plain))
+    return BASH_ABOVE;
+  const h = home?.startsWith("/") ? resolvePath("/", home) : undefined;
+  const user = h ? reEscape(h.split("/").pop() ?? "") : "";
+  const homed = h ? plain.replace(new RegExp(`(?<![^${PATH_END}])(?:~(?:${user})?|\\$HOME|\\$\\{HOME\\})(?=$|[/${PATH_END}])`, "gi"), h) : plain;
+  const flat = homed.replace(/\/(?:\.?\/)+/g, "/");
+  for (const m of flat.matchAll(/(?<![\w.-])(?:cd|chdir|pushd)(?=$|[\s;&|)])(?:[^\S\n]+-[^\s;&|()]*)*[^\S\n]*([^\s;&|()]*)/g)) {
+    const w = m[1];
+    const to = w === "" ? h : w.startsWith("/") ? resolvePath("/", w) : undefined;
+    if (to !== undefined && tops.some((t) => t.toLowerCase() !== to.toLowerCase() && inside(t, to, false) !== undefined))
+      return BASH_ABOVE;
+  }
+  for (const m of flat.matchAll(/\/[^\s;&|<>()`]*/g)) {
+    const parts = m[0].split("/").slice(1);
+    for (const top of tops) {
+      const own = top.split("/").slice(1);
+      const k = Math.min(parts.length, own.length);
+      if (!parts.slice(0, k).some((p) => /[*?[{]/.test(p)))
+        continue;
+      const like = (p, o) => new RegExp(`^${reEscape(p).replace(/\\\{[^}]*\\\}|\\\[[^\]]*\\\]/g, ".*").replace(/\\\*/g, ".*").replace(/\\\?/g, ".")}$`, "i").test(o);
+      if (parts.slice(0, k).every((p, i) => like(p, own[i])))
+        return "";
     }
   }
-  const unresolved = unresolvedTarget(command);
-  if (unresolved !== undefined)
-    return BASH_UNRESOLVED + unresolved;
+  for (const top of tops) {
+    for (const m of flat.matchAll(new RegExp(`${reEscape(top)}(?=$|[/*?[${PATH_END}])(?:/[^${PATH_END}]*)?`, "gi"))) {
+      const abs = resolvePath("/", top + m[0].slice(top.length));
+      if (insideAny(abs, wts, false) === undefined)
+        return insideAny(abs, tops, false) ?? "";
+    }
+  }
   return;
 }
-var BASH_PATHS_MAX = 2000;
-function bashPathsToCheck(command, worktree, home, cwd, root = []) {
-  const wts = folderList(worktree);
-  if (typeof command !== "string" || !wts.length)
-    return { paths: [], tooMany: false };
-  const out = new Set;
-  const found = walkBash(command, wts, home, cwd, (abs) => {
-    out.add(abs);
-    return out.size > BASH_PATHS_MAX ? BASH_TOO_MANY : undefined;
-  }, { tops: folderList(root), plain: true });
-  const tooMany = found === BASH_TOO_MANY;
-  return { paths: tooMany ? [] : [...out], tooMany };
-}
-var bashTooManyText = (worktree) => `Refused: this command has too many paths or folder changes (cd) to check where they lead (more than ${BASH_PATHS_MAX} paths, or more than ${BASH_FOLDERS_MAX} folders it may be in). Split it into shorter commands, use absolute paths inside your own folder ${worktree}, or write files with the Write tool.`;
-function unresolvedText(word) {
-  const w = word.replace(/[\u0000-\u001f\u007f]+/g, " ");
-  const shown = w.length > UNRESOLVED_SHOWN ? `${w.slice(0, UNRESOLVED_SHOWN - 1)}…` : w;
-  return `Refused: symcc can't check a path built from ${shown}; write the path out in full (a variable or command output in where a command writes, or in cd, may lead outside your own folder).`;
-}
-var bashOutsideText = (rel, worktree) => rel === BASH_TOO_MANY ? bashTooManyText(worktree) : rel.startsWith(BASH_UNRESOLVED) ? unresolvedText(rel.slice(BASH_UNRESOLVED.length)) : rel.startsWith(BASH_LOST) ? `${bashOutsideText(rel.slice(BASH_LOST.length), worktree)} symcc couldn't tell the shell's folder; use a full path.` : `Refused: this command names ${rel || "the project folder"} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`;
+var bashOutsideText = (rel, worktree) => rel === BASH_DOTDOT ? `Refused: this command has a ".." path piece. Use full paths inside your own folder ${worktree} instead.` : rel === BASH_ABOVE ? `Refused: this command changes to a folder above the project, from where a relative path reaches the owner's copy. Stay in your own folder ${worktree} and use full paths.` : `Refused: this command names ${rel || "the project folder"} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it, never the owner's copy, even to read.`;
 function editInProject(path, root) {
   const p = editTarget(path);
   const tops = folderList(root);
@@ -4197,612 +3220,126 @@ function guardReason(kind, message) {
 }
 var guardFailedText = (name, reason) => `${name} couldn't check this call, so it was refused: ${reason}`;
 // hooks/core/git-guard.ts
-var GIT_READ = new Set(["diff", "log", "show", "status", "blame", "grep", "rev-parse", "ls-files", "ls-tree", "cat-file", "rev-list", "merge-base", "describe", "shortlog", "show-branch", "whatchanged", "name-rev", "diff-tree", "diff-index", "diff-files", "annotate", "help", "version", "count-objects", "var", "check-ignore", "check-attr", "show-ref"]);
-var GIT_GLOBAL_VALUE = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env", "--super-prefix"]);
-var GIT_GLOBAL_REFUSED = /^(-c|--config-env|--exec-path)/;
-var LONG_REFUSED = ["output", "ext-diff", "textconv", "open-files-in-pager", "exec-path", "exec"];
-var LONG_OK = new Set(["text"]);
-var DIFF_LIKE = new Set(["diff", "log", "show", "reflog", "whatchanged", "diff-tree", "diff-index", "diff-files", "format-patch", "rev-list", "shortlog"]);
-var BRANCH_WRITE = /^(-[a-zA-Z]*[dDfmMcCu]|--(delete|force|move|copy|set-upstream-to|unset-upstream|edit-description|track|no-track|create-reflog|recurse-submodules)(=|$))/;
-var BRANCH_VALUE = new Set(["--contains", "--no-contains", "--merged", "--no-merged", "--points-at", "--format", "--sort", "--column"]);
-var GIT_ENV_REFUSED = /^(GIT_\w*|PAGER|EDITOR|VISUAL|LESS\w*|SSH_ASKPASS|BROWSER|HOME|XDG_CONFIG_HOME)=/;
-var GREP_VALUE = "efABCmO";
-var DIFF_VALUE = "SGLOInUlMCBX";
-function shortFlags(a, value) {
-  let out = "";
-  for (const c of a.slice(1)) {
-    out += c;
-    if (value.includes(c))
-      break;
-  }
-  return out;
-}
-function gitBadOption(sub, args) {
-  for (const a of args) {
-    const long = /^--([^=]+)/.exec(a)?.[1];
-    if (sub === "cat-file" && long && long.length > 1 && "filters".startsWith(long))
-      return a.split("=")[0];
-    if (long && !LONG_OK.has(long) && !long.startsWith("no-") && LONG_REFUSED.some((n) => n.startsWith(long)))
-      return a.split("=")[0];
-    const flag = sub === "grep" ? "O" : DIFF_LIKE.has(sub) ? "o" : undefined;
-    if (flag && /^-[^-]/.test(a) && shortFlags(a, sub === "grep" ? GREP_VALUE : sub === "shortlog" ? DIFF_VALUE.replace("n", "") : DIFF_VALUE).includes(flag))
-      return `-${flag}`;
-  }
-  return;
-}
-var CONFIG_SHOW = /^(--(global|local|system|worktree|show-origin|show-scope|name-only|null|includes|no-includes|bool|int|bool-or-int|path|expiry-date|type=[\w-]+)|-z)$/;
-var CONFIG_GET = new Set(["--get", "--get-all", "--get-regexp", "--get-urlmatch", "--list", "-l"]);
-function configReadOnly(args) {
-  let get = args[0] === "get" || args[0] === "list";
-  for (const a of get ? args.slice(1) : args) {
-    if (CONFIG_GET.has(a))
-      get = true;
-    else if (a.startsWith("-") && !CONFIG_SHOW.test(a))
-      return false;
-  }
-  return get;
-}
-function gitReadOnly(sub, args) {
-  if (GIT_READ.has(sub))
-    return true;
-  if (sub === "remote")
-    return args.length === 0 || args.every((a) => a === "-v" || a === "--verbose") || args[0] === "get-url";
-  if (sub === "config")
-    return configReadOnly(args);
-  if (sub === "reflog")
-    return args[0] === "show" || args.every((a) => a.startsWith("-"));
-  if (sub === "stash" || sub === "worktree")
-    return args[0] === "list" || sub === "stash" && args[0] === "show";
-  if (sub !== "branch")
-    return false;
-  let list = false;
-  let named = false;
-  for (let i = 0;i < args.length; i++) {
-    const a = args[i];
-    if (a === "--list" || a === "-l" || a === "--show-current")
-      list = true;
-    else if (BRANCH_WRITE.test(a))
-      return false;
-    else if (BRANCH_VALUE.has(a))
-      i++;
-    else if (!a.startsWith("-"))
-      named = true;
-  }
-  return list || !named;
-}
-var isGit = (w) => /(^|\/)git$/i.test(w);
-function gitWriteIn(command, allow, cwd) {
-  if (typeof command !== "string")
-    return;
-  const { bad, git, env } = gitScan(command, 0, allow, false, cwd);
-  return bad ?? (git && env ? env : undefined);
-}
-var eitherAllow = (a, b) => (sub, args, place) => a(sub, args, place) || b(sub, args, place);
-function literalPath(raw) {
-  const q = /^"([^"]*)"$/.exec(raw) ?? /^'([^']*)'$/.exec(raw);
-  const p = q ? q[1] : raw;
-  if (!(q ? /^\/[\w./@%+,= -]*$/ : /^\/[\w./@%+,=-]*$/).test(p))
-    return;
-  if (p.split("/").includes(".."))
-    return;
-  return resolvePath("/", p);
-}
-var inScratchTemp = (abs, temps, keep) => {
-  const rel = insideAny(abs, folderList(temps), true);
-  return !!rel && insideAny(abs, folderList(keep), false) === undefined;
-};
-function scratchTemps(tmpdir) {
-  const t = tmpdir ? literalPath(tmpdir.replace(/\/+$/, "")) : undefined;
-  return t && /^(\/private)?\/var\/folders\/[^/]+\//.test(t) ? ["/tmp", t] : ["/tmp"];
-}
-var MESSAGE_SUBS = new Set(["commit", "tag", "merge", "notes", "stash"]);
-var SCRATCH_INIT_OPTIONS = /^(-q|--quiet|--bare|--initial-branch=[\w./-]+)$/;
-var scratchGitAllow = (temps, keep) => (sub, _args, place) => {
-  if (!place)
-    return false;
-  const ok = (abs) => abs !== undefined && inScratchTemp(abs, temps, keep);
-  let dir = place.dir;
-  for (let i = 0;i < place.pre.length; i++) {
-    const o = place.pre[i].raw;
-    if (o === "-C") {
-      dir = literalPath(place.pre[++i]?.raw ?? "");
-      if (dir === undefined)
-        return false;
-    } else if (o !== "--no-pager")
-      return false;
-  }
-  const args = place.args;
-  if (sub === "init") {
-    const names = [];
-    for (let i = 0;i < args.length; i++) {
-      const a = args[i];
-      if (a.raw === "-b" || a.raw === "--initial-branch") {
-        if (!/^[\w./-]+$/.test(args[++i]?.raw ?? ""))
-          return false;
-      } else if (a.raw.startsWith("-")) {
-        if (!SCRATCH_INIT_OPTIONS.test(a.raw))
-          return false;
-      } else
-        names.push(a);
-    }
-    if (names.length > 1)
-      return false;
-    const name = names[0];
-    if (name) {
-      if (name.raw.startsWith("/") || /^["']\//.test(name.raw))
-        return ok(literalPath(name.raw));
-      return dir !== undefined && /^[\w.@%+,=-][\w./@%+,=-]*$/.test(name.raw) && !name.raw.split("/").includes("..") && ok(resolvePath(dir, name.raw));
-    }
-  }
-  if (!ok(dir))
-    return false;
-  for (let i = 0;i < args.length; i++) {
-    const a = args[i];
-    if (MESSAGE_SUBS.has(sub)) {
-      if (a.raw === "--message" || /^-[aqsvnS]*m$/.test(a.raw)) {
-        i++;
-        continue;
-      }
-      if (/^(-[aqsvnS]*m|--message=)/.test(a.raw))
-        continue;
-    }
-    const redir = REDIRECT.exec(a.raw);
-    if (redir) {
-      if (!redir[4] && !redir[3])
-        i++;
-      continue;
-    }
-    const long = a.w.split("=")[0];
-    if (long.length > 2 && long.startsWith("--") && ("--global".startsWith(long) || "--system".startsWith(long)))
-      return false;
-    if (sub === "config" && /^-f./.test(a.w)) {
-      const f = a.w.slice(2);
-      const plain = /^[\w.@%+,=-][\w./@%+,=-]*$/.test(f) && !f.split("/").includes("..");
-      if (!plain && !ok(literalPath(f)))
-        return false;
-    }
-    if (/\s/.test(a.w) && !/^--author=/.test(a.raw))
-      return false;
-    if (a.expands || /(^|[=:,])~/.test(a.w) || /(^|[^\w.])\.\.(\/|$)/.test(a.w))
-      return false;
-    for (const m of a.w.matchAll(/(?:^|^-[A-Za-z]|[^\w.@%+-])(\/[^\s,:;'"|&<>()]*)/g))
-      if (!ok(literalPath(m[1])))
-        return false;
-  }
-  return true;
-};
-var WORKER_GIT = new Set(["add", "rm", "mv", "restore", "checkout", "commit", "merge", "cherry-pick", "revert", "reset", "rebase", "bisect", "clean", "am", "apply"]);
-var REBASE_VALUE = new Set(["--onto", "-s", "--strategy", "-X", "--strategy-option", "-x", "--exec"]);
+var GIT_ALL = `add am annotate apply archimport archive backfill bisect blame branch bugreport bundle cat-file check-attr
+check-ignore check-mailmap check-ref-format checkout checkout--worker checkout-index cherry cherry-pick clean
+clone column commit commit-graph commit-tree config count-objects credential credential-cache
+credential-cache--daemon credential-netrc credential-osxkeychain credential-store cvsexportcommit cvsimport
+cvsserver daemon describe diagnose diff diff-files diff-index diff-pairs diff-tree difftool difftool--helper
+fast-export fast-import fetch fetch-pack filter-branch fmt-merge-msg for-each-ref for-each-repo format-patch
+format-rev fsck fsck-objects fsmonitor--daemon gc get-tar-commit-id grep hash-object help history hook
+http-backend http-fetch http-push imap-send index-pack init init-db instaweb interpret-trailers jump
+last-modified log ls-files ls-remote ls-tree mailinfo mailsplit maintenance merge merge-base merge-file
+merge-index merge-octopus merge-one-file merge-ours merge-recursive merge-recursive-ours
+merge-recursive-theirs merge-resolve merge-subtree merge-tree mergetool mktag mktree multi-pack-index mv
+name-rev notes p4 pack-objects pack-redundant pack-refs patch-id pickaxe prune prune-packed pull push
+quiltimport range-diff read-tree rebase receive-pack reflog refs remote remote-ext remote-fd remote-ftp
+remote-ftps remote-http remote-https repack replace replay repo request-pull rerere reset restore rev-list
+rev-parse revert rm send-email send-pack sh-i18n--envsubst shell shortlog show show-branch show-index
+show-ref sparse-checkout stage stash status stripspace submodule submodule--helper subtree switch
+symbolic-ref tag unpack-file unpack-objects update-index update-ref update-server-info upload-archive
+upload-archive--writer upload-pack url-parse var verify-commit verify-pack verify-tag version web--browse
+whatchanged worktree write-tree lfs`.split(/\s+/);
+var GIT_READS = new Set(`annotate blame cat-file check-attr check-ignore check-mailmap check-ref-format cherry column
+count-objects describe diff diff-files diff-index diff-pairs diff-tree fmt-merge-msg for-each-ref get-tar-commit-id grep
+help last-modified log ls-files ls-tree merge-base name-rev patch-id range-diff rev-list rev-parse shortlog show
+show-branch show-index show-ref status stripspace var verify-commit verify-pack verify-tag version whatchanged`.split(/\s+/));
+var GIT_WRITES = new Set(GIT_ALL.filter((c) => !GIT_READS.has(c)));
+var WORKER_GIT = new Set(["commit", "merge", "cherry-pick", "revert", "restore", "reset", "add", "stage", "rm", "mv", "clean", "am", "apply", "bisect", "rebase", "checkout"]);
+var scratchInit = (args) => args.length === 1 && /^\/(?:private\/)?tmp\/[\w.@+,-]+(?:\/[\w.@+,-]+)*\/?$/.test(args[0]) && !args[0].split("/").includes("..");
 var longStart = (a, name) => {
   const long = /^--([^=]+)/.exec(a)?.[1];
   return !!long && long.length > 1 && name.startsWith(long);
 };
-var workerGitAllow = (own) => (sub, args, place) => {
-  if (!place || !WORKER_GIT.has(sub))
-    return false;
-  const mine = folderList(own);
-  let dir = place.dir;
-  for (let i = 0;i < place.pre.length; i++) {
-    const o = place.pre[i].raw;
-    if (o === "-C") {
-      const to = place.pre[++i]?.raw ?? "";
-      dir = to.startsWith("/") || /^["']\//.test(to) ? literalPath(to) : dir !== undefined && /^[\w.@%+,=-][\w./@%+,=-]*$/.test(to) && !to.split("/").includes("..") ? resolvePath(dir, to) : undefined;
-    } else if (o !== "--no-pager")
-      return false;
-  }
-  if (dir === undefined || insideAny(resolvePath("/", dir), mine, true) === undefined)
-    return false;
-  const words = [];
-  for (let i = 0;i < place.args.length; i++) {
-    const a = place.args[i];
-    const redir = REDIRECT.exec(a.raw);
-    if (redir) {
-      if (!redir[4] && !redir[3])
-        i++;
-      continue;
-    }
-    if (MESSAGE_SUBS.has(sub) && (a.raw === "--message" || /^-[aqsvnS]*m$/.test(a.raw))) {
-      i++;
-      continue;
-    }
-    if (MESSAGE_SUBS.has(sub) && /^(-[aqsvnS]*m|--message=)/.test(a.raw))
-      continue;
-    if (a.expands)
-      return false;
-    words.push(a.w);
-  }
-  args = words;
-  if ((sub === "merge" || sub === "rebase") && args.some((a) => longStart(a, "autostash")))
-    return false;
-  if (sub === "bisect" && args[0] === "reset")
-    return args.length === 1;
-  if (sub === "checkout")
-    return args.indexOf("--") >= 0 && args.indexOf("--") < args.length - 1 && !args.slice(0, args.indexOf("--")).some((a) => /^-[a-zA-Z]*[bB]/.test(a) || longStart(a, "orphan") || longStart(a, "detach"));
-  if (sub === "rebase") {
-    let names = 0;
-    let root = false;
-    for (let i = 0;i < args.length; i++) {
-      const a = args[i];
-      if (longStart(a, "update-refs") || longStart(a, "quit"))
-        return false;
-      if (longStart(a, "root"))
-        root = true;
-      if (REBASE_VALUE.has(a))
-        i++;
-      else if (!a.startsWith("-"))
-        names++;
-    }
-    return names <= (root ? 0 : 1);
-  }
-  return true;
-};
-var TEXT_TOOLS = {
-  grep: undefined,
-  egrep: undefined,
-  fgrep: undefined,
-  rg: /^--(p|hostname-bin)/,
-  ag: /^--p/,
-  ack: /^--p/,
-  cat: undefined,
-  head: undefined,
-  tail: undefined,
-  less: /^(\+|-k|--lesskey)/,
-  more: /^(\+|-k|--lesskey)/,
-  wc: undefined,
-  sort: /^--co/,
-  uniq: undefined,
-  cut: undefined,
-  ls: undefined,
-  file: undefined,
-  stat: undefined,
-  diff: undefined,
-  find: /^-(exec|execdir|ok|okdir|delete)$/
-};
-var TOOL_DIR = /^(\/usr\/local\/bin|\/opt\/homebrew\/bin|\/usr\/bin|\/bin)\/[^/]+$/;
-var progName = (w) => w.slice(w.lastIndexOf("/") + 1).toLowerCase();
-var ADDS_WORDS = new Set(["xargs", "parallel"]);
-function textTool(words) {
-  const w = words[0];
-  if (w === undefined || w.includes("/") && !TOOL_DIR.test(w))
-    return false;
-  const name = progName(w);
-  if (!Object.hasOwn(TEXT_TOOLS, name))
-    return false;
-  const refused = TEXT_TOOLS[name];
-  return !refused || !words.slice(1).some((a) => refused.test(a));
-}
-var plainCd = (p) => (p.words[0] === "cd" || p.words[0] === "pushd") && p.words.length <= 2 && /^\s*(cd|pushd)(\s+(?!-)[\w./~+,:%-]+)?\s*$/.test(p.text);
-var RUNS_INSIDE = /\$\(|`|<\(|>\(/;
-var RERUNS = new Set(["bash", "sh", "zsh", "dash", "ksh", "eval"]);
-var BRACE_WHAT = "with {braces}";
-var BRACE_WORDS_MAX = 1024;
-var BRACE_CHARS_MAX = 2000;
-var BRACE_OPEN_MAX = 50;
-function braceExpand(w) {
-  if (w.length > BRACE_CHARS_MAX || w.split("{").length - 1 > BRACE_OPEN_MAX)
-    return null;
-  for (let i = w.indexOf("{");i >= 0; i = w.indexOf("{", i + 1)) {
-    let depth = 0;
-    let j = i;
-    const cuts = [];
-    for (;j < w.length; j++) {
-      const c = w[j];
-      if (c === "{")
-        depth++;
-      else if (c === "}" && --depth === 0)
-        break;
-      else if (c === "," && depth === 1)
-        cuts.push(j);
-    }
-    if (j >= w.length)
-      continue;
-    const body = w.slice(i + 1, j);
-    let alts;
-    if (cuts.length)
-      alts = [i, ...cuts].map((at, k) => w.slice(at + 1, cuts[k] ?? j));
-    else {
-      const num3 = /^(-?\d+)\.\.(-?\d+)(?:\.\.-?\d+)?$/.exec(body);
-      const chr = /^([A-Za-z])\.\.([A-Za-z])(?:\.\.-?\d+)?$/.exec(body);
-      if (num3) {
-        const [a, b] = [Number(num3[1]), Number(num3[2])];
-        if (Math.abs(a - b) >= BRACE_WORDS_MAX)
-          return null;
-        alts = Array.from({ length: Math.abs(a - b) + 1 }, (_, k) => String(a < b ? a + k : a - k));
-      } else if (chr) {
-        const [a, b] = [chr[1].charCodeAt(0), chr[2].charCodeAt(0)];
-        alts = Array.from({ length: Math.abs(a - b) + 1 }, (_, k) => String.fromCharCode(Math.min(a, b) + k));
+var WORKER_LIMITS = {
+  checkout: {
+    bad: (w) => {
+      const d = w.indexOf("--");
+      return d >= 0 && d < w.length - 1 && !w.slice(0, d).some((a) => /^-[a-zA-Z]*[bB]/.test(a) || longStart(a, "orphan") || longStart(a, "detach")) ? undefined : "git checkout <branch>";
+    },
+    node: ["checkout:*"]
+  },
+  rebase: {
+    bad: (w) => {
+      let names = 0;
+      for (let i = 0;i < w.length; i++) {
+        const a = w[i];
+        if (/^-[a-zA-Z]*x/.test(a) || ["exec", "update-refs", "autostash", "quit"].some((n) => longStart(a, n)))
+          return `git rebase ${a.split("=")[0]}`;
+        if (["--onto", "-s", "--strategy", "-X", "--strategy-option"].includes(a))
+          i++;
+        else if (!a.startsWith("-"))
+          names++;
       }
+      return names > (w.some((a) => longStart(a, "root")) ? 0 : 1) ? "git rebase <other branch>" : undefined;
+    },
+    node: ["rebase * *", "rebase -*x*", "rebase --e*", "rebase --u*", "rebase --au*", "rebase --q*"]
+  },
+  bisect: { bad: (w) => w[0] === "run" ? "git bisect run" : w[0] === "reset" && w.length > 1 ? "git bisect reset <commit>" : undefined, node: ["bisect run:*", "bisect reset *"] },
+  merge: { bad: (w) => w.some((a) => longStart(a, "autostash")) ? "git merge --autostash" : undefined, node: ["merge *--au*"] }
+};
+var BRANCH_LIST = new Set(["--list", "-l", "-a", "--all", "-r", "--remotes", "-v", "-vv", "--verbose", "--show-current", "--contains", "--no-contains", "--merged", "--no-merged", "--points-at", "--sort", "--format", "--color", "--no-color", "-i", "--ignore-case", "--column", "--no-column", "--omit-empty", "--abbrev", "--no-abbrev"]);
+var BRANCH_LIST_MODE = new Set(["--list", "-l", "--contains", "--no-contains", "--merged", "--no-merged", "--points-at"]);
+var branchListOnly = (args) => {
+  const opts = args.filter((a) => a.startsWith("-")).map((a) => a.split("=")[0]);
+  return opts.every((o) => BRANCH_LIST.has(o)) && (opts.length === args.length || opts.some((o) => BRANCH_LIST_MODE.has(o)));
+};
+var GIT_OPTION_OK = new Set(["--no-pager", "-P", "-p", "--paginate", "--no-optional-locks", "--version", "--help"]);
+var GIT_AT = new RegExp(String.raw`(?:^|&&|\|\||[;|&(){\n` + "`" + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n]|(?<!\S)-(?:exec|execdir|ok|okdir)[^\S\n])` + String.raw`(?:[^\S\n]*(?:(?:(?:/[\w.-]+)*/)?(?:env|sudo|doas|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|noglob|nocorrect|coproc|builtin|repeat|!|-)` + String.raw`(?:[^\S\n]+(?:-[^\s;&|](?![^\s;&|])(?:[^\S\n]+(?!-)(?!\d[\w.]*(?![^\s;&|]))(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]{2,}|\d[\w.]*(?![^\s;&|])))*|\w+=[^\s;&|]*` + String.raw`|\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()]+)(?=\s))*` + String.raw`[^\S\n]*(?:(?:/[\w.-]+)*/)?git(?:-([a-z][\w-]*))?(?=$|[\s'"` + "`" + String.raw`;&|()<>\\])`, "gi");
+function gitWriteIn(text, who = "reader") {
+  if (typeof text !== "string")
+    return;
+  const command = joinLines(text).replace(/["'\\]/g, "");
+  if (/(?<![\w])GIT_\w*=/.test(command))
+    return "a GIT_ setting";
+  if (/core\.hookspath/i.test(command))
+    return "core.hooksPath";
+  if (/--(?:git-common-dir|absolute-git-dir|git-path|git-dir)(?![\w-])/.test(command))
+    return "git's own folder";
+  for (const m of command.matchAll(GIT_AT)) {
+    const rest = command.slice(m.index + m[0].length).replace(/\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()`]*/g, " ").split(/[;&|()`\n]/)[0];
+    const words = rest.split(/\s+/).map((w) => w.replace(/["'\\]/g, "")).filter(Boolean);
+    let i = 0;
+    if (!m[1]) {
+      for (;words[i]?.startsWith("-"); i++)
+        if (!GIT_OPTION_OK.has(words[i]))
+          return `git ${words[i].split("=")[0]}`;
     }
-    if (!alts && body.includes(".."))
-      return null;
-    if (!alts)
+    const sub = (m[1] ?? words[i++])?.toLowerCase();
+    if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub) || m[1] && !GIT_ALL.includes(sub))
       continue;
-    const out = [];
-    for (const a of alts) {
-      const more = braceExpand(w.slice(0, i) + a + w.slice(j + 1));
-      if (!more || out.push(...more) > BRACE_WORDS_MAX)
-        return null;
-    }
-    return out;
+    const args = words.slice(i);
+    if (sub === "grep" && args.some((a) => /^-[a-zA-Z]*O/.test(a) || longStart(a, "open-files-in-pager")))
+      return "git grep -O";
+    if (GIT_READS.has(sub))
+      continue;
+    if (sub === "branch" && branchListOnly(args))
+      continue;
+    if (sub === "init" && who === "worker" && scratchInit(args))
+      continue;
+    if (who === "reader" || !WORKER_GIT.has(sub))
+      return `git ${sub}`;
+    const bad = WORKER_LIMITS[sub]?.bad(args);
+    if (bad)
+      return bad;
   }
-  return [w];
+  return;
 }
-var braceGit = (w) => {
-  if (!hasBrace(w))
-    return false;
-  if (/(?:^|[/=])git$/i.test(w.replace(/[{},]/g, "")) || w.split(/[{},]/).some((part) => /^git(?:$|-)/i.test(part.split(/[/=]/).pop() ?? "")))
-    return true;
-  const words = braceExpand(w);
-  return words ? words.some((e) => /(?:^|[/=])git(?:$|-)/i.test(e)) : braceLetters(w);
-};
-var braceLetters = (w) => {
-  const letters = w.replace(/\{-?\d+\.\.-?\d+(?:\.\.-?\d+)?\}/g, "").replace(/\{([A-Za-z])\.\.([A-Za-z])(?:\.\.-?\d+)?\}/g, (_, a, b) => {
-    const [x, y] = [a.charCodeAt(0), b.charCodeAt(0)].sort((m, n) => m - n);
-    return Array.from({ length: y - x + 1 }, (_2, k) => String.fromCharCode(x + k)).join("");
-  }).toLowerCase();
-  if (/\{[^{}]*\.\.[^{}]*\}/.test(letters))
-    return true;
-  return [..."git"].every((c) => letters.includes(c));
-};
-var plainBraces = (w) => {
-  const v = w.replace(/[@$]\{[^{}]*\}/g, "").replace(/\{\}/g, "");
-  if (v.length > BRACE_CHARS_MAX || v.split("{").length - 1 > BRACE_OPEN_MAX || /[{,]-/.test(v))
-    return false;
-  for (let i = v.indexOf("{");i >= 0; i = v.indexOf("{", i + 1)) {
-    let depth = 0;
-    let j = i;
-    for (;j < v.length; j++) {
-      if (v[j] === "{")
-        depth++;
-      else if (v[j] === "}" && --depth === 0)
-        break;
-    }
-    if (v.slice(i + 1, j).includes(".."))
+function gitPlaceOk(command, cwd, places) {
+  const list = folderList(places);
+  const ok = (p) => p.startsWith("/") && insideAny(resolvePath("/", p), list, false) !== undefined;
+  const flat = joinLines(command).replace(/["'\\]/g, "");
+  for (const m of flat.matchAll(/(?<![\w.-])(?:cd|chdir|pushd|popd)(?=$|[\s;&|)])[^\S\n]*([^\s;&|()]*)/g)) {
+    const to = m[1];
+    if (!(to.startsWith("/") ? ok(to) : /^(?!-)[\w@%+,.-][\w./@%+,-]*$/.test(to) && !to.split("/").includes("..")))
       return false;
   }
-  return true;
-};
-function findExecTextArgs(words) {
-  const out = new Set;
-  if (!words.some((w) => progName(w) === "find"))
-    return out;
-  for (let i = 0;i < words.length; i++) {
-    if (!/^-(exec|execdir|ok|okdir)$/.test(words[i]))
-      continue;
-    let end = i + 1;
-    while (end < words.length && !/^(\\?;|\+)$/.test(words[end]))
-      end++;
-    if (textTool(words.slice(i + 1, end)))
-      for (let k = i + 2;k < end; k++)
-        out.add(k);
-    i = end;
-  }
-  return out;
+  const first = /^\s*(?:cd|chdir|pushd)\s+(\/\S*)/.exec(flat)?.[1];
+  return cwd !== undefined && ok(cwd) || first !== undefined && ok(first);
 }
-var unsplit_ = (text) => /\n|\\|\$'|(?:^|[\s;&|()<>`])#/.test(text);
-function dropQuotedBackslashes(text) {
-  let out = "";
-  for (let i = 0;i < text.length; i++) {
-    const c = text[i];
-    if (c === "\\")
-      out += c + (text[i + 1] ?? ""), i++;
-    else if (c === "'" || c === '"') {
-      let j = i + 1;
-      let inner = "";
-      for (;j < text.length && text[j] !== c; j++) {
-        const d = text[j];
-        if (d !== "\\")
-          inner += d;
-        else if (c === '"' && /[\\"$`\n]/.test(text[j + 1] ?? `
-`))
-          inner += d + (text[j + 1] ?? ""), j++;
-      }
-      if (j >= text.length)
-        return out + text.slice(i);
-      out += c + inner + c;
-      i = j;
-    } else
-      out += c;
-  }
-  return out;
-}
-function dropSingleQuoted(text) {
-  let out = "";
-  let dq = false;
-  for (let i = 0;i < text.length; i++) {
-    const c = text[i];
-    if (c === "\\")
-      out += c + (text[i + 1] ?? ""), i++;
-    else if (c === '"')
-      dq = !dq, out += c;
-    else if (c === "'" && !dq) {
-      const end = text.indexOf("'", i + 1);
-      if (end < 0)
-        return out + text.slice(i);
-      out += "''";
-      i = end;
-    } else
-      out += c;
-  }
-  return out;
-}
-var isAssign = (w) => /^[A-Za-z_]\w*\+?=/.test(w);
-var isPrint = (w) => w !== undefined && (!w.includes("/") || TOOL_DIR.test(w)) && /^(echo|printf)$/.test(progName(w));
-var printOrAssign = (p) => {
-  if (p.doc || RUNS_INSIDE.test(p.text) || /[<>]/.test(p.text))
-    return false;
-  const cmd = p.words.find((w) => !isAssign(w));
-  return cmd === undefined || isPrint(cmd);
-};
-function braceTextArgs(p) {
-  const out = new Set;
-  let i = 0;
-  for (;i < p.words.length && isAssign(p.words[i]); i++)
-    out.add(i);
-  if (isPrint(p.words[i]))
-    for (let k = i + 1;k < p.words.length; k++)
-      out.add(k);
-  return out;
-}
-var FOLDER_WORDS = new Set(["cd", "chdir", "pushd", "popd", "eval", "source", "."]);
-function gitFolders(pieces, cwd) {
-  const out = new Map;
-  if (pieces.some((p) => !("op" in p) && p.doc))
-    return out;
-  if (pieces.some((p) => ("op" in p) && (p.op === "|" || p.op === "(" || p.op === ")"))) {
-    const dir2 = cwd ? literalPath(cwd) : undefined;
-    const moves = pieces.some((p) => {
-      if ("op" in p)
-        return false;
-      const words = rawWords(p.text);
-      return !!words[0]?.expands || words.some((x) => FOLDER_WORDS.has(x.w));
-    });
-    if (!moves && dir2 !== undefined) {
-      for (const p of pieces)
-        if (!("op" in p))
-          out.set(p, dir2);
-    }
-    return out;
-  }
-  let dir = cwd ? literalPath(cwd) : undefined;
-  let moved = false;
-  let prev;
-  for (const p of pieces) {
-    if ("op" in p) {
-      if (p.op !== "&&" && moved)
-        dir = undefined;
-      prev = p.op;
-      continue;
-    }
-    out.set(p, dir);
-    const words = rawWords(p.text);
-    const name = words[0]?.raw;
-    if (name === "cd" || name === "chdir" || name === "pushd" || name === "popd") {
-      moved = true;
-      dir = name !== "popd" && prev !== "||" && words.length === 2 ? literalPath(words[1].raw) : undefined;
-    } else if (words[0]?.expands || !isGit(words[0]?.w ?? "") && words.some((x) => FOLDER_WORDS.has(x.w))) {
-      moved = true;
-      dir = undefined;
-    }
-  }
-  return out;
-}
-function gitScan(command, depth, allow, broad = false, cwd) {
-  const out = { git: false };
-  if (depth > 4)
-    return out;
-  const pieces = shellPieces(command);
-  const dirs = depth === 0 ? gitFolders(pieces, cwd) : new Map;
-  let seen = false;
-  const simple = pieces.flatMap((p) => {
-    if ("op" in p)
-      return [];
-    const raws = rawWords(p.text);
-    const words = raws.map((x) => x.w);
-    const adds = seen;
-    seen ||= words.some((a) => ADDS_WORDS.has(progName(a)));
-    return [{ ...p, words, raws, top: depth === 0 && !p.doc, dir: dirs.get(p), braces: rawWords(p.text, braceLit).map((x) => x.w), adds }];
-  });
-  const placeOf = (p) => p.top ? { raws: p.raws, dir: p.dir } : undefined;
-  const gitAt = (words, at, adds, braces, place) => {
-    const w = words[at];
-    const dashed = /(?:^|\/)git-([\w-]+)$/i.exec(w)?.[1];
-    const braced = !dashed && !isGit(w) && braceGit(braces[at] ?? w);
-    if (!dashed && !isGit(w) && !/=git$/i.test(w) && !braced)
-      return;
-    out.git = true;
-    if (adds || words.slice(0, at).some((a) => ADDS_WORDS.has(progName(a))))
-      return { bad: "xargs git" };
-    if (braced)
-      return { bad: `git ${BRACE_WHAT}` };
-    let j = at + 1;
-    let sub = dashed;
-    let refused;
-    if (!dashed) {
-      for (;j < words.length && words[j].startsWith("-"); j += GIT_GLOBAL_VALUE.has(words[j]) ? 2 : 1)
-        if (!refused && GIT_GLOBAL_REFUSED.test(words[j]))
-          refused = words[j].split("=")[0];
-      sub = words[j++];
-    }
-    const dashes = sub !== undefined && GIT_READ.has(sub) ? words.indexOf("--", j) : -1;
-    const own = dashes < 0 ? braces.slice(at + 1) : braces.slice(at + 1, dashes);
-    const paths = dashes < 0 ? [] : braces.slice(dashes + 1).filter(hasBrace);
-    if (own.some(hasBrace) || paths.some((w2) => !plainBraces(w2) || braceExpand(w2)?.every((e) => !e.startsWith("-")) !== true))
-      return { bad: `git ${BRACE_WHAT}` };
-    if (refused)
-      return { bad: `git ${refused}` };
-    if (sub === undefined)
-      return {};
-    const args = words.slice(j);
-    const where = place && at === 0 && !dashed && isGit(w) ? { pre: place.raws.slice(1, j - 1), args: place.raws.slice(j), dir: place.dir } : undefined;
-    if (allow?.(sub, args, where))
-      return {};
-    if (!gitReadOnly(sub, args))
-      return { bad: `git ${sub}` };
-    const opt = gitBadOption(sub, args);
-    return opt ? { bad: `git ${sub} ${opt}` } : {};
-  };
-  const exempt = (p) => {
-    if (p.words.length === 0)
-      return true;
-    if (p.doc || RUNS_INSIDE.test(p.text))
-      return false;
-    if (textTool(p.words) || plainCd(p))
-      return true;
-    const w = p.words[0];
-    if (command.includes("@{"))
-      return false;
-    return (isGit(w) || /(?:^|\/)git-[\w-]+$/i.test(w)) && gitAt(p.words, 0, p.adds, p.braces, placeOf(p))?.bad === undefined;
-  };
-  const fold = (inner) => {
-    out.git ||= inner.git;
-    out.env ??= inner.env;
-    return inner.bad ? { ...out, bad: inner.bad } : undefined;
-  };
-  const unsplit = unsplit_(dropQuotedBackslashes(command));
-  const gitProgram = simple.some((p) => p.words.some((w) => /(?:^|[/=])git-[\w-]+$|git-core\//i.test(w)));
-  broad ||= unsplit || gitProgram || !simple.every(exempt);
-  const quiet = !unsplit_(dropSingleQuoted(command)) && !gitProgram && simple.every((p) => exempt(p) || printOrAssign(p));
-  for (const p of simple) {
-    const words = p.words;
-    const textBraces = quiet ? braceTextArgs(p) : new Set;
-    for (const w of words)
-      out.env ??= GIT_ENV_REFUSED.exec(w)?.[1];
-    if (!broad && exempt(p))
-      continue;
-    const shellAt = words.findIndex((w) => RERUNS.has(progName(w)));
-    if (shellAt >= 0) {
-      const rest = words.slice(shellAt + 1);
-      const texts = progName(words[shellAt]) === "eval" ? [rest.join(" ")] : rest.filter((w) => !/^[-+]/.test(w));
-      for (const t of texts) {
-        const bad = fold(gitScan(t, depth + 1, allow, true));
-        if (bad)
-          return bad;
-      }
-    }
-    const toolArgs = findExecTextArgs(words);
-    for (let i = 0;i < words.length; i++) {
-      const w = words[i];
-      const g = toolArgs.has(i) || textBraces.has(i) && hasBrace(p.braces[i] ?? "") && plainBraces(p.braces[i] ?? "") ? undefined : gitAt(words, i, p.adds, p.braces, i === 0 ? placeOf(p) : undefined);
-      if (g?.bad)
-        return { ...out, bad: g.bad };
-      if (g)
-        continue;
-      const at = w.search(/git(?!\w)/i);
-      if (at >= 0 && /[\s;&|<>()`$]/.test(w.slice(at))) {
-        const bad = fold(gitScan(w.slice(at), depth + 1, allow, broad));
-        if (bad)
-          return bad;
-      }
-    }
-  }
-  return out;
-}
-var gitReadOnlyText = (what, who) => `Refused: ${what} may change the repository or run another program, and ${who} may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list, stash list/show, remote -v, config --get, reflog), without options that write a file or run a program (--output, -O, --ext-diff, -c, GIT_* settings).`;
-var SCRATCH_GIT_TEXT = "A scratch repository under /tmp with a plain path is fine (e.g. git init /tmp/x, git -C /tmp/x commit -m m); no $TMPDIR, $(mktemp), ~ or ..";
-var gitWriteText = (what) => `${gitReadOnlyText(what, "the checker")} Check the work without changing any branch, commit, tag or the stash. ${SCRATCH_GIT_TEXT}`;
-var workerGitWriteText = (what) => `Refused: ${what} may change more than your own branch. In your own folder you may change git on your own branch (commit, merge, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect, add, rm). Not allowed: push, fetch, pull or changing remotes; switching to, making or deleting a branch (checkout or switch to a branch, branch -d/-D/-m); worktree; config; tag; stash (it is shared with the owner's folder); a git command in another folder, through a $variable, or with -c or GIT_* settings. ${SCRATCH_GIT_TEXT}`;
-var scoutGitWriteText = (what) => `${gitReadOnlyText(what, "a scout")} You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead.`;
+var PLAIN_TEXT = 'Every git call where a command starts counts (also after &&, ;, |, $( and in sh -c "..."), and any git command not on the allowed list (an alias too) is refused.';
+var gitWriteText = (what) => `Refused: ${what} may change the repository, and the checker may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list), without git options before the command (-C, -c...) or GIT_* settings. Check the work without changing any branch, commit, tag or the stash. ${PLAIN_TEXT}`;
+var workerGitWriteText = (what) => `Refused: ${what} may change more than your own branch. In your own folder (or a scratch repository under /tmp) you may change git on your own branch: commit, merge, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect, add, rm. Not allowed: push, fetch, pull, remote, tag, config, stash, worktree, update-ref, symbolic-ref, making, switching to or deleting a branch, rebase -x/--exec/--update-refs, bisect run, --autostash, git options before the command (-C, -c, --git-dir...), GIT_* settings, and git in any other folder (cd to your folder or to /tmp/... with a full path). ${PLAIN_TEXT}`;
+var scoutGitWriteText = (what) => `Refused: ${what} may change the repository, and a scout may only read with git (diff, log, show, status, blame, grep, rev-parse, ls-files, branch --list). You run in the owner's own folder: don't commit, push, merge, reset, switch branches, stash or move any branch or tag. Report what you find instead. ${PLAIN_TEXT}`;
 // hooks/core/git-setup.ts
 function startBranch(current, originHead, branches) {
   const cur = String(current ?? "").trim();
@@ -5042,7 +3579,7 @@ function rejectTask(b, id, reason, now) {
 }
 var YOUR_EDITS = "(includes your edits)";
 var ownerEditedLine = (files) => `owner edited files before approving: ${files.join(", ")}`;
-var unquote2 = (s) => /^".*"$/.test(s) ? s.slice(1, -1).replace(/\\(.)/g, "$1") : s;
+var unquote = (s) => /^".*"$/.test(s) ? s.slice(1, -1).replace(/\\(.)/g, "$1") : s;
 function parseDiffStat(text) {
   const out = [];
   for (const line of String(text ?? "").split(`
@@ -5050,7 +3587,7 @@ function parseDiffStat(text) {
     const m = /^\s*(.+?)\s+\|\s+(.*)$/.exec(line);
     if (!m)
       continue;
-    const file = unquote2(m[1].trim());
+    const file = unquote(m[1].trim());
     const rest = m[2].trim();
     if (/^Bin\b/.test(rest)) {
       out.push({ file, added: 0, removed: 0, binary: true });
@@ -5065,6 +3602,18 @@ function parseDiffStat(text) {
     const bar = plus + minus;
     const added = bar === 0 ? 0 : bar === total ? plus : Math.round(total * plus / bar);
     out.push({ file, added, removed: bar === 0 ? 0 : total - added });
+  }
+  return out;
+}
+function parseNumstat(text) {
+  const out = [];
+  for (const line of String(text ?? "").split(`
+`)) {
+    const m = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line);
+    if (!m)
+      continue;
+    const file = unquote(m[3].trim());
+    out.push(m[1] === "-" ? { file, added: 0, removed: 0, binary: true } : { file, added: Number(m[1]), removed: Number(m[2]) });
   }
   return out;
 }
@@ -5404,7 +3953,7 @@ var SETTING_LABEL_WIDTH = Math.max(...SETTINGS.map((x) => x.label.length), "Task
 var settingShown = (name, value) => name === "mode" && isMode(value) ? MODE_NAME[value] : value;
 var testCommandsText = (cmds) => !cmds.length ? "none" : cmds.length === 1 && !cmds[0].trim().startsWith("[") ? cmds[0] : JSON.stringify(cmds);
 var TESTS_SHORT_MAX = 24;
-var RUNNERS2 = new Set(["sh", "bash", "zsh", "npx", "bunx", "pnpx", "node", "deno", "python", "python3", "env", "exec"]);
+var RUNNERS = new Set(["sh", "bash", "zsh", "npx", "bunx", "pnpx", "node", "deno", "python", "python3", "env", "exec"]);
 function testName(cmd) {
   let words = cmd.trim().split(/\s+/);
   if (words[0] === "cd" && words.includes("&&"))
@@ -5413,7 +3962,7 @@ function testName(cmd) {
   const first = words[0] ?? "";
   const name = (w) => w.replace(/\/+$/, "").split("/").pop().replace(/\.[A-Za-z]+$/, "");
   const next = words[1];
-  if (RUNNERS2.has(first) && next && /^[\w@.\/:-]+$/.test(next) && !next.startsWith("-"))
+  if (RUNNERS.has(first) && next && /^[\w@.\/:-]+$/.test(next) && !next.startsWith("-"))
     return name(next) || first;
   return name(first) || first;
 }
@@ -6634,7 +5183,7 @@ function cleanNote(raw) {
   const s = String(raw ?? "").replace(/\s+/g, " ").trim().replace(/^(?:[-*•+]|\d+[.)])\s+/, "").replace(/^T-\d+\s+/, "");
   return cleanLearned([plainLesson(s)])[0] ?? "";
 }
-var joinLines = (lines) => lines.length ? `${lines.join(`
+var joinLines2 = (lines) => lines.length ? `${lines.join(`
 `)}
 ` : "";
 function orgMemAdd(guide, notes, date, max = ORG_MEM_MAX_LINES) {
@@ -6661,7 +5210,7 @@ function orgMemAdd(guide, notes, date, max = ORG_MEM_MAX_LINES) {
     return { text, added: [], repeats, bad, noTopic, full: true };
   if (!added.length)
     return { text, added: said, repeats, bad, noTopic, full: false };
-  return { text: joinLines([...old, ...added.map((x) => orgMemLine(date, x.text, x.topic))]), added: said, repeats, bad, noTopic, full: false };
+  return { text: joinLines2([...old, ...added.map((x) => orgMemLine(date, x.text, x.topic))]), added: said, repeats, bad, noTopic, full: false };
 }
 function findOrgMemNote(guide, which) {
   const notes = orgMemNotes(guide);
@@ -6956,16 +5505,40 @@ function checkerProblems(report, max = CHECKER_PROBLEMS_MAX) {
   if (h < 0)
     return [];
   const out = [];
+  let cur = null;
+  const flush = () => {
+    if (cur !== null && cur.trim())
+      out.push(oneLine2(cur, 300));
+    cur = null;
+  };
   for (const l of lines.slice(h + 1)) {
-    if (!/^- ?$/.test(l) && !l.startsWith("- "))
+    if (/^[-*] ?$/.test(l) || /^[-*] /.test(l)) {
+      flush();
+      cur = l.slice(2);
+    } else if (!l.trim())
+      continue;
+    else if (cur !== null && /^\s+\S/.test(l))
+      cur += ` ${l.trim()}`;
+    else
       break;
-    if (out.length >= max)
-      break;
-    const t = l.slice(2).trim();
-    if (t)
-      out.push(oneLine2(t, 300));
   }
-  return out;
+  flush();
+  return out.slice(0, max);
+}
+function problemsBlockLines(report, max = CHECKER_PROBLEMS_MAX) {
+  const lines = String(report ?? "").split(`
+`).map((l) => l.trim());
+  const h = lines.findLastIndex((l) => /^(#{1,6}\s*)?(\*\*|__|\*|_)?Problems:?(\*\*|__|\*|_)?:?$/.test(l));
+  if (h < 0)
+    return [];
+  const out = [];
+  for (const l of lines.slice(h + 1)) {
+    if (/^#{1,6}\s/.test(l))
+      break;
+    if (l)
+      out.push(oneLine2(l.replace(/^[-*+]\s+/, ""), 300));
+  }
+  return out.filter(Boolean).slice(0, max);
 }
 var checkerEntry = (tryLabel2, v, why = "", tryNo2 = 0, who = {}) => {
   const problems = v && "report" in v ? checkerProblems(v.report) : [];
@@ -6982,13 +5555,17 @@ var checkerAskText = (id, n, finding) => `${id} was sent back ${n === 2 ? "twice
 var isCheckerAsk = (q) => /^T-\d+ was sent back (twice|\d+ times) by the checker: [\s\S]*\. Merge as is \/ Keep fixing \/ Drop$/.test(String(q ?? "").trim());
 function parseCheckerAnswer(answer) {
   const a = String(answer ?? "").trim().toLowerCase();
-  if (a.startsWith("merge"))
-    return "merge";
-  if (a.startsWith("keep") || a.startsWith("fix"))
-    return "fix";
-  if (a.startsWith("drop"))
-    return "drop";
-  return;
+  const words = a.match(/[a-z]+/g) ?? [];
+  const picks = new Set;
+  for (const w of words) {
+    if (w === "merge" || w === "merged")
+      picks.add("merge");
+    else if (w === "keep" || w === "fix")
+      picks.add("fix");
+    else if (w === "drop" || w === "dropped")
+      picks.add("drop");
+  }
+  return picks.size === 1 ? [...picks][0] : undefined;
 }
 
 // hooks/core/reports.ts
@@ -10330,7 +8907,7 @@ var startS = () => ({
   writing: Promise.resolve(),
   me: "",
   driving: false,
-  dam: false,
+  chat: "",
   guardOnly: false,
   boardMtime: null,
   readMtime: null,
@@ -10470,12 +9047,13 @@ var isDamValue = (value) => (value ?? "").trim() === DAM_ENV_VALUE;
 var DAM_EXE_ENV = "CLAUDE_CODE_EXECUTABLE";
 var isDamChatExe = (value) => /(^|[/\\])harness-claude$/.test((value ?? "").trim());
 var DAM_POST_LINE = "Slack (DAM): plain replies never reach Slack. Post your short reply (same shape as above) to this Slack thread with DAM's reply tool; use DAM's post tool if there is no thread.";
+var chatPostLine = (chat) => chat === "dam" ? DAM_POST_LINE : `Chat (${chat}): plain replies never reach the chat. Post your short reply (same shape as above) to it with the ${chat} server's reply tool.`;
 var damGuideCore = (name = DEFAULT_NAME) => [
   `Lead guide (short; the full ${name} guide may be missing in this session):`,
   `- You are the lead of the ${name} board: turn the owner's wishes into small tasks with ${name} add (why, origin_by, request = the owner's exact words, files incl. tests, after = tasks that share files); don't do the tasks' work yourself; talk about tasks by id (T-3).`,
   `- Mode review: ask the owner before each ${name} add. Put the owner's answer to a waiting task into it with ${name} change answer: their words.`,
   `- Reply shape: news first, no lead-in. One line per task: "<mark> T-n  <what happened>   <what it means, ≤ 8 words>" (✓ merged, ✗ failed, ↺ retrying, ▶ started, ◐ needs your review); a routine update is one short line at most.`,
-  `- A question: the question in one sentence, then the choices numbered, then "(or answer on the board)".`
+  `- A question: the question in one sentence, then the choices numbered, then "(reply with the number or your own words)".`
 ].join(`
 `);
 var notDrivingText = (name = DEFAULT_NAME) => `This window does not drive the board, but you still add, change, drop, approve and answer tasks here as usual; the window that drives runs the workers, scouts and merges. Mention /${name}-drive only when the owner wants this window to run the work itself.`;
@@ -10555,11 +9133,11 @@ Reply shape: one line per task ("✓ T-5  merged   what it means"); a routine up
 
 ${ending}${startOnly ? "" : damEnding()}`;
 }
-var damEnding = () => S.dam ? `
+var damEnding = () => S.chat ? `${S.chat === "dam" ? `
 
-${damGuideCore(S.N.name)}
+${damGuideCore(S.N.name)}` : ""}
 
-${DAM_POST_LINE}` : "";
+${chatPostLine(S.chat)}` : "";
 var brief = (text) => cutLine(text, 200);
 function noteForLead(text) {
   if (!S.enabledNow)
@@ -14226,6 +12804,64 @@ async function sizeOf($, from, to) {
   const r = await git($, ["diff", "--shortstat", "--no-renames", from, to]).catch(() => null);
   return r && r.exitCode === 0 ? parseShortstat(String(r.stdout ?? "")) : undefined;
 }
+async function mergedBefore($, t, merged) {
+  const saved = new Set((t.runs ?? []).flatMap((r) => Array.isArray(r?.commits) ? r.commits : []));
+  const own = (sha, msg) => saved.has(sha) || isTaskCommit(msg, t.id, S.N.name);
+  const p = await git($, ["rev-list", "--parents", "-n", "1", merged]).catch(() => null);
+  if (!p || p.exitCode !== 0)
+    return "";
+  const [, first, second] = String(p.stdout ?? "").trim().split(/\s+/);
+  if (!first)
+    return "";
+  if (second) {
+    const m = await git($, ["log", "-n", "1", "--format=%B", merged]).catch(() => null);
+    if (m && m.exitCode === 0 && isTaskCommit(String(m.stdout ?? ""), t.id, S.N.name))
+      return second;
+    if (saved.has(merged)) {
+      const f = await git($, ["log", "-n", "1", "--format=%B", first]).catch(() => null);
+      if (f && f.exitCode === 0 && own(first, String(f.stdout ?? "")))
+        return second;
+    }
+    return first;
+  }
+  const log = await git($, ["log", "--first-parent", "-n", "200", "--format=%H%x1f%P%x1f%B%x1e", merged]).catch(() => null);
+  if (!log || log.exitCode !== 0)
+    return first;
+  for (const entry of String(log.stdout ?? "").split("\x1E")) {
+    const [sha, parents, msg] = entry.trim().split("\x1F");
+    if (!sha)
+      continue;
+    if (!own(sha, msg ?? ""))
+      return sha;
+    const second2 = (parents ?? "").split(" ")[1];
+    if (second2)
+      return second2;
+  }
+  return first;
+}
+var mergedMemo = new Map;
+async function mergedChanges($, t) {
+  if (!hasMergedChanges(t))
+    return null;
+  const merged = t.merged;
+  const key = `${t.id}:${merged}`;
+  if (mergedMemo.has(key))
+    return mergedMemo.get(key);
+  const before = await mergedBefore($, t, merged);
+  const r = before ? await git($, ["diff", "--numstat", "--no-renames", before, merged]).catch(() => null) : null;
+  const files = r && r.exitCode === 0 ? parseNumstat(String(r.stdout ?? "")) : [];
+  const got = files.length ? { files, error: "", merged, before } : null;
+  mergedMemo.set(key, got);
+  return got;
+}
+var DIFF_GONE = "diff not available";
+async function mergedDiff($, t, file = "") {
+  const c = await mergedChanges($, t).catch(() => null);
+  if (!c)
+    return DIFF_GONE;
+  const r = await git($, ["diff", "--no-color", "--no-ext-diff", "--no-renames", c.before, c.merged, ...file ? ["--", file] : []]).catch(() => null);
+  return r && r.exitCode === 0 ? String(r.stdout ?? "") : DIFF_GONE;
+}
 async function testedTree($, commit, dir) {
   const r = await git($, ["rev-parse", "-q", "--verify", `${commit}^{tree}`], dir).catch(() => null);
   const id = r && r.exitCode === 0 ? r.stdout.trim() : "";
@@ -15679,7 +14315,7 @@ async function timedOut(host, id, t, max, minutes) {
   else
     tellLead(host, `${id} "${out.title}": its time (${max} minutes) was up, so I stopped the worker and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it. The limit can be changed with ${S.N.name} settings max_minutes.`);
 }
-var overtimeLeadText = (id, title, limit) => `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(" | ")}. Ask the owner in the chat now, plain and short, offering these ${optionsVia(OVERTIME_OPTIONS.length)}, plus "or answer on the board"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.${popupTied(id)}`;
+var overtimeLeadText = (id, title, limit) => `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(" | ")}. Ask the owner in the chat now, plain and short, offering these ${optionsVia(OVERTIME_OPTIONS.length)}, plus "${answerTail()}"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.${popupTied(id)}`;
 async function askOvertime(host, b, id, limit) {
   const t = await change(host, (x) => {
     const cur = find(x, id);
@@ -16313,9 +14949,9 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / priority, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged. Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers to a task) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines: at the top of the next board update, or beside the owner's next message if that comes first. They need no reply; just take them into account. Only the owner setting up git, or allowing or refusing a task's files on the board, wakes you at once with a board update.
-${S.W.askPopup ? `- Ask every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") with ${S.W.askPopup} (2 to 4 short options). ${S.N.name} puts each such question on the board by itself as a Q-n, so don't also add a ${S.N.name} question for it. Whichever the owner answers first closes the other: a board answer comes back as the pop-up's answer, and a pop-up answer closes the Q-n (the tool result says so). If the owner closes the pop-up without answering, the Q-n stays on the board, and a later board answer wakes you with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it." (already closed: act on it and don't ask again). Only for a question with 5 or 6 options, first add it with ${S.N.name} question (action add), then ask it with ${S.W.askPopup} with the same question text and the first 3 options plus "the rest on the board": the pop-up is tied to that Q-n. Drop a question that no longer matters (${S.N.name} question action drop). A question about one task stays ${S.N.name} ask.
-- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask in the chat with ${S.W.askPopup}, with the same options (where a line here says numbered plain chat text, use ${S.W.askPopup} with those options), with the question's header set to exactly the task id (T-5; an id only mentioned in the question text doesn't tie it). ${S.N.name} ties that pop-up to the task's own board question (no Q-n is added): whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into the task for you (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a note), and the tool result says what was done and what is left for you (e.g. a reject's reason: then ${S.N.name} reject yourself). ${S.W.askPopup} takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board" (or the owner types one under Other); when the owner picks "the rest on the board", the board question stays open and a board update brings their answer. Don't stack two questions under the same numbers: ask one at a time.` : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "or answer on the board". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
-- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "or answer on the board". Don't stack two questions under the same numbers: ask one at a time.`}
+${popup() ? `- Ask every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") with ${popup()} (2 to 4 short options). ${S.N.name} puts each such question on the board by itself as a Q-n, so don't also add a ${S.N.name} question for it. Whichever the owner answers first closes the other: a board answer comes back as the pop-up's answer, and a pop-up answer closes the Q-n (the tool result says so). If the owner closes the pop-up without answering, the Q-n stays on the board, and a later board answer wakes you with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it." (already closed: act on it and don't ask again). Only for a question with 5 or 6 options, first add it with ${S.N.name} question (action add), then ask it with ${popup()} with the same question text and the first 3 options plus "the rest on the board": the pop-up is tied to that Q-n. Drop a question that no longer matters (${S.N.name} question action drop). A question about one task stays ${S.N.name} ask.
+- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask in the chat with ${popup()}, with the same options (where a line here says numbered plain chat text, use ${popup()} with those options), with the question's header set to exactly the task id (T-5; an id only mentioned in the question text doesn't tie it). ${S.N.name} ties that pop-up to the task's own board question (no Q-n is added): whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into the task for you (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a note), and the tool result says what was done and what is left for you (e.g. a reject's reason: then ${S.N.name} reject yourself). ${popup()} takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board" (or the owner types one under Other); when the owner picks "the rest on the board", the board question stays open and a board update brings their answer. Don't stack two questions under the same numbers: ask one at a time.` : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "${answerTail()}". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
+- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "${answerTail()}". Don't stack two questions under the same numbers: ask one at a time.`}
 - The board has one mode (${S.N.name} settings mode): "paused" stops every worker and scout and starts nothing new, "review" (shown to the owner as "approve merge") runs work but every finished task that passes waits for the owner, "auto" (shown as "auto merge"; the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - In mode "review", ask the owner before every ${S.N.name} add, whatever the task comes from (the owner's words, a scout finding, a worker's report, your own idea): say in one or two lines what the task would be, and add it only after a yes. In mode "auto" you add tasks as usual. Plain answers, notes (add_details) and board actions (approve, pause, settings) need no asking.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
@@ -16323,11 +14959,11 @@ ${S.W.askPopup ? `- Ask every question for the owner that isn't about one task (
 - A task that failed for good: don't retry it on your own (even though a retry is possible). Ask the owner first, unless they already said to retry that task. A task the checker sent back twice waits for the owner on its own with "Merge as is / Keep fixing / Drop"; put their answer in with ${S.N.name} change answer: their words.
 - Work merged by hand: when a task's branch was merged outside the board (by the owner, or by you on the owner's word, e.g. its only failure was the merge tests timing out), don't drop it and don't let a new worker redo it: ${S.N.name} merged T-5 marks it done. ${S.N.name} checks with git that all its commits are in the branch it merges into and refuses with the reason if not; nothing is merged or tested, its folder and branch are cleaned up, and tasks waiting on it start. It works for a task that is to do, running, failed, waiting, paused, in review or dropped. Use it only after the owner's word or a rule the owner set.
 - Investigation or change (the kind parameter of ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself. Add an errand (kind: errand) when the owner wants something done that is not a change to the project (tidy a folder outside the repo, gather files, write something outside the project): the worker's report is its result and the task ends done on its own, in every mode. Investigation: the owner wants an answer to read; errand: the owner wants something done.
-- An answered investigation ("T-5 is answered") waits in review for the owner to read its answer; it has nothing to merge. Tell the owner the answer in the chat, short and plain (read it with ${S.N.name} board task T-5), and offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "or answer on the board". On the owner's word: ${S.N.name} approve T-5 is Done (it ends done; its folder is removed, and its branch too unless it has commits from earlier tries, which are kept; the reply says so), ${S.N.name} approve T-5 with keep_note: true is Keep as a note (Done, plus a new docs task that writes docs/research/<topic>.md from the answer and merges as usual), and ${S.N.name} reject T-5 with their follow-up question is Ask more (a fresh try gets the question and the earlier answer).
+- An answered investigation ("T-5 is answered") waits in review for the owner to read its answer; it has nothing to merge. Tell the owner the answer in the chat, short and plain (read it with ${S.N.name} board task T-5), and offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "${answerTail()}". On the owner's word: ${S.N.name} approve T-5 is Done (it ends done; its folder is removed, and its branch too unless it has commits from earlier tries, which are kept; the reply says so), ${S.N.name} approve T-5 with keep_note: true is Keep as a note (Done, plus a new docs task that writes docs/research/<topic>.md from the answer and merges as usual), and ${S.N.name} reject T-5 with their follow-up question is Ask more (a fresh try gets the question and the earlier answer).
 - A worker that tries to edit a file outside its task's files is refused (${S.N.name} records the path as a request) and stops; the task then waits for the owner, asking to allow those files. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you are told at once) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files another way (e.g. a shell command) fails its try at the merge's scope check.
-- A worker that needs the owner to decide something calls its own question tool, ${toolName("ask_owner")} (maybe with options, which the board shows as buttons), and stops; that tool is for workers only: you never call it (to make a task wait with your own question, use ${S.N.name} ask). The task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "symcc: T-5 needs you" (the project's name first) (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as numbered plain chat text, plus "or answer on the board". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
+- A worker that needs the owner to decide something calls its own question tool, ${toolName("ask_owner")} (maybe with options, which the board shows as buttons), and stops; that tool is for workers only: you never call it (to make a task wait with your own question, use ${S.N.name} ask). The task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "symcc: T-5 needs you" (the project's name first) (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as numbered plain chat text, plus "${answerTail()}". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
 - A worker whose run ended on an API error (retries used up, the context limit) or a refusal fails its try with that reason, and nothing is checked or merged; its work stays in its folder and branch, so ${S.N.name} retry continues from there. But when ${S.N.name} itself stopped that worker (a reload, a takeover, driving moved to another session), the try does not fail: a new worker goes on with the same try. What a worker writes in its hand-back is only its report: symcc never reads a question or a file request out of it.
-- A worker that runs past its time limit (max_minutes, plus any time the owner added) is not stopped: it keeps working, its task stays doing with the note "over time; asked the owner", and you are told "T-5 has run 45 min. Give it more time?" with the options +30 min | +60 min | Stop it (the owner hears "needs you" too, and the board shows them as buttons). Ask the owner in the chat, offering those choices as numbered plain chat text, plus "or answer on the board"; put their pick into the task with ${S.N.name} change and answer: "+30 min", "+60 min" (any "+N min" works) or "Stop it". More time moves that task's limit later and the worker goes on. Stop it (or no answer by the limit plus max_minutes again) tells the worker to write down what it has and hand back; a few minutes later it is stopped and the task fails, with its work kept in its folder, branch and report, so a retry continues from there.
+- A worker that runs past its time limit (max_minutes, plus any time the owner added) is not stopped: it keeps working, its task stays doing with the note "over time; asked the owner", and you are told "T-5 has run 45 min. Give it more time?" with the options +30 min | +60 min | Stop it (the owner hears "needs you" too, and the board shows them as buttons). Ask the owner in the chat, offering those choices as numbered plain chat text, plus "${answerTail()}"; put their pick into the task with ${S.N.name} change and answer: "+30 min", "+60 min" (any "+N min" works) or "Stop it". More time moves that task's limit later and the worker goes on. Stop it (or no answer by the limit plus max_minutes again) tells the worker to write down what it has and hand back; a few minutes later it is stopped and the task fails, with its work kept in its folder, branch and report, so a retry continues from there.
 - To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its history; a running task restarts). A change to a running task's details, title or files (add_details too) restarts its try, so put a note in the same change as an answer instead of sending it a moment later. After a checker send-back (or any other retry, not a task's first try), add your note within a minute of the retry starting: a retry under a minute old starts again with the note on the same try number (no lost try); later, the note restarts it as a new try. Changing only its priority or after-list keeps it running (saved for its next try). details rewrites the whole text, so use it only for a full rewrite, never both at once.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
@@ -16356,7 +14992,7 @@ Talk like a team lead about the board. News first: the first line says what happ
 - Out of work (last task merged, nothing to do, running or waiting) with a backlog: name 2-3 backlog items to move to todo (bugs and safety first), so the owner can pick.
 - An update that only says an agent is starting ends with "No reply needed; end the turn without a message.": send no message at all.
 - New task: "Added T-n  <title in ≤ 10 words>", then one line for what waits on what, if anything.
-- Question for the owner (in chat text): the question in one sentence, then the choices numbered, then "(or answer on the board)".
+- Question for the owner (in chat text): the question in one sentence, then the choices numbered, then "(${answerTail()})".
 - A worker's or checker's report: at most 3 short bullets of what matters to the owner (what changed for them, any limit or risk), not its file list.
 - Longer explanations (the owner asks how, why, WDYT): plain English, short sentences, a table or a sketch when it helps.`;
 var KIND_PARAM = () => ({ type: "string", description: `The task type: ${[...new Set([...BUILT_IN_KINDS.filter((n) => !S.kinds.some((k) => k.name === n && k.off)), ...kindNames(S.kinds)])].join(", ")}, or the owner's own (see your instructions for what each is for); change when unsure. Every task type but investigation and errand runs like change (the default): the worker changes files, which are committed, tested and merged. investigation: the worker finds an answer and hands it back; nothing is committed, tested or merged, and it always waits for the owner to read it (even in mode auto). errand: general work that isn't a change to the project; the task ends done on its own after the worker hands back, and nothing is merged. A researcher task is an investigation unless you give kind; use change (or docs) for a researcher when the owner wants a lasting document that later tasks will read.` });
@@ -16963,8 +15599,10 @@ async function ownerSettings($, a, where) {
 
 // hooks/app/questions.ts
 var REST_ON_BOARD = "the rest on the board";
-var optionsVia = (n) => S.W.askPopup ? `with ${S.W.askPopup}${n > 4 ? ` (it takes at most 4 options: show the first 3 plus "${REST_ON_BOARD}", or the owner types one under Other)` : ""}` : "as numbered plain chat text";
-var popupTied = (id) => S.W.askPopup ? ` Set the ${S.W.askPopup} question's header to exactly ${id}: ${S.N.name} then ties the pop-up to ${id}'s board question, so whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into ${id} for you (the tool result says what was done, and what is left for you).` : "";
+var popup = () => S.chat ? "" : S.W.askPopup;
+var answerTail = () => S.chat ? "reply with the number or your own words" : "or answer on the board";
+var optionsVia = (n) => popup() ? `with ${popup()}${n > 4 ? ` (it takes at most 4 options: show the first 3 plus "${REST_ON_BOARD}", or the owner types one under Other)` : ""}` : "as numbered plain chat text";
+var popupTied = (id) => popup() ? ` Set the ${popup()} question's header to exactly ${id}: ${S.N.name} then ties the pop-up to ${id}'s board question, so whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into ${id} for you (the tool result says what was done, and what is left for you).` : "";
 var QUESTION_ACTIONS = ["add", "list", "answer", "drop"];
 var stillOpen = (b) => {
   const n = openQuestions(b).length;
@@ -16980,9 +15618,9 @@ async function questionTool(host, a) {
       return [y, [q2, y]];
     });
     sayQuestion(host, b, q.id);
-    if (S.W.askPopup)
-      return `added ${q.id} "${q.text}" with the options ${q.options.join(" | ")} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, offering the options ${optionsVia(q.options.length)}, with the same question text: ${S.N.name} ties that pop-up to ${q.id}, so whichever the owner answers first closes the other, and a board answer comes back as the pop-up's answer. (Next time just ask with ${S.W.askPopup}: it puts the question on the board by itself.)`;
-    return `added ${q.id} "${q.text}" with the options ${q.options.join(" | ")} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, offering the options ${optionsVia(q.options.length)}, plus "or answer on the board". If the owner answers in the chat, close it with ${S.N.name} question action answer, id ${q.id} and their answer; a board answer reaches you at once in a board update ("The owner answered your question ${q.id} …: … Act on it.").`;
+    if (popup())
+      return `added ${q.id} "${q.text}" with the options ${q.options.join(" | ")} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, offering the options ${optionsVia(q.options.length)}, with the same question text: ${S.N.name} ties that pop-up to ${q.id}, so whichever the owner answers first closes the other, and a board answer comes back as the pop-up's answer. (Next time just ask with ${popup()}: it puts the question on the board by itself.)`;
+    return `added ${q.id} "${q.text}" with the options ${q.options.join(" | ")} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, offering the options ${optionsVia(q.options.length)}, plus "${answerTail()}". If the owner answers in the chat, close it with ${S.N.name} question action answer, id ${q.id} and their answer; a board answer reaches you at once in a board update ("The owner answered your question ${q.id} …: … Act on it.").`;
   }
   if (action === "answer" || action === "drop") {
     const id = normQid(a.id);
@@ -17679,7 +16317,8 @@ function endFailure(end2) {
   const said = [end2.refusal?.category, end2.refusal?.explanation].filter(Boolean).join(": ");
   return `the model refused to go on${said ? ` (${cutLine(said, 300)})` : ""}`;
 }
-var workerQuestionText = (id, question, options) => `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? "" : "."}${options?.length ? ` Options: ${options.join(" | ")}.` : ""} Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change ${id} with answer: that answer, and tell the owner what you answered. Otherwise ask the owner in the chat now, plain and short${options?.length ? `, offering the options ${optionsVia(options.length)}, plus "or answer on the board"` : ", and say they can also answer on the board"}; put their answer into the task with ${S.N.name} change ${id} and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again.${popupTied(id)}`;
+var canAnswerNote = () => S.chat ? "they can reply with their own words" : "they can also answer on the board";
+var workerQuestionText = (id, question, options) => `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? "" : "."}${options?.length ? ` Options: ${options.join(" | ")}.` : ""} Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change ${id} with answer: that answer, and tell the owner what you answered. Otherwise ask the owner in the chat now, plain and short${options?.length ? `, offering the options ${optionsVia(options.length)}, plus "${answerTail()}"` : `, and say ${canAnswerNote()}`}; put their answer into the task with ${S.N.name} change ${id} and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again.${popupTied(id)}`;
 var reportWarned = false;
 async function saveReport(host, t, answer) {
   if (!answer.trim())
@@ -18116,7 +16755,7 @@ async function settle(host, t, b, r, summary, worktree, agentId, approved = fals
       return;
     }
     sayNeedsYou(host, b, t, ask2);
-    tellLead(host, `${ask2} The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`, { urgent: true });
+    tellLead(host, `${ask2} The task now waits for the owner. Ask them in the chat, plain and short (${canAnswerNote()}); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`, { urgent: true });
     return;
   }
   if (r.review) {
@@ -18136,7 +16775,7 @@ async function settle(host, t, b, r, summary, worktree, agentId, approved = fals
       return;
     }
     sayNeedsYou(host, b, t, ask2);
-    tellLead(host, `${ask2}. The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words (Merge as is moves it on to the tests with no checker; Keep fixing starts one more try with the checker's report; Drop drops it).`, { urgent: true });
+    tellLead(host, `${ask2}. The task now waits for the owner. Ask them in the chat, plain and short (${canAnswerNote()}); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words (Merge as is moves it on to the tests with no checker; Keep fixing starts one more try with the checker's report; Drop drops it).`, { urgent: true });
     return;
   }
   const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES;
@@ -18163,9 +16802,32 @@ async function settle(host, t, b, r, summary, worktree, agentId, approved = fals
     sayDone(host, b, t.id);
   if (r.ok && await removeWorktree(host, t.id, worktree, agentId, true))
     await deleteMergedBranch(host, taskBranch(t), intoOf(t));
-  const gaveUp = r.testOutput !== undefined ? `
-It already had ${tries} automatic ${tries === 1 ? "retry" : "retries"}. ${r.checker ? `The checker's report:
-${r.testOutput.replace(/^[^\n]*\n/, "")}` : `The last test run: ${gaveUpTestsText(r.testOutput)}`}` : "";
+  const triesText = `${tries} of ${retries} automatic ${retries === 1 ? "try" : "tries"} used`;
+  const gaveUp = r.testOutput !== undefined && !r.checker ? `
+It already had ${tries} automatic ${tries === 1 ? "retry" : "retries"}. The last test run: ${gaveUpTestsText(r.testOutput)}` : "";
+  if (!r.ok && r.checker && r.testOutput !== undefined) {
+    const report = r.testOutput.replace(/^[^\n]*\n/, "");
+    const who = checkerName(S.N.name, t.id);
+    const all = checkerProblems(report, Infinity);
+    const list2 = all.slice(0, CHECKER_PROBLEMS_MAX);
+    const n = all.length;
+    const more = n > list2.length ? `
+- … and ${n - list2.length} more (see the task page)` : "";
+    const block = n ? [] : problemsBlockLines(report, Infinity);
+    const shown = n ? list2 : block.slice(0, CHECKER_PROBLEMS_MAX);
+    const more2 = n ? more : block.length > shown.length ? `
+- … and ${block.length - shown.length} more (see the task page)` : "";
+    const count2 = n || block.length;
+    const problems = shown.length ? `Problems:
+${shown.map((p) => `- ${p}`).join(`
+`)}${more2}` : `Problems:
+- ${firstProblemOf(report).replace(/^…\s*/, "")}`;
+    tellLead(host, `✗ ${t.id} "${t.title}" not merged. Its checker (${who}) — an agent that tries to break each change before it merges — found ${count2 > 1 ? `${count2} problems` : "a problem"}. No automatic tries left (${triesText}).
+Checker ${who}'s report (try ${t.attempts}):
+${problems}
+The full report is on the task page.`);
+    return;
+  }
   const doneSaid = r.ok ? find(await load(host).catch(() => b), t.id)?.done : undefined;
   const doneNote = doneSaid ? ` Done: ${doneSaid}` : "";
   if (r.ok && approved)
@@ -19888,61 +18550,15 @@ async function realEdit($, path2, worktree, root) {
     return asIs;
   return { path: file, worktree: [wt, worktree], root: [top, root] };
 }
-async function bashOutside($, command, worktree, root, cwd) {
+async function bashOutside($, command, worktree, root) {
   if (!root)
     return;
-  const home = S.home || undefined;
   const look = diskLook($);
   const [wts, tops] = await Promise.all([bothNames(look, worktree), bothNames(look, root)]);
-  const rel = bashOutsideFolder(command, wts, tops, home, cwd);
-  if (rel !== undefined)
-    return { text: bashOutsideText(rel, worktree), guard: rel === BASH_TOO_MANY ? "too-many" : "path", ...rel === BASH_TOO_MANY ? {} : { what: rel } };
-  const { paths, tooMany } = bashPathsToCheck(command, wts, home, cwd, tops);
-  if (tooMany)
-    return { text: bashTooManyText(worktree), guard: "too-many" };
-  const bashLook = { real: look.real, isLink: async () => false };
-  const linky = linkFinder($, wts);
-  const reals = await Promise.all(paths.map(async (abs) => await linky(abs).catch(() => true) ? realPathOf("/", abs, bashLook).catch(() => {
+  const rel = bashOutsideFolder(command, wts, tops, S.home || undefined);
+  if (rel === undefined)
     return;
-  }) : abs));
-  for (const [i, real] of reals.entries()) {
-    const via = editOutsideFolder(real || paths[i], wts, tops);
-    if (via !== undefined)
-      return { text: bashOutsideText(via, worktree), guard: "path", what: via };
-  }
-  return;
-}
-function linkFinder($, wts) {
-  const lists = new Map;
-  const listOf2 = (dir) => {
-    let got = lists.get(dir);
-    if (!got) {
-      got = Promise.resolve().then(() => $.fs.list(dir)).then((es) => {
-        const m = new Map;
-        for (const e of es)
-          m.set(e.name.toLowerCase(), (m.get(e.name.toLowerCase()) ?? false) || e.isLink);
-        return m;
-      }, () => null);
-      lists.set(dir, got);
-    }
-    return got;
-  };
-  return async (abs) => {
-    const from = wts.filter((w) => w.startsWith("/") && abs.startsWith(`${w}/`)).sort((a, b) => b.length - a.length)[0] ?? "/";
-    let dir = from;
-    for (const part of abs.slice(from.length).split("/").filter(Boolean)) {
-      const m = await listOf2(dir);
-      if (!m)
-        return true;
-      const isLink = m.get(part.toLowerCase());
-      if (isLink === undefined)
-        return false;
-      if (isLink)
-        return true;
-      dir = dir === "/" ? `/${part}` : `${dir}/${part}`;
-    }
-    return false;
-  };
+  return { text: bashOutsideText(rel, worktree), guard: "path", ...rel === BASH_DOTDOT || rel === BASH_ABOVE ? {} : { what: rel } };
 }
 async function checkEdit($, agentId, touch, cwd, kindOf3 = () => listedKind($, agentId)) {
   if (!agentId || !touch)
@@ -19959,7 +18575,7 @@ async function judgeEdit($, agentId, touch, who, cwd, kindOf3) {
   const chk = checkerRuns.get(agentId);
   if (chk) {
     Object.assign(who, { role: "checker", task: chk.task });
-    return checkerCheck($, touch, chk.worktree, cwd);
+    return checkerCheck($, touch, chk.worktree);
   }
   const scout = scoutRuns.get(agentId);
   if (scout !== undefined) {
@@ -19974,14 +18590,14 @@ async function judgeEdit($, agentId, touch, who, cwd, kindOf3) {
   }
   if (on?.kind === "checker") {
     Object.assign(who, { role: "checker", task: on.task });
-    return checkerCheck($, touch, on.worktree, cwd);
+    return checkerCheck($, touch, on.worktree);
   }
   const w = mine ?? (on?.kind === "worker" ? on.worker : undefined);
   if (!w)
     return unknownAgentCheck($, agentId, kindOf3);
   Object.assign(who, { role: "worker", task: w.task });
   if ("command" in touch)
-    return await outsideOwnFolder($, touch, w.worktree, cwd) ?? workerGitWrite($, w, touch.command, cwd);
+    return await outsideOwnFolder($, touch, w.worktree) ?? workerGitWrite($, w, touch.command, cwd);
   const real = await realEdit($, touch.path, w.worktree, S.root);
   if (real === null)
     return { text: brokenLinkText(editTarget(touch.path)), guard: "link" };
@@ -20028,31 +18644,19 @@ var movedText2 = () => `${DRIVING_MOVED[0].toUpperCase()}${DRIVING_MOVED.slice(1
 var stoppedTextFor = (agentId) => movedAgents.has(agentId) ? movedText2() : stoppedText();
 var unknownAgentText = () => `Refused: ${S.N.name} has no record of this agent (it is not the lead, nor a worker, scout or checker the board names now), so it may not edit files or run shell commands. Do nothing more; answer "stopped" and end.`;
 var stoppedText = () => `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.`;
-async function checkerCheck($, touch, worktree, cwd) {
-  const git2 = "command" in touch && gitWriteIn(touch.command) ? gitWriteIn(touch.command, await scratchGit($, worktree), cwd) : undefined;
+async function checkerCheck($, touch, worktree) {
+  const git2 = "command" in touch ? gitWriteIn(touch.command) : undefined;
   if (git2)
     return { text: gitWriteText(git2), guard: "git", what: git2 };
-  return outsideOwnFolder($, touch, worktree, cwd);
+  return outsideOwnFolder($, touch, worktree);
 }
 async function workerGitWrite($, w, command, cwd) {
   if (!gitWriteIn(command))
     return;
-  const scratch = await scratchGit($, w.worktree);
-  if (!gitWriteIn(command, scratch, cwd))
-    return;
   const t = find(await load($), w.task);
-  const own = t && !isInvestigation(t) && w.worktree.startsWith("/") ? workerGitAllow(await bothNames(diskLook($), w.worktree)) : () => false;
-  const git2 = gitWriteIn(command, eitherAllow(scratch, own), cwd);
+  const reader = !t || isInvestigation(t) || !w.worktree.startsWith("/");
+  const git2 = gitWriteIn(command, reader ? "reader" : "worker") ?? (gitPlaceOk(command, cwd, [...await bothNames(diskLook($), w.worktree), "/tmp"]) ? undefined : "git in another folder");
   return git2 ? { text: workerGitWriteText(git2), guard: "git", what: git2 } : undefined;
-}
-async function scratchGit($, worktree) {
-  if (!S.root || !worktree.startsWith("/"))
-    return () => false;
-  const look = diskLook($);
-  const [wts, tops, tmp] = await Promise.all([bothNames(look, worktree), bothNames(look, S.root), Promise.resolve().then(() => $.env("TMPDIR")).catch(() => {
-    return;
-  })]);
-  return scratchGitAllow(scratchTemps(tmp), [...wts, ...tops]);
 }
 async function scoutCheck($, touch) {
   if ("command" in touch) {
@@ -20065,10 +18669,9 @@ async function scoutCheck($, touch) {
   const rel = editInProject(real.path, real.root);
   return rel !== undefined ? { text: scoutEditText(rel), guard: "scout-edit", what: rel } : undefined;
 }
-async function outsideOwnFolder($, touch, worktree, cwd) {
-  if ("command" in touch) {
-    return bashOutside($, touch.command, worktree, S.root, cwd);
-  }
+async function outsideOwnFolder($, touch, worktree) {
+  if ("command" in touch)
+    return bashOutside($, touch.command, worktree, S.root);
   const real = await realEdit($, touch.path, worktree, S.root);
   if (real === null)
     return { text: brokenLinkText(editTarget(touch.path)), guard: "link" };
@@ -20151,7 +18754,7 @@ async function sessionStart(host) {
     const oldMe = S.me;
     const wasDriving = S.driving && !S.fresh && !S.offHere && !!oldMe;
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`);
-    S.dam = await isDamSession(host);
+    S.chat = await isDamSession(host) ? "dam" : "";
     S.fresh = !await host.fs.exists(path(S.N.boardFile)).catch(() => false);
     S.offHere = false;
     S.driving = false;
@@ -20696,6 +19299,19 @@ ${taskText(old, false, b.tasks, undefined, b.archived_done)}`);
       const t = find(b, cmd.id);
       if (!t)
         return say(await findArchived(host, cmd.id) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`);
+      if (hasMergedChanges(t)) {
+        const got = await mergedChanges(host, t).catch(() => null);
+        if (!got)
+          return say(DIFF_GONE);
+        if (!cmd.file)
+          return say(statText(t.id, got.files, S.N.name));
+        const f = cmd.file.replace(/^\.\//, "");
+        if (!got.files.some((x) => x.file === f))
+          return say(`${t.id} did not change ${f}. Changed: ${got.files.map((x) => x.file).join(", ")}`);
+        const text = await mergedDiff(host, t, f);
+        return say(text === DIFF_GONE ? text : cutDiff(text, t.id, 5000, f, S.N.name).join(`
+`) || `${f}: no text changes (binary?)`);
+      }
       if (t.status !== "review")
         return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); /${S.N.name}-diff shows the changes of a task in review.`);
       try {
@@ -20727,9 +19343,9 @@ async function leadGuideText(host) {
   const notDriving = S.driving ? "" : `
 
 ${notDrivingText(S.N.name)}`;
-  const dam = S.dam ? `
+  const dam = S.chat ? `
 
-${DAM_POST_LINE}` : "";
+${chatPostLine(S.chat)}` : "";
   return `${leadGuide(host.features)}${notDriving}${dam}`;
 }
 function ownerTyped(text) {
@@ -20963,7 +19579,7 @@ function patchOddHeader(text) {
 var patchOddText = "Refused: symcc can't read this patch's file names safely; remove control characters (like \\r) and odd line breaks from its '***' lines.";
 var str2 = (v) => typeof v === "string" ? v : "";
 var quoted = (parts) => parts.map((s) => /^[\w@%+=:,./-]+$/.test(s) ? s : `'${s.replace(/'/g, `'\\''`)}'`).join(" ");
-function commandOf2(v) {
+function commandOf(v) {
   if (typeof v === "string")
     return v;
   if (Array.isArray(v) && v.length && v.every((x) => typeof x === "string"))
@@ -20997,7 +19613,7 @@ function copilotTouches(dir, toolName2, toolArgs) {
   if (FILE_TOOLS.has(toolName2))
     return toolName2 === "str_replace_editor" && f.command === "view" ? [] : str2(f.path) ? [file(str2(f.path))] : [];
   if (SHELL_TOOLS.has(toolName2))
-    return shell(commandOf2(f.command));
+    return shell(commandOf(f.command));
   if (SHELL_INPUT_TOOLS.has(toolName2))
     return shell(str2(f.input));
   return [];

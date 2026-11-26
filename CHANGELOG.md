@@ -2,6 +2,22 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.46 (2026-11-26)
+
+### Added
+- Chat mode: when you write to the lead from a chat app (Telegram, Slack and other Claude Code channels, or DAM), your message counts as your own words, the lead posts its replies to that chat, and it asks questions as numbered text ("reply with the number or your own words") instead of the terminal pop-up. Typing in the terminal again turns it off. See "From a chat app" in the guide.
+- Board updates say who wrote each part and why (the worker, the checker by its id, or symcc).
+- Task page: ▍Changes stays after a task is merged, and `/symcc-diff` works for done tasks too; it counts a worker's own commits and its own merge of main.
+- Website: a blog built by the site script (dated posts, an index, RSS), and nicer doc pages: an "On this page" list (on the side on wide screens, folded on phones), a sticky header marking the current page, Previous/Next links, cleaner tables and code. The home page looks as before.
+
+### Changed
+- The worker guards are slimmer: one git deny list read from a command's text, no shell parser.
+
+### Fixed
+- The git guard sees git after a lone `--` or a non-letter option (`env -- git push`, `xargs -0 git push`, `nice -5 git push`).
+- An answer to "sent back twice by the checker" must name exactly one of Merge as is / Keep fixing / Drop; "drop? no, keep fixing" no longer drops the task.
+- The blog build refuses an impossible date, the post name `index` and two posts with the same name.
+
 ## 0.5.45 (2026-11-26)
 
 ### Added
