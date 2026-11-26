@@ -1929,6 +1929,9 @@ The built-in task types (in the plugin, one file each: `kinds/<name>.ts`):
 | `refactor` | Cleaning up code without changing what it does; tests that passed still pass. |
 | `docs` | Documentation only (README, docs/, comments), not code. |
 | `investigation` | Find an answer and hand it back; nothing is merged. |
+| `errand` | General work that isn't a change to the project (tidy a folder outside the repo, gather files); ends done with a report, nothing merged. |
+
+**Errands.** An `errand` runs like an investigation (no file list, no checks, no tests, its folder is removed after), with one difference: when the worker hands back, the task ends done on its own, in every mode, with the report kept. Use an investigation when you want an answer to read, an errand when you want something done. A failing errand fails like any task.
 
 **Two ways a task runs.** `investigation` is one of them: its worker hands back an answer,
 nothing is committed, tested or merged, and it waits for you to read it (see
