@@ -1075,8 +1075,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   or value says why, e.g. `max_parallel must be a whole number, 1-8`.
 - `notify` is `voice` ("symcc: T-3 done", "my app: T-5 needs you" out loud: the project folder's name comes
   first, with dashes, underscores and dots said as spaces, and only its first three words when it is long),
-  `sound 1`, `sound 2` or `sound 3` (a short chime from that sound set), or `off`. A new board uses `voice` where
-  this computer can speak, else `sound N` with N picked from the project folder's name, else `off`.
+  `sound 1`, `sound 2` or `sound 3` (a short chime from that sound set), or `off`. A new board uses `sound 2` where
+  this computer can play sounds, else `voice` where it can only speak, else `off`.
   Once per session symcc checks which programs exist (without playing anything): on macOS
   `say` for voice and `afplay` with the built-in sounds for sound; on Linux `spd-say`,
   `espeak-ng` or `espeak` for voice and `paplay` (freedesktop sounds), `canberra-gtk-play`

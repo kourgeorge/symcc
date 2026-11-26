@@ -98,15 +98,16 @@ test('the default sound set comes from the project folder name and stays the sam
   // many names spread over all 3 sets
   const sets = new Set(['a', 'b', 'c', 'web', 'api', 'site', 'alpha', 'beta'].map(n => soundSetFor(`/x/${n}`)))
   expect(sets.size).toBe(3)
-  // with no notify saved on a machine that can only chime, the default is the project folder's set (S.root)
-  expect(notifyOf({}, { voice: false, sound: true }, '/x/web')).toBe('sound 2')
-  expect(notifyOf({}, { voice: true, sound: true }, '/x/web')).toBe('voice')
-  expect(notifyOf({}, { voice: false, sound: false }, '/x/web')).toBe('off')
+  // with no notify saved on a machine that can only chime, the default is sound 2
+  expect(notifyOf({}, { voice: false, sound: true })).toBe('sound 2')
+  expect(notifyOf({}, { voice: true, sound: true })).toBe('sound 2')
+  expect(notifyOf({}, { voice: false, sound: false })).toBe('off')
   const { $ } = machine('Darwin', ['afplay'], ALL_MAC)
   S.root = '/x/web'
   expect((await playsFor($, null, ['T-1'])).map(p => p.argv)).toEqual([['afplay', `${MAC}/${MAC_SETS[2][0]}.aiff`]])
+  // the default is sound 2 for every folder
   S.root = '/x/symcc'
-  expect((await playsFor($, null, ['T-1'])).map(p => p.argv)).toEqual([['afplay', `${MAC}/${MAC_SETS[3][0]}.aiff`]])
+  expect((await playsFor($, null, ['T-1'])).map(p => p.argv)).toEqual([['afplay', `${MAC}/${MAC_SETS[2][0]}.aiff`]])
 })
 
 test('T-695: notify takes voice, sound 1, sound 2, sound 3 or off, and nothing else; there is no sound_set', async () => {
@@ -130,11 +131,11 @@ test('T-695: notify takes voice, sound 1, sound 2, sound 3 or off, and nothing e
   // shown in the settings lists
   expect(settingValue({ notify: 'sound 1' }, 'notify', '/x/web')).toBe('sound 1')
   const text = settingsText({ notify: 'sound 2' }, 'symcc', '/x/web')
-  expect(text).toMatch(/notify\s+sound 2\s+\(default voice \(else sound N, N picked from the project name, else off\) · voice \/ sound 1 \/ sound 2 \/ sound 3 \/ off\)/)
+  expect(text).toMatch(/notify\s+sound 2\s+\(default sound 2 \(else voice if this computer can only speak, else off\) · voice \/ sound 1 \/ sound 2 \/ sound 3 \/ off\)/)
   expect(text).toContain('sound 1: a short chime, sound set 1')
   expect(text).not.toContain('sound_set')
   const lead = leadSettingsText({}, { sound: true, voice: false }, '/x/web')
-  expect(lead).toContain('notify: sound 2 (default voice')
+  expect(lead).toContain('notify: sound 2 (default sound 2')
   expect(lead).toContain('this machine can play: sound 1, sound 2, sound 3, off')
   expect(lead).not.toContain('sound_set')
   expect(groupSummary(SETTING_GROUPS.find(g => g.title === 'Board and alerts')!, { notify: 'sound 2' }, 200)).toContain('notify sound 2')
