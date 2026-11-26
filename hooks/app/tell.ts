@@ -31,10 +31,9 @@ export function meanwhileText(lines: readonly string[], shown = MEANWHILE_SHOWN)
  * it (takeBoardUpdate) on its next hook that can carry text. `urgent`: the owner must act on it now (a worker needs
  * them, a worker's time is up); the update it goes in is sent as urgent (LeadSend: OpenCode gives it mid-turn).
  */
-export function tellLead(host: Host, text: string, how?: { urgent?: boolean; ids?: string[] }) {
+export function tellLead(host: Host, text: string, how?: { urgent?: boolean }) {
   if (!S.enabledNow) return // the plugin is disabled: no "[name] Board update" messages
   leadQueue.push(text)
-  about(text, how?.ids)
   if (how?.urgent) S.leadUrgent = true
   if (host.features.wakeLead !== 'now') return
   // an update that failed to send goes out with this one, in a moment, not after the retry wait
@@ -61,7 +60,7 @@ function sendBoardUpdate(host: Host) {
   const before = meanwhile.slice()
   const update = takeBoardUpdate()
   if (!update) return
-  void (urgent ? host.lead.send(update, { urgent: true }) : host.lead.send(update)).then(() => delivered([...lines, ...before]), err => {
+  void (urgent ? host.lead.send(update, { urgent: true }) : host.lead.send(update)).then(() => {}, err => {
     if (!S.enabledNow) return
     leadQueue.unshift(...lines)
     meanwhile.unshift(...before)
@@ -97,44 +96,13 @@ export function takeBoardUpdate(): string | undefined {
  */
 const damEnding = () => (S.dam ? `\n\n${damGuideCore(S.N.name)}\n\n${DAM_POST_LINE}` : '')
 
-/** T-995: line text → the task ids it is about that have not moved on yet (only lines queued with ids are here). */
-const waitingOn = new Map<string, string[]>()
-const about = (text: string, ids?: string[]) => {
-  if (ids?.length) waitingOn.set(text, [...ids])
-}
-
-/**
- * T-995: task `id` has moved on (answered, merged, dropped): the waiting lines about it (queued with its id) are stale and
- * leave both queues; a line about several tasks goes when all of them have moved on. Call it before telling the new line.
- */
-export function moveOn(id: string) {
-  for (const q of [leadQueue, meanwhile]) {
-    for (let i = q.length - 1; i >= 0; i--) {
-      const left = waitingOn.get(q[i] ?? '')
-      if (!left?.includes(id)) continue
-      const rest = left.filter(x => x !== id)
-      if (rest.length) waitingOn.set(q[i]!, rest)
-      else {
-        waitingOn.delete(q[i]!)
-        q.splice(i, 1)
-      }
-    }
-  }
-}
-
-/** A line reached the chat: its task ids are not needed any more (unless the same text waits again). */
-function delivered(texts: readonly string[]) {
-  for (const t of texts) if (!leadQueue.includes(t) && !meanwhile.includes(t)) waitingOn.delete(t)
-}
-
 /** An answer cut to one short line, for a "Meanwhile" line. */
 export const brief = (text: string) => cutLine(text, 200)
 
 /** The owner's own action (or a merge they approved): no message now; one short line in the next board update. */
-export function noteForLead(text: string, ids?: string[]) {
+export function noteForLead(text: string) {
   if (!S.enabledNow) return
   meanwhile.push(text.trim())
-  about(text.trim(), ids)
 }
 
 /**
@@ -148,17 +116,10 @@ export function meanwhileForPrompt(): { text: string; back: () => void } {
   const lines = meanwhile.splice(0)
   if (!lines.length || !S.enabledNow) return { text: '', back: () => {} }
   let put = false
-  const kept = new Map<string, string[]>()
-  for (const l of lines) {
-    const ids = waitingOn.get(l)
-    if (ids) kept.set(l, ids)
-  }
-  delivered(lines) // the prompt carries them; `back` restores their ids if it never reaches the chat
   const back = () => {
     if (put) return
     put = true
     meanwhile.unshift(...lines)
-    for (const [l, ids] of kept) if (!waitingOn.has(l)) waitingOn.set(l, ids)
   }
   return { text: `[${S.N.name}] ${meanwhileText(lines)}\n(Happened since your last message; take it into account.)`, back }
 }

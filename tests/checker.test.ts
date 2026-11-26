@@ -984,7 +984,6 @@ test('T-386: a reload stops the running checker; at the next check the task gets
   expect(t.attempts).toBe(1)
   expect(t.test_tries ?? 0).toBe(0)
   expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
-  expect(meanwhile.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(0) // T-995: the task merged, so the restart line is stale
 })
 
 test("T-386: a checker that ended over the reload, or whose stopped hand-back arrives, gets a new run without waiting for a check", async () => {

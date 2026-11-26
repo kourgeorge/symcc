@@ -13,7 +13,7 @@ import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/
 import { addPassedTree, parsePassedTrees, passedTreesText, treePassed, PASSED_TREES_MAX } from '../hooks/core/passed-trees'
 import { S, leadQueue, workers, sayQueue, meanwhile, scoutRuns, haltedAnywhere } from '../hooks/app/state'
 import { askCall, checkEdit } from '../hooks/app/ask'
-import { tellLead, noteForLead, meanwhileText, moveOn } from '../hooks/app/tell'
+import { tellLead, noteForLead, meanwhileText } from '../hooks/app/tell'
 import { saidNeedsYou, findPlayers, playable, playsFor, sayNext, sayDone, WIN_TEXT_VAR } from '../hooks/app/voice'
 import { workerFinished, check, pump, startWorker, lateHandBack, WORKER_PROMPT, workerQuestionText, type TurnEnd, notThisTry, unclaimed, SYMCC_STOPPED_NOTE } from '../hooks/app/workers'
 import { stopOrphans, formerWorker, ownerTimeState } from '../hooks/app/cleanup'
@@ -3029,40 +3029,6 @@ function leadWorld() {
   return { $: host, sent }
 }
 
-test('T-995: moveOn drops waiting lines about a task that moved on, and no one else\'s', () => {
-  const { $, sent } = leadWorld()
-  noteForLead('T-1 "x" failed its tests; retrying on its own (1 of 2). Nothing to do.', ['T-1'])
-  noteForLead('T-2 "y" failed its tests; retrying on its own (1 of 2). Nothing to do.', ['T-2'])
-  noteForLead('T-1 "x", T-2 "y": back to todo.', ['T-1', 'T-2'])
-  moveOn('T-1')
-  tellLead($, 'T-3 "z" is ready for review.')
-  expect(sent.length).toBe(1)
-  expect(sent[0]).not.toContain('T-1 "x" failed')
-  expect(sent[0]).toContain('T-2 "y" failed')
-  expect(sent[0]).toContain('T-1 "x", T-2 "y": back to todo.') // one of its tasks has not moved on
-  moveOn('T-2')
-  expect(meanwhile).toEqual([])
-})
-
-test('T-995: a failed send keeps the task ids of its lines, even when another task moves on meanwhile', async () => {
-  let fail: (e: Error) => void = () => {}
-  const sent: string[] = []
-  const { host: $ } = fakeHost({ clock: { after: (_ms, f) => (f(), { cancel() {} }) }, lead: { send: text => (sent.push(text), new Promise<never>((_, rej) => (fail = rej))) as never } })
-  S.leadTimer = null
-  S.leadRetry = null
-  S.enabledNow = true
-  leadQueue.splice(0)
-  meanwhile.splice(0)
-  noteForLead('T-1 "a" failed its tests; retrying on its own (1 of 2). Nothing to do.', ['T-1'])
-  tellLead($, 'T-3 "z" is ready for review.') // the send starts and takes the lines
-  moveOn('T-5')
-  fail(new Error('gone'))
-  await pause(0)
-  S.leadRetry = null
-  moveOn('T-1')
-  expect(meanwhile).toEqual([])
-})
-
 test('T-995: a retry, a reload restart and a plain merge send no update; failed for good and a question still do', async () => {
   const { $, sent } = leadWorld()
   noteForLead('T-1 "x" conflicts; retrying on its own (1 of 2). Nothing to do.')
@@ -5545,9 +5511,8 @@ test('an approve waiting in line behind two slow merges, then main moved by hand
 // ---------------- investigations: the hand-back is the result ----------------
 
 /** T-1, an investigation, is "doing" with worker ag1 in `mode`, which then hands back `answer`. */
-async function investigationAnswers(mode: 'auto' | 'review', answer: string, extra: Partial<BoardTask> = {}, rec: Rec = {}, seed?: () => void) {
+async function investigationAnswers(mode: 'auto' | 'review', answer: string, extra: Partial<BoardTask> = {}, rec: Rec = {}) {
   const w = world()
-  seed?.()
   const [b0] = boardWith(mode, ['npm test'], { kind: 'investigation', history: hist('created by the lead') } as Partial<BoardTask>)
   // set after the try started: a new try (attempts changing) clears the time fields
   const b = Object.keys(extra).length ? patchTask(b0, 'T-1', extra, ISO) : b0
@@ -5575,16 +5540,6 @@ for (const mode of ['auto', 'review'] as const)
     expect(w.calls).not.toContain(`root: git worktree remove --force ${WT}`)
     expect(leadQueue.join('\n')).toContain('T-1 "Do it" is answered and waits for the owner to read it')
   })
-
-test('T-995: answered drops an earlier waiting line about that task, and keeps lines about others', async () => {
-  await investigationAnswers('auto', 'It is fine.', {}, {}, () => {
-    noteForLead('T-1 "Do it": retrying on its own (1 of 2). Nothing to do.', ['T-1'])
-    noteForLead('T-2 "Other": retrying on its own (1 of 2). Nothing to do.', ['T-2'])
-  })
-  expect(meanwhile.join('\n')).not.toContain('T-1 "Do it": retrying')
-  expect(meanwhile.join('\n')).toContain('T-2 "Other": retrying')
-  expect(leadQueue.join('\n')).toContain('T-1 "Do it" is answered')
-})
 
 test("a long investigation answer is cut on the task; the report keeps it all", async () => {
   const long = 'x'.repeat(ANSWER_MAX_CHARS + 500)

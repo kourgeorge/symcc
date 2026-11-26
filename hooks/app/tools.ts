@@ -10,7 +10,7 @@ import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { statsHtml, openCommands } from '../core/stats-html'
 import { doctor } from './doctor'
-import { noteForLead, brief, tellLead, moveOn } from './tell'
+import { noteForLead, brief, tellLead } from './tell'
 import { playable, playSample } from './voice'
 import { pump, startNow, approve, mergeWaiting, checkingNow, stopAsked, CHECKING_TEXT, mergingNow, MERGING_TEXT, fullAnswer } from './workers'
 import { stopWorker, setBoardMode, setSymcc } from './board-mode'
@@ -835,7 +835,6 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const checking = checkingNow(t.id)
       if (checking) stopAsked.set(t.id, 'dropped')
       else if (t.status === 'doing') await stopWorker($, t.id, 'dropped')
-      moveOn(t.id)
       await change($, x => patchTask(x, t.id, { status: 'dropped', note: str(a.reason) ?? 'dropped', ...(failedOnClash(t) ? { merge_main: true } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'dropped') }, now()))
       if (checking) await haltChecker($, t.id, 'the task was dropped')
       if (!checking) await removeWorktree($, t.id, worktreeDir(t.id)).catch(() => undefined)
