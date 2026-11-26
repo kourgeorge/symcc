@@ -55,7 +55,7 @@ export type HistoryFacts = Omit<SymccHistoryEntry, 'at' | 'kind' | 'text'> & His
  * T-1079: who wrote a history line, saved with it. `agent`: the name the agent ran under ("symcc-T-3", "symcc-T-3-checker");
  * `by`: 'worker' or 'you' where the kind alone doesn't say (see historyActor); `report`: a checker line's saved full report (a file).
  */
-export type HistoryWho = { agent?: string; by?: 'worker' | 'you'; report?: string }
+export type HistoryWho = { agent?: string; by?: 'worker' | 'you' | 'lead' | 'symcc'; report?: string }
 
 /** "try 2: <body>" as an entry to add, with its `try` fact; `facts` adds the rest. */
 export const tryEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, kind: HistoryKind, body: string, facts: HistoryFacts = {}): HistoryAdd => [kind, `${tryLabel(t)}: ${body}`, { try: Number(t.attempts) || 0, ...facts }]
@@ -368,7 +368,7 @@ const OWNER_KINDS: readonly HistoryKind[] = ['answer', 'rejected', 'approve-fail
  * lead's, the owner's answer and rejection are the owner's ("you"); symcc's own steps have no actor ('').
  */
 export function historyActor(e: Pick<HistoryEntry, 'kind' | 'step' | 'result' | 'by'>): HistoryActor {
-  if (e.by) return e.by
+  if (e.by) return e.by === 'symcc' ? '' : e.by
   const kind = e.kind as HistoryKind
   if (kind === 'checker' || kind === 'checker-ok' || kind === 'checker-problems') return 'checker'
   if (LEAD_KINDS.includes(kind)) return 'lead'

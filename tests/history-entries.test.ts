@@ -8,6 +8,7 @@ import { taskWasResult } from '../hooks/core/review'
 import { oldDataRows, guessHistoryKind, migrateHistory, oldHistoryFacts, oldHistoryEntry, upgradeArchiveTask } from '../hooks/core/old-data'
 import { readOld, stillOld } from './old-data-fixture'
 import { taskText } from '../hooks/app/tools'
+import { firstProblemOf } from '../hooks/core/checker'
 
 const T = '2026-11-18T10:00:00.000Z'
 const T2 = '2026-11-18T11:30:00.000Z'
@@ -176,4 +177,19 @@ test('T-806: lines today\'s helpers wrote are never read as old text: no reason,
   expect(rows.find(r => r.text.startsWith('history entries without their facts'))?.n ?? 0).toBe(0)
   // an old line with the same words and no fact field at all is still old
   expect(migrateHistory({ history: [{ at: T, kind: 'failed', text: 'try 1: x → tests failed: y' }] })![0]!.reason).toBe('tests')
+})
+
+test('T-1079: merge lines name who started the merge, and the checker line shows the first problem', () => {
+  const t = { id: 'T-1', role: 'general', attempts: 2 }
+  const line = (who: 'you' | 'lead' | 'symcc', said: string) => {
+    const [kind, text, facts] = resultEntry(t, 'merged', said, 'merged into main (abc)', { by: who })
+    return historyLineText(historyEntry(kind, text, T, facts))
+  }
+  expect(line('you', 'approved by the owner')).toContain('you:')
+  expect(line('lead', 'moved to tests by the lead')).toContain('lead:')
+  expect(line('lead', 'moved to tests by the lead')).not.toContain('you:')
+  expect(line('symcc', 'merged once your files were out of the way')).not.toMatch(/you:|worker|lead:/)
+  const rep = (s: string) => firstProblemOf(s)
+  expect(rep('I checked by importing x from /tmp.\n\nProblems:\n\n- a.ts:3 — real bug')).toBe('a.ts:3 — real bug')
+  expect(rep('I checked x.\n\n## Problems\n- a.ts:3 — real bug')).toBe('a.ts:3 — real bug')
 })
