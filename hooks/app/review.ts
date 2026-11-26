@@ -605,8 +605,12 @@ export async function mergedBefore($: Host, t: Pick<SymccTask, 'id'>, merged: st
   const p = await git($, ['rev-list', '--parents', '-n', '1', merged]).catch(() => null)
   if (!p || p.exitCode !== 0) return ''
   const [, first, second] = String(p.stdout ?? '').trim().split(/\s+/)
-  if (second) return second
   if (!first) return ''
+  if (second) {
+    // symcc's own merge commit (the task's trailer): main is its second parent. A merge made by hand on main: its first parent is main.
+    const m = await git($, ['log', '-n', '1', '--format=%B', merged]).catch(() => null)
+    return m && m.exitCode === 0 && isTaskCommit(String(m.stdout ?? ''), t.id, S.N.name) ? second : first
+  }
   const log = await git($, ['log', '--first-parent', '-n', '200', '--format=%H%x1f%P%x1f%B%x1e', merged]).catch(() => null)
   if (!log || log.exitCode !== 0) return first
   for (const entry of String(log.stdout ?? '').split('\x1e')) {

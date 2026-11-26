@@ -27,6 +27,10 @@ function gitWorld(o: { commits: Record<string, { parents: string[]; message: str
         const c = o.commits[a[a.length - 1]!]
         return c ? { exitCode: 0, stdout: `${a[a.length - 1]} ${c.parents.join(' ')}\n`, stderr: '' } : { exitCode: 128, stdout: '', stderr: 'bad object' }
       }
+      if (a[0] === 'log' && a.includes('--format=%B')) {
+        const c = o.commits[a[a.length - 1]!]
+        return c ? { exitCode: 0, stdout: c.message + '\n', stderr: '' } : { exitCode: 128, stdout: '', stderr: 'bad' }
+      }
       if (a[0] === 'log') {
         const out: string[] = []
         for (let s: string | undefined = a[a.length - 1]; s && o.commits[s]; s = o.commits[s]!.parents[0]) out.push(`${s}\x1f${o.commits[s]!.parents.join(' ')}\x1f${o.commits[s]!.message}\x1e`)
@@ -44,7 +48,7 @@ const NUMSTAT = '12\t3\thooks/a.ts\n-\t-\tlogo.png\n'
 
 test('T-1086: a done task\'s changes are read from git: main before a catch-up merge is its second parent', async () => {
   const merged = sha('a')
-  const w = gitWorld({ commits: { [merged]: { parents: [sha('b'), sha('c')], message: 'T-7: Do it' } }, numstat: NUMSTAT })
+  const w = gitWorld({ commits: { [merged]: { parents: [sha('b'), sha('c')], message: 'T-7: Do it\n\nSymcc-Task: T-7' } }, numstat: NUMSTAT })
   const got = await mergedChanges(w.$, task({ merged }))
   expect(got?.before).toBe(sha('c'))
   expect(got?.merged).toBe(merged)
@@ -87,9 +91,16 @@ test('T-1086: a retry\'s catch-up merge inside the line: main before is its seco
   expect(got?.before).toBe(sha('9'))
 })
 
+test('T-1086: a hand merge on main (parents: main, task tip): main before is the first parent', async () => {
+  const merged = sha('8')
+  const w = gitWorld({ commits: { [merged]: { parents: [sha('a'), sha('b')], message: "Merge branch 'task'" } }, numstat: NUMSTAT })
+  const got = await mergedChanges(w.$, task({ merged }))
+  expect(got?.before).toBe(sha('a'))
+})
+
 test('T-1086: a file\'s diff comes from git; "diff not available" when git no longer has the commits', async () => {
   const merged = sha('1')
-  const w = gitWorld({ commits: { [merged]: { parents: [sha('2'), sha('3')], message: 'x' } }, numstat: NUMSTAT, diff: 'diff --git a/hooks/a.ts b/hooks/a.ts\n+new\n' })
+  const w = gitWorld({ commits: { [merged]: { parents: [sha('2'), sha('3')], message: 'Symcc-Task: T-7' } }, numstat: NUMSTAT, diff: 'diff --git a/hooks/a.ts b/hooks/a.ts\n+new\n' })
   expect(await mergedDiff(w.$, task({ merged }), 'hooks/a.ts')).toBe('diff --git a/hooks/a.ts b/hooks/a.ts\n+new\n')
   expect(w.calls).toContain(`diff --no-color --no-ext-diff --no-renames ${sha('3')} ${merged} -- hooks/a.ts`)
   const gone = gitWorld({ commits: {} })
@@ -97,7 +108,7 @@ test('T-1086: a file\'s diff comes from git; "diff not available" when git no lo
   expect(await mergedDiff(gone.$, task({ merged: sha('4') }), 'hooks/a.ts')).toBe(DIFF_GONE)
   expect(DIFF_GONE).toBe('diff not available')
   // the commits are lost after the list was shown: the diff says so instead of failing
-  const lost = gitWorld({ commits: { [sha('5')]: { parents: [sha('6'), sha('7')], message: 'x' } }, numstat: NUMSTAT })
+  const lost = gitWorld({ commits: { [sha('5')]: { parents: [sha('6'), sha('7')], message: 'Symcc-Task: T-7' } }, numstat: NUMSTAT })
   expect((await mergedChanges(lost.$, task({ merged: sha('5') })))?.files.length).toBe(2)
   expect(await mergedDiff(lost.$, task({ merged: sha('5') }), 'hooks/a.ts')).toBe(DIFF_GONE)
 })
