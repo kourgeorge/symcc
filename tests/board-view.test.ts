@@ -50,3 +50,20 @@ test('T-1102: the lead guide names the board views only in chat mode', () => {
     S.chat = ''
   }
 })
+
+test('T-1111: in chat mode board task / page equals /symcc-task and "more"; outside chat mode it is unchanged', async () => {
+  const host = world()
+  const plain = await runTool(host, 'board', { task: 'T-1' })
+  S.chat = 'telegram'
+  try {
+    const slash = (await runCommand(host, `${S.N.name}-task`, 'T-1'))?.text
+    expect(await runTool(host, 'board', { task: 'T-1' })).toBe(slash)
+    expect(slash).not.toBe(plain)
+    expect(slash).toContain('Say: approve')
+    expect(await runTool(host, 'board', { task: 'T-1', page: 2 })).toBe((await runCommand(host, `${S.N.name}-task`, 'T-1 more'))?.text)
+    expect(await runTool(host, 'board', { task: 'T-1', page: 3 })).toBe((await runCommand(host, `${S.N.name}-task`, 'T-1 page 3'))?.text)
+  } finally {
+    S.chat = ''
+  }
+  expect(await runTool(host, 'board', { task: 'T-1' })).toBe(plain)
+})
