@@ -50,7 +50,7 @@ export function siteStats(input: { tasks: SymccTask[]; archived?: SymccTask[]; n
   const billed = doneChange.map(t => taskFigures(t, input.nowMs)).filter(f => f.hasData && f.tokens !== undefined).map(f => billedTokens(f.tokens))
   const perDay = new Map<string, number>()
   for (const t of every) {
-    if (t.status !== 'done') continue
+    if (t.status !== 'done' || isInvestigation(t as { kind?: unknown })) continue
     const day = dayOf(doneAtMs(t) ?? Date.parse(t.updated_at || ''), off)
     if (day) perDay.set(day, (perDay.get(day) ?? 0) + 1)
   }

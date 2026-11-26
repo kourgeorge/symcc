@@ -16,7 +16,7 @@ import type { SymccTask } from '../types'
 
 const text = (f: string): string | null => (existsSync(f) ? readFileSync(f, 'utf8') : null)
 
-export async function collect(root: string, from: string, nowMs: number) {
+export async function collect(root: string, from: string, nowMs: number, offsetMin = -new Date(nowMs).getTimezoneOffset()) {
   const data = join(root, '.symcc')
   const boardText = text(join(data, 'board.json'))
   if (boardText === null) throw new Error(`site-stats: no board at ${join(data, 'board.json')}`)
@@ -47,7 +47,7 @@ export async function collect(root: string, from: string, nowMs: number) {
   }
   const lead = await leadUsage(host as never, root, { kind: 'all' }, nowMs).catch(() => ({ leadProblem: 'unreadable' }))
   const team = { ...lead, scouts: parseScoutUsage(text(join(data, 'scouts.json'))) }
-  return siteStats({ tasks: read.board.tasks as SymccTask[], archived: [...archived.values()], nowMs, from, team })
+  return siteStats({ tasks: read.board.tasks as SymccTask[], archived: [...archived.values()], nowMs, from, team, offsetMin })
 }
 
 if (import.meta.main) {

@@ -48,5 +48,15 @@ if (!(s.tokens.scouts.all > 0) || !(s.tokens.workers.all > 0) || s.tokens.total.
 if (s.tokens.lead !== null) fail('the lead should not be counted without session logs')
 if (!(s.perDone.medianTokens > 0) || !(s.perDone.medianMs > 0)) fail(`perDone: ${JSON.stringify(s.perDone)}`)
 if (!s.perDay.length) fail('no perDay')
+if (s.perDay.reduce((n, d) => n + d.done, 0) !== s.tasks.done - s.tasks.answered - s.tasks.errands) fail(`perDay sums to ${JSON.stringify(s.perDay)}, tasks.done ${s.tasks.done}`)
+// T-1147: a fixed offset: a change task done at 23:30 UTC is on the next day at UTC+2; an answered investigation is not counted
+const { siteStats } = await import(join(repo, 'hooks/core/site-stats.ts'))
+const at = '2026-11-20T23:30:00.000Z'
+const mk = (id, over) => ({ ...base(id, 't', 'done', { history: [{ at, kind: 'merged', text: 'x', how: 'own' }], updated_at: at, runs: [run(10, 1000)] }), ...over })
+const nowFixed = Date.parse('2026-11-21T12:00:00Z')
+const tasks = [mk('T-10', {}), mk('T-11', { kind: 'investigation' })]
+const days = off => siteStats({ tasks, nowMs: nowFixed, from: '2026-11-09', offsetMin: off }).perDay
+if (JSON.stringify(days(0)) !== JSON.stringify([{ day: '2026-11-20', done: 1 }])) fail(`UTC perDay ${JSON.stringify(days(0))}`)
+if (JSON.stringify(days(120)) !== JSON.stringify([{ day: '2026-11-21', done: 1 }])) fail(`UTC+2 perDay ${JSON.stringify(days(120))}`)
 for (const secret of ['SECRET', 'secret-project-folder', 'secret-file', 'DETAILS-', 'tmp', 'Users']) if (text.includes(secret)) fail(`the JSON holds "${secret}"`)
 process.exit(bad ? 1 : 0)
