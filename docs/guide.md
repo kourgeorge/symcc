@@ -3003,6 +3003,8 @@ After you update symcc, run **symcc: Restart symcc**.
 
 - **symcc: Set up symcc in this project** (or `/symcc-init` to the lead) creates the board. Then tell the lead what you want done.
 - The panel has the Now, Board, Worktrees, Scouts and Memory pages. The sidebar shows the board at a glance, and its badge counts what needs you.
+- On the Board page, a task shows what it has done so far, its change size, its history with who wrote each line, and its checker's report.
+- When another window drives the board, the header says so. **Drive here** makes this window drive it.
 - **symcc: Message the lead** sends the lead a message from anywhere.
 - The settings are `symcc.agents`, `symcc.leadModel`, `symcc.workerModel`, `symcc.pluginPath`, `symcc.nodePath`, `symcc.proxy` and `symcc.notify`.
 
