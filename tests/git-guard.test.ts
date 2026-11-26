@@ -272,3 +272,20 @@ test('T-1062: a redirect before the git command, a wrapper by its full path, ~us
   for (const c of ['ls /tmp/*', `ls ${WT}/*.ts`, 'ls /Users/o/repository', 'cat ~/notes/*.md', 'ls /Users/other/*', 'echo ~1 HEAD~2'])
     expect([c, no(c)]).toEqual([c, undefined])
 })
+
+test('T-1062: many option words after a wrapper still find the git call, fast', () => {
+  const push = 'gi' + 't push origin main'
+  for (const c of [
+    'env' + ' -i'.repeat(40) + ' true; ' + push,
+    'env' + ' -i'.repeat(40) + ' ' + push,
+    'sudo' + ' -u root'.repeat(40) + ' ' + push,
+    'nice' + ' -n 5'.repeat(40) + ' ' + push,
+    'timeout' + ' 5'.repeat(40) + ' ' + push,
+    'if' + ' -ab'.repeat(40) + ' ' + push,
+    ('env -i ' + 'time -p ').repeat(30) + push,
+  ]) {
+    const start = Date.now()
+    expect([c, gitWriteIn(c, 'worker'), gitWriteIn(c, 'reader')]).toEqual([c, 'git push', 'git push'])
+    expect([c, Date.now() - start < 500]).toEqual([c, true])
+  }
+})
