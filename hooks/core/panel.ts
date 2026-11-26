@@ -1,6 +1,6 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { asBlockers, byRunOrder, type BoardTask, type CheckStep, type TurnStep, emptyBoard, OPEN, intoOf, isFinished, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
+import { asBlockers, byRunOrder, type BoardTask, type CheckStep, type TurnStep, emptyBoard, OPEN, intoOf, isFinished, hasMergedChanges, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
 import { approveRunning, checkStepNow, finishingNow, shownStatus } from './lead'
@@ -685,7 +685,7 @@ export function taskActions(t: BoardTask, ctx: TaskActionCtx = {}): TaskAction[]
       : [inReview && a('approve', 'Approve', 'approve', 'a', { main: true }), inReview && a('reject', 'Reject', 'reject', 'x', { group: 'danger' })]
   out.push(
     // the changes stay open to look at while the merge runs
-    inReview && !isAnswered(t) && a('show-changes', 'Show changes', 'show changes', 'd'),
+    ((inReview && !isAnswered(t)) || hasMergedChanges(t)) && a('show-changes', 'Show changes', 'show changes', 'd'),
     !!ctx.worker && a('watch', 'Watch worker', 'watch worker', 'w'),
     // pausing is the next step of a running or waiting-to-run task (T-751)
     (s === 'doing' || s === 'todo') && a('pause', 'Pause', 'pause', 'p', { main: true }),

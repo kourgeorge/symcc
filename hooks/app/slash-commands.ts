@@ -1,12 +1,12 @@
 // symcc's slash commands, split out of symcc.ts (T-877): the list a host registers (COMMANDS) and what each one does
 // (runCommand). symcc.ts re-exports them; this file imports session-start.ts, never symcc.ts.
-import { type Command, boardText, shortHome, notSetUpAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
+import { type Command, hasMergedChanges, boardText, shortHome, notSetUpAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
 import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { findArchived } from './archive'
 import { deleteOrgMem, orgMemNow } from './org-mem'
 import { setupGit, recheckGit } from './git'
 import { publish, statusView, driveHere, disableHere, enableHere } from './lead'
-import { changedFiles, changesText } from './review'
+import { changedFiles, changesText, DIFF_GONE, mergedChanges, mergedDiff } from './review'
 import { changeRole } from './roles'
 import { changeKind } from './kinds'
 import { scheduleScouts, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
@@ -275,6 +275,16 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     case 'diff': {
       const t = find(b, cmd.id)
       if (!t) return say((await findArchived(host, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
+      // T-1086: a done change task shows what its merge brought into the branch, from git
+      if (hasMergedChanges(t)) {
+        const got = await mergedChanges(host, t).catch(() => null)
+        if (!got) return say(DIFF_GONE)
+        if (!cmd.file) return say(statText(t.id, got.files, S.N.name))
+        const f = cmd.file.replace(/^\.\//, '')
+        if (!got.files.some(x => x.file === f)) return say(`${t.id} did not change ${f}. Changed: ${got.files.map(x => x.file).join(', ')}`)
+        const text = await mergedDiff(host, t, f)
+        return say(text === DIFF_GONE ? text : cutDiff(text, t.id, 5000, f, S.N.name).join('\n') || `${f}: no text changes (binary?)`)
+      }
       if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); /${S.N.name}-diff shows the changes of a task in review.`)
       try {
         const files = await changedFiles(host, intoOf(t), t)

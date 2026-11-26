@@ -185,6 +185,18 @@ export function parseDiffStat(text: string): DiffFile[] {
   return out
 }
 
+/** T-1086: the rows of `git diff --numstat --no-renames` output ("12<tab>3<tab>path"; "-<tab>-<tab>path" for a binary file): one per file. */
+export function parseNumstat(text: string): DiffFile[] {
+  const out: DiffFile[] = []
+  for (const line of String(text ?? '').split('\n')) {
+    const m = /^(\d+|-)\t(\d+|-)\t(.+)$/.exec(line)
+    if (!m) continue
+    const file = unquote(m[3]!.trim())
+    out.push(m[1] === '-' ? { file, added: 0, removed: 0, binary: true } : { file, added: Number(m[1]), removed: Number(m[2]) })
+  }
+  return out
+}
+
 /** A file row's short count: "+12 -3", "binary". */
 export const statCount = (f: DiffFile) => (f.binary ? 'binary' : `+${f.added} -${f.removed}`)
 

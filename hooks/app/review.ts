@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type ChangeSize, parseShortstat, type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withHistory, findRole, roleOf, isProseRole, notProse, notProseText, docsOnly, PROSE_TESTS_SKIPPED, PROSE_DOCS_CHECKS } from '../board'
+import { type ChangeSize, parseNumstat, hasMergedChanges, parseShortstat, type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withHistory, findRole, roleOf, isProseRole, notProse, notProseText, docsOnly, PROSE_TESTS_SKIPPED, PROSE_DOCS_CHECKS } from '../board'
 import { loadRoles } from './roles'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
@@ -597,6 +597,57 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
 export async function sizeOf($: Host, from: string, to: string): Promise<ChangeSize | undefined> {
   const r = await git($, ['diff', '--shortstat', '--no-renames', from, to]).catch(() => null)
   return r && r.exitCode === 0 ? parseShortstat(String(r.stdout ?? '')) : undefined
+}
+
+/** T-1086: what main was before a done task's merged commit: the second parent of symcc's catch-up merge (its parents are the task's tip, then main);
+ *  else the first commit down the first-parent line that is not the task's own. '' when git does not have the commit. */
+export async function mergedBefore($: Host, t: Pick<SymccTask, 'id'>, merged: string): Promise<string> {
+  const p = await git($, ['rev-list', '--parents', '-n', '1', merged]).catch(() => null)
+  if (!p || p.exitCode !== 0) return ''
+  const [, first, second] = String(p.stdout ?? '').trim().split(/\s+/)
+  if (second) return second
+  if (!first) return ''
+  const log = await git($, ['log', '--first-parent', '-n', '200', '--format=%H%x1f%B%x1e', merged]).catch(() => null)
+  if (!log || log.exitCode !== 0) return first
+  for (const entry of String(log.stdout ?? '').split('\x1e')) {
+    const [sha, msg] = entry.trim().split('\x1f')
+    if (sha && !isTaskCommit(msg ?? '', t.id, S.N.name)) return sha
+  }
+  return first
+}
+
+/** What a done task's page shows under Changes: its files, the commit it merged as, and what main was before it. */
+export type MergedChanges = { files: DiffFile[]; error: string; merged: string; before: string }
+
+/** T-1086: the answers kept in memory for the page (nothing is saved in the data folder); null: nothing to show. */
+const mergedMemo = new Map<string, MergedChanges | null>()
+
+/**
+ * T-1086: a done change task's Changes: `git diff --numstat <main before> <merged commit>`, read from the commits
+ * the task recorded; null for an investigation or errand, a task with no merged commit, or when git has none of it.
+ */
+export async function mergedChanges($: Host, t: SymccTask): Promise<MergedChanges | null> {
+  if (!hasMergedChanges(t)) return null
+  const merged = (t as BoardTask).merged!
+  const key = `${t.id}:${merged}`
+  if (mergedMemo.has(key)) return mergedMemo.get(key)!
+  const before = await mergedBefore($, t, merged)
+  const r = before ? await git($, ['diff', '--numstat', '--no-renames', before, merged]).catch(() => null) : null
+  const files = r && r.exitCode === 0 ? parseNumstat(String(r.stdout ?? '')) : []
+  const got = files.length ? { files, error: '', merged, before } : null
+  mergedMemo.set(key, got)
+  return got
+}
+
+/** T-1086: said in place of a done task's diff when git no longer has its commits. */
+export const DIFF_GONE = 'diff not available'
+
+/** T-1086: a done task's diff (all files, or just `file`) from git: `git diff <before> <merged> -- <file>`; DIFF_GONE when git has no such commits. */
+export async function mergedDiff($: Host, t: SymccTask, file = ''): Promise<string> {
+  const c = await mergedChanges($, t).catch(() => null)
+  if (!c) return DIFF_GONE
+  const r = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', c.before, c.merged, ...(file ? ['--', file] : [])]).catch(() => null)
+  return r && r.exitCode === 0 ? String(r.stdout ?? '') : DIFF_GONE
 }
 
 /** T-527: the git tree id of commit `commit` (the code a test run tests), or '' when git can't tell. */

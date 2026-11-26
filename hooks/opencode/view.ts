@@ -13,7 +13,8 @@ import { type PaneView, S } from '../app/state'
 import { safeWrite } from '../app/store'
 import { loadScoutResults } from '../app/scouts'
 import { parseScoutRuns, safeScoutFile, scoutRunsFile, scoutRunTasks, mergeRoles, mergeKinds, intoOf, isAnswered, type BoardTask } from '../board'
-import { changedFiles } from '../app/review'
+import { changedFiles, mergedChanges } from '../app/review'
+import { hasMergedChanges } from '../core/board-file'
 import { roleLists, roleFileDay } from '../app/roles'
 import { kindLists } from '../app/kinds'
 import { orgMemNow } from '../app/org-mem'
@@ -89,11 +90,21 @@ export async function scoutRunsOf(host: Pick<Host, 'fs'>, root: string, v: Symcc
   return out
 }
 
+/** T-1086: how many of the newest done tasks get their Changes read for the panel. */
+const DONE_CHANGES = 20
+
 /** The files each task in review changed (T-580; not an answered investigation's: nothing to merge), against the
  *  branch it merges into, or why they can't be read: the TUI's task page lists them under Changes. */
 export async function changesOf(host: Host, v: SymccView): Promise<ViewChanges> {
   const out: ViewChanges = {}
-  for (const t of v.tasks ?? []) {
+  let done = 0
+  for (const t of [...(v.tasks ?? [])].sort((x, y) => String(y.updated_at).localeCompare(String(x.updated_at)))) {
+    // T-1086: a done change task's list comes from its merged commits (see mergedChanges); the newest few are read
+    if (hasMergedChanges(t) && done++ < DONE_CHANGES) {
+      const got = await mergedChanges(host, t).catch(() => null)
+      if (got) out[t.id] = { files: got.files, error: '' }
+      continue
+    }
     if (t.status !== 'review' || isAnswered(t as BoardTask)) continue
     out[t.id] = await changedFiles(host, intoOf(t), t).then(
       files => ({ files, error: '' }),

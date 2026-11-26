@@ -6,7 +6,7 @@
 // layout. Nothing here reads a file: the report texts and the changed files come in as facts.
 import type { SymccTask } from '../../types'
 import { type Seg, detailRows, detailRowLines, wrapSegs, showsAnswer, answerText } from './details'
-import type { BoardTask } from './board-file'
+import { type BoardTask, hasMergedChanges } from './board-file'
 import { isAnswered } from './task'
 import { taskReports } from './reports'
 import { whyFailed, failNext, failAsks } from './failure'
@@ -102,6 +102,9 @@ export function detailsLines(text: string, width: number): SectionLine[] {
 export const changesTitle = (files: readonly DiffFile[], target: string) =>
   `Changes (${files.length} ${files.length === 1 ? 'file' : 'files'}, against ${target})${files.some(f => f.edited) ? ` ${YOUR_EDITS}` : ''}`
 
+/** T-1086: the heading of a done task's Changes section: how many files and the short id of the commit that merged them. */
+export const mergedChangesTitle = (files: readonly DiffFile[], merged: string) => `Changes (${files.length} ${files.length === 1 ? 'file' : 'files'}, merged ${merged.slice(0, 7)})`
+
 /** A changed file's line: its name (padded to `width`), +added -removed (or "binary"), and "edited by you". */
 export function changedFileSegs(f: DiffFile, width: number): Seg[] {
   return [
@@ -178,14 +181,16 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
   out.push({ id: 'details', title: 'Details', lines: detailRows(t, { ...f.detail, nowMs: f.nowMs }).flatMap((r, i) => detailRowLines(r, width).map((segs, j) => ({ segs, key: `row-${i}-${j}` }))) })
   // T-761: the task's branch against the one it merges into (core/task-branch.ts); none before it has a branch
   if (f.branch) out.push({ id: 'branch', title: cutTitle(taskBranchTitle(f.branch), Math.max(1, width - 1)), lines: taskBranchLines(t, f.branch, f.nowMs, width).map((segs, i): SectionLine => ({ segs, key: `branch-${i}` })) })
-  if (t.status === 'review' && !isAnswered(bt) && f.changes) {
+  // T-1086: a done change task keeps its Changes: the files its merge brought into main, read from git (no folder line)
+  const doneChanges = hasMergedChanges(bt) && !!f.changes
+  if ((doneChanges || (t.status === 'review' && !isAnswered(bt))) && f.changes) {
     const files = f.changes.files
     const fileWidth = Math.max(4, ...files.map(x => x.file.length))
     out.push({
       id: 'changes',
-      title: changesTitle(files, f.target ?? 'main'),
+      title: doneChanges ? mergedChangesTitle(files, bt.merged!) : changesTitle(files, f.target ?? 'main'),
       lines: [
-        plainLine(['  folder: ', f.dataDir ?? '.symcc', '/worktrees/', t.id, ' · edit files there, then approve (the tests run again)'], 'inactive'),
+        ...(doneChanges ? [] : [plainLine(['  folder: ', f.dataDir ?? '.symcc', '/worktrees/', t.id, ' · edit files there, then approve (the tests run again)'], 'inactive')]),
         ...(f.changes.error ? [plainLine(`  Could not read the changes: ${f.changes.error}`, 'error')] : []),
         ...(!f.changes.error && !files.length ? [plainLine('  no changes', 'inactive')] : []),
         ...files.map((x): SectionLine => ({ segs: changedFileSegs(x, fileWidth), action: { diff: x.file }, key: `file:${x.file}` })),

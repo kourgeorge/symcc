@@ -590,6 +590,9 @@ export const modeOf = (b: { mode?: unknown } | null | undefined): SymccMode => (
 /** A full git commit id: 40 hex characters (SHA-1) or 64 (SHA-256). */
 export const isSha = (x: unknown): x is string => typeof x === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(x)
 
+/** T-1086: whether a done task has something merged to show under Changes: a change task (not an investigation or errand) with its merged commit recorded. */
+export const hasMergedChanges = (t: { status?: unknown; kind?: unknown; merged?: unknown }): boolean => t.status === 'done' && !isInvestigation(t) && isSha(t.merged)
+
 /**
  * A task from board.json with its commit fields made safe: `runs[].commits` keeps only full
  * commit ids (a broken list is dropped), a run that is not an object is dropped, and a `merged`
