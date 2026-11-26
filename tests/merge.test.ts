@@ -7387,6 +7387,14 @@ test('T-1080: a try that goes to review has its size saved before it merges; app
   expect(after.size).toEqual({ files: 25, added: 539, removed: 3722 })
 })
 
+test("T-1080: the 'bring up to date' merge commit that lands on main carries the Done sentence", async () => {
+  const w = world({ upToDate: false })
+  const [b, t0] = boardWith('auto', ['npm test'])
+  const t = { ...t0, done: 'Git is checked against a short list.' } as typeof t0
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit --no-verify -m /.test(c) && c.includes('bring up to date with main') && c.includes('Git is checked against a short list.'))).toBe(true)
+})
+
 test('T-1080: a report with no Done line saves none, and the merged update has no Done', async () => {
   const { t } = await finishes('I changed src/a.ts.')
   expect(t.done).toBe(undefined)

@@ -512,7 +512,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   // the catch-up with the target shows as "test" (owner's choice, Q-30), so the Stage line only moves on: queue → test → merge
   await markStep($, t, 'testing', stopped)
   if ((await git($, ['merge-base', '--is-ancestor', main, tip])).exitCode !== 0) {
-    const m = await git($, [...asSymcc(), 'merge', '--no-edit', '--no-verify', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}` }), main], dir)
+    const m = await git($, [...asSymcc(), 'merge', '--no-edit', '--no-verify', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}`, ...((t as BoardTask).done ? { done: (t as BoardTask).done } : {}) }), main], dir)
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
       // Only a real conflict is one: any other failure (e.g. signing the merge commit) is git's error, and retrying on conflicts can't help it.

@@ -1712,7 +1712,7 @@ export function headerLines(hd: { from: PageFrom; label: string; place: ReturnTy
       return [...(gap ? [{ text: ' '.repeat(gap), color: 'text' }] : []), { text: pillText(x), color: x.fact ? 'inactive' : PILL_COLOR, ...(x.fact ? {} : { hit: x.hit }) }]
     }),
   )
-  return [first, ...titleLines(hd.label, hd.title, hd.color, w), ...(hd.size ? [[{ text: ' '.repeat(hd.label.length + 2), color: 'text' }, ...hd.size]] : []), ...groupSegLines(hd.state, w), ...rows, [{ text: headerRule(w), color: 'ide' }]]
+  return [first, ...titleLines(hd.label, hd.title, hd.color, w), ...(hd.size ? wrapSegs(hd.size, Math.max(8, Math.floor(w) - hd.label.length - 2)).map(l => [{ text: ' '.repeat(hd.label.length + 2), color: 'text' }, ...l]) : []), ...groupSegLines(hd.state, w), ...rows, [{ text: headerRule(w), color: 'ide' }]]
 }
 
 /** A row of buttons, going on to more rows when it doesn't fit `w` (core's packRows, as Claude Code's buttonRows),
