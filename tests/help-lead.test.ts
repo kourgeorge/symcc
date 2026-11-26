@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
-import { SETTINGS } from '../hooks/board'
+import { SETTINGS, errandFolders, patchTask, addTask, emptyBoard, find } from '../hooks/board'
+import { claudePermissions } from '../hooks/process/claude-runner'
 import { settingWords } from '../hooks/core/setting-notes'
 import { TOOLS, manual, MANUAL, leadGuide } from '../hooks/app/tools'
 import { ALL_FEATURES } from '../hooks/host'
@@ -67,6 +68,40 @@ test('the kind option text names errand and investigation as not merged', () => 
   expect(text).toContain('Every task type but investigation and errand runs like change')
   expect(text).toContain('errand:')
   expect(text).toContain('nothing is merged')
+})
+
+test('T-1129: the kind option text says change is a general coding task and errand is work outside the project', () => {
+  const add = TOOLS().find(t => t.name === 'add')!
+  const props = (add.inputSchema as unknown as { properties: Record<string, { description?: string }> }).properties
+  const text = props.kind!.description!
+  expect(text).toContain('a general coding task')
+  expect(text).toContain('errand: work outside the project or with nothing to merge')
+  expect(text).toContain('name an outside folder in its files')
+})
+
+test('T-1129: an errand worker may edit an absolute folder outside the project (Claude Code // rule)', () => {
+  const allowed = claudePermissions({ kind: 'worker', files: ['/Users/me/Desktop/talk/', 'notes.md'] }, true).allowed
+  expect(allowed).toContain('Edit(//Users/me/Desktop/talk/**)')
+  expect(allowed).toContain('Write(//Users/me/Desktop/talk/**)')
+  expect(allowed).toContain('Edit(./notes.md)')
+  expect(claudePermissions({ kind: 'worker' }, true).allowed).toContain('Edit(./**)')
+})
+
+test('T-1129: errandFolders drops the project, its board and .git, / and the home folder, and expands ~/', () => {
+  const root = '/proj'
+  const home = '/Users/me'
+  expect(errandFolders(['/proj/.symcc/', '/proj', '/proj/.git/', '/', home, '/Users/me/'], root, home)).toEqual([])
+  expect(errandFolders(['//', '///', '/Users/me/.', '/Users/me/./', '/users/me/', '/PROJ/x', '/a/../b'], root, home)).toEqual([])
+  expect(errandFolders(['~/Desktop/t/', '/Users/me/Desktop/x/', 'rel/'], root, home)).toEqual(['/Users/me/Desktop/t/', '/Users/me/Desktop/x/'])
+  const rule = claudePermissions({ kind: 'worker', files: errandFolders(['~/Desktop/t/'], root, home) }, true).allowed
+  expect(rule).toContain('Edit(//Users/me/Desktop/t/**)')
+})
+
+test('T-1129: changing an errand to another kind drops its absolute files', () => {
+  const [b, t] = addTask(emptyBoard(), { title: 'talk', kind: 'errand', files: ['/Users/me/Desktop/talk/', 'a.md'], origin: { why: 'a test' } }, '2026-01-01T00:00:00Z', '.symcc')
+  expect(find(b, t.id)!.files).toEqual(['/Users/me/Desktop/talk/', 'a.md'])
+  const c = patchTask(b, t.id, { kind: 'change' }, '2026-01-01T00:00:01Z')
+  expect(find(c, t.id)!.files).toEqual(['a.md'])
 })
 
 test('the checker texts say it runs before the merge queue, not after the tests pass; a test time-out is a normal failed try', () => {
