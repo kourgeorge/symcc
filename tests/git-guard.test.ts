@@ -230,3 +230,24 @@ test('T-1062: through checkEdit, a worker, a scout and a checker get their own r
   expect(await checkEdit($, 'c1', { command: `cat ${ROOT}/README.md` }, WT)).toBe(bashOutsideText('README.md', WT))
   expect(await checkEdit($, 'c1', { command: 'git diff' }, WT)).toBeUndefined()
 })
+
+test("T-1062: a quoted or escaped '..', git after find -exec and other wrappers, and git grep -O are refused", () => {
+  const no = (c: string) => bashOutsideFolder(c, WT, ROOT, '/Users/o')
+  for (const c of ["cd .''. && rm README.md", 'cd \\.. && rm README.md', 'echo x > .\\./.\\./.\\./README.md', 'cat ".."/x']) expect([c, no(c)]).toEqual([c, BASH_DOTDOT])
+  expect(no('git diff "main"..HEAD')).toBe(undefined)
+  const node = (w: boolean) => gitDeniedRules(w)
+  for (const who of ['reader', 'worker'] as const) {
+    for (const [c, what] of [
+      ['find . -exec git push origin HEAD:main \\;', 'git push'], ['find . -execdir git stash {} +', 'git stash'], ['find . -ok git tag v \\;', 'git tag'],
+      ['caffeinate git push', 'git push'], ['watch -n1 git push', 'git push'], ['stdbuf -o0 git push', 'git push'],
+      ['git grep -O"git push origin HEAD:main #" x', 'git grep -O'], ['git grep -niOless x', 'git grep -O'], ['git grep --open-files-in-pager=vi x', 'git grep -O'],
+    ] as const)
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, what])
+    for (const c of ['git grep -O"git push origin HEAD:main #" x', 'git grep --open=vi x', 'caffeinate git push', 'watch -n1 git push', 'stdbuf -o0 git push', 'find . -exec git push origin HEAD:main \\;'])
+      expect([c, who, nodeRefuses(node(who === 'worker'), c)]).toEqual([c, who, true])
+    for (const c of ['git grep -n foo', 'git grep -e a --or -e b', 'find . -name "*.ts" -exec cat {} +']) {
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, undefined])
+      expect([c, who, nodeRefuses(node(who === 'worker'), c)]).toEqual([c, who, false])
+    }
+  }
+})

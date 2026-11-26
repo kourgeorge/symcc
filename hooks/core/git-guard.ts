@@ -111,8 +111,8 @@ const GIT_OPTION_OK = new Set(['--no-pager', '-P', '-p', '--paginate', '--no-opt
  * `grep "git push" docs/` and `git commit -m "make git simpler"` hold no git call (git is not where a command starts).
  */
 const GIT_AT = new RegExp(
-  String.raw`(?:^|&&|\|\||[;|&(){\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n])` +
-    String.raw`(?:[^\S\n]*(?:(?:env|sudo|command|exec|time|timeout|nice|nohup|xargs|eval|if|then|do|else|elif|while|until|!)` +
+  String.raw`(?:^|&&|\|\||[;|&(){\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n]|(?<!\S)-(?:exec|execdir|ok|okdir)[^\S\n])` +
+    String.raw`(?:[^\S\n]*(?:(?:env|sudo|doas|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|!)` +
     String.raw`(?:[^\S\n]+(?:-[a-zA-Z](?:[^\S\n]+(?!-)(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]+|\d[\w.]*))*|\w+=[^\s;&|]*` +
     String.raw`|\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()]+)(?=\s))*` +
     String.raw`[^\S\n]*(?:(?:/[\w.-]+)*/)?git(?:-([a-z][\w-]*))?(?=$|[\s'"` + '`' + String.raw`;&|()<>\\])`,
@@ -145,8 +145,11 @@ export function gitWriteIn(text: unknown, who: 'reader' | 'worker' = 'reader'): 
     const sub = (m[1] ?? words[i++])?.toLowerCase()
     // an allow list (T-1062): any name but the reads (and a worker's own writes) is refused, aliases and add-ons too;
     // a word that is no command name (`$X`, `a.ts`) is not seen, and `git-x` counts only as one of git's own programs
-    if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub) || (m[1] && !GIT_ALL.includes(sub)) || GIT_READS.has(sub)) continue
+    if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub) || (m[1] && !GIT_ALL.includes(sub))) continue
     const args = words.slice(i)
+    // `git grep -O<program>` runs that program (a hidden `git push`)
+    if (sub === 'grep' && args.some(a => /^-[a-zA-Z]*O/.test(a) || longStart(a, 'open-files-in-pager'))) return 'git grep -O'
+    if (GIT_READS.has(sub)) continue
     if (sub === 'branch' && branchListOnly(args)) continue
     if (sub === 'init' && who === 'worker' && scratchInit(args)) continue
     if (who === 'reader' || !WORKER_GIT.has(sub)) return `git ${sub}`
@@ -175,7 +178,7 @@ export function gitPlaceOk(command: string, cwd: string | undefined, places: Fol
 }
 
 /** Programs often put in front of git; the Node host's rules refuse git after them. */
-const GIT_WRAPPERS = ['env', 'sudo', 'command', 'exec', 'xargs', 'nohup', 'time', 'nice']
+const GIT_WRAPPERS = ['env', 'sudo', 'command', 'exec', 'xargs', 'nohup', 'time', 'nice', 'caffeinate', 'watch', 'stdbuf']
 
 /**
  * The same deny list as Claude Code rules for every `claude -p` agent (the Node host has no symcc hook; a deny rule
@@ -191,9 +194,12 @@ export function gitDeniedRules(worker = false, aliases: readonly string[] = []):
     ...[...subs.map(c => `${c}:*`), ...limits].map(r => `Bash(git ${r})`),
     'Bash(git -*)',
     ...['-C', '-c', '--git-dir', '--work-tree', '--exec-path', '--config-env'].map(o => `Bash(git ${o}:*)`),
-    ...GIT_WRAPPERS.map(w => `Bash(${w} git:*)`),
+    // also with the wrapper's options in between (`watch -n1 git push`)
+    ...GIT_WRAPPERS.flatMap(w => [`Bash(${w} git:*)`, `Bash(${w} * git *)`]),
     'Bash(GIT_*)',
     'Bash(git rev-parse *--git-*)', 'Bash(git rev-parse *--absolute-git-dir*)',
+    // `git grep -O<program>` runs that program; `find -exec git ...` runs git
+    'Bash(git grep *-O*)', 'Bash(git grep *--op*)', 'Bash(find * -exec* git *)', 'Bash(find * -ok* git *)',
   ]
 }
 

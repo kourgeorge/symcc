@@ -157,9 +157,11 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
   const wts = folderList(worktree)
   const tops = folderList(root).filter(t => t !== '/')
   if (typeof command !== 'string' || !wts.length || !tops.length) return undefined
-  if (/(?:^|[\s/'"=:(<>&|;,{])\.\.(?=$|[\s/'"`;&|)<>,}])/.test(command)) return BASH_DOTDOT
+  // quotes and backslashes only group words: `.''.`, `\..` and `.\./` are `..` to the shell
+  const plain = joinLines(command).replace(/["'\\]/g, '')
+  if (/(?:^|[\s/=:(<>&|;,{])\.\.(?=$|[\s/`;&|)<>,}])/.test(plain)) return BASH_DOTDOT
   // `a//b` and `a/./b` name the same place as `a/b`
-  const flat = joinLines(command).replace(/["'\\]/g, '').replace(/\/(?:\.?\/)+/g, '/')
+  const flat = plain.replace(/\/(?:\.?\/)+/g, '/')
   const h = home?.startsWith('/') ? resolvePath('/', home) : undefined
   // a cd to a folder above the project (`cd /`, or home by `cd` or `cd ~`), from where a relative path reaches it;
   // option words (`cd -P /`, `cd -- /`) are skipped, so `cd -` (the last folder, unknown here) counts as home
