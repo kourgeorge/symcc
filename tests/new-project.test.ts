@@ -513,7 +513,7 @@ test('T-968: the owner sets up git from the board: the lead gets one board updat
   expect(update).toContain('The owner set up git here (branch main')
   expect(update).toContain(GIT_READY_LINE)
   expect(update.split(GIT_READY_LINE).length).toBe(2)
-  expect(update).not.toContain('Meanwhile the owner')
+  expect(update).not.toContain('Meanwhile (')
   expect(takeBoardUpdate()).toBeUndefined()
   expect((await load(w.host)).tasks.map(t => t.status)).toEqual(['doing'])
 })
@@ -549,7 +549,7 @@ test("T-968: a Meanwhile line goes with the owner's next prompt (not the lead's 
   noteForLead('The owner dropped T-6.')
   ownerTyped('create a task for the search')
   const block = meanwhileForPrompt().text
-  expect(block).toContain('Meanwhile the owner (nothing to answer):\n- The owner dropped T-6.')
+  expect(block).toContain('Meanwhile (nothing to answer):\n- The owner dropped T-6.')
   // the guide (the system prompt) never carries it, so it stays the same
   expect(await leadGuideText(w.host)).not.toContain('The owner dropped T-6.')
   // the owner's next prompt gets nothing again

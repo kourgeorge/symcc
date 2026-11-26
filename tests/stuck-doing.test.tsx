@@ -152,11 +152,11 @@ test('(b, c) a worker this copy stopped that stays listed does not keep its task
   await w.clock.advance(2_000)
   await w.clock.settle()
   const told = w.prompts.filter(p => p.includes('T-1 "Build it": no worker was working on it any more'))
-  expect(told).toHaveLength(1)
+  expect(told).toHaveLength(0) // T-995: a quiet "Meanwhile" line now, no board update
   // later checks change nothing more and tell nothing more
   await w.clock.advance(2 * 60_000)
   await w.clock.settle()
-  expect(w.prompts.filter(p => p.includes('no worker was working on it any more'))).toHaveLength(1)
+  expect(w.prompts.filter(p => p.includes('no worker was working on it any more'))).toHaveLength(0)
 })
 
 // guard: already worked before T-376 (main sends such a task back too); kept so it stays that way

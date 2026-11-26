@@ -545,7 +545,7 @@ test("Run now from the panel: a task that waits asks first and starts once told 
     await s.message('anything new?')
     await until(() => leadTurns().some(t => t.text.endsWith('anything new?')), 20_000, "the owner's message")
     const turn = leadTurns().find(t => t.text.endsWith('anything new?'))!
-    expect(turn.text).toContain('Meanwhile the owner (nothing to answer):')
+    expect(turn.text).toContain('Meanwhile (nothing to answer):')
     expect(turn.text).toContain('T-3')
     await s.lead.idle()
     await s.message('and now?')

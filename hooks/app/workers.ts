@@ -1157,7 +1157,7 @@ export async function checkAgain(host: Host, t0: BoardTask, moved = false) {
     if (await folderGone(host, t0, note, `${id} "${t.title}": its checker stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next try goes on from the same branch. This is not counted as a retry.`)) return
     await markFinishing(host, id, tryNo).catch(() => undefined)
     // told once: a start tried again because the agent type wasn't loaded yet is the same restart
-    if (!moved && !checkerNotReady.has(id) && !adoptedCheckers.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
+    if (!moved && !checkerNotReady.has(id) && !adoptedCheckers.has(id)) noteForLead(`${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
     go = { b, t, dir }
   } finally {
     if (!go) await endFinishing(host, id, tryNo)
@@ -1177,7 +1177,7 @@ async function folderGone(host: Host, t0: BoardTask, note: string, tell: string)
     const cur = find(x, t0.id)
     return cur && sameTry(cur, t0) ? ([putTask(x, backToTodo(cur, note, now())), true] as [Board, boolean]) : ([x, false] as [Board, boolean])
   })
-  if (back) tellLead(host, tell)
+  if (back) noteForLead(tell)
   return true
 }
 
@@ -1227,7 +1227,7 @@ async function mergeAgain(host: Host, t0: BoardTask) {
     if (await folderGone(host, t0, note, `${id} "${t.title}": its test and merge stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next worker goes on from the same folder and branch.`)) return
     await noteAgain(host, t, RELOAD_AGAIN)
     await markFinishing(host, id, tryNo).catch(() => undefined)
-    tellLead(host, `${id} "${t.title}": its test and merge stopped when the plugin reloaded, so I put the same branch back in the merge line to test and merge it again. This is not a new try; nothing to do.`)
+    noteForLead(`${id} "${t.title}": its test and merge stopped when the plugin reloaded, so I put the same branch back in the merge line to test and merge it again. This is not a new try; nothing to do.`)
     go = { b, t, dir }
   } finally {
     if (!go) await endFinishing(host, id, tryNo)
@@ -1505,7 +1505,7 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   if (r.conflict && onTestFail(t, retries) === 'retry') {
     const note = `conflicts with the latest ${intoOf(t)}; a new try will merge it in (${tries + 1} of ${retries})`
     if (!(await write(cur => ({ status: 'todo', note, test_tries: tries + 1, test_output: undefined, merge_main: true, history: withHistory(cur.history, now(), line) })))) return
-    tellLead(host, `${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; retrying on its own, the new try merges it in first (${tries + 1} of ${retries}). Nothing to do.`)
+    noteForLead(`${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; retrying on its own, the new try merges it in first (${tries + 1} of ${retries}). Nothing to do.`)
     return
   }
   if (r.testOutput !== undefined && onTestFail(t, retries) === 'retry') {
@@ -1513,7 +1513,7 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
     // T-547: tests that ran out of time fail the same way; the note says so (and to raise test_minutes if they are just slow).
     const note = r.timedOut !== undefined ? timedOutRetryNote(r.timedOut, tries + 1, retries) : `${r.checker ? 'the checker found problems' : 'tests failed'}; a new try will fix them (${tries + 1} of ${retries})`
     if (!(await write(cur => ({ status: 'todo', note, test_tries: tries + 1, test_output: r.testOutput, merge_main: undefined, history: withHistory(cur.history, now(), line) })))) return
-    tellLead(host, `${t.id} "${t.title}" ${r.checker ? 'was sent back by the checker' : r.timedOut !== undefined ? `ran out of time in its tests (${r.timedOut} min)` : 'failed its tests'}; retrying on its own (${tries + 1} of ${retries}). Nothing to do.`)
+    noteForLead(`${t.id} "${t.title}" ${r.checker ? 'was sent back by the checker' : r.timedOut !== undefined ? `ran out of time in its tests (${r.timedOut} min)` : 'failed its tests'}; retrying on its own (${tries + 1} of ${retries}). Nothing to do.`)
     return
   }
   const detail = r.conflict ? `conflicts with the latest ${intoOf(t)} (after ${tries} automatic ${tries === 1 ? 'retry' : 'retries'})` : r.detail
@@ -1543,7 +1543,7 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   // T-1080: the merged update says what the whole task did (its worker's "Done:" line, kept on the task)
   const doneSaid = r.ok ? (find(await load(host).catch(() => b), t.id) as BoardTask | undefined)?.done : undefined
   const doneNote = doneSaid ? ` Done: ${doneSaid}` : ''
-  if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.${doneNote}`)
+  if (r.ok && (approved || (!r.untested && !r.secrets?.length))) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.${doneNote}`)
   tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${doneNote}${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }
 
@@ -1925,7 +1925,7 @@ export async function sendBackIdle(host: Host, agents: HostAgent[]) {
     void mergeAgain(host, t).catch(() => undefined)
   }
   for (const id of merged.keys()) tellLead(host, `✓ ${id} is done: its work was already merged (${shortSha(merged.get(id)!)}) when the plugin reloaded.`)
-  if (back.length) tellLead(host, `${back.map(t => `${t.id} "${t.title}"`).join(', ')}: no worker was working on ${back.length > 1 ? 'them' : 'it'} any more (${back.length > 1 ? 'their workers' : 'its worker'} stopped or ended), so ${back.length > 1 ? 'they go' : 'it goes'} back to todo; the next worker goes on from the same folder and branch.`)
+  if (back.length) noteForLead(`${back.map(t => `${t.id} "${t.title}"`).join(', ')}: no worker was working on ${back.length > 1 ? 'them' : 'it'} any more (${back.length > 1 ? 'their workers' : 'its worker'} stopped or ended), so ${back.length > 1 ? 'they go' : 'it goes'} back to todo; the next worker goes on from the same folder and branch.`)
 }
 
 /**

@@ -221,7 +221,7 @@ test('/symcc-reject puts "The owner rejected T-1" in the lead\'s notes, sent wit
   expect(r.text).toContain("board.json can't be read")
   await w.clock.advance(2000)
   const update = w.prompts.find(p => p.startsWith('[symcc] Board update:')) ?? ''
-  expect(update).toContain('Meanwhile the owner (nothing to answer):\n- The owner rejected T-1 ("too big"): T-1 rejected: back to "todo"')
+  expect(update).toContain('Meanwhile (nothing to answer):\n- The owner rejected T-1 ("too big"): T-1 rejected: back to "todo"')
 })
 
 test("T-968: the owner's next prompt carries the Meanwhile line as its context, once; a later board update doesn't repeat it", async ($, on) => {
@@ -232,7 +232,7 @@ test("T-968: the owner's next prompt carries the Meanwhile line as its context, 
   const i = w.prompts.indexOf('what now?')
   expect(i >= 0).toBe(true)
   const context = (w.contexts[i] ?? []).join('\n')
-  expect(context).toContain('Meanwhile the owner (nothing to answer):\n- The owner rejected T-1 ("too big")')
+  expect(context).toContain('Meanwhile (nothing to answer):\n- The owner rejected T-1 ("too big")')
   await $.prompt.submit({ text: 'and then?', origin: { kind: 'composer' } } as never)
   expect((w.contexts[w.prompts.indexOf('and then?')] ?? []).join('\n')).not.toContain('The owner rejected T-1')
   // a board update sent for a real reason (a broken board.json) doesn't carry it again
