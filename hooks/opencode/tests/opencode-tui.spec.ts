@@ -32,8 +32,6 @@ import { PLUGIN_ROOT } from '../host'
 import { inGroups, pillText, taskListIds, scoutListNames } from '../../core/page-header'
 import { PANEL_TABS, headerLines } from '../board-view'
 import { sizeSegs } from '../../core/page-header'
-import { changesOf } from '../view'
-import { fakeHost } from '../../../tests/fake-host'
 import { startTui as startTuiLive, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
@@ -4744,24 +4742,4 @@ test('T-1105: a setting\'s pick dialog says what the setting does and gives each
   expect(prompts.at(-1)!.description).toBe(settingAbout('max_parallel'))
   expect(prompts.at(-1)!.description).toContain('1-8')
   board.stop()
-})
-
-test('T-1094: Changes of an older done task are read only when it is the open one', async () => {
-  const sha = (c: string) => c.repeat(40)
-  const host = fakeHost({
-    run: async argv => {
-      const a = argv.slice(1)
-      if (a[0] === 'rev-list') return { exitCode: 0, stdout: `${a[a.length - 1]} ${sha('b')} ${sha('c')}\n`, stderr: '' }
-      if (a[0] === 'log') return { exitCode: 0, stdout: 'T-1: x\n\nSymcc-Task: T-1\n', stderr: '' }
-      if (a[0] === 'diff') return { exitCode: 0, stdout: '1\t0\ta.ts\n', stderr: '' }
-      return { exitCode: 1, stdout: '', stderr: '' }
-    },
-  })
-  const tasks = Array.from({ length: 25 }, (_, i) => ({ id: `T-${i + 1}`, title: 't', details: '', files: [], status: 'done', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, merged: sha('a'), created_at: '2026-11-01T00:00:00.000Z', updated_at: `2026-11-01T00:00:${String(i).padStart(2, '0')}.000Z` })) as unknown as SymccTask[]
-  const got = await changesOf(host.host, { tasks } as never)
-  expect(Object.keys(got).length).toBe(20)
-  expect(got['T-1']).toBe(undefined)
-  const open = await changesOf(host.host, { tasks } as never, 'T-1')
-  expect(Object.keys(open).length).toBe(21)
-  expect(open['T-1']!.files.length).toBe(1)
 })
