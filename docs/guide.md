@@ -70,7 +70,9 @@ Each part is there for a reason. Knowing it makes the rest of this guide easier 
   project by itself.
 - **A checker (optional), a second pair of eyes.** A fresh agent that did not write the change
   tries to break it before it reaches the tests. It is off by default because it costs time and
-  tokens.
+  tokens. It sends work back only for what is worse than main; gaps main already has are listed
+  as follow-ups. After two send-backs the task waits for you: Merge as is (tests, no checker),
+  Keep fixing (one more try) or Drop.
 - **One merge queue.** Finished tasks take turns. Only the task at the front catches up with
   your branch, runs the tests and merges, so your branch cannot move in between and the code
   that was tested is exactly the code that merges. Before the queue, several tasks could merge
@@ -1103,7 +1105,11 @@ only; the Organizational memory page has the same header shape, see below):
    A page alone in its list shows no place. A task opened from the Live tab goes through the
    Live tab's tasks.
 2. **The title**: the id, always in the board's orange whatever the status, then the title in
-   bold. A long title wraps, indented under itself.
+   bold. A long title wraps, indented under itself. Under it (T-1080) a dim line says how big the
+   change is, from git: `merged c2fb0c16 · 25 files · +539 −3,722` once merged, and
+   `branch symcc/T-1063 · 25 files · +539 −3,722` before (a task in review shows it, so you see the
+   size before you approve). It is saved when a try hands back and again at the merge. An
+   investigation or an errand, with no commits, shows no such line.
 3. **The state**: the status mark and word in its color, and for a running task its step and
    its work time; then task type · role · try n/m (n of the tries it may get, its automatic retries
    counted); then where it came from (`♟ from you`, `⌕ scout bugs`, `◆ lead`, `↳ from T-5`,
@@ -1124,6 +1130,11 @@ only; the Organizational memory page has the same header shape, see below):
    Stash to backlog, Already merged, Keep as a note, Ask more); then, set apart, the ones that throw
    work away (Reject, Drop); then, at the end, the page's own: `[☐ Needs review]` (a checkbox:
    `n` turns it on, `[☑ Needs review]`, and off) and `[Copy]` (`y`).
+
+At the top of the page, above ▍What to do (and the other sections), comes **▍Done** (T-1080): one or two
+plain sentences on what the whole task has done so far. The worker writes them as the first line of
+every report, `Done: …`; symcc keeps the latest one on the task, puts it in the commit message and in
+the lead's `✓ merged` update. An old task, or one whose report has no `Done:` line, shows no ▍Done.
 
 Further down, under ▍Report, the buttons that show an earlier try's report look the same:
 `[Try 1] [Try 2] [● Try 3]` (● the one shown); their keys, `1`-`9`, are in the key line
@@ -1294,13 +1305,13 @@ words as bold headings with the same spacing):
   where a running lane has `▶ `, the id in the accent color, the title and second row dim, and `merged 3m ago` on the right (`3m ago` on a narrow panel).
   At most 3 such lanes show, newest first; after 10 minutes, or when a 4th task merges, the oldest
   goes. Only merged tasks get one: answered investigations,
-  failed or dropped tasks don't. Enter (or a click) on a finished lane opens its task page.
+  failed or dropped tasks don't. Enter (or a click) on a finished lane opens its task page. A finished lane's second row ends with the change size, `+212 −48` (T-1080; no file count there); it is the first part dropped when the row is narrow.
 
   ```
    ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○
      try 1/3 · ⏱ 2m · ⌀ at hand-back  change
    ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
-     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M  change
+     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M · +212 −48  change
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
@@ -1582,10 +1593,16 @@ task, and the ID on a commit takes you back to the task and your request.
   trailers: `Symcc-Task`, `Symcc-From` (who asked), `Symcc-Why` and `Symcc-Try`. Find them
   with `git log --grep "T-3"`.
 - **The task page** (`/symcc-task T-3`, or open it on the board): **History** has one short
-  line per event, each with when it happened ("10:42" today, "Nov 18 22:49" before), for
-  example what the worker said in a try (cut at a word end with "…") and how it went,
+  line per event, each with when it happened ("10:42" today, "Nov 18 22:49" before), and a
+  dim label for who wrote it: `worker symcc-T-3:`, `checker symcc-T-3-checker:` (the name the
+  agent ran under), `lead:` or `you:`; symcc's own steps have none. For example what the
+  worker said in a try (cut at a word end with "…") and how it went (`→ the checker found
+  problems`), then the checker's own line (`checker symcc-T-3-checker: found problems: <its
+  first problem>`, or `OK`), never the two joined in one line,
   **Commits** lists the commits each try made and the one that was merged, and **Report**
-  shows the worker's full final report for the latest try. When more than one try has a
+  shows the worker's full final report for the latest try, and under it **Checker (try 2) ·
+  symcc-T-3-checker** the checker's full report of that try (not shown when the try had no
+  checker; VS Code draws it as Markdown too). When more than one try has a
   report, press the try's number (`1`, `2`, ...) to read that try's report. `/symcc-task T-3`
   shows the first 40 lines (at most 4,000 characters) and says where the full report is.
 - **Asking the lead.** The lead's `board` tool shows the same: with `task: T-3` it gives the

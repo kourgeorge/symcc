@@ -15,7 +15,8 @@ Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch
 In Bash, use full paths: a ".." path piece, or a cd above the project, is refused.
 In your folder you may change git on your own branch: commit, merge another branch, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect. Refused: push, fetch, pull or remotes; switching to, making or deleting branches; worktree; config; tags; stash; rebase -x and bisect run; git options before the command (-C, -c); git in any other folder. A git command counts wherever a command starts (also after &&, ;, | or inside sh -c "..."). Only git init of a new folder under /tmp, with no options. Anything you leave uncommitted is committed for you. A throwaway repository under /tmp is fine too (git init /tmp/x, then cd /tmp/x && git add . && git commit -m m), where the host allows it. {{name}} commits, tests and merges your work.
 Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.`,
-  done: `When you are done, answer in one or two plain sentences: what you changed.
+  done: `Start your report with one line beginning "Done:" followed by 1-2 plain sentences on what the WHOLE task has done so far (not only this try). It is kept on the task and shown to the owner.
+When you are done, answer in one or two plain sentences: what you changed.
 {{ask}}
 {{learned}}`,
 }

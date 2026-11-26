@@ -28,6 +28,7 @@
 import { DEFAULT_NAME, dataDir } from '../name'
 import { VIEW_FILE, parseViewFile, bandDraw, panelLines, pagePlace, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, PANEL_MARK, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, BACKLOG_MORE_ID, dayOfId, dayId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, LIVE_OM_ALL_ID, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, resetAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
 import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingShown, settingValue, viewAsBoard, isSettingPage, everyText, nextFindings, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, showsDriveButton, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
+import { checkerReportOf } from '../core/task-sections'
 import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey, orgMemTopicCounts } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
@@ -336,6 +337,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [sent, setSent] = r.createSignal<{ id: string; answer: string } | undefined>(undefined)
   // the open task's latest report (T-580), read from its file when the page opens or a newer try's report comes
   const [taskReport, setTaskReport] = r.createSignal<{ file: string; text: string | null | undefined } | undefined>(undefined)
+  // T-1079: the checker's saved report of that try (its own section), read the same way
+  const [taskChecker, setTaskChecker] = r.createSignal<{ file: string; text: string | null | undefined } | undefined>(undefined)
   // the approve just sent from a task's page (T-614): until its first step is on the board, the page's badge, Status
   // row and Stage line show it started ("✎ prep"), not "ready for review"
   const [approving, setApproving] = r.createSignal<ApproveSent | undefined>(undefined)
@@ -458,6 +461,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   /** Reads the open task's latest report, unless it is the one already read (or being read). */
   const readTaskReport = () => {
+    readCheckerReport()
     const f = file()
     const t = tab() === 'tasks' && opened() ? f?.view.tasks.find(x => x.id === opened()) : undefined
     const latest = t ? taskReports(t).at(-1) : undefined
@@ -468,6 +472,20 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     void d.readText(`${f.root}/${latest.file}`).then(
       text => opened() === id && taskReport()?.file === latest.file && setTaskReport({ file: latest.file, text }),
       () => opened() === id && taskReport()?.file === latest.file && setTaskReport({ file: latest.file, text: null }),
+    )
+  }
+  /** T-1079: reads the checker's saved report of the open task's latest report try, unless it is the one already read. */
+  const readCheckerReport = () => {
+    const f = file()
+    const t = tab() === 'tasks' && opened() ? f?.view.tasks.find(x => x.id === opened()) : undefined
+    const saved = t ? checkerReportOf(t, taskReports(t).at(-1)?.try ?? t.attempts) : null
+    if (!f || !saved) return void (taskChecker() && setTaskChecker(undefined))
+    if (taskChecker()?.file === saved.file) return
+    const id = opened()
+    setTaskChecker({ file: saved.file, text: undefined })
+    void d.readText(`${f.root}/${saved.file}`).then(
+      text => opened() === id && taskChecker()?.file === saved.file && setTaskChecker({ file: saved.file, text }),
+      () => opened() === id && taskChecker()?.file === saved.file && setTaskChecker({ file: saved.file, text: null }),
     )
   }
   // T-700: a task opened from the Live tab goes back there (to its lane) on b, as on the terminal panel and VS Code;
@@ -482,6 +500,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     setOpened(id)
     setSent(undefined)
     setTaskReport(undefined)
+    setTaskChecker(undefined)
     readTaskReport()
     readTaskParts()
     setRun('')
@@ -532,7 +551,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), backlogAll: backlogAll(), openDays: openDays(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...searchChoice(), ...(edit() ? { edit: edit()! } : {}), ...(fromLive() ? { from: 'live' as const } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), backlogAll: backlogAll(), openDays: openDays(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(taskChecker() ? { taskChecker: taskChecker()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...searchChoice(), ...(edit() ? { edit: edit()! } : {}), ...(fromLive() ? { from: 'live' as const } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */

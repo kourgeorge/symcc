@@ -19,6 +19,8 @@ export type PageHeader = {
   title: string
   color: string
   state: Seg[][]
+  /** T-1080: the line under the title, how big the change is (core's sizeSegs); none for a task with no saved size */
+  size?: Seg[] | null
   buttons: (HeaderButton & { onPress: () => void })[]
   onBack: () => void
   onPrev: () => void
@@ -80,6 +82,7 @@ export function pageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
       {whereRow}
       <Box key="hdr-title" flexDirection="column">
         {titleLines(hd.label, hd.title, hd.color, width).map((l, i) => segs(`hdr-title-${i}`, l))}
+        {hd.size ? segs('hdr-size', [{ text: ' '.repeat(hd.label.length + 2), color: 'text' }, ...hd.size]) : null}
       </Box>
       <Box key="hdr-state" flexDirection="column">
         {groupSegLines(hd.state, width).map((l, i) => segs(`hdr-state-${i}`, l))}
@@ -164,6 +167,13 @@ export function vsPageHeader(pane: PaneParts, hd: PageHeader): RenderChildren {
         <Text key="vs-title-gap">{'  '}</Text>
         <Text key="vs-title-text" wrap="wrap" bold size="title" color={C('text')}>{hd.title}</Text>
       </Text>
+        {hd.size ? (
+          <Text key="vs-size" size="caption" wrap="wrap">
+            {hd.size.map((x, i) => (
+              <Text key={`vs-size-${i}`} color={C(x.color)}>{x.text}</Text>
+            ))}
+          </Text>
+        ) : null}
       </Box>
       <Box key="vs-state" flexDirection="row" flexWrap="wrap" columnGap={2}>
         {chip('vs-state-status', status, true)}

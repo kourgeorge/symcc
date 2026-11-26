@@ -305,7 +305,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
             { key: 'time', node: <Box key={`live-time:${lane.id}`} flexDirection="row" flexGrow={1} justifyContent="flex-end">{line(`live-right:${lane.id}`, when, 'inactive')}</Box> },
           ])}
         </Box>
-        {done ? null : numbersLine(lane)}
+        {numbersLine(lane)}
         {trainLists[li]!.map(r => {
           // a waiting train: one line, the id and title a link, "waits" and "+ also" dim
           if (!r.id) return <Box key={`live-more:${lane.id}`} flexDirection="column" paddingLeft={2}>{line(`live-more-text:${lane.id}`, segText(r.segs).trim(), 'inactive')}</Box>

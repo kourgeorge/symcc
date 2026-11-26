@@ -2,7 +2,7 @@
 // finishWork (workers.ts) runs a checker here after the prep step and before the task joins the merge line, and waits
 // for its verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { emptyBoard, type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
+import { emptyBoard, type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, checkerReportFile, reportText, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
@@ -10,7 +10,7 @@ import { changeValues } from './prompt-values'
 import { S, type CheckerEnd, checkerRuns, adoptedCheckers, halt, stopped, movedAway } from './state'
 import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
-import { change, load, now } from './store'
+import { change, load, now, path, safeWrite } from './store'
 import { startAgent } from './starts'
 import { logVerdict } from './evidence'
 import { orgMemText, keepSuggestions } from './org-mem'
@@ -144,7 +144,8 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     verdict = null
     why = `it moved the task's branch ${taskBranch(t)} and it could not be put back`
   }
-  await record($, t, verdict, why, end.tokens, back === 'moved' ? `${tryLabel(t)}: the checker moved the branch ${taskBranch(t)}; it was put back at ${saved!.head.slice(0, 10)}, so nothing it made is merged` : undefined, agentId)
+  const reportFile = end.answer?.trim() ? await saveCheckerReport($, t, end.answer) : undefined
+  await record($, t, verdict, why, end.tokens, back === 'moved' ? `${tryLabel(t)}: the checker moved the branch ${taskBranch(t)}; it was put back at ${saved!.head.slice(0, 10)}, so nothing it made is merged` : undefined, agentId, reportFile)
   logVerdict($, t.id, Number(t.attempts) || 0, verdict)
   return { verdict, ...(why ? { why } : {}) }
 }
@@ -166,15 +167,30 @@ async function markChecker($: Host, t: SymccTask, agentId: string, on: boolean) 
 }
 
 /** The checker's verdict (`v`, or none with `why`) as a history line of task `t`, and its tokens added to the current try; only while `t` is still on that try. */
-async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: string, tokens?: SymccTokens, before?: string, agentId?: string) {
+async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: string, tokens?: SymccTokens, before?: string, agentId?: string, report?: string) {
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.attempts !== t.attempts) return x
     if (!v && movedAway.has(t.id)) return x // the lead moved the task: its own "moved to ..." line is the only one
     // T-774, T-805: the checker's tokens go only on its own agent entry, ended now (a stopped checker keeps the tokens it had)
     const runs = cur.runs?.length && (agentId || tokens) ? withAgentUsed(cur.runs, 'checker', agentId, now(), tokens ? { tokens } : {}) : undefined
-    return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...(before ? [['step', before, { try: cur.attempts }] as HistoryAdd] : []), checkerEntry(tryLabel(cur), v, why, cur.attempts)), ...(runs ? { runs } : {}) }, now())
+    return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...(before ? [['step', before, { try: cur.attempts }] as HistoryAdd] : []), checkerEntry(tryLabel(cur), v, why, cur.attempts, { ...(agentId ? { agent: checkerName(S.N.name, t.id) } : {}), ...(report ? { report } : {}) })), ...(runs ? { runs } : {}) }, now())
   }).catch(() => undefined)
+}
+
+/**
+ * T-1079: saves checker answer `answer` (its full report) of task `t`'s current try to <dir>/reports/<id>-try-<N>-checker.md
+ * (through a temp file and a rename) and gives its path; undefined when it could not be saved (the task goes on).
+ */
+async function saveCheckerReport($: Host, t: SymccTask, answer: string): Promise<string | undefined> {
+  const rel = checkerReportFile(S.N.dir, t.id, t.attempts)
+  try {
+    await $.run(['mkdir', '-p', path(`${S.N.dir}/reports`)])
+    await safeWrite($, path(rel), reportText(answer), 'the checker report')
+    return rel
+  } catch {
+    return undefined
+  }
 }
 
 /** Throws away anything the checker changed in folder `dir` (symcc committed the work before it ran, so nothing of the task's is lost). */

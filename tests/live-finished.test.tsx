@@ -128,3 +128,12 @@ test('T-771: the VS Code Live tab shows the finished lane (dim link, no ▶, "me
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
+
+test('T-1080: the VS Code Live tab draws the change size on a finished lane', async ($, on) => {
+  const sized = TASKS.map(t => (t.id === 'T-747' ? { ...t, size: { files: 25, added: 539, removed: 3722 } } : t))
+  seedBoard(on, { view: liveView(sized) })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
+  await ui.press({ key: 'tab-live' })
+  expect(await ui.find({ type: 'Text', text: /\+539/ })).toBeDefined()
+  await ui.unmount()
+})

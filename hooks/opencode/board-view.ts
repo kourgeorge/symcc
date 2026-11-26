@@ -41,7 +41,7 @@ import type { TaskBranchFacts } from '../core/task-branch'
 import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleStateGroups } from '../core/role-changes'
 import { type DefRow, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICK_LABEL, roleTableRow, kindTableRow, defsCountText, defLayout, defCells, defCellTone, newDefText, roleWritesLine, codePickOf } from '../core/def-table'
 import { defActions, roleButtons as headerRoleButtons } from '../core/page-header'
-import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, TASK_ID_COLOR, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
+import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, sizeSegs, TASK_ID_COLOR, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { LIST_TONE, sessionNote } from '../core/details'
 import type { SearchMore } from '../core/panel'
 import { isObj, plural } from '../core/text'
@@ -325,6 +325,8 @@ export type PanelChoice = {
   sent?: { id: string; answer: string }
   /** the open task's latest report (T-580), read from its file: its text undefined while it is read, null when it can't be */
   taskReport?: { file: string; text: string | null | undefined }
+  /** T-1079: the checker's saved report of that try (its own section), read from its file the same way */
+  taskChecker?: { file: string; text: string | null | undefined }
   /** the task whose approve this panel just sent, and when (ms): its page shows the approve's first step at once (see
    *  approveSent), as Claude Code's task page does */
   approving?: ApproveSent
@@ -705,7 +707,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     const t = choice.opened ? f.view.tasks.find(x => x.id === choice.opened) : undefined
     // the approve in progress takes the same buttons and keys away (approveInProgress)
     const busy = !!t && approveInProgress(f, t, choice.approving, nowMs)
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore) : null
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore, choice.taskChecker) : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '', choice.searchMore, choice.backlogAll ?? false, choice.openDays ?? [])
     keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!page && busy)
     if (!page) modeRow = modeLines(f, !!choice.search?.trim(), w)
@@ -1553,13 +1555,13 @@ function questionRow(q: OwnerQuestion, front: string, idWidth: number, w: number
 
 /** How many lines of a long History or Report section the task page shows; the rest is cut with "… (n more lines)"
  *  (the whole report stays in its file, named in the section). */
-export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { history: 30, report: 40 }
+export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { history: 30, report: 40, checker: 40 }
 
 /** The page of the task or question `id`: its title, its question and its choices, each a clickable line (T-583),
  *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,
  *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), with the latest report's text
  *  (`report`, read by the TUI) and the changed files from the view file; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = '', more?: SearchMore): Body | null {
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = '', more?: SearchMore, checker?: PanelChoice['taskChecker']): Body | null {
   const v = f.view
   const b = bodyMaker()
   const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
@@ -1585,7 +1587,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   // T-751: the page header, as on Claude Code's task page: where you are (‹ Tasks or ‹ Live, its place in that list),
   // the title, the state, the buttons in groups (core's taskActions), a thin rule; it stays at the top while the rest scrolls
   addAll(headerLines({
-    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: t.title, color: TASK_ID_COLOR,
+    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: t.title, color: TASK_ID_COLOR, size: sizeSegs(t),
     state: taskStateGroups(t, { nowMs, merging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? false, nowMs) }),
     buttons: taskButtons(t, busy),
   }, w))
@@ -1609,7 +1611,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
     width: w,
     nowMs,
     detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, merging, driving: v.driving ?? false, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
-    ...(report ? { texts: { [report.file]: report.text } } : {}),
+    ...(report || checker ? { texts: { ...(report ? { [report.file]: report.text } : {}), ...(checker ? { [checker.file]: checker.text } : {}) } } : {}),
     changes: v.changes?.[t.id] ?? null,
     // T-761: the Branch section, from the facts the server side read with git (app/branches.ts)
     ...(v.task_branches?.[t.id] ? { branch: v.task_branches[t.id] } : {}),
@@ -1698,7 +1700,7 @@ export const scoutButtons = (sc: Pick<SymccScout, 'running' | 'paused'>): HeadBu
 /** A page header's lines (T-751, core/page-header.ts): where you are (Back and, with a place, "‹ 2 of 6 ›": each a
  *  click), the title, the state (wrapping between its groups), the buttons in their groups (each "[Pause]" in the
  *  text color, T-775; wrapping between groups, never inside a button), then a thin rule. */
-export function headerLines(hd: { from: PageFrom; label: string; place: ReturnType<typeof placeIn>; title: string; color: string; state: Seg[][]; buttons: HeadButton[] }, w: number): Line[] {
+export function headerLines(hd: { from: PageFrom; label: string; place: ReturnType<typeof placeIn>; title: string; color: string; size?: Seg[] | null; state: Seg[][]; buttons: HeadButton[] }, w: number): Line[] {
   const where = whereLine(hd.from, hd.label, hd.place, w)
   const go: Record<string, PanelHit> = { back: { key: 'back' }, prev: { key: 'prev' }, next: { key: 'next' } }
   // Back is a button like the others ("[Tasks]", the text color); the arrow and the pager stay dim
@@ -1710,7 +1712,7 @@ export function headerLines(hd: { from: PageFrom; label: string; place: ReturnTy
       return [...(gap ? [{ text: ' '.repeat(gap), color: 'text' }] : []), { text: pillText(x), color: x.fact ? 'inactive' : PILL_COLOR, ...(x.fact ? {} : { hit: x.hit }) }]
     }),
   )
-  return [first, ...titleLines(hd.label, hd.title, hd.color, w), ...groupSegLines(hd.state, w), ...rows, [{ text: headerRule(w), color: 'ide' }]]
+  return [first, ...titleLines(hd.label, hd.title, hd.color, w), ...(hd.size ? wrapSegs(hd.size, Math.max(8, Math.floor(w) - hd.label.length - 2)).map(l => [{ text: ' '.repeat(hd.label.length + 2), color: 'text' }, ...l]) : []), ...groupSegLines(hd.state, w), ...rows, [{ text: headerRule(w), color: 'ide' }]]
 }
 
 /** A row of buttons, going on to more rows when it doesn't fit `w` (core's packRows, as Claude Code's buttonRows),

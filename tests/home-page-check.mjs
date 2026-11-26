@@ -48,7 +48,7 @@ const chat = text(view('chat'))
 for (const w of ['❯ there is no clear visual separation between the sections of the live page, show some ideas', '⏺ Four looks', 'T-747 try 1 → checks passed', 'symcc: T-747 done', 'scout gaps-bot found'])
   if (!chat.includes(w)) bad(`still frame: the chat has no "${w}"`)
 const task = text(view('task'))
-for (const w of ['T-740', '▍History', '▍Runs', '‹ [Tasks]', '[Try 1] [● Try 2]', '▸ worker 12m', '⌕ checker 10m', 'try 1 → the checker found problems']) if (!task.includes(w)) bad(`still frame: the task page has no "${w}"`)
+for (const w of ['T-740', '▍History', '▍Runs', '‹ [Tasks]', '[Try 1] [● Try 2]', '▸ worker 12m', '⌕ checker 10m', 'worker symcc-T-740: try 1: made the change → the checker found problems', 'checker symcc-T-740-checker: found problems']) if (!task.includes(w)) bad(`still frame: the task page has no "${w}"`)
 // the real figures from the board on 2026-11-21 (not guesses): the looks offered, the owner's pick, slots, today, org-mem
 for (const w of ['1 Same heading for all', '2 Colored headings', '3 Boxes', '4 Side bar', '❯ 4'])
   if (!chat.includes(w)) bad(`still frame: the chat has no "${w}" (the real looks and pick)`)

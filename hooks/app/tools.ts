@@ -1,6 +1,8 @@
 import type { SymccTask } from '../../types'
 import { isFinished, priorityError, makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, filesAllowedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, PROSE_ROLE_TEXT, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
 import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
+import { checkerReportOf } from '../core/task-sections'
+import { sizeSegs } from '../core/page-header'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
@@ -17,6 +19,7 @@ import { stopWorker, setBoardMode, setSymcc } from './board-mode'
 import { answerOvertime } from './cleanup'
 import { haltChecker } from './checker'
 import { moveStage } from './move'
+import { isCheckerAsk, parseCheckerAnswer, CHECKER_ASK_OPTIONS } from '../board'
 import { questionTool, boardAnswered } from './questions'
 import { markMerged } from './merged'
 import { publish, enableHere } from './lead'
@@ -30,21 +33,35 @@ const TOPIC_RULES = 'reuse an existing topic when it fits (a new one only when n
 // ---------------- the lead's tools ----------------
 
 /** T-1024: an add with the title and details of a task added within this long answers that task instead of adding another. */
-const sameJson = (x: unknown, y: unknown): boolean => JSON.stringify(x) === JSON.stringify(y)
+/** T-1079: a history line the lead's change or question wrote is the lead's ("lead: ..."); the owner's answer stays the owner's. */
+const leadLine = (l: HistoryAdd): HistoryAdd => (l[0] === 'answer' ? l : [l[0], l[1], { ...l[2], by: 'lead' }])
+const leadLines = (ls: HistoryAdd[]): HistoryAdd[] => ls.map(leadLine)
+const sameJson =(x: unknown, y: unknown): boolean => JSON.stringify(x) === JSON.stringify(y)
 const ADD_AGAIN_MS = 5 * 60_000
 
 /** The latest saved report of task `t` (see taskReports): its file and text; text null when the file can't be read. Null when there is none. */
-export async function latestReport($: Host, t: SymccTask): Promise<{ file: string; try: number; text: string | null } | null> {
+export async function latestReport($: Host, t: SymccTask): Promise<ReportRead | null> {
   const r = taskReports(t).at(-1)
   if (!r) return null
-  return { ...r, text: await $.fs.read(path(r.file)).then(x => String(x), () => null) }
+  const read = (file: string) => $.fs.read(path(file)).then(x => String(x), () => null)
+  // T-1079: the checker's saved report of that try comes with it (its own section in taskText)
+  const c = checkerReportOf(t, r.try)
+  return { ...r, text: await read(r.file), ...(c ? { checker: { file: c.file, agent: c.agent, text: await read(c.file) } } : {}) }
 }
 
+/** A saved report read from its file (text null when it can't be read), with the try's checker report when it had one (T-1079). */
+export type ReportRead = { file: string; try: number; text: string | null; checker?: { file: string; agent: string; text: string | null } }
+
 /** Task `t` as text for /<name>-task; `report` is its latest saved report (latestReport), shown last. */
-export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: { file: string; try: number; text: string | null } | null, archivedDone: string[] = []): string {
+export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: ReportRead | null, archivedDone: string[] = []): string {
   const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
+  // T-1080: how big its change is, right under the title
+  const size = sizeSegs(t as BoardTask)
+  if (size) L.push(size.map(x => x.text).join(''))
   L.push(fromText(t, 120))
+  // T-1080: what the whole task has done so far (its worker's latest "Done:" line)
+  if ((t as BoardTask).done) L.push(`Done: ${(t as BoardTask).done}`)
   if (t.origin?.why) L.push(`why: ${t.origin.why}`)
   if (t.origin?.evidence) L.push(`seen by ${S.N.name}: ${t.origin.evidence}`)
   if (shownNote(t)) L.push(`${stateLabelLower()}: ${shownNote(t)}`)
@@ -69,6 +86,7 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   if (t.research_notes?.length) L.push('', ...t.research_notes.map(f => `Research: ${f}`))
   if (report === null && t.attempts > 0) L.push('', 'Report: no saved report')
   if (report) L.push('', `Report (try ${report.try}, ${report.file}):`, ...(report.text === null ? ['  (could not read the file)'] : reportPreview(report.text, report.file).map(l => (l ? `  ${l}` : ''))))
+  if (report?.checker) L.push('', `Checker (try ${report.try}${report.checker.agent ? ` · ${report.checker.agent}` : ''}, ${report.checker.file}):`, ...(report.checker.text === null ? ['  (could not read the file)'] : reportPreview(report.checker.text, report.checker.file).map(l => (l ? `  ${l}` : ''))))
   const older = taskReports(t).filter(r => r.try !== report?.try)
   if (report && older.length) L.push('', 'Older tries\' reports:', ...older.map(r => `  try ${r.try}: ${r.file}`))
   if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')
@@ -381,6 +399,7 @@ ${
 - In mode "review", ask the owner before every ${S.N.name} add, whatever the task comes from (the owner's words, a scout finding, a worker's report, your own idea): say in one or two lines what the task would be, and add it only after a yes. In mode "auto" you add tasks as usual. Plain answers, notes (add_details) and board actions (approve, pause, settings) need no asking.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - Moving a task to a stage: ${S.N.name} change T-5 with stage (work, check, tests or review) moves it, with its branch as it is, to that stage of its run. Use it when the owner wants a step skipped or repeated, e.g. "no need to check again, just test" is stage tests (the merge queue now, no checker; it merges if its tests pass); check starts a fresh checker; work is a new worker try; review waits for the owner. A running worker or checker is stopped first. It uses no automatic retry.
+- A task that failed for good: don't retry it on your own (even though a retry is possible). Ask the owner first, unless they already said to retry that task. A task the checker sent back twice waits for the owner on its own with "Merge as is / Keep fixing / Drop"; put their answer in with ${S.N.name} change answer: their words.
 - Work merged by hand: when a task's branch was merged outside the board (by the owner, or by you on the owner's word, e.g. its only failure was the merge tests timing out), don't drop it and don't let a new worker redo it: ${S.N.name} merged T-5 marks it done. ${S.N.name} checks with git that all its commits are in the branch it merges into and refuses with the reason if not; nothing is merged or tested, its folder and branch are cleaned up, and tasks waiting on it start. It works for a task that is to do, running, failed, waiting, paused, in review or dropped. Use it only after the owner's word or a rule the owner set.
 - Investigation or change (the kind parameter of ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself. Add an errand (kind: errand) when the owner wants something done that is not a change to the project (tidy a folder outside the repo, gather files, write something outside the project): the worker's report is its result and the task ends done on its own, in every mode. Investigation: the owner wants an answer to read; errand: the owner wants something done.
 - An answered investigation ("T-5 is answered") waits in review for the owner to read its answer; it has nothing to merge. Tell the owner the answer in the chat, short and plain (read it with ${S.N.name} board task T-5), and offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "or answer on the board". On the owner's word: ${S.N.name} approve T-5 is Done (it ends done; its folder is removed, and its branch too unless it has commits from earlier tries, which are kept; the reply says so), ${S.N.name} approve T-5 with keep_note: true is Keep as a note (Done, plus a new docs task that writes docs/research/<topic>.md from the answer and merges as usual), and ${S.N.name} reject T-5 with their follow-up question is Ask more (a fresh try gets the question and the earlier answer).
@@ -718,6 +737,14 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // An answer to a running worker's "give it more time?" question: only that, nothing else changes.
       const overtime = str(a.answer)?.trim() && (t as BoardTask).live?.time_ask ? await answerOvertime($, t.id, str(a.answer)!) : undefined
       if (overtime) return overtime
+      // T-996: the owner's answer to "sent back twice by the checker": Merge as is goes on to the tests (no checker), Drop drops it,
+      // Keep fixing falls through to the usual answer (one more try; test_output still holds the checker's report)
+      if (str(a.answer)?.trim() && t.status === 'waiting' && isCheckerAsk(t.ask?.text)) {
+        const pick = parseCheckerAnswer(str(a.answer)!)
+        if (!pick) throw new Error(`Nothing changed: ${t.id} waits for one of ${CHECKER_ASK_OPTIONS.join(', ')}`)
+        if (pick === 'merge') return moveStage($, t.id, 'tests')
+        if (pick === 'drop') return runTool($, 'drop', { task: t.id, reason: 'dropped by the owner after two checker send-backs' })
+      }
       // An answer to a task that no longer waits (the owner answered on the board first): change nothing at all.
       if (str(a.answer)?.trim() && t.status !== 'waiting') return alreadyAnsweredText(t, a)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
@@ -796,7 +823,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         const p = fields()
         // No restart line, but a changed after-list still gets its "waits on changed" line (the health check counts them).
         await change($, x => {
-          const lines = changeLines(t, p, false)
+          const lines = leadLines(changeLines(t, p, false))
           return patchTask(x, t.id, { ...p, ...(lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {}) }, now(), S.N.dir)
         })
         return `${t.id} updated (its worker keeps running; this counts from its next try)`
@@ -815,7 +842,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ''}: ${answer}`
       await change($, x => {
         const cur = find(x, t.id) ?? t
-        const lines = changeLines(t, patch, wasDoing && !fresh, answer, note)
+        const lines = leadLines(changeLines(t, patch, wasDoing && !fresh, answer, note))
         const end = fresh ? { attempts: Math.max(0, cur.attempts - 1), runs: withoutOpenRun(cur.runs) } : wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {}
         return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: withHistory(cur.history, now(), ...lines) } : {}) }, now(), S.N.dir)
       })
@@ -851,7 +878,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       const asked = t.status === 'doing' && !checkingNow(t.id)
       // T-732: a to-do task asked about gets a line too, so the stats count the wait as waiting for the owner
-      const line: HistoryAdd | null = asked ? stoppedEntry(t, 'the lead asked the owner a question') : t.status === 'todo' ? ['asked', 'the lead asked the owner a question'] : null
+      const line: HistoryAdd | null = asked ? leadLine(stoppedEntry(t, 'the lead asked the owner a question')) : t.status === 'todo' ? ['asked', 'the lead asked the owner a question', { by: 'lead' }] : null
       await change($, x => patchTask(x, t.id, { status: 'waiting', ask: makeAsk('lead', (str(a.question) ?? '').slice(0, 1000), now()), note: 'waiting for you', ...(failedOnClash(t) ? { merge_main: true } : {}), ...(line ? { history: withHistory((find(x, t.id) ?? t).history, now(), line) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
       await haltChecker($, t.id, 'the task was sent to the owner')
       return `${t.id} now waits for the owner`
