@@ -108,8 +108,14 @@ test('T-1096: a worker\'s own commit and its own merge of main (no Task line) in
   expect(got?.before).toBe(sha('9'))
   expect(got?.files.length).toBe(2)
   // a worker merge on top (the merged commit itself)
-  const top = gitWorld({ commits: { [sha('a')]: { parents: [sha('b'), sha('c')], message: 'T-7: merge main' } }, numstat: NUMSTAT })
-  const got2 = await mergedChanges(top.$, task({ merged: sha('a'), runs: [{ started: 'x', commits: [sha('a')] }] as BoardTask['runs'] }))
+  const top = gitWorld({
+    commits: {
+      [sha('a')]: { parents: [sha('b'), sha('c')], message: 'T-7: merge main' },
+      [sha('b')]: { parents: [sha('d')], message: 'T-7: work' },
+    },
+    numstat: NUMSTAT,
+  })
+  const got2 = await mergedChanges(top.$, task({ merged: sha('a'), runs: [{ started: 'x', commits: [sha('b'), sha('a')] }] as BoardTask['runs'] }))
   expect(got2?.before).toBe(sha('c'))
 })
 

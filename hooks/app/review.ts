@@ -639,6 +639,11 @@ export type MergedChanges = { files: DiffFile[]; error: string; merged: string; 
 /** T-1086: the answers kept in memory for the page (nothing is saved in the data folder); null: nothing to show. */
 const mergedMemo = new Map<string, MergedChanges | null>()
 
+/** Forgets the answers kept in memory (a plugin reload; tests). */
+export function resetMergedChanges() {
+  mergedMemo.clear()
+}
+
 /**
  * T-1086: a done change task's Changes: `git diff --numstat <main before> <merged commit>`, read from the commits
  * the task recorded; null for an investigation or errand, a task with no merged commit, or when git has none of it.

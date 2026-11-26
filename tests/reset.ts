@@ -11,6 +11,7 @@ import { resetStarts } from '../hooks/app/starts'
 import { resetStore } from '../hooks/app/store'
 import { resetMergeLine } from '../hooks/app/merge-line'
 import { resetLogo } from '../hooks/app/logo'
+import { resetMergedChanges } from '../hooks/app/review'
 import { stopAsked, offAsked, seenEnded, onPurpose } from '../hooks/app/workers'
 import { saidNeedsYou } from '../hooks/app/voice'
 import { guardLogged } from '../hooks/app/ask'
@@ -42,6 +43,7 @@ export function resetPlugin() {
   resetStore()
   resetMergeLine()
   resetLogo()
+  resetMergedChanges()
   stopLiveTick()
   live.frame = 0
   resetBackground()
