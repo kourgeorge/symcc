@@ -139,7 +139,10 @@ const PHASES: readonly Phase[] = ['claimed', 'worker', 'checker']
  * A task as the board file keeps it: `live`: what only one running try holds (see Live). `failed_on`: why a "failed" task failed, when a later step needs to
  * know (only "clash": its branch conflicts with the one it merges into, so its next try merges that in first).
  */
-export type BoardTask = SymccTask & { live?: Live; failed_on?: 'clash'; answer?: string; suggested?: string[] }
+export type BoardTask = SymccTask & { live?: Live; failed_on?: 'clash'; answer?: string; suggested?: string[]; size?: ChangeSize; done?: string }
+
+/** T-1080: how big a task's change is: files changed, lines added and lines removed (git diff --shortstat); saved at each hand-back and at the merge. */
+export type ChangeSize = { files: number; added: number; removed: number }
 
 /**
  * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every task type ends in a

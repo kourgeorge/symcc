@@ -2,7 +2,7 @@
 import type { SymccStatus, SymccTask } from '../../types'
 import { type BoardTask, byRunOrder, inLineNote, intoOf, isInvestigation, modeOf, STATUS_WORD } from './board-file'
 import { crossBranchNotes } from './git-setup'
-import { shortSha, taskCommits } from './commits'
+import { shortSha, sizeText, taskCommits } from './commits'
 import { originMark, originOf } from './origin'
 import { findKind, type KindDef, kindMark } from './kinds'
 import { findRole, type RoleDef, roleOf } from './roles'
@@ -332,6 +332,8 @@ export function taskCopyText(t: SymccTask, o: { roles?: RoleDef[]; report?: stri
   const from = og ? originWordSegs(og).map(s => s.text).join('') : 'unknown'
   const kind = kindMark(t)
   const L = [`${t.id}  ${t.title}`, `${STATUS_WORD[t.status]} · ${kind ? `${kind} · ` : ''}${role} · from: ${from}`]
+  if ((t as BoardTask).size) L.push(`size: ${sizeText((t as BoardTask).size!)}`)
+  if ((t as BoardTask).done) L.push(`Done: ${(t as BoardTask).done}`)
   if (og?.why) L.push(`why: ${squash(og.why)}`)
   if (shownNote(t)) L.push(`${stateLabelLower()}: ${shownNote(t)}`)
   L.push('What to do:', t.details.trim() ? t.details.trimEnd() : '(no details)')

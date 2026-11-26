@@ -15,6 +15,7 @@ import type { SymccScout, SymccTask } from '../../types'
 import { type BoardTask, DEFAULT_AUTO_RETRIES, isInvestigation, kindOf, STATUS_WORD } from './board-file'
 import { type Seg, STATUS_BADGE, STATUS_MARK, statusMark, wrapSegs } from './details'
 import { originOf } from './origin'
+import { shortSha, sizeText } from './commits'
 import { DEFAULT_ROLE, isCheckerRole, roleNameError, roleOf } from './roles'
 import { ALWAYS_ON_KINDS, kindNameError } from './kinds'
 import { type DefSource, defNamed } from './def-files'
@@ -163,6 +164,19 @@ export function taskStateGroups(t: BoardTask, o: { nowMs: number; merging?: bool
   const from = originShort(t)
   const note = o.note?.trim()
   return [status, what, ...(from ? [[from]] : []), ...(note ? [[{ text: note, color: 'inactive', italic: true }]] : [])]
+}
+
+/**
+ * T-1080: the line right under a task's title, how big its change is: "merged c2fb0c16 · 25 files · +539 −3,722", or before
+ * it is merged "branch symcc/T-5 · 25 files · +539 −3,722". Null when the task has no saved size (an investigation, an
+ * errand, or nothing committed yet).
+ */
+export function sizeSegs(t: Pick<BoardTask, 'size' | 'merged' | 'branch' | 'status'>): Seg[] | null {
+  const z = t.size
+  if (!z) return null
+  const where = t.status === 'done' && t.merged ? `merged ${shortSha(t.merged)}` : t.branch ? `branch ${t.branch}` : ''
+  const [added = '', removed = ''] = sizeText(z, false).split(' ')
+  return [...(where ? [{ text: where, color: 'inactive' }, dot()] : []), { text: sizeText(z).split(' · ')[0]!, color: 'inactive' }, dot(), { text: added, color: 'success' }, { text: ' ', color: 'text' }, { text: removed, color: 'error' }]
 }
 
 /** Line 3 of a scout's page, in groups: its state or how often it runs ("◉ running now", "◷ every 2 days"), when

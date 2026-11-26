@@ -1,5 +1,5 @@
 import type { SymccTask, SymccTokens } from '../../types'
-import { PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, mergeTestCount, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, isErrand, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, isUsageLimit, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs, isProseRole, checkerSendBacks, CHECKER_SEND_BACKS, checkerAskText, CHECKER_ASK_OPTIONS, firstProblemOf, CHECKER_MARK } from '../board'
+import { doneLine, PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, mergeTestCount, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerRetryText, kindOf, isInvestigation, isErrand, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, isUsageLimit, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs, isProseRole, checkerSendBacks, CHECKER_SEND_BACKS, checkerAskText, CHECKER_ASK_OPTIONS, firstProblemOf, CHECKER_MARK } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
@@ -1000,8 +1000,12 @@ async function finishTry(host: Host, agentId: string, w: Pick<Worker, 'task' | '
 
 async function finishTryBody(host: Host, agentId: string, w: Pick<Worker, 'task' | 'worktree' | 'branch'>, answer: string, end: TurnEnd, gaveUp: () => boolean, release: Promise<unknown> | undefined, limit: TurnLimit | undefined, letGo: (() => Promise<void>) | undefined): Promise<boolean> {
   const b = await load(host)
-  const t = find(b, w.task)
-  if (!t || t.status !== 'doing') return false // changed or dropped meanwhile
+  const t0 = find(b, w.task)
+  if (!t0 || t0.status !== 'doing') return false // changed or dropped meanwhile
+  // T-1080: its "Done:" line (what the whole task has done so far) is saved on the task, and is in the commit message and the merged update
+  const doneNow = doneLine(answer)
+  const t = doneNow ? { ...t0, done: doneNow } : t0
+  if (doneNow) await change(host, x => (find(x, t.id)?.status === 'doing' ? patchTask(x, t.id, { done: doneNow }, now()) : x)).catch(() => undefined)
   await saveReport(host, t, answer)
   // T-632: its "Learned:" lines are only suggestions for org-mem, kept on the task for the lead (see keepSuggestions)
   await keepSuggestions(host, t.id, answer)
@@ -1079,7 +1083,7 @@ async function finishTail(host: Host, t: SymccTask, b: Board, r: CheckResult, ma
     await landIfMerged(host, t, r.merged, made, 'finish', 'doing')
     return
   }
-  await recordCommits(host, t.id, made, r.merged)
+  await recordCommits(host, t.id, made, r.merged, r.size)
   // T-440: the branch it merges into was deleted during the tests, the merge-line wait or the checker: it waits with the "branch is gone" question, its work kept, no failed try
   if (r.gone && (await waitIfBranchGone(host, b, t, 'merge'))) return
   if (r.blocked) await holdForFiles(host, t, b, r, resultEntry(t, 'try-result', cutLine(summary, 300), r.detail, { agent: workerName(S.N.name, t.id) }), worktree, agentId)
@@ -1507,8 +1511,11 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
   // Merged: its folder goes, then its branch, only when all its work is in the branch it merged into (deleteMergedBranch), so nothing is lost.
   if (r.ok && (await removeWorktree(host, t.id, worktree, agentId, true))) await deleteMergedBranch(host, taskBranch(t), intoOf(t))
   const gaveUp = r.testOutput !== undefined ? `\nIt already had ${tries} automatic ${tries === 1 ? 'retry' : 'retries'}. ${r.checker ? `The checker's report:\n${r.testOutput.replace(/^[^\n]*\n/, '')}` : `The last test run: ${gaveUpTestsText(r.testOutput)}`}` : ''
-  if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.`)
-  tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
+  // T-1080: the merged update says what the whole task did (its worker's "Done:" line, kept on the task)
+  const doneSaid = r.ok ? (find(await load(host).catch(() => b), t.id) as BoardTask | undefined)?.done : undefined
+  const doneNote = doneSaid ? ` Done: ${doneSaid}` : ''
+  if (r.ok && approved) return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.${doneNote}`)
+  tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${doneNote}${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ''}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`)
 }
 
 /** How the last Approve, Done, Keep as a note or Merge now of each task ended: 'merged', 'done' (an investigation's Done), or 'failed'. */
@@ -1680,7 +1687,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
       await landIfMerged(host, t, r.merged, made, kind, status)
       return ''
     }
-    await recordCommits(host, t.id, made, r.merged)
+    await recordCommits(host, t.id, made, r.merged, r.size)
     const cur = find(await load(host), t.id)
     if (r.ok && r.review && !r.merged) {
       // A move to tests in board mode "review": the tests passed; it waits for the owner's approve like any finished task.

@@ -2,6 +2,7 @@ import type { SymccTask } from '../../types'
 import { isFinished, priorityError, makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, filesAllowedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, PROSE_ROLE_TEXT, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
 import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
 import { checkerReportOf } from '../core/task-sections'
+import { sizeSegs } from '../core/page-header'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
@@ -55,7 +56,12 @@ export type ReportRead = { file: string; try: number; text: string | null; check
 export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: ReportRead | null, archivedDone: string[] = []): string {
   const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
+  // T-1080: how big its change is, right under the title
+  const size = sizeSegs(t as BoardTask)
+  if (size) L.push(size.map(x => x.text).join(''))
   L.push(fromText(t, 120))
+  // T-1080: what the whole task has done so far (its worker's latest "Done:" line)
+  if ((t as BoardTask).done) L.push(`Done: ${(t as BoardTask).done}`)
   if (t.origin?.why) L.push(`why: ${t.origin.why}`)
   if (t.origin?.evidence) L.push(`seen by ${S.N.name}: ${t.origin.evidence}`)
   if (shownNote(t)) L.push(`${stateLabelLower()}: ${shownNote(t)}`)

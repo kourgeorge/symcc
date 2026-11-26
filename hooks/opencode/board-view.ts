@@ -41,7 +41,7 @@ import type { TaskBranchFacts } from '../core/task-branch'
 import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleStateGroups } from '../core/role-changes'
 import { type DefRow, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICK_LABEL, roleTableRow, kindTableRow, defsCountText, defLayout, defCells, defCellTone, newDefText, roleWritesLine, codePickOf } from '../core/def-table'
 import { defActions, roleButtons as headerRoleButtons } from '../core/page-header'
-import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, TASK_ID_COLOR, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
+import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, sizeSegs, TASK_ID_COLOR, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { LIST_TONE, sessionNote } from '../core/details'
 import type { SearchMore } from '../core/panel'
 import { isObj, plural } from '../core/text'
@@ -1587,7 +1587,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   // T-751: the page header, as on Claude Code's task page: where you are (‹ Tasks or ‹ Live, its place in that list),
   // the title, the state, the buttons in groups (core's taskActions), a thin rule; it stays at the top while the rest scrolls
   addAll(headerLines({
-    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: t.title, color: TASK_ID_COLOR,
+    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: t.title, color: TASK_ID_COLOR, size: sizeSegs(t),
     state: taskStateGroups(t, { nowMs, merging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? false, nowMs) }),
     buttons: taskButtons(t, busy),
   }, w))
@@ -1700,7 +1700,7 @@ export const scoutButtons = (sc: Pick<SymccScout, 'running' | 'paused'>): HeadBu
 /** A page header's lines (T-751, core/page-header.ts): where you are (Back and, with a place, "‹ 2 of 6 ›": each a
  *  click), the title, the state (wrapping between its groups), the buttons in their groups (each "[Pause]" in the
  *  text color, T-775; wrapping between groups, never inside a button), then a thin rule. */
-export function headerLines(hd: { from: PageFrom; label: string; place: ReturnType<typeof placeIn>; title: string; color: string; state: Seg[][]; buttons: HeadButton[] }, w: number): Line[] {
+export function headerLines(hd: { from: PageFrom; label: string; place: ReturnType<typeof placeIn>; title: string; color: string; size?: Seg[] | null; state: Seg[][]; buttons: HeadButton[] }, w: number): Line[] {
   const where = whereLine(hd.from, hd.label, hd.place, w)
   const go: Record<string, PanelHit> = { back: { key: 'back' }, prev: { key: 'prev' }, next: { key: 'next' } }
   // Back is a button like the others ("[Tasks]", the text color); the arrow and the pager stay dim
@@ -1712,7 +1712,7 @@ export function headerLines(hd: { from: PageFrom; label: string; place: ReturnTy
       return [...(gap ? [{ text: ' '.repeat(gap), color: 'text' }] : []), { text: pillText(x), color: x.fact ? 'inactive' : PILL_COLOR, ...(x.fact ? {} : { hit: x.hit }) }]
     }),
   )
-  return [first, ...titleLines(hd.label, hd.title, hd.color, w), ...groupSegLines(hd.state, w), ...rows, [{ text: headerRule(w), color: 'ide' }]]
+  return [first, ...titleLines(hd.label, hd.title, hd.color, w), ...(hd.size ? [[{ text: ' '.repeat(hd.label.length + 2), color: 'text' }, ...hd.size]] : []), ...groupSegLines(hd.state, w), ...rows, [{ text: headerRule(w), color: 'ide' }]]
 }
 
 /** A row of buttons, going on to more rows when it doesn't fit `w` (core's packRows, as Claude Code's buttonRows),

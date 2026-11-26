@@ -1,7 +1,7 @@
 // The commits of a task and the commit message.
 import type { SymccRun, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { isSha } from './board-file'
+import { type ChangeSize, isSha } from './board-file'
 import { originOf } from './origin'
 import { ellipsis } from './text'
 
@@ -71,7 +71,7 @@ export function trailerPrefix(name: string = DEFAULT_NAME): string {
  * Line breaks and control characters in the title and why are made into spaces, so they
  * can never break the trailer block. Trailers with nothing to say (no why) are left out.
  */
-export function commitMessage(t: Pick<SymccTask, 'id' | 'title' | 'attempts'> & { origin?: unknown }, o: { subject?: string; name?: string; tryNo?: number } = {}): string {
+export function commitMessage(t: Pick<SymccTask, 'id' | 'title' | 'attempts'> & { origin?: unknown }, o: { subject?: string; name?: string; tryNo?: number; done?: string } = {}): string {
   const id = oneLine(t.id, 40) || '?'
   const subject = oneLine(o.subject ?? `${id}: ${t.title}`, 200) || id
   const k = trailerPrefix(o.name)
@@ -80,7 +80,24 @@ export function commitMessage(t: Pick<SymccTask, 'id' | 'title' | 'attempts'> & 
   const n = Number(o.tryNo ?? t.attempts)
   const tryNo = Number.isFinite(n) && n > 0 ? String(Math.floor(n)) : ''
   const trailers = [`${k}-Task: ${id}`, `${k}-From: ${originTag(t)}`, ...(why ? [`${k}-Why: ${why}`] : []), ...(tryNo ? [`${k}-Try: ${tryNo}`] : [])]
-  return `${subject}\n\n${trailers.join('\n')}\n`
+  // T-1080: what the whole task has done so far (the worker's "Done:" line), in the body above the trailers
+  const done = oneLine(o.done, 300)
+  return `${subject}\n\n${done ? `${done}\n\n` : ''}${trailers.join('\n')}\n`
+}
+
+/** T-1080: git's `--shortstat` text ("25 files changed, 539 insertions(+), 3722 deletions(-)") as a size; undefined when it has no change. */
+export function parseShortstat(text: string): ChangeSize | undefined {
+  const n = (re: RegExp) => Number(re.exec(text)?.[1] ?? 0)
+  const files = n(/(\d+) files? changed/)
+  return files > 0 ? { files, added: n(/(\d+) insertions?\(\+\)/), removed: n(/(\d+) deletions?\(-\)/) } : undefined
+}
+
+/** A number with thousands commas: 3722 -> "3,722". */
+const grouped = (n: number) => String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+
+/** T-1080: a size in words: "25 files · +539 −3,722" ("+539 −3,722" without the files part, for a narrow Live row). */
+export function sizeText(s: ChangeSize, withFiles = true): string {
+  return `${withFiles ? `${s.files} ${s.files === 1 ? 'file' : 'files'} · ` : ''}+${grouped(s.added)} −${grouped(s.removed)}`
 }
 
 /**

@@ -1103,7 +1103,11 @@ only; the Organizational memory page has the same header shape, see below):
    A page alone in its list shows no place. A task opened from the Live tab goes through the
    Live tab's tasks.
 2. **The title**: the id, always in the board's orange whatever the status, then the title in
-   bold. A long title wraps, indented under itself.
+   bold. A long title wraps, indented under itself. Under it (T-1080) a dim line says how big the
+   change is, from git: `merged c2fb0c16 · 25 files · +539 −3,722` once merged, and
+   `branch symcc/T-1063 · 25 files · +539 −3,722` before (a task in review shows it, so you see the
+   size before you approve). It is saved when a try hands back and again at the merge. An
+   investigation or an errand, with no commits, shows no such line.
 3. **The state**: the status mark and word in its color, and for a running task its step and
    its work time; then task type · role · try n/m (n of the tries it may get, its automatic retries
    counted); then where it came from (`♟ from you`, `⌕ scout bugs`, `◆ lead`, `↳ from T-5`,
@@ -1124,6 +1128,11 @@ only; the Organizational memory page has the same header shape, see below):
    Stash to backlog, Already merged, Keep as a note, Ask more); then, set apart, the ones that throw
    work away (Reject, Drop); then, at the end, the page's own: `[☐ Needs review]` (a checkbox:
    `n` turns it on, `[☑ Needs review]`, and off) and `[Copy]` (`y`).
+
+At the top of the page, above ▍What to do (and the other sections), comes **▍Done** (T-1080): one or two
+plain sentences on what the whole task has done so far. The worker writes them as the first line of
+every report, `Done: …`; symcc keeps the latest one on the task, puts it in the commit message and in
+the lead's `✓ merged` update. An old task, or one whose report has no `Done:` line, shows no ▍Done.
 
 Further down, under ▍Report, the buttons that show an earlier try's report look the same:
 `[Try 1] [Try 2] [● Try 3]` (● the one shown); their keys, `1`-`9`, are in the key line
@@ -1294,13 +1303,13 @@ words as bold headings with the same spacing):
   where a running lane has `▶ `, the id in the accent color, the title and second row dim, and `merged 3m ago` on the right (`3m ago` on a narrow panel).
   At most 3 such lanes show, newest first; after 10 minutes, or when a 4th task merges, the oldest
   goes. Only merged tasks get one: answered investigations,
-  failed or dropped tasks don't. Enter (or a click) on a finished lane opens its task page.
+  failed or dropped tasks don't. Enter (or a click) on a finished lane opens its task page. A finished lane's second row ends with the change size, `+212 −48` (T-1080; no file count there); it is the first part dropped when the row is narrow.
 
   ```
    ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○
      try 1/3 · ⏱ 2m · ⌀ at hand-back  change
    ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
-     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M  change
+     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M · +212 −48  change
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,

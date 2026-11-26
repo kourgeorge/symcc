@@ -304,6 +304,9 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   // which of the shared sections show, and their headings, come from core's taskSections (as on the terminal)
   const sec = (id: TaskSection['id']) => x.sections.find(s => s.id === id)
+  // T-1080: what the whole task has done so far, at the top
+  const doneSec = sec('done')
+  const done = doneSec ? section('done', doneSec.title, [plain('vs-done-text', (t as BoardTask).done ?? '')]) : null
   const answerSec = sec('answer')
   const answer = answerSec
     ? section('answer', answerSec.title, [
@@ -477,6 +480,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     <Box flexDirection="column" gap={1}>
       {vsPageHeader(pane, { ...header, backFocus: !(x.answerable || typingBox) })}
       {mergeStatus}
+      {done}
       {question}
       {fileWait}
       {failed}
