@@ -116,7 +116,7 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | Command | What it does |
 |---|---|
 | `/symcc` | Open the board panel (tasks, scouts and settings) |
-| `/symcc-board [html]` | Open the board panel on the Live view (Claude Code and OpenCode; in OpenCode it closes the panel when it is open). Where there is no panel, it says so. `html` writes the board as one self-contained web page (`.symcc/board.html`) and opens it; the lead's board tool does the same with `view: "html"` |
+| `/symcc-board [html]` | Open the board panel on the Live view (Claude Code and OpenCode; in OpenCode it closes the panel when it is open and takes no `html`). Where there is no panel, it says so. In Claude Code, `html` writes the board as one self-contained web page (`.symcc/board.html`) and opens it; the lead's board tool does the same with `view: "html"` (also in OpenCode; scouts and checkers are refused) |
 | `/symcc-answer T-5 <answer>` | OpenCode only: answer a waiting task, or a question with `Q-3 <answer>`. The board panel sends this for you |
 | `/symcc-tasks` | Print a clear list of the open tasks in the chat, grouped like the board (every client; it never opens the panel). In chat mode: short plain lines, at most 3,500 characters |
 | `/symcc-status` | Print what the board's Live tab shows, as text in the chat (every client; it never opens the panel): NEEDS YOU (only when something waits for you), TASKS (each running task's steps, time and try, and what waits for it), BRANCHES, TODAY (with yesterday and the last 7 days) and ORGANIZATIONAL MEMORY (the count and the 3 newest notes) |

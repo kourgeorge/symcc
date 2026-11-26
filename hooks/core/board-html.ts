@@ -20,7 +20,7 @@ const TODO_MAX = 300
 const CSS = `:root{--bg:#f6f7fa;--fg:#1c2230;--muted:#667085;--card:#fff;--line:#dfe3ea;--amber:#b25e00;--red:#c0262d;--blue:#1f5fbf;--green:#1a7f42;--purple:#7a3fc0}
 @media (prefers-color-scheme:dark){:root{--bg:#12151c;--fg:#e6e9f0;--muted:#98a0b3;--card:#1b2029;--line:#2b3240;--amber:#f0a040;--red:#ff7b80;--blue:#6aa5ff;--green:#4cc27a;--purple:#b98cff}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-main{max-width:720px;margin:0 auto;padding:12px}h1{font-size:1.3rem;margin:.2em 0}h2{font-size:1.05rem;margin:1.2em 0 .4em;border-bottom:1px solid var(--line);padding-bottom:.2em}
+main{max-width:720px;margin:0 auto;padding:12px}h1{font-size:1.3rem;margin:.2em 0;overflow-wrap:anywhere}h2{font-size:1.05rem;margin:1.2em 0 .4em;border-bottom:1px solid var(--line);padding-bottom:.2em}
 .task{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;overflow-wrap:anywhere}
 .head{font-weight:600}.mark{display:inline-block;min-width:1.2em}.meta{color:var(--muted);font-size:.85rem}
 .ask{margin:.4em 0;font-weight:600}ol{margin:.2em 0 .2em 1.4em;padding:0}.todo{margin:.3em 0 0;white-space:pre-wrap}
