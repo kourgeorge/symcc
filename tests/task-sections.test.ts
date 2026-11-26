@@ -110,3 +110,27 @@ test('T-580: an answered investigation shows its Answer (the latest report\'s fu
   // the report not read: the answer saved on the task
   expect(text(sec(taskSections(t, facts()), 'answer'))).toEqual([`  ${R1}`, '  Short answer.'])
 })
+
+// ---------------- T-1079: the checker's own section ----------------
+
+const CK = '.symcc/reports/T-1-try-2-checker.md'
+const CK_REPORT = 'I probed it from /tmp.\n\nProblems:\n- the empty input still throws'
+
+test('T-1079: a try with a checker report shows ▍Checker (try n) · its agent name under the Report, with its full text; a try with no checker shows none', () => {
+  const history = hist('try 1: worker started')
+  const withChecker = [...history, { at: iso(NOW), kind: 'checker-problems', text: 'try 2: checker found problems: the empty input still throws', try: 2, agent: 'symcc-T-1-checker', report: CK }]
+  const t = task('todo', { attempts: 2, history: withChecker as SymccTask['history'], runs: [run(R1), run(R2)] })
+  const s = taskSections(t, facts({ texts: { [R2]: 'Fixed.', [CK]: CK_REPORT } }))
+  expect(titles(s).slice(-3)).toEqual(['Report (try 2, 2 of 2)', 'Checker (try 2) · symcc-T-1-checker', expect.stringMatching(/^Runs/)])
+  expect(text(sec(s, 'checker'))).toEqual([`  ${CK}`, '  I probed it from /tmp.', '', '  Problems:', '  - the empty input still throws'])
+  // not read yet / can't be read
+  expect(text(sec(taskSections(t, facts()), 'checker'))).toEqual([`  ${CK}`, '  (reading the report…)'])
+  expect(text(sec(taskSections(t, facts({ texts: { [CK]: null } })), 'checker'))).toEqual([`  ${CK}`, '  Could not read the checker report file.'])
+  // the owner picked try 1: that try had no checker, so there is no section
+  expect(ids(taskSections(t, facts({ shownTry: 1, texts: { [R1]: 'x' } })))).not.toContain('checker')
+  // a task with no checker at all
+  expect(ids(taskSections(task('todo', { attempts: 2, history, runs: [run(R1), run(R2)] }), facts()))).not.toContain('checker')
+  // an old entry with no saved agent name: the heading has no id
+  const old = [{ at: iso(NOW), kind: 'checker-ok', text: 'try 2: checker: OK', try: 2, report: CK }]
+  expect(titles(taskSections(task('review', { attempts: 2, history: old as SymccTask['history'], runs: [run(R1), run(R2)] }), facts())).filter(x => x.startsWith('Checker'))).toEqual(['Checker (try 2)'])
+})

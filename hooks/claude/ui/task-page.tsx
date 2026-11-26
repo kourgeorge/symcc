@@ -15,7 +15,7 @@ import { runTool, allowAskedFiles, refuseAskedFiles } from '../../app/tools'
 import type { PaneParts } from './parts'
 import { answerBox, dropDraft, fieldRows } from './answer-box'
 import { taskPageVs } from './vscode-task'
-import { taskSections, type SectionLine, type TaskSection } from '../../core/task-sections'
+import { taskSections, checkerReportOf, type SectionLine, type TaskSection } from '../../core/task-sections'
 import { NAV_KEYS, navHint, TASK_ID_COLOR, taskPlace, taskStateGroups, type PageFrom } from '../../core/page-header'
 import { pageHeader, type PageHeader } from './page-header'
 import { claudeHost } from '../host'
@@ -273,6 +273,9 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   // the report texts the sections need: the one shown, and the latest for an answer or a failed try's ask
   const texts: Record<string, string | null> = shown ? { [shown.file]: reportBody } : {}
   if (latest && !(latest.file in texts) && (answerShown || (failed && latest.try === t.attempts))) texts[latest.file] = await $.fs.read(path(latest.file)).then(x => String(x), () => null)
+  // T-1079: the checker's saved report of the try shown (its own section)
+  const checkerSaved = checkerReportOf(t, shown?.try ?? t.attempts)
+  if (checkerSaved) texts[checkerSaved.file] = await $.fs.read(path(checkerSaved.file)).then(x => String(x), () => null)
   const answer = answerShown ? answerText(t as BoardTask, answerFrom ? texts[answerFrom.file] : null).trimEnd() : ''
   const pickReport = (n: number) => () => ((S.reportTry = { task: t.id, try: n }), $.ui.invalidate('ui.render'))
   // A waiting task: buttons for a file request (Allow / Don't allow) or the worker's options, each with a number key, plus Answer….
@@ -468,7 +471,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   // VS Code's side panel: its own wide page, with buttons and no key hints (see vscode-task.tsx)
   if (pane.vscode)
     return taskPageVs(pane, t, {
-      header, agentId, inReview, runNowAsk: S.runNowAsk === t.id ? runNowQuestion(t.id, waits) : '', answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, sections, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
+      header, agentId, inReview, runNowAsk: S.runNowAsk === t.id ? runNowQuestion(t.id, waits) : '', answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, checkerBody: checkerSaved ? (texts[checkerSaved.file] ?? null) : null, answerShown, answerFrom, answer, sections, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
       redraw: () => $.ui.invalidate('ui.render'),
       on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, runNow: runNowIt, startAnyway: runNowGo(true), cancelRunNow, toTodo, stash: stashIt, markMerged: markMergedIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
     })
@@ -500,6 +503,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
       {sectionEl('what')}
       {sectionEl('history')}
       {sectionEl('report')}
+      {sectionEl('checker')}
       {sectionEl('runs')}
 
       {footer(boxOpen ? boxKeys : taskKeys(actions, reports.map(r => r.try), choices.length > 0, place && place.of > 1 ? navHint('claude') : null), 'task-keys')}

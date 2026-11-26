@@ -59,8 +59,8 @@ test('an old board with string history converts once: kinds guessed from the tex
   expect(statsReport({ tasks: r.board.tasks, nowMs: Date.parse(T), full: true })).toContain('Failed tries')
   // an entry with no time shows none; one with a time shows it first
   const text = taskText(r.board.tasks[0]!, false)
-  expect(text).toContain('  • the lead added a note: “the earlier try failed”')
-  expect(text).toContain(`  • ${historyTime('2026-11-01T09:20:00.000Z')}  try 1: did it → tests failed`)
+  expect(text).toContain('  • lead: the lead added a note: “the earlier try failed”')
+  expect(text).toContain(`  • ${historyTime('2026-11-01T09:20:00.000Z')}  worker: try 1: did it → tests failed`)
 })
 
 test('an old archive converts the same way, once, and its stats still count', () => {

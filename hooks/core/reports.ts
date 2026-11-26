@@ -11,6 +11,9 @@ export const REPORT_PREVIEW_LINES = 40
 /** Where try `attempt` of task `id` keeps its report, relative to the project: "<dir>/reports/T-3-try-2.md". */
 export const reportFile = (dir: string, id: string, attempt: number) => `${dir}/reports/${id}-try-${attempt}.md`
 
+/** T-1079: where the checker of try `attempt` of task `id` keeps its full report: "<dir>/reports/T-3-try-2-checker.md". */
+export const checkerReportFile = (dir: string, id: string, attempt: number) => `${dir}/reports/${id}-try-${attempt}-checker.md`
+
 /** The text saved for a report: the worker's answer, trimmed, cut at REPORT_MAX_CHARS with a line saying so. */
 export function reportText(answer: string): string {
   const a = answer.trim()

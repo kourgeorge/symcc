@@ -1580,10 +1580,16 @@ task, and the ID on a commit takes you back to the task and your request.
   trailers: `Symcc-Task`, `Symcc-From` (who asked), `Symcc-Why` and `Symcc-Try`. Find them
   with `git log --grep "T-3"`.
 - **The task page** (`/symcc-task T-3`, or open it on the board): **History** has one short
-  line per event, each with when it happened ("10:42" today, "Nov 18 22:49" before), for
-  example what the worker said in a try (cut at a word end with "…") and how it went,
+  line per event, each with when it happened ("10:42" today, "Nov 18 22:49" before), and a
+  dim label for who wrote it: `worker symcc-T-3:`, `checker symcc-T-3-checker:` (the name the
+  agent ran under), `lead:` or `you:`; symcc's own steps have none. For example what the
+  worker said in a try (cut at a word end with "…") and how it went (`→ the checker found
+  problems`), then the checker's own line (`checker symcc-T-3-checker: found problems: <its
+  first problem>`, or `OK`), never the two joined in one line,
   **Commits** lists the commits each try made and the one that was merged, and **Report**
-  shows the worker's full final report for the latest try. When more than one try has a
+  shows the worker's full final report for the latest try, and under it **Checker (try 2) ·
+  symcc-T-3-checker** the checker's full report of that try (not shown when the try had no
+  checker; VS Code draws it as Markdown too). When more than one try has a
   report, press the try's number (`1`, `2`, ...) to read that try's report. `/symcc-task T-3`
   shows the first 40 lines (at most 4,000 characters) and says where the full report is.
 - **Asking the lead.** The lead's `board` tool shows the same: with `task: T-3` it gives the

@@ -148,9 +148,22 @@ export const checkerPrompt = (v: CheckerValues, task?: SymccTask): string => {
   return buildPrompt({ kind: 'checker', values: all, ...(task ? { task } : {}) })
 }
 
-/** The history line of a checker's verdict. */
+/** The history line of a checker's verdict: with problems, only the first problem (see firstProblemOf). */
 export const checkerLine = (tryLabel: string, v: CheckerVerdict | null, why = ''): string =>
-  !v ? `${tryLabel}: checker gave no verdict${why ? ` (${why})` : ''}` : 'report' in v ? `${tryLabel}: checker found problems: ${oneLine(v.report, 300)}` : `${tryLabel}: checker: OK`
+  !v ? `${tryLabel}: checker gave no verdict${why ? ` (${why})` : ''}` : 'report' in v ? `${tryLabel}: checker found problems: ${firstProblemOf(v.report)}` : `${tryLabel}: checker: OK`
+
+/**
+ * T-1079: the first problem of a checker's report, on one line: the first "- " item under its "Problems:" line, else the
+ * text after "Problems:" on that line, else the report's first line.
+ */
+export function firstProblemOf(report: string): string {
+  const first = checkerProblems(report)[0]
+  if (first) return first
+  const lines = String(report ?? '').split('\n').map(l => l.trim()).filter(Boolean)
+  const inline = lines.findLast(l => /^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?\s*\S/.test(l))
+  const after = inline?.replace(/^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?\s*/, '').replace(/^[-*]\s+/, '')
+  return oneLine(after || lines.find(l => l !== CHECKER_MARK) || '', 300)
+}
 
 /** The most problem lines saved on a checker's history entry. */
 export const CHECKER_PROBLEMS_MAX = 5
@@ -175,9 +188,9 @@ export function checkerProblems(report: string): string[] {
 }
 
 /** checkerLine as a history entry to add: "checker-ok", "checker-problems" (with its `problems` fact), or "checker" with no verdict. */
-export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = '', tryNo = 0): HistoryAdd => {
+export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = '', tryNo = 0, who: { agent?: string; report?: string } = {}): HistoryAdd => {
   const problems = v && 'report' in v ? checkerProblems(v.report) : []
-  return [!v ? 'checker' : 'report' in v ? 'checker-problems' : 'checker-ok', checkerLine(tryLabel, v, why), { try: tryNo, ...(problems.length ? { problems } : {}) }]
+  return [!v ? 'checker' : 'report' in v ? 'checker-problems' : 'checker-ok', checkerLine(tryLabel, v, why), { try: tryNo, ...(problems.length ? { problems } : {}), ...(who.agent ? { agent: who.agent } : {}), ...(who.report ? { report: who.report } : {}) }]
 }
 
 const oneLine = (s: string, max: number) => {

@@ -325,6 +325,8 @@ export type PanelChoice = {
   sent?: { id: string; answer: string }
   /** the open task's latest report (T-580), read from its file: its text undefined while it is read, null when it can't be */
   taskReport?: { file: string; text: string | null | undefined }
+  /** T-1079: the checker's saved report of that try (its own section), read from its file the same way */
+  taskChecker?: { file: string; text: string | null | undefined }
   /** the task whose approve this panel just sent, and when (ms): its page shows the approve's first step at once (see
    *  approveSent), as Claude Code's task page does */
   approving?: ApproveSent
@@ -705,7 +707,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     const t = choice.opened ? f.view.tasks.find(x => x.id === choice.opened) : undefined
     // the approve in progress takes the same buttons and keys away (approveInProgress)
     const busy = !!t && approveInProgress(f, t, choice.approving, nowMs)
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore) : null
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore, choice.taskChecker) : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '', choice.searchMore, choice.backlogAll ?? false, choice.openDays ?? [])
     keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!page && busy)
     if (!page) modeRow = modeLines(f, !!choice.search?.trim(), w)
@@ -1553,13 +1555,13 @@ function questionRow(q: OwnerQuestion, front: string, idWidth: number, w: number
 
 /** How many lines of a long History or Report section the task page shows; the rest is cut with "… (n more lines)"
  *  (the whole report stays in its file, named in the section). */
-export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { history: 30, report: 40 }
+export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { history: 30, report: 40, checker: 40 }
 
 /** The page of the task or question `id`: its title, its question and its choices, each a clickable line (T-583),
  *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,
  *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), with the latest report's text
  *  (`report`, read by the TUI) and the changed files from the view file; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = '', more?: SearchMore): Body | null {
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = '', more?: SearchMore, checker?: PanelChoice['taskChecker']): Body | null {
   const v = f.view
   const b = bodyMaker()
   const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
@@ -1609,7 +1611,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
     width: w,
     nowMs,
     detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, merging, driving: v.driving ?? false, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
-    ...(report ? { texts: { [report.file]: report.text } } : {}),
+    ...(report || checker ? { texts: { ...(report ? { [report.file]: report.text } : {}), ...(checker ? { [checker.file]: checker.text } : {}) } } : {}),
     changes: v.changes?.[t.id] ?? null,
     // T-761: the Branch section, from the facts the server side read with git (app/branches.ts)
     ...(v.task_branches?.[t.id] ? { branch: v.task_branches[t.id] } : {}),

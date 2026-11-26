@@ -14,7 +14,7 @@
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
 import { type DetailRow, type DiffFile, type Seg, agentLines, findRole, fmtRun, fmtTotal, sumRuns, taskActions, type TaskAction, type TaskActionId, type BoardTask } from '../../board'
-import type { TaskSection } from '../../core/task-sections'
+import { checkerReportOf, type TaskSection } from '../../core/task-sections'
 import { RUN_NOW_NO, RUN_NOW_YES } from '../../core/run-now'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
@@ -67,6 +67,8 @@ export type VsTaskCtx = {
   at: number
   shown: { try: number; file: string } | undefined
   reportBody: string | null
+  /** T-1079: the latest checker's saved report of the try shown (null when it can't be read); the section shows only when the page has one */
+  checkerBody: string | null
   answerShown: boolean
   answerFrom: { try: number; file: string } | undefined
   answer: string
@@ -400,7 +402,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     ? section('history', historySec.title, [
         <Box key="vs-history" flexDirection="column">
           {shownEvents.map((e, i) => {
-            const stamp = [historyTime(e.at, nowMs), e.label].filter(Boolean).join(' · ')
+            const stamp = [historyTime(e.at, nowMs), e.by, e.label].filter(Boolean).join(' · ')
             const resultColor = e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text'
             // the line goes on below the last shown event when older ones are hidden behind "Show all"
             const line = i < shownEvents.length - 1 || hidden > 0
@@ -460,6 +462,17 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
         ])
       : null
 
+  // T-1079: the checker's full report of that try, under the worker's report (who said what), its agent name in the heading
+  const checkerSec = sec('checker')
+  const checkerSaved = checkerSec ? checkerReportOf(t, x.shown?.try ?? t.attempts) : null
+  const checker = checkerSec
+    ? section('checker', checkerSec.title, [
+        plain('vs-checker-file', checkerSaved?.file ?? '', 'inactive'),
+        x.checkerBody === null ? plain('vs-checker-error', 'Could not read the checker report file.', 'error') : null,
+        x.checkerBody?.trim() ? <Markdown key="vs-checker-md" text={x.checkerBody.trimEnd()} /> : null,
+      ])
+    : null
+
   return (
     <Box flexDirection="column" gap={1}>
       {vsPageHeader(pane, { ...header, backFocus: !(x.answerable || typingBox) })}
@@ -477,6 +490,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {changes}
       {history}
       {report}
+      {checker}
       {time}
     </Box>
   )

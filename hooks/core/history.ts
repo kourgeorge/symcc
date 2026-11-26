@@ -49,7 +49,13 @@ export function notUsedEntry(line: HistoryAdd, why: string): HistoryAdd {
 }
 
 /** The facts a history line carries besides its time, kind and text (T-806; see SymccHistoryEntry). */
-export type HistoryFacts = Omit<SymccHistoryEntry, 'at' | 'kind' | 'text'>
+export type HistoryFacts = Omit<SymccHistoryEntry, 'at' | 'kind' | 'text'> & HistoryWho
+
+/**
+ * T-1079: who wrote a history line, saved with it. `agent`: the name the agent ran under ("symcc-T-3", "symcc-T-3-checker");
+ * `by`: 'worker' or 'you' where the kind alone doesn't say (see historyActor); `report`: a checker line's saved full report (a file).
+ */
+export type HistoryWho = { agent?: string; by?: 'worker' | 'you'; report?: string }
 
 /** "try 2: <body>" as an entry to add, with its `try` fact; `facts` adds the rest. */
 export const tryEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, kind: HistoryKind, body: string, facts: HistoryFacts = {}): HistoryAdd => [kind, `${tryLabel(t)}: ${body}`, { try: Number(t.attempts) || 0, ...facts }]
@@ -120,17 +126,17 @@ export type FailReason = SymccFailReason
  * Only that T-678 path gives a try its number back without a "restarted"/"stopped" line: a drive hand-over (handedOff)
  * also takes the number back but writes its own "restarted" line, which already says why, so no mark is added then.
  */
-export function workerStartedEntry(t: Pick<SymccTask, 'role' | 'attempts' | 'history'>, mergeMain: boolean): HistoryAdd {
+export function workerStartedEntry(t: Pick<SymccTask, 'role' | 'attempts' | 'history'>, mergeMain: boolean, agent?: string): HistoryAdd {
   const history = t.history ?? []
   const last = history.findLastIndex(h => h.kind === 'stage' && h.step === 'worker-start' && h.try === (Number(t.attempts) || 0))
   const since = last < 0 ? [] : history.slice(last + 1)
   const changed = last >= 0 && !since.some(h => h.kind === 'restarted' || h.kind === 'stopped')
   const again = !changed ? '' : since.some(h => h.kind === 'note') ? ' · same try number (note joined)' : ' · same try number (task changed)'
-  return ['stage', `try ${t.attempts}: ${WORKER_STARTED} (role ${roleOf(t)})${mergeMain ? ' · merges main in first' : ''}${again}`, { try: Number(t.attempts) || 0, step: 'worker-start' }]
+  return ['stage', `try ${t.attempts}: ${WORKER_STARTED} (role ${roleOf(t)})${mergeMain ? ' · merges main in first' : ''}${again}`, { try: Number(t.attempts) || 0, step: 'worker-start', ...(agent ? { agent } : {}) }]
 }
 
 /** T-723: "try 2: worker handed back", the 'stage' line of a try whose worker handed back its report. */
-export const workerHandedBackEntry = (t: Pick<SymccTask, 'attempts'>): HistoryAdd => ['stage', `try ${t.attempts}: ${WORKER_HANDED_BACK}`, { try: Number(t.attempts) || 0, step: 'handed-back' }]
+export const workerHandedBackEntry = (t: Pick<SymccTask, 'attempts'>, agent?: string): HistoryAdd => ['stage', `try ${t.attempts}: ${WORKER_HANDED_BACK}`, { try: Number(t.attempts) || 0, step: 'handed-back', ...(agent ? { agent } : {}) }]
 
 /**
  * The history lines of a change to task `t` (as it was) with `patch`: the restart line when its
@@ -237,7 +243,7 @@ export const HISTORY_KINDS = {
 export type HistoryKind = keyof typeof HISTORY_KINDS
 
 /** A history entry (the record saved in board.json). */
-export type HistoryEntry = SymccHistoryEntry
+export type HistoryEntry = SymccHistoryEntry & HistoryWho
 
 /** One entry to add: its kind, its text and its facts (see HistoryFacts). */
 export type HistoryAdd = [kind: HistoryKind, text: string, facts?: HistoryFacts]
@@ -276,7 +282,8 @@ export function historyTime(at: string | undefined, nowMs = Date.now()): string 
 /** "10:42  try 1: checker: OK": an entry's line for plain text, its time first when it has one. */
 export const historyLineText = (e: HistoryEntry, nowMs = Date.now()): string => {
   const when = historyTime(e.at, nowMs)
-  return when ? `${when}  ${e.text}` : e.text
+  const words = historyLineWords(e)
+  return when ? `${when}  ${words}` : words
 }
 
 /** The mark drawn for each tone, the same in every view. */
@@ -302,7 +309,16 @@ export type HistoryEvent = {
   said: string
   /** a try's result, after its " → " ('' when there is none) */
   result: string
+  /** T-1079: who wrote the line ('' for symcc's own steps; see historyActor) */
+  who: HistoryActor
+  /** the name the agent ran under ("symcc-T-3-checker"), '' when none was saved (old entries) */
+  agent: string
+  /** "worker symcc-T-3" / "checker" / "lead" / "you": drawn dim before the line; '' for symcc's own steps */
+  by: string
 }
+
+/** T-1079: who wrote a history line: an agent (worker, checker, scout), the lead, the owner, or symcc itself (''). */
+export type HistoryActor = '' | 'worker' | 'checker' | 'scout' | 'lead' | 'you'
 
 /** A line's "try 2 (role tester): " label split off: [label, try number, the rest], or null when it names no try. */
 export function tryParts(text: string): [label: string, n: number, body: string] | null {
@@ -328,12 +344,43 @@ const RESULT_KINDS = ['merged', 'done', 'failed', 'try-result', 'not-merged', 'a
 export function historyEvent(e: HistoryEntry): HistoryEvent {
   const kind: HistoryKind = isHistoryKind(e.kind) ? e.kind : 'other'
   const tone: HistoryTone = HISTORY_KINDS[kind]
-  const parts = tryParts(e.text)
+  const who = historyActor(e)
+  let parts = tryParts(e.text)
+  // a checker's line reads "checker <id>: found problems: ..." / "checker <id>: OK": its own words, with no try label
+  if (who === 'checker' && parts) parts = ['', parts[1], parts[2].replace(/^checker:? ?/, '')]
   const text = parts ? parts[2] : e.text
   const isResult = (RESULT_KINDS as readonly string[]).includes(kind)
   const result = parts && isResult && e.result && text.endsWith(` → ${e.result}`) ? e.result : ''
   return {
     kind, tone, mark: HISTORY_MARK[tone], at: e.at ?? '', try: parts ? parts[1] : 0, label: parts ? parts[0] : '', text,
     said: result ? text.slice(0, text.length - result.length - 3) : text, result,
+    who, agent: e.agent ?? '', by: who ? (e.agent ? `${who} ${e.agent}` : who) : '',
   }
+}
+
+/** The kinds written by the lead's or the owner's own words. */
+const LEAD_KINDS: readonly HistoryKind[] = ['note']
+const OWNER_KINDS: readonly HistoryKind[] = ['answer', 'rejected', 'approve-failed', 'run-now']
+
+/**
+ * T-1079: who wrote history entry `e`, from what was saved with it (`by`) or else its kind: the checker's lines are the
+ * checker's, a worker's start and hand-back and the result lines carrying its report are the worker's, a note is the
+ * lead's, the owner's answer and rejection are the owner's ("you"); symcc's own steps have no actor ('').
+ */
+export function historyActor(e: Pick<HistoryEntry, 'kind' | 'step' | 'result' | 'by'>): HistoryActor {
+  if (e.by) return e.by
+  const kind = e.kind as HistoryKind
+  if (kind === 'checker' || kind === 'checker-ok' || kind === 'checker-problems') return 'checker'
+  if (LEAD_KINDS.includes(kind)) return 'lead'
+  if (OWNER_KINDS.includes(kind)) return 'you'
+  if (kind === 'stage' && (e.step === 'worker-start' || e.step === 'handed-back')) return 'worker'
+  if (kind === 'answered') return 'worker'
+  if ((RESULT_KINDS as readonly string[]).includes(kind) && e.result) return 'worker'
+  return ''
+}
+
+/** T-1079: history entry `e` as one plain line: its time, who wrote it, then its words ("10:42  checker symcc-T-3-checker: found problems: ..."). */
+export function historyLineWords(e: HistoryEntry): string {
+  const v = historyEvent(e)
+  return `${v.by ? `${v.by}: ` : ''}${v.label ? `${v.label}: ` : ''}${v.text}`
 }

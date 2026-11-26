@@ -1,6 +1,6 @@
 // The task page's sections (T-580), as plain data: what the Claude Code terminal's task page shows under its title and
 // buttons, in its order and with its headings: ▍Why it failed, ▍Answer, ▍Details, ▍Branch (T-761), ▍Changes, ▍What to do, ▍History,
-// ▍Report and ▍Runs (time and cost, with a one-line sum). Each section is lines of colored pieces (Seg), some with what a press or click on
+// ▍Report, ▍Checker (T-1079, the checker's full report of the try) and ▍Runs (time and cost, with a one-line sum). Each section is lines of colored pieces (Seg), some with what a press or click on
 // them does (a changed file opens its diff). The terminal (hooks/claude/ui/task-page.tsx) and OpenCode's panel
 // (hooks/opencode/board-view.ts) draw them; VS Code's card (vscode-task.tsx) takes their contents but keeps its own
 // layout. Nothing here reads a file: the report texts and the changed files come in as facts.
@@ -10,7 +10,7 @@ import type { BoardTask } from './board-file'
 import { isAnswered } from './task'
 import { taskReports } from './reports'
 import { whyFailed, failNext, failAsks } from './failure'
-import { historyEvent, historyTime, HISTORY_COLOR } from './history'
+import { historyEvent, historyTime, HISTORY_COLOR, type HistoryEntry } from './history'
 import { agentLines, fmtRun, fmtTotal, runsSummary, sumRuns } from './runs'
 import { usualTokens } from './live'
 import { type DiffFile, YOUR_EDITS } from './review'
@@ -18,7 +18,7 @@ import { taskBranchLines, taskBranchTitle, type TaskBranchFacts } from './task-b
 import { cutTitle } from './width'
 
 /** The sections, in the page's order. */
-export type TaskSectionId = 'why' | 'answer' | 'details' | 'branch' | 'changes' | 'what' | 'history' | 'report' | 'runs'
+export type TaskSectionId = 'why' | 'answer' | 'details' | 'branch' | 'changes' | 'what' | 'history' | 'report' | 'checker' | 'runs'
 
 /** What a press on a line does: show a changed file's diff. */
 export type SectionAction = { diff: string }
@@ -120,6 +120,7 @@ export function historyLines(t: Pick<SymccTask, 'history'>, width: number, nowMs
     const at = historyTime(e.at, nowMs)
     const words: Seg[] = [
       ...(at ? [{ text: `${at} `, color: 'inactive' } as Seg] : []),
+      ...(e.by ? [{ text: `${e.by}: `, color: 'inactive' } as Seg] : []),
       ...(e.label ? [{ text: `${e.label}: `, color: 'text', bold: true } as Seg] : []),
       { text: e.said, color: e.tone === 'bad' && !e.result ? 'error' : 'inactive' },
       ...(e.result ? [{ text: ` → ${e.result}`, color: e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text' } as Seg] : []),
@@ -129,6 +130,15 @@ export function historyLines(t: Pick<SymccTask, 'history'>, width: number, nowMs
       ...(last ? [] : [{ segs: [{ text: '│', color: 'inactive' }], key: `history-${i}-line` }]),
     ]
   })
+}
+
+/**
+ * T-1079: the saved report of the latest checker of try `tryNo` of task `t`: its file, its agent name ('' on an old entry) and
+ * the verdict ('ok' or 'problems'); null when that try had no checker with a saved report.
+ */
+export function checkerReportOf(t: Pick<SymccTask, 'history'>, tryNo: number): { try: number; file: string; agent: string; ok: boolean } | null {
+  const e = (t.history as HistoryEntry[]).findLast(h => h.report && h.try === tryNo && (h.kind === 'checker-ok' || h.kind === 'checker-problems'))
+  return e?.report ? { try: tryNo, file: e.report, agent: e.agent ?? '', ok: e.kind === 'checker-ok' } : null
 }
 
 /** The task page's sections for task `t`, in order (see the top of this file). */
@@ -196,6 +206,22 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
         ...(body !== null ? indented(body.trimEnd(), 'text', width, 'report') : []),
       ],
       ...(reports.length > 1 ? { tries: reports.map((r, i) => ({ try: r.try, shown: i === at, ...(r.try <= 9 && !f.numberKeysTaken ? { key: String(r.try) } : {}) })) } : {}),
+    })
+  }
+  // T-1079: the checker's full report of the try the Report shows (its own section: who said what); none when that try had no checker
+  const checkerTry = checkerReportOf(t, shown?.try ?? t.attempts)
+  if (checkerTry) {
+    const body = textOf(f, checkerTry.file)
+    const read = f.texts?.[checkerTry.file] !== undefined
+    out.push({
+      id: 'checker',
+      title: `Checker (try ${checkerTry.try})${checkerTry.agent ? ` · ${checkerTry.agent}` : ''}`,
+      lines: [
+        plainLine(['  ', checkerTry.file], 'inactive'),
+        ...(!read ? [plainLine('  (reading the report…)', 'inactive')] : []),
+        ...(read && body === null ? [plainLine('  Could not read the checker report file.', 'error')] : []),
+        ...(body !== null ? indented(body.trimEnd(), 'text', width, 'checker') : []),
+      ],
     })
   }
   const summary = t.runs?.length ? runsSummary(t.runs, f.nowMs, usualTokens(f.detail.all)) : ''

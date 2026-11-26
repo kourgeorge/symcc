@@ -5,6 +5,7 @@ import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
 import { notProse } from '../hooks/core/checker'
+import { historyEvent, historyLineWords, workerStartedEntry, withHistory, noteAddedLine } from '../hooks/core/history'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped, adoptedCheckers } from '../hooks/app/state'
 import { pump, workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
 import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
@@ -1857,4 +1858,66 @@ test('T-1072: a doing task whose worker belongs to another session (not in worke
     await expect(runTool(w.$, 'change', { task: 'T-1', stage })).rejects.toThrow('worker is still running')
     expect(w.calls.slice(before).some(c => /git (add|commit|reset|clean)/.test(c))).toBe(false)
   }
+})
+
+// ---------------- T-1079: who said what on the task page ----------------
+
+/** The checker's full report with a "Problems:" list, as the checker prompt asks for it. */
+const PROBLEMS_REPORT = 'I checked T-1 by importing /tmp/probe.ts and running it from /tmp with an empty input.\n\nProblems:\n- src/a.ts:12 doIt("") throws instead of returning ""\n- the docs name no example'
+
+test('T-1079: a worker hand-back line is the worker\'s alone, and the checker\'s send-back is its own single line with its first problem', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => checkerFinished(id, PROBLEMS_REPORT))
+  const events = t.history.map(h => historyEvent(h))
+  // (a) the worker's result line: "worker symcc-T-1", its report, "→ the checker found problems", none of the checker's words
+  const worker = events.filter(e => e.who === 'worker' && e.result)
+  expect(worker.length).toBe(1)
+  expect(worker[0]!.by).toBe('worker symcc-T-1')
+  expect(worker[0]!.said).toBe('made the change')
+  expect(worker[0]!.result).toBe('the checker found problems')
+  expect(historyLineWords(t.history.find(h => h.result)!)).toBe('worker symcc-T-1: try 1: made the change → the checker found problems')
+  expect(t.history.filter(h => h.result).every(h => !h.text.includes('doIt'))).toBe(true)
+  // (b) the checker's verdict: one line, its first problem (not the report's first sentence), with its agent name
+  const lines = t.history.filter(h => h.kind === 'checker-problems')
+  expect(lines.length).toBe(1)
+  expect(historyLineWords(lines[0]!)).toBe('checker symcc-T-1-checker: found problems: src/a.ts:12 doIt("") throws instead of returning ""')
+  expect(historyLineWords(lines[0]!)).not.toContain('I checked')
+  // (c) no second line for the same verdict
+  expect(t.history.filter(h => h.text.includes('found problems')).length).toBe(2) // the checker's line and the worker's outcome only
+  expect(t.history.filter(h => h.text.includes('src/a.ts:12')).length).toBe(1)
+  // the full report is saved, and the verdict line names the file
+  expect((lines[0] as { report?: string }).report).toBe('.symcc/reports/T-1-try-1-checker.md')
+  expect(await w.$.fs.read(`${ROOT}/.symcc/reports/T-1-try-1-checker.md`)).toContain('I checked T-1 by importing')
+})
+
+test('T-1079: a checker OK is "checker symcc-T-1-checker: OK"; an old entry with no saved agent shows "checker:" with no id', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => checkerFinished(id, 'Everything held.\nOK'))
+  const ok = t.history.find(h => h.kind === 'checker-ok')!
+  expect(historyLineWords(ok)).toBe('checker symcc-T-1-checker: OK')
+  const { agent: _gone, ...old } = ok as typeof ok & { agent?: string }
+  expect(historyLineWords(old)).toBe('checker: OK')
+  expect(historyEvent(old)).toMatchObject({ who: 'checker', agent: '', by: 'checker' })
+})
+
+test('T-1079: one try read top to bottom: each history line has one actor, in order (worker, checker, worker, lead, worker again)', async () => {
+  const w = world()
+  const start = patchTask(boardWith(true), 'T-1', { history: withHistory([], ISO, workerStartedEntry({ role: 'general', attempts: 1, history: [] }, false, 'symcc-T-1')) }, ISO)
+  await saveBoard(w.$, start)
+  const t = await finish(w, async id => checkerFinished(id, PROBLEMS_REPORT))
+  // the lead adds a note, and the next try's worker starts
+  const next = { ...t, attempts: 2, history: withHistory(t.history, ISO, ['note', noteAddedLine('use the other fix')], workerStartedEntry({ role: 'general', attempts: 2, history: t.history }, false, 'symcc-T-1')) }
+  const story = next.history.map(h => historyEvent(h)).filter(e => e.by).map(e => `${e.by}: ${e.said}${e.result ? ` → ${e.result}` : ''}`)
+  expect(story).toEqual([
+    'worker symcc-T-1: worker started (role general)',
+    'worker symcc-T-1: worker handed back',
+    'checker symcc-T-1-checker: found problems: src/a.ts:12 doIt("") throws instead of returning ""',
+    'worker symcc-T-1: made the change → the checker found problems',
+    'lead: the lead added a note: “use the other fix”',
+    'worker symcc-T-1: worker started (role general)',
+  ])
+  // symcc's own steps (prep, checker started, ...) have no actor, and no line mixes two
+  expect(next.history.map(h => historyEvent(h)).filter(e => !e.by).every(e => e.who === '')).toBe(true)
 })

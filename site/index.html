@@ -120,8 +120,9 @@
       <details class="card">
         <summary><span class="icon">↺</span><b>A checker</b><span>A second agent tries to break each change.</span></summary>
         <p>Before the tests run, the checker reads the change and the task. If it finds problems, the task goes back to a worker with the checker's words, and a new try starts. You see each try on the task page.</p>
-        <pre>try 1 → the checker found problems
-try 2: worker started</pre>
+        <pre>worker symcc-T-3: try 1: made the change → the checker found problems
+checker symcc-T-3-checker: found problems: the empty input still throws
+worker symcc-T-3: try 2: worker started</pre>
       </details>
       <details class="card">
         <summary><span class="icon">✓</span><b>A merge queue</b><span>The code that was tested is the code that merges.</span></summary>

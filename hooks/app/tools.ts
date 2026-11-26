@@ -1,6 +1,7 @@
 import type { SymccTask } from '../../types'
 import { isFinished, priorityError, makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, filesAllowedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, PROSE_ROLE_TEXT, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
 import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
+import { checkerReportOf } from '../core/task-sections'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
@@ -34,14 +35,20 @@ const sameJson = (x: unknown, y: unknown): boolean => JSON.stringify(x) === JSON
 const ADD_AGAIN_MS = 5 * 60_000
 
 /** The latest saved report of task `t` (see taskReports): its file and text; text null when the file can't be read. Null when there is none. */
-export async function latestReport($: Host, t: SymccTask): Promise<{ file: string; try: number; text: string | null } | null> {
+export async function latestReport($: Host, t: SymccTask): Promise<ReportRead | null> {
   const r = taskReports(t).at(-1)
   if (!r) return null
-  return { ...r, text: await $.fs.read(path(r.file)).then(x => String(x), () => null) }
+  const read = (file: string) => $.fs.read(path(file)).then(x => String(x), () => null)
+  // T-1079: the checker's saved report of that try comes with it (its own section in taskText)
+  const c = checkerReportOf(t, r.try)
+  return { ...r, text: await read(r.file), ...(c ? { checker: { file: c.file, agent: c.agent, text: await read(c.file) } } : {}) }
 }
 
+/** A saved report read from its file (text null when it can't be read), with the try's checker report when it had one (T-1079). */
+export type ReportRead = { file: string; try: number; text: string | null; checker?: { file: string; agent: string; text: string | null } }
+
 /** Task `t` as text for /<name>-task; `report` is its latest saved report (latestReport), shown last. */
-export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: { file: string; try: number; text: string | null } | null, archivedDone: string[] = []): string {
+export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: ReportRead | null, archivedDone: string[] = []): string {
   const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
   L.push(fromText(t, 120))
@@ -69,6 +76,7 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   if (t.research_notes?.length) L.push('', ...t.research_notes.map(f => `Research: ${f}`))
   if (report === null && t.attempts > 0) L.push('', 'Report: no saved report')
   if (report) L.push('', `Report (try ${report.try}, ${report.file}):`, ...(report.text === null ? ['  (could not read the file)'] : reportPreview(report.text, report.file).map(l => (l ? `  ${l}` : ''))))
+  if (report?.checker) L.push('', `Checker (try ${report.try}${report.checker.agent ? ` · ${report.checker.agent}` : ''}, ${report.checker.file}):`, ...(report.checker.text === null ? ['  (could not read the file)'] : reportPreview(report.checker.text, report.checker.file).map(l => (l ? `  ${l}` : ''))))
   const older = taskReports(t).filter(r => r.try !== report?.try)
   if (report && older.length) L.push('', 'Older tries\' reports:', ...older.map(r => `  try ${r.try}: ${r.file}`))
   if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')

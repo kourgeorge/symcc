@@ -411,15 +411,16 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -428,23 +429,24 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -1184,15 +1186,16 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -1201,23 +1204,24 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -1977,15 +1981,16 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -1994,23 +1999,24 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -2682,15 +2688,16 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -2699,23 +2706,24 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -3192,15 +3200,16 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -3209,23 +3218,24 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -4824,15 +4834,16 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -4841,23 +4852,24 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -5502,15 +5514,16 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -5519,23 +5532,24 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -6409,15 +6423,16 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -6426,23 +6441,24 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -7154,15 +7170,16 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -7171,23 +7188,24 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
