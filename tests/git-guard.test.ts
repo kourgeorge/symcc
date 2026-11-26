@@ -94,6 +94,10 @@ test('T-1062: the git text is read whole: git inside quotes, after a wrapper, or
     ['git rebase --exec="git branch -f main HEAD" HEAD~1', 'git rebase --exec'],
     // a branch is a file in git's own folder: writing it there by a built path would move it
     ['echo abc > "$(git rev-parse --git-common-dir)/refs/heads/main"', "git's own folder"],
+    // a backslash at a line's end joins the next line: the shell runs `git push`
+    ['git \\\npush origin main', 'git push'],
+    ['git commit -m x && git\\\n push', 'git push'],
+    ['gi\\\nt push', 'git push'],
   ] as const)
     expect([c, gitWriteIn(c, 'worker')]).toEqual([c, what])
   // file names with git in them are no git call; a pipe or redirection ends git's words
@@ -113,7 +117,7 @@ test("T-1062: a worker's git writes run only in its own folder or /tmp", () => {
   expect(gitPlaceOk('cd /Users/o/other && git commit -m x', WT, places)).toBe(false)
   expect(gitPlaceOk('git commit -m x', '/Users/o/other', places)).toBe(false)
   expect(gitPlaceOk('git commit -m x', undefined, places)).toBe(false)
-  for (const c of ['cd && git commit', 'cd - && git commit', 'cd ~ && git commit', 'cd $X && git commit', 'popd; git commit', 'pushd /x; git commit', 'true | chdir /x; git commit']) expect([c, gitPlaceOk(c, WT, places)]).toEqual([c, false])
+  for (const c of ['cd \\\n/x && git commit', 'cd && git commit', 'cd - && git commit', 'cd ~ && git commit', 'cd $X && git commit', 'popd; git commit', 'pushd /x; git commit', 'true | chdir /x; git commit']) expect([c, gitPlaceOk(c, WT, places)]).toEqual([c, false])
   expect(shellCwd('/x')).toBe('/x')
   expect(shellCwd('x')).toBe(undefined)
   expect(shellCwd(undefined)).toBe(undefined)
@@ -132,6 +136,11 @@ test("T-1062: the shell path rule refuses the owner's folder in the text (any na
   // zsh runs a pipe's last command in the main shell, so `true | cd /owner; rm x` really moves: the path is in the text
   expect(no(`true | cd ${ROOT}; rm x`)).toBe('')
   expect(no(`true | chdir ${ROOT}; rm x`)).toBe('')
+  // the same folder with extra `//`, `/./` or a line join in its path
+  expect(no('cat /Users/o//repo/README.md')).toBe('README.md')
+  expect(no('cd /Users/o/./repo && rm README.md')).toBe('')
+  expect(no('cat /Users/o/.//./repo/./a')).toBe('a')
+  expect(no('cat /Users/o/re\\\npo/a')).toBe('a')
   // '..' anywhere: "use full paths"
   for (const c of ['cd .. && ls', 'cat ../x', 'cat a/../../b', 'echo x > ../../README.md', 'make --prefix=../src', `bun -e "import('../x')"`, `cd ${WT}/src && cat ../a`]) expect([c, no(c)]).toEqual([c, BASH_DOTDOT])
   // a cd above the project, from where a relative path reaches it

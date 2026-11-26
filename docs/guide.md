@@ -1243,8 +1243,8 @@ words as bold headings with the same spacing):
 ─── ❯ TASKS ────────────────────────────────────────────────
 
                        work✧    check✧   queue    tests    done
- ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2
-   try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9×median) · worker 812.4k · checker 287.6k · ⌕ × 1  change
+ ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2  change
+   try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9×median) · worker 812.4k · checker 287.6k · ⌕ × 1
 ```
 
 - `NEEDS YOU` is the first section, shown only while something waits for you, and hidden (no
@@ -1278,14 +1278,14 @@ words as bold headings with the same spacing):
   and Tests rows; Organizational memory is one line with an `All notes` link. When nothing runs: `All done`, `Up next
   from the backlog`, and one primary `Tell the lead` button. On a narrow panel the train and header shrink together.
 - The second row has no bar, only numbers about this task:
-  `try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6×median) · worker 5.4M · checker 1.9M · ⌕ × 2` and, at the right end of the row, `bug`. That is
+  `try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6×median) · worker 5.4M · checker 1.9M · ⌕ × 2`. That is
   the try (`try 2/3`, auto retries after failing tests included), the task's working
   time so far (all tries; time when Claude Code was closed is left out), the whole task's tokens
   (every try so far), how many times the board's median tokens per merged task that is (yellow
   from twice the median), how its tokens split between its workers and checkers, as
   `worker 5.4M · checker 1.9M` (a part that is 0 is left out, and nothing shows when there is nothing to split), and
   `⌕ × N` for how many times the checker sent the task back (`⌕` is the checker's mark; on a task row, `↺` with a number is the try). On a narrow panel the parts go in this order: first the
-  split, then `(×median)`, then `⌀`, and the clock `⏱` last; the try stays. The task type (dim) is at the right end of the row, lined up under the time on the first row; when the row is too narrow for both, the type is dropped, never wrapped. A
+  split, then `(×median)`, then `⌀`, and the clock `⏱` last; the try stays. The task type (dim) ends the first row, after the time or place (waiting child rows end with it too); the title gives way to it first, and on a panel too narrow for the type it is dropped, never wrapped. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.
 - **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend at the bottom of the Live tab, below the footer, says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `avg` marks an average (`avg ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
@@ -1297,22 +1297,22 @@ words as bold headings with the same spacing):
   failed or dropped tasks don't. Enter (or a click) on a finished lane opens its task page.
 
   ```
-   ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○      2m
-     try 1/3 · ⏱ 2m · ⌀ at hand-back                            change
-   ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
-     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M  change
+   ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○      2m  change
+     try 1/3 · ⏱ 2m · ⌀ at hand-back
+   ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago  change
+     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
-  then `waits`. The waiting train's id is in the accent color (orange) and the rest of the row
+  then `waits` and its task type (dim). The waiting train's id is in the accent color (orange) and the rest of the row
   is dim gray. Topic labels in the organizational memory rows and topic grid are blue:
 
   ```
-   ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
-     try 1/3 · ⏱ 2m · ⌀ at hand-back               bug
-     └─◇ T-713 Task files: no si…  waits
-        └─◇ T-714 Help: /symcc-h…  waits
-     └─◇ T-716 Live deps…  waits  + also T-690
+   ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m  bug
+     try 1/3 · ⏱ 2m · ⌀ at hand-back
+     └─◇ T-713 Task files: no …  waits  change
+        └─◇ T-714 Help: /symcc-he…  waits  docs
+     └─◇ T-716 Live deps…  waits  + also T-690  feature
   ```
 
   A task that waits only for another todo task hangs under that task's train, one step further in
@@ -2761,7 +2761,7 @@ bun hosts/node/main.ts --root <project> board
 bun hosts/node/main.ts --root <project> cmd symcc-mode review    # any slash command
 ```
 
-What the lead would be told is printed after each answer, under `[lead]`. A worker's file list is handed to `claude -p` as its own permission rules (`--permission-mode dontAsk`, with `Edit(...)` and `Write(...)` rules for the task's files, and git writes denied). There is no symcc hook guard there, so those rules are the only check on git, and they are stricter than in Claude Code: a worker or checker may not change git at all, not even in a scratch repository under `.scratch/` or `/tmp`. Claude Code's rules match the start of a command, not the folder it acts on, so every git call that starts with an option (`git -C <dir> ...`, `git --git-dir=...`, `git -c ...`) is refused, as are `commit`, `merge`, `init`, `reset`, `checkout`, `branch`, `push`, `stash`, `add`, `config` and the other writing subcommands, and `env git`, `xargs git` and the like. Reading with git (`status`, `diff`, `log`, `show`, `blame`, `grep`) still works. A command that hides git inside another program (`sh -c "git commit"`, a script) is not caught by these rules. The scope check at merge time still stands behind it. A `claude -p` worker has no `ask_owner` tool, and it can't be sent messages while it runs: to stop it, its process is ended. Every running worker, scout or checker process is written to `.symcc/processes.json` (its pid, task, folder and start time) and removed when it ends; on a fresh start symcc stops the ones an earlier run left alive and clears the rest.
+What the lead would be told is printed after each answer, under `[lead]`. A worker's file list is handed to `claude -p` as its own permission rules (`--permission-mode dontAsk`, with `Edit(...)` and `Write(...)` rules for the task's files, and git writes denied). There is no symcc hook guard there, so those rules are the only check on git. They come from the same deny list as the hook guard (`hooks/core/git-guard.ts`): a worker may commit, merge, cherry-pick, revert, restore, reset, add, rm, bisect and rebase its own branch, while push, fetch, pull, remote, tag, config, stash, worktree, update-ref, symbolic-ref, branch, switch, `rebase -x`/`--exec`/`--update-refs`, `bisect run` and `--autostash` are refused; a checker or scout may not change git at all. Claude Code's rules match the start of a command, not the folder it acts on, so every git call that starts with an option (`git -C <dir> ...`, `git --git-dir=...`, `git -c ...`) is refused, as are `env git`, `xargs git` and the like, `git checkout` as a whole (use `git restore <file>`) and a rebase with more than one word. Reading with git (`status`, `diff`, `log`, `show`, `blame`, `grep`) still works. A command that hides git inside another program (`sh -c "git push"`, a script) is not caught by these rules. The scope check at merge time still stands behind it. A `claude -p` worker has no `ask_owner` tool, and it can't be sent messages while it runs: to stop it, its process is ended. Every running worker, scout or checker process is written to `.symcc/processes.json` (its pid, task, folder and start time) and removed when it ends; on a fresh start symcc stops the ones an earlier run left alive and clears the rest.
 
 ---
 

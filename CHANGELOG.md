@@ -2,6 +2,18 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.43 (2026-11-26)
+
+### Added
+- Workers may change git in their own folder and on their own branch: commit, merge, cherry-pick, restore, reset and rebase of their own branch. Push, fetch, pull, other branches, worktree, config, tags and stash stay refused. At merge, symcc checks the files of every commit of a try, cancels a merge left stuck on a conflict, and commits one the worker resolved.
+- Roles and Task types pages: a [Settings] Back button at the top.
+- Live tab: each task row and waiting row ends with its task type, in a dim color; the type takes only spare title room.
+
+### Changed
+- After a plugin restart, a checker that is still running is kept and its verdict used, instead of being stopped and started again.
+- A board update that only carries the health check opens with "[symcc health check]"; fewer false "pushed back" warnings.
+- Faster board changes: fewer git and mkdir runs per change.
+
 ## 0.5.42 (2026-11-25)
 
 ### Added

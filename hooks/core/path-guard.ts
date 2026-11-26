@@ -138,6 +138,9 @@ export const BASH_ABOVE = '\u0000above'
 /** Characters that end a path in a command's text. */
 const PATH_END = String.raw`\s;&|<>(){}=:,\``
 
+/** Shell text `s` with each backslash at a line's end joined to the next line, as the shell does. */
+export const joinLines = (s: string) => s.replace(/\\\r?\n/g, '')
+
 /** `s` with its regular expression characters escaped. */
 const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
@@ -155,7 +158,8 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
   const tops = folderList(root).filter(t => t !== '/')
   if (typeof command !== 'string' || !wts.length || !tops.length) return undefined
   if (/(?:^|[\s/'"=:(])\.\.(?=$|[\s/'"`;&|)])/.test(command)) return BASH_DOTDOT
-  const flat = command.replace(/\\\n/g, '').replace(/["'\\]/g, '')
+  // `a//b` and `a/./b` name the same place as `a/b`
+  const flat = joinLines(command).replace(/["'\\]/g, '').replace(/\/(?:\.?\/)+/g, '/')
   const h = home?.startsWith('/') ? resolvePath('/', home) : undefined
   // a cd to a folder above the project (`cd /`, or home by `cd` or `cd ~`), from where a relative path reaches it
   for (const m of flat.matchAll(/(?<![\w.-])(?:cd|chdir|pushd)(?=$|[\s;&|)])[^\S\n]*([^\s;&|()]*)/g)) {

@@ -1361,7 +1361,7 @@ test('each slash command is added and runs symcc\'s runCommand: a typed one (TUI
     expect(status.endsWith(ownerAnswerText('symcc-status', '').trimStart())).toBe(true)
     expect(statusHeadings(status).filter(h => h !== 'BRANCHES')).toEqual(['NEEDS YOU', 'TASKS', 'TODAY', 'ORGANIZATIONAL MEMORY'])
     expect(statusSection(status, 'TASKS').some(l => l.startsWith(' ▶ T-2') && l.endsWith('↺2'))).toBe(true)
-    expect(statusSection(status, 'TASKS').includes('   └─◇ T-4 Write the export  waits')).toBe(true)
+    expect(statusSection(status, 'TASKS').some(l => /^   └─◇ T-4 Write the export  waits  \w+$/.test(l))).toBe(true)
     // T-938: TODAY's first row is "Now:" the mode line (this board is paused), then the figures
     expect(statusSection(status, 'TODAY')[0]).toBe(' Now: ⏸ paused · agents 0/3 busy')
     expect(statusSection(status, 'TODAY')[1]!.split('Σ')[0]).toBe(statusTodayLines(statusBoard(t902), t902)[1]!.split('Σ')[0])

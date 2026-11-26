@@ -74,12 +74,12 @@ const evidence = async (w: ReturnType<typeof world>) => {
 test('a refused git command adds one "refused" event: who, the guard, a short cleaned reason and the command head, never the full command', async () => {
   const w = world()
   await withWorker(w)
-  const command = `git tag -m "token=${SECRET} and more words that should never be logged" v1`
-  expect(await checkEdit(w.host, 'w1', { command }, WT)).toBe(workerGitWriteText('git tag'))
+  const command = `git push origin main -o "token=${SECRET} and more words that should never be logged"`
+  expect(await checkEdit(w.host, 'w1', { command }, WT)).toBe(workerGitWriteText('git push'))
   const got = await evidence(w)
   expect(got.length).toBe(1)
   const e = got[0] as Extract<EvidenceEvent, { kind: 'refused' }>
-  expect([e.kind, e.task, e.try, e.role, e.guard, e.what]).toEqual(['refused', 'T-1', 2, 'worker', 'git', 'git tag'])
+  expect([e.kind, e.task, e.try, e.role, e.guard, e.what]).toEqual(['refused', 'T-1', 2, 'worker', 'git', 'git push'])
   expect(e.reason.length <= REASON_MAX).toBe(true)
   expect(e.reason.startsWith('Refused')).toBe(false)
   const line = w.files.get(LOG)!

@@ -2,7 +2,7 @@
 // guard (gitWriteIn, gitPlaceOk) and by the Node host's Claude Code rules (gitDeniedRules). It stops honest
 // mistakes; a script that builds its git command at run time still gets through (the merge-time scope check over
 // every commit of a try is the backstop for files, T-1053).
-import { folderList, insideAny, resolvePath, type Folders } from './path-guard'
+import { folderList, insideAny, joinLines, resolvePath, type Folders } from './path-guard'
 
 /** git commands that write a commit, a ref, the index, the config, the stash, the files, or a repository. Scouts and checkers may run none. */
 const GIT_WRITES = new Set([
@@ -77,8 +77,10 @@ const GIT_AT = /(?<![\w.-])git(?:-([a-z][\w-]*))?(?=$|[\s'"`;&|()<>\\])/gi
  * git's own folder (--git-dir, --git-common-dir...), any git option before the command but GIT_OPTION_OK. 'reader' (a scout, a checker, an investigation): every command in GIT_WRITES
  * (`git branch` only listing is fine). 'worker': GIT_WRITES but WORKER_GIT, within WORKER_LIMITS.
  */
-export function gitWriteIn(command: unknown, who: 'reader' | 'worker' = 'reader'): string | undefined {
-  if (typeof command !== 'string') return undefined
+export function gitWriteIn(text: unknown, who: 'reader' | 'worker' = 'reader'): string | undefined {
+  if (typeof text !== 'string') return undefined
+  // the shell joins a backslash at a line's end with the next line (`git \` + newline + `push` runs `git push`)
+  const command = joinLines(text)
   if (/(?<![\w])GIT_\w*=/.test(command)) return 'a GIT_ setting'
   if (/core\.hookspath/i.test(command)) return 'core.hooksPath'
   // git's own folder holds every branch as a file (`--output=$(git rev-parse --git-common-dir)/refs/heads/main`)
@@ -108,7 +110,7 @@ export function gitWriteIn(command: unknown, who: 'reader' | 'worker' = 'reader'
 export function gitPlaceOk(command: string, cwd: string | undefined, places: Folders): boolean {
   const list = folderList(places)
   const ok = (p: string) => p.startsWith('/') && insideAny(resolvePath('/', p), list, false) !== undefined
-  const flat = command.replace(/["'\\]/g, '')
+  const flat = joinLines(command).replace(/["'\\]/g, '')
   for (const m of flat.matchAll(/(?<![\w.-])(?:cd|chdir|pushd|popd)(?=$|[\s;&|)])[^\S\n]*([^\s;&|()]*)/g)) {
     const to = m[1]!
     if (!(to.startsWith('/') ? ok(to) : /^(?!-)[\w@%+,.-][\w./@%+,-]*$/.test(to) && !to.split('/').includes('..'))) return false
