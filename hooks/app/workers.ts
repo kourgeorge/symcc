@@ -1146,7 +1146,7 @@ export async function checkAgain(host: Host, t0: BoardTask, moved = false) {
     if (!go) await endFinishing(host, id, tryNo)
   }
   const { b, t, dir } = go
-  await finishUnderLimit(host, id, tryNo, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, true, gaveUp, over, limit))
+  await finishUnderLimit(host, id, tryNo, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, true, gaveUp, over, limit, moved))
 }
 
 /**
@@ -1171,11 +1171,12 @@ async function folderGone(host: Host, t0: BoardTask, note: string, tell: string)
  * hand-back: prep, the checker, and on its OK the merge line. Without it (its test and merge was cut off, see mergeAgain)
  * a checker runs first only when the checker setting is on and this try has no checker OK yet.
  */
-async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string, fromChecker: boolean, gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit) {
+async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string, fromChecker: boolean, gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit, moved = false) {
   const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
   const made: string[] = []
   const why = fromChecker ? stop() : undefined
-  if (fromChecker && !why && !adoptedCheckers.has(t.id)) await cleanFolder(host, dir)
+  // a move by the lead (moved) keeps uncommitted edits: the prep step commits them, so they are checked
+  if (fromChecker && !moved && !why && !adoptedCheckers.has(t.id)) await cleanFolder(host, dir)
   // T-1068: a checker that kept running over the reload is only waited for (no prep, no folder clean: its try's prep ran before);
   // its verdict then goes on as a fresh checker's would, through the merge line's prep
   const adoptedWas = fromChecker && !why && adoptedCheckers.has(t.id)

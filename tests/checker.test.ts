@@ -48,7 +48,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   // tree: what `rev-parse <commit>^{tree}` gives (T-526); empty: git can't tell, so no passed tree is recorded
   // moves: each commit main was moved to, in order
   // slowStatus: `git status` waits this many promise turns before it answers, as a real git takes a moment (T-740)
-  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '', moves: [] as string[], slowStatus: 0 }
+  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '', moves: [] as string[], slowStatus: 0, edits: false }
   // the project's test commands (T-565): fails makes each one exit 1 with output; hold: a run in folder `cwd` waits for `until`
   const tests = { fails: false, output: '(fail) src/a.test.ts > doIt handles empty input\n 0 pass\n 1 fail', hold: null as { cwd: string; until: Promise<void> } | null }
   const files = new Map<string, string>()
@@ -56,6 +56,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   function runGit(a0: string[]): Res {
     const a = a0.filter((x, i) => x !== '-c' && a0[i - 1] !== '-c')
     const s = a.join(' ')
+    if (a[0] === 'status' && git.edits && git.dirty) return ok(' M src/owner-fix.ts')
     if (a[0] === 'commit') {
       if (!git.dirty) return fail('nothing to commit')
       git.dirty = false
@@ -1713,6 +1714,19 @@ test('T-1072: stage review then approve runs the tests; stage check tells the le
   await until(() => checkerRuns.size > 0)
   expect(leadQueue.some(m => String(m).includes('plugin reloaded'))).toBe(false)
   await runTool(w2.$, 'drop', { task: 'T-1' })
+})
+
+test('T-1072: a move to check from review keeps and commits the owner\'s uncommitted edits (no reset, no clean)', async () => {
+  const w = world()
+  inRepo(w)
+  w.git.edits = true
+  await saveBoard(w.$, boardWith(false, { status: 'review', note: 'x', test_output: 'tests failed' }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'check' })
+  await until(() => checkerRuns.size > 0)
+  expect(w.calls.some(c => /git (reset|clean)/.test(c))).toBe(false)
+  expect(w.calls.some(c => c.includes('git add -A -- .'))).toBe(true)
+  expect(w.calls.some(c => /commit/.test(c))).toBe(true)
+  await runTool(w.$, 'drop', { task: 'T-1' })
 })
 
 test('T-1072: while a worker runs, a move to check, tests or review is refused with no git write; work is allowed', async () => {
