@@ -5,7 +5,7 @@
 //   host.ts; for Claude Code, its Edit, Write and NotebookEdit, and Bash: claude/tools.ts), so no tool name is read here.
 // Both are written to the task's current try on the board at once (live.ask, live.refused), so a plugin reload
 // before the hand-back doesn't lose them; finishWork (workers.ts) decides from the board.
-import { type Board, type BoardTask, type Live, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, makeAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, bashTooManyText, BASH_TOO_MANY, gitWriteIn, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, workerGitAllow, scratchGitAllow, scratchTemps, eitherAllow, type GitAllow, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
+import { type Board, type BoardTask, type Live, ASK_TOOL, ASK_SCHEMA, ASK_SENT, OPTIONS_MIN, OPTIONS_MAX, parseAsk, makeAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, BASH_DOTDOT, BASH_ABOVE, gitWriteIn, gitPlaceOk, gitWriteText, workerGitWriteText, scoutGitWriteText, editInProject, scoutEditText, editTarget, find, isInvestigation, patchTask, realPathOf, brokenLinkText, guardReason, guardFailedText, type PathLookup } from '../board'
 import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isOwnAgent, boardAgents, rememberOnBoard, movedAgents, movedRefused, DRIVING_MOVED } from './state'
 import { drivenElsewhere } from './lead'
 import type { FileTouch, Host } from '../host'
@@ -104,74 +104,16 @@ async function realEdit($: Host, path: string, worktree: string, root: string): 
 }
 
 /**
- * Why worker shell `command` is refused for naming a path in the project `root` outside its own folder `worktree`
- * (bashOutsideFolder, with both folders by both their names), or for naming a path elsewhere that a symbolic link
- * leads into the project, in its own folder or elsewhere (each looked up on disk, see bashPathsToCheck), or for
- * having too many paths or folder changes to check (T-436). Undefined: allowed.
+ * Why worker shell `command` is refused for naming the project `root` outside its own folder `worktree`, or for a
+ * `..` path piece (bashOutsideFolder, both folders by both their names: as written and where links lead). Undefined: allowed.
  */
-async function bashOutside($: Host, command: string, worktree: string, root: string, cwd?: string): Promise<Refusal | undefined> {
+async function bashOutside($: Host, command: string, worktree: string, root: string): Promise<Refusal | undefined> {
   if (!root) return undefined
-  const home = S.home || undefined
   const look = diskLook($)
   const [wts, tops] = await Promise.all([bothNames(look, worktree), bothNames(look, root)])
-  const rel = bashOutsideFolder(command, wts, tops, home, cwd)
-  if (rel !== undefined) return { text: bashOutsideText(rel, worktree), guard: rel === BASH_TOO_MANY ? 'too-many' : 'path', ...(rel === BASH_TOO_MANY ? {} : { what: rel }) }
-  const { paths, tooMany } = bashPathsToCheck(command, wts, home, cwd, tops)
-  if (tooMany) return { text: bashTooManyText(worktree), guard: 'too-many' }
-  // only where links lead matters here (a link that leads nowhere is no way into the project), so no folder is listed
-  const bashLook: PathLookup = { real: look.real, isLink: async () => false }
-  const linky = linkFinder($, wts)
-  const reals = await Promise.all(
-    paths.map(async abs => ((await linky(abs).catch(() => true)) ? realPathOf('/', abs, bashLook).catch(() => undefined) : abs)),
-  )
-  for (const [i, real] of reals.entries()) {
-    // a path that can't be looked up is judged as written
-    const via = editOutsideFolder(real || paths[i]!, wts, tops)
-    if (via !== undefined) return { text: bashOutsideText(via, worktree), guard: 'path', what: via }
-  }
-  return undefined
-}
-
-/**
- * Whether clean absolute path `abs` may go through a symbolic link, so it is worth looking up where it leads (T-436):
- * from the worker's folder (any of its names `wts`, when `abs` is inside it) or else from "/", each piece is found in
- * its folder's list (each folder listed once per command, letter case ignored, as on macOS); a link piece answers
- * true, a missing one false (nothing under it exists), a folder that can't be listed true. So a long command naming many plain files costs one listing
- * per folder, not a lookup per path.
- */
-function linkFinder($: Host, wts: readonly string[]): (abs: string) => Promise<boolean> {
-  const lists = new Map<string, Promise<Map<string, boolean> | null>>()
-  const listOf = (dir: string) => {
-    let got = lists.get(dir)
-    if (!got) {
-      got = Promise.resolve()
-        .then(() => $.fs.list(dir))
-        .then(
-          es => {
-            const m = new Map<string, boolean>()
-            for (const e of es) m.set(e.name.toLowerCase(), (m.get(e.name.toLowerCase()) ?? false) || e.isLink)
-            return m
-          },
-          () => null,
-        )
-      lists.set(dir, got)
-    }
-    return got
-  }
-  return async abs => {
-    const from = wts.filter(w => w.startsWith('/') && abs.startsWith(`${w}/`)).sort((a, b) => b.length - a.length)[0] ?? '/'
-    let dir = from
-    for (const part of abs.slice(from.length).split('/').filter(Boolean)) {
-      const m = await listOf(dir)
-      // a folder that can't be listed: looked up the slow way
-      if (!m) return true
-      const isLink = m.get(part.toLowerCase())
-      if (isLink === undefined) return false
-      if (isLink) return true
-      dir = dir === '/' ? `/${part}` : `${dir}/${part}`
-    }
-    return false
-  }
+  const rel = bashOutsideFolder(command, wts, tops, S.home || undefined)
+  if (rel === undefined) return undefined
+  return { text: bashOutsideText(rel, worktree), guard: 'path', ...(rel === BASH_DOTDOT || rel === BASH_ABOVE ? {} : { what: rel }) }
 }
 
 /**
@@ -181,11 +123,11 @@ function linkFinder($: Host, wts: readonly string[]): (abs: string) => Promise<b
  * file request (the worker should edit its own copy).
  * On a change task, an edit in its folder outside the task's files is refused (the reason the worker reads) and its path
  * recorded on its try on the board. Undefined: not ours to decide. An investigation
- * has no file list, so its edits are never refused (they are not kept anyway). A worker's shell command that names a path
- * in the project outside its own folder is refused too (bashOutsideFolder), and so is one that writes with git
- * (workerGitWrite), as for a checker; files written through the shell inside its folder are only caught by the
- * merge-time scope check. `cwd` is the folder the worker's shell is in (a shell tool may
- * keep it between calls); relative paths start there when it is inside the worker's folder. An agent symcc has no record
+ * has no file list, so its edits are never refused (they are not kept anyway). A worker's shell command whose text names
+ * the project outside its own folder, or has a `..` path piece, is refused too (bashOutsideFolder), and so is a git
+ * command of the deny list (workerGitWrite), as for a checker; files written through the shell inside its folder are
+ * only caught by the merge-time scope check. `cwd` is the folder the worker's shell is in (a shell tool may keep it
+ * between calls): a worker's git writes run only there when it is its own folder or /tmp. An agent symcc has no record
  * of that the host (`kindOf`, by default its agent list) says is one of symcc's is refused (unknownAgentCheck, T-555).
  */
 export async function checkEdit($: Host, agentId: string | undefined, touch: FileTouch | null, cwd?: string, kindOf: AgentKindOf = () => listedKind($, agentId!)): Promise<string | undefined> {
@@ -204,7 +146,7 @@ async function judgeEdit($: Host, agentId: string, touch: FileTouch, who: Who, c
   const chk = checkerRuns.get(agentId)
   if (chk) {
     Object.assign(who, { role: 'checker', task: chk.task })
-    return checkerCheck($, touch, chk.worktree, cwd)
+    return checkerCheck($, touch, chk.worktree)
   }
   // a scout runs in the owner's own folder: it may run tests and read with git, and write throwaway files outside the
   // project (such as /tmp), but never write with git or edit a file inside the project
@@ -223,12 +165,12 @@ async function judgeEdit($: Host, agentId: string, touch: FileTouch, who: Who, c
   }
   if (on?.kind === 'checker') {
     Object.assign(who, { role: 'checker', task: on.task })
-    return checkerCheck($, touch, on.worktree, cwd)
+    return checkerCheck($, touch, on.worktree)
   }
   const w = mine ?? (on?.kind === 'worker' ? on.worker : undefined)
   if (!w) return unknownAgentCheck($, agentId, kindOf)
   Object.assign(who, { role: 'worker', task: w.task })
-  if ('command' in touch) return (await outsideOwnFolder($, touch, w.worktree, cwd)) ?? workerGitWrite($, w, touch.command, cwd)
+  if ('command' in touch) return (await outsideOwnFolder($, touch, w.worktree)) ?? workerGitWrite($, w, touch.command, cwd)
   const real = await realEdit($, touch.path, w.worktree, S.root)
   // realEdit gives null only for an edit with a path
   if (real === null) return { text: brokenLinkText(editTarget(touch.path)!), guard: 'link' }
@@ -309,42 +251,26 @@ export const stoppedText = () => `${S.N.name} stopped this agent. Do nothing mor
  * are shared with the owner's folder, main too, and so is the stash), and it is kept inside that folder as a worker
  * is; it has no file list. Undefined: allowed.
  */
-async function checkerCheck($: Host, touch: FileTouch, worktree: string, cwd?: string): Promise<Refusal | undefined> {
-  const git = 'command' in touch && gitWriteIn(touch.command) ? gitWriteIn(touch.command, await scratchGit($, worktree), cwd) : undefined
+async function checkerCheck($: Host, touch: FileTouch, worktree: string): Promise<Refusal | undefined> {
+  const git = 'command' in touch ? gitWriteIn(touch.command) : undefined
   if (git) return { text: gitWriteText(git), guard: 'git', what: git }
-  return outsideOwnFolder($, touch, worktree, cwd)
+  return outsideOwnFolder($, touch, worktree)
 }
 
 /**
- * Why worker `w`'s shell `command` is refused for a git write (gitWriteIn) that changes more than its own branch in its
- * own folder (T-1053, workerGitAllow: a push, a remote, another branch, worktree, config, a tag...): branch names,
- * remotes, settings and tags are shared with the owner's folder (main too), so `git update-ref refs/heads/main HEAD`
- * from its own folder would move main. In its folder it may commit, merge, reset its branch and so on; symcc still
- * commits what is left, checks every commit of the try and merges. A scratch repository under /tmp stays allowed
- * (scratchGitAllow). Undefined: allowed.
+ * Why worker `w`'s shell `command` is refused for git (T-1062): a command of the worker deny list (gitWriteIn: push,
+ * tag, config, update-ref, a branch, stash, `git -C`...; `git update-ref refs/heads/main` from its folder would really
+ * move main), or a git write run anywhere but its own folder or /tmp (gitPlaceOk, with the shell's folder `cwd`). An
+ * investigation's changes are never kept, so its worker only reads with git. symcc still checks every commit of the
+ * try at merge time. Undefined: allowed.
  */
 async function workerGitWrite($: Host, w: Worker, command: string, cwd?: string): Promise<Refusal | undefined> {
   if (!gitWriteIn(command)) return undefined
-  const scratch = await scratchGit($, w.worktree)
-  if (!gitWriteIn(command, scratch, cwd)) return undefined
-  // an unreadable board throws on, so the hook's .catch refuses the command (see guardFailed). An investigation's
-  // changes are never kept, so its worker still only reads with git there
+  // an unreadable board throws on, so the hook's .catch refuses the command (see guardFailed)
   const t = find(await load($), w.task)
-  const own: GitAllow = t && !isInvestigation(t) && w.worktree.startsWith('/') ? workerGitAllow(await bothNames(diskLook($), w.worktree)) : () => false
-  const git = gitWriteIn(command, eitherAllow(scratch, own), cwd)
+  const reader = !t || isInvestigation(t) || !w.worktree.startsWith('/')
+  const git = gitWriteIn(command, reader ? 'reader' : 'worker') ?? (gitPlaceOk(command, cwd, [...(await bothNames(diskLook($), w.worktree)), '/tmp']) ? undefined : 'git in another folder')
   return git ? { text: workerGitWriteText(git), guard: 'git', what: git } : undefined
-}
-
-/**
- * The git writes a worker or checker in folder `worktree` may run in a throwaway repository (scratchGitAllow, T-591):
- * under /tmp or the system temp folder, never in the project or that folder (each by both its names). With no project
- * folder known, none.
- */
-async function scratchGit($: Host, worktree: string): Promise<GitAllow> {
-  if (!S.root || !worktree.startsWith('/')) return () => false
-  const look = diskLook($)
-  const [wts, tops, tmp] = await Promise.all([bothNames(look, worktree), bothNames(look, S.root), Promise.resolve().then(() => $.env('TMPDIR')).catch(() => undefined)])
-  return scratchGitAllow(scratchTemps(tmp), [...wts, ...tops])
 }
 
 /**
@@ -367,10 +293,8 @@ async function scoutCheck($: Host, touch: FileTouch): Promise<Refusal | undefine
  * Why a shell command or an edit of a checker in folder `worktree` is refused: it names a path in the project outside
  * that folder (the owner's copy, the board, another worker's folder). Undefined: allowed.
  */
-async function outsideOwnFolder($: Host, touch: FileTouch, worktree: string, cwd?: string): Promise<Refusal | undefined> {
-  if ('command' in touch) {
-    return bashOutside($, touch.command, worktree, S.root, cwd)
-  }
+async function outsideOwnFolder($: Host, touch: FileTouch, worktree: string): Promise<Refusal | undefined> {
+  if ('command' in touch) return bashOutside($, touch.command, worktree, S.root)
   const real = await realEdit($, touch.path, worktree, S.root)
   if (real === null) return { text: brokenLinkText(editTarget(touch.path)!), guard: 'link' }
   const outside = real.root.length ? editOutsideFolder(real.path, real.worktree, real.root) : undefined

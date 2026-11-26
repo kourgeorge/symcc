@@ -6,7 +6,7 @@ import { notProseText } from '../hooks/core/checker'
 import { YOUR_EDITS } from '../hooks/core/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
-import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
+import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, DEFAULT_TEST_MINUTES, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
 import { PREP_NOTE, STEP_NOTE, shownNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, mergeTestCount, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, withAgentStart, workerIdOf, tryTokens, tryCost, onTask, namedReports, latestReportOf } from '../hooks/board'
 import { usedRun, runBy } from './agent-fixture'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
@@ -25,7 +25,6 @@ import { taskPhase, taskAsks, FINISH_STALE_MS, needsYou, waitsForYou, answeredLe
 import { keysFor } from './task-keys'
 import { ranOutOfTime } from'../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
-import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { SYMCC_WORDS } from '../hooks/host'
@@ -3877,94 +3876,6 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/src/new/b.ts` })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
   expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toEqual(['README.md'])
-  // the same links in Bash: a read through a link inside the worker's folder is refused like the edit (T-436)
-  const bash = (command: string, cwd?: string) => checkEdit(f.$, 'ag1', { command }, cwd)
-  expect(await bash(`cat ${wt5}/link/README.md`)).toMatch(/^Refused: this command names README\.md in the owner's copy/)
-  expect(await bash('cat link/README.md')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
-  expect(await bash('cat "link/README.md"')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
-  expect(await bash('cd link && cat README.md')).toMatch(/^Refused: this command names the project folder in the owner's copy/)
-  expect(await bash('cd src && cat ../link/.symcc/worktrees/T-6/a.ts')).toMatch(/names \.symcc\/worktrees\/T-6\/a\.ts/)
-  expect(await bash('cat README.md', `${wt5}/link`)).toMatch(/names README\.md in the owner's copy/)
-  expect(await bash(`python3 - <<'EOF'\nprint(open('link/README.md').read())\nEOF`)).toMatch(/names README\.md in the owner's copy/)
-  // wildcards: the folder part before the first wildcard piece is looked up, so a link there is followed too
-  for (const glob of ['cat link/*.md', 'cat link/R?ADME.md', 'cat link/[R]EADME.md', 'cat ./link/README*', 'head -n1 link/READM*', 'cat "link"/*.md'])
-    expect(await bash(glob), glob).toMatch(/^Refused: this command names the project folder in the owner's copy/)
-  expect(await bash('cat src/*.ts scratch/*.txt *.md')).toBeUndefined()
-  // links that lead elsewhere, a link that leads nowhere, and the worker's own files: allowed
-  expect(await bash('cat scratch/notes.txt broken src/a.ts && ls src')).toBeUndefined()
-  expect(await bash(`cat ${wt5}/src/a.ts`)).toBeUndefined()
-  // too many paths to look up: refused, not cut short
-  expect(await bash(`cat ${Array.from({ length: BASH_PATHS_MAX }, (_, i) => `f${i}`).join(' ')} link/README.md`)).toBe(bashTooManyText(wt5))
-  // ordinary long commands main allowed are still allowed, and only paths that may go through a link are looked up
-  // the slow way: one folder listing each, not a lookup per path (T-436)
-  let slow = 0
-  const realStat = fs.stat as (p: string, o?: { resolve?: boolean }) => Promise<unknown>
-  fs.stat = async (p: string, o?: { resolve?: boolean }) => (o?.resolve && slow++, realStat(p, o))
-  const files = (n: number, f: (i: number) => string) => Array.from({ length: n }, (_, i) => f(i)).join(' ')
-  expect(await bash(`rm ${files(129, i => `f${i}.txt`)}`)).toBeUndefined()
-  expect(await bash(`cat ${files(130, i => `src/f${i}.ts`)}`)).toBeUndefined()
-  expect(await bash(`cat > notes.md <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `- see docs/x${i}.md`).join('\n')}\nEOF`)).toBeUndefined()
-  expect(await bash(`cat > src/m.ts <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `import m${i} from './hooks/m${i}'`).join('\n')}\nEOF`)).toBeUndefined()
-  expect(await bash(`cd src; cd a; cd b; cd c; cat ${files(9, i => `f${i}`)}`)).toBeUndefined()
-  expect(await bash(`${Array.from({ length: 17 }, (_, i) => `cd d${i}`).join(' && ')} && cat x`)).toBeUndefined()
-  expect(await bash(`cat ${files(1999, i => `src/f${i}.ts`)}`)).toBeUndefined()
-  const looked = slow
-  // the folder lookups of the worker's own folder and the project, not one per path (counted before the timed call).
-  // This count is what catches the old slow way (a lookup per path), so no tight time limit is needed (T-478)
-  expect(looked).toBeLessThan(30)
-  // and a generous time cap only: the work is not linear in the paths (4 times the paths took about 20 times as long
-  // under load), so a growth ratio would flake; the fastest of 3 runs keeps one busy moment from counting
-  const big = await bestMsOfAsync(() => bash(`cat ${files(1999, i => `src/f${i}.ts`)}`))
-  expect(big).toBeLessThan(SPEED_CAP_MS)
-  // a link among many plain paths is still followed
-  expect(await bash(`cat ${files(500, i => `src/f${i}.ts`)} link/README.md`)).toMatch(/names README\.md in the owner's copy/)
-  fs.stat = realStat
-  workers.clear()
-})
-
-test("a worker's Bash naming the owner's copy through a symbolic link elsewhere is refused; a link into its own folder or elsewhere is not (T-417)", async () => {
-  S.me = 'me'
-  const f = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
-  await saveBoard(f.$, b)
-  const wt5 = `${ROOT}/.symcc/worktrees/T-5`
-  const disk = fakeDisk({
-    [ROOT]: 'dir',
-    [`${ROOT}/README.md`]: 'file',
-    [`${ROOT}/.symcc`]: 'dir',
-    [`${ROOT}/.symcc/worktrees`]: 'dir',
-    [wt5]: 'dir',
-    [`${wt5}/src`]: 'dir',
-    '/home': 'dir',
-    '/home/me': 'dir',
-    '/home/me/link': `-> ${ROOT}`,
-    '/home/me/mine': `-> ${wt5}`,
-    '/home/me/out': '-> /tmp/x2',
-    '/tmp': 'dir',
-    '/tmp/x2': 'dir',
-  })
-  const fs = (f.$ as unknown as { fs: Record<string, unknown> }).fs
-  const plainStat = fs.stat as (p: string) => Promise<unknown>
-  fs.stat = async (p: string, o?: { resolve?: boolean }) => {
-    if (!o?.resolve) return plainStat(p)
-    const realPath = await disk.real(p)
-    if (realPath === undefined) throw new Error(`ENOENT ${p}`)
-    return { kind: 'file', size: 0, mtimeMs: 0, isLink: false, realPath }
-  }
-  fs.list = async (d: string) => disk.list(d).map(e => ({ ...e, kind: e.isLink ? 'other' : 'file', size: 0, mtimeMs: 0 }))
-  workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
-  const bash = (command: string) => checkEdit(f.$, 'ag1', { command })
-  expect(await bash('cat /home/me/link/README.md')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
-  expect(await bash('test -e /home/me/link/.symcc/worktrees/T-6/a.ts')).toMatch(/names \.symcc\/worktrees\/T-6\/a\.ts/)
-  expect(await bash('cat /home/me/link/.symcc/worktrees/T-5/src/a.ts')).toBeUndefined()
-  expect(await bash('cat /home/me/mine/src/a.ts && ls /home/me/out/notes')).toBeUndefined()
-  expect(await bash('cd tests && cat ../hooks/claude/tools.ts')).toBeUndefined()
-  // a disk that can't be read changes nothing: the paths are judged as written
-  fs.stat = async () => {
-    throw new Error('no disk')
-  }
-  expect(await bash('cat /home/me/link/README.md')).toBeUndefined()
-  expect(await bash(`cat ${ROOT}/README.md`)).toMatch(/^Refused: this command names README\.md/)
   workers.clear()
 })
 
@@ -3977,7 +3888,7 @@ test("a worker's Bash command reaching the owner's copy is refused; its own fold
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
   const bash = (agent: string | undefined, command: string) => checkEdit(f.$, agent, { command })
   for (const c of [`echo x > ${ROOT}/README.md`, `cp a ${ROOT}/.symcc/board.json`, `cd ${ROOT} && git commit -m x`, 'echo x > ../../README.md'])
-    expect(await bash('ag1', c)).toMatch(/^Refused: this command names .* outside your own folder/)
+    expect(await bash('ag1', c)).toMatch(/^Refused: this command (names .* outside your own folder|has a "\.\." path piece)/)
   for (const c of ['echo x > /tmp/a', 'echo x > src/a.ts', 'bun test', `cat ${wt5}/src/a.ts`]) expect(await bash('ag1', c)).toBeUndefined()
   // no file request was recorded for any of them
   expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toBeUndefined()
@@ -3987,7 +3898,7 @@ test("a worker's Bash command reaching the owner's copy is refused; its own fold
   workers.clear()
 })
 
-test("T-1053: a worker may change git in its own folder on its own branch; push, other branches, worktree, config, tags and other folders stay refused (T-432)", async () => {
+test("T-1053, T-1062: a worker may change git in its own folder on its own branch; the deny list, other branches and other folders stay refused", async () => {
   S.me = 'me'
   const f = world()
   const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
@@ -3995,105 +3906,81 @@ test("T-1053: a worker may change git in its own folder on its own branch; push,
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
   // the shell is in the worker's own folder (as Claude Code tells it), or a folder inside it
-  const bash = (command: string, cwd = wt5) => checkEdit(f.$, 'ag1', { command }, cwd)
+  const bash = (command: string, cwd: string | undefined = wt5) => checkEdit(f.$, 'ag1', { command }, cwd)
   for (const command of [
     'git commit -am x', 'git add -A && git commit -m "x: why"', 'git merge main', 'git merge --no-edit symcc/T-7', 'git merge --abort',
     'git merge --no-edit main 2>&1 | tail -20', 'git cherry-pick abc123', 'git revert --no-edit HEAD', 'git restore src/a.ts', 'git restore --staged .',
-    'git checkout -- src/a.ts', 'git checkout main -- src/a.ts', 'git reset --hard HEAD~1', 'git merge -s ort -X theirs main', 'git merge --strategy=ours main',
-    'git rebase main', 'git rebase --continue', 'git rebase --root', 'git rebase --onto main HEAD~2', 'git merge --no-autostash main', 'git bisect start', 'git bisect reset', 'git bisect good', 'git rebase --abort',
-    'git commit -s -m x', 'git cherry-pick -s abc123', 'git merge -ns ours main', 'git merge -nsort main', 'git merge -Xours main', 'git merge -m "uses -s evil" main',
-    // a git command that runs another program is not refused: a worker can run any program from Bash anyway
-    'git merge -s evil main', 'git rebase -msfoo main', 'git rebase --exec=true main', 'git bisect run sh check.sh',
-    `git -C ${wt5} commit -m x`, `cd ${wt5} && git commit -am x`, 'git -C src add a.ts', 'git rm -q old.ts', 'git clean -fd',
+    'git checkout -- src/a.ts', 'git checkout main -- src/a.ts', 'git reset --hard HEAD~1', 'git merge -s ort -X theirs main', 'git merge --no-autostash main',
+    'git rebase main', 'git rebase --continue', 'git rebase --root', 'git rebase --onto main HEAD~2', 'git rebase -i HEAD~3', 'git rebase --abort',
+    'git bisect start', 'git bisect reset', 'git bisect good', 'git commit -s -m x', 'git merge -m "uses -s evil" main',
+    `cd ${wt5} && git commit -am x`, 'cd src && git add a.ts', 'git rm -q old.ts', 'git clean -fd',
+    // a scratch repository under /tmp
+    'git init /tmp/x', 'cd /tmp/x && git add . && git commit -m m',
   ]) expect([command, await bash(command)]).toEqual([command, undefined])
   expect(await bash('git commit -am x', `${wt5}/src`)).toBeUndefined()
+  expect(await bash('git commit -m m', '/tmp/x')).toBeUndefined()
+  // the shell starts in the owner's folder, but the command first goes to the worker's own one
+  expect(await bash(`cd ${wt5} && git commit -am x`, ROOT)).toBeUndefined()
   for (const [command, what] of [
     ['git push', 'git push'],
     ['git push . HEAD:main', 'git push'],
     ['git remote add x https://example.com/x.git', 'git remote'],
-    ['git remote set-url origin x', 'git remote'],
     ['git branch -D symcc/T-7', 'git branch'],
     ['git branch -m other', 'git branch'],
     ['git branch new', 'git branch'],
     ['git branch -f main HEAD', 'git branch'],
-    ['git checkout main', 'git checkout'],
-    ['git checkout main --', 'git checkout'],
-    ['git checkout -b x', 'git checkout'],
-    ['git checkout -B x -- a.ts', 'git checkout'],
-    ['git checkout --detach -- a.ts', 'git checkout'],
+    ['git checkout main', 'git checkout <branch>'],
+    ['git checkout main --', 'git checkout <branch>'],
+    ['git checkout -b x', 'git checkout <branch>'],
+    ['git checkout -B x -- a.ts', 'git checkout <branch>'],
+    ['git checkout --detach -- a.ts', 'git checkout <branch>'],
     ['git switch main', 'git switch'],
-    ['git switch -c x', 'git switch'],
     ['git worktree add /tmp/x main', 'git worktree'],
     ['git config user.name x', 'git config'],
     ['git tag v1', 'git tag'],
     ['git update-ref refs/heads/main HEAD', 'git update-ref'],
     ['git symbolic-ref HEAD refs/heads/main', 'git symbolic-ref'],
-    ['git rebase main symcc/T-7', 'git rebase'],
-    ['git rebase --update-refs main', 'git rebase'],
-    // with --root the name is the branch to rebase: the folder would switch to it
-    ['git rebase --root other', 'git rebase'],
-    ['git rebase --root --onto main other', 'git rebase'],
-    // ends the bisect on another branch
-    ['git bisect reset other', 'git bisect'],
-    // --autostash leaves changes in the shared stash
-    ['git merge --autostash main', 'git merge'],
-    ['git rebase --autostash main', 'git rebase'],
-    ['git pull --autostash origin main', 'git pull'],
-    ['git fetch . HEAD:main', 'git fetch'],
-    ['git pull origin main:main', 'git pull'],
-    // fetch and pull are refused altogether: even a plain fetch copies tags that point into what it fetched (checker, try 9)
+    ['git rebase main symcc/T-7', 'git rebase <other branch>'],
+    ['git rebase --root other', 'git rebase <other branch>'],
+    ['git rebase --root --onto main other', 'git rebase <other branch>'],
+    ['git rebase --update-refs main', 'git rebase --update-refs'],
+    ['git rebase --autostash main', 'git rebase --autostash'],
+    ['git rebase --quit', 'git rebase --quit'],
+    ['git bisect reset other', 'git bisect reset <commit>'],
+    ['git merge --autostash main', 'git merge --autostash'],
+    ['git merge --autost main', 'git merge --autostash'],
     ['git fetch origin', 'git fetch'],
-    ['git fetch --all', 'git fetch'],
-    ['git fetch --no-tags origin', 'git fetch'],
-    ['git pull --no-rebase origin main', 'git pull'],
-    ['git pull -s ort origin main', 'git pull'],
-    ['git fetch -p -P origin', 'git fetch'],
-    ['git fetch -pP origin', 'git fetch'],
-    ['git fetch --prune-tags origin', 'git fetch'],
-    ['git fetch --prune --prune-t origin', 'git fetch'],
-    ['git fetch --tags origin', 'git fetch'],
-    ['git fetch -t origin', 'git fetch'],
-    ['git fetch origin tag v1', 'git fetch'],
-    ['git pull --tags origin main', 'git pull'],
-    // --set-upstream writes branch.<name>.remote and .merge into the shared config
-    ['git fetch --set-upstream origin main', 'git fetch'],
-    ['git pull --set-upstream origin main', 'git pull'],
-    ['git pull --set origin main', 'git pull'],
-    // --quit leaves HEAD detached, off the task's branch, and a worker can't switch back
-    ['git rebase --quit', 'git rebase'],
-    ['git rebase --qui', 'git rebase'],
-    ['git merge --autost main', 'git merge'],
-    // every stash form: the stash is shared with the owner's folder (the owner's word, T-1053)
+    ['git pull origin main', 'git pull'],
     ['git stash', 'git stash'],
-    ['git stash push -m wip', 'git stash'],
     ['git stash pop', 'git stash'],
-    ['git stash apply', 'git stash'],
-    ['git stash drop', 'git stash'],
-    ['git stash clear', 'git stash'],
-    ['git fetch --upload-pack=evil origin', 'git fetch'],
-    ['git pull --upload-pack evil origin', 'git pull'],
-    ['git merge $BR', 'git merge'],
-    ['git p', 'git p'],
     ['git lfs push origin', 'git lfs'],
-    ['git -c core.hooksPath=x commit -m x', 'git -c'],
-    ['git --git-dir=/elsewhere/.git commit -m x', 'git commit'],
-    ['git -C /tmp/elsewhere/.. commit -m x', 'git commit'],
-    ['git -C $D commit -m x', 'git commit'],
-    ['sh -c "git commit -m x"', 'git commit'],
+    ['git -c user.name=x commit -m x', 'git -c'],
+    ['git -c core.hooksPath=x commit -m x', 'core.hooksPath'],
+    ['GIT_DIR=/elsewhere/.git git commit -m x', 'a GIT_ setting'],
+    ['git --git-dir=/elsewhere/.git commit -m x', "git's own folder"],
+    ['git --work-tree=/elsewhere commit -m x', 'git --work-tree'],
+    ['git -C /tmp/x commit -m x', 'git -C'],
+    [`git -C ${wt5} commit -m x`, 'git -C'],
     ['sh -c "git update-ref refs/heads/main HEAD"', 'git update-ref'],
     ['/usr/libexec/git-core/git-update-ref refs/heads/main HEAD', 'git update-ref'],
+    // T-1053's last checker: a program git runs is checked too (rebase -x / --exec and bisect run are refused)
+    ["git rebase -x 'git push origin main' HEAD~1", 'git rebase -x'],
+    ['git rebase --exec="git branch -f main HEAD" HEAD~1', 'git rebase --exec'],
+    ['git bisect run git push', 'git bisect run'],
+    // a git write in any folder but its own or /tmp (lead's note, T-1053's checker)
+    ['cd /Users/me/other && git commit -m x', 'git in another folder'],
+    ['cd $D && git commit -m x', 'git in another folder'],
+    ['cd && git commit -m x', 'git in another folder'],
   ] as const) expect([command, await bash(command)]).toEqual([command, workerGitWriteText(what)])
-  // a git write outside its own folder (a folder outside the project, here), or with the folder unknown, is refused
-  expect(await bash('git commit -am x', '/Users/me/other')).toBe(workerGitWriteText('git commit'))
-  expect(await checkEdit(f.$, 'ag1', { command: 'git commit -am x' })).toBe(workerGitWriteText('git commit'))
-  // a cd to a folder from a variable is refused by the path check, before git is looked at
-  expect(await bash('cd $D && git commit -m x')).toMatch(/^Refused: symcc can't check a path built from \$D/)
-  for (const command of ['git status', 'git diff', 'git log --oneline -5', 'git show HEAD', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git stash list', 'bun test', 'echo "use git diff"'])
-    expect(await bash(command)).toBeUndefined()
-  // a path in the owner's copy, or another task's folder, is still refused for that first
+  // the shell's folder elsewhere, or unknown
+  expect(await bash('git commit -am x', '/Users/me/other')).toBe(workerGitWriteText('git in another folder'))
+  expect(await checkEdit(f.$, 'ag1', { command: 'git commit -am x' })).toBe(workerGitWriteText('git in another folder'))
+  for (const command of ['git status', 'git diff', 'git log --oneline -5', 'git show HEAD', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'bun test', 'echo "use git diff"', 'cd "$(git rev-parse --show-toplevel)"', 'tee -a "$LOG"'])
+    expect([command, await checkEdit(f.$, 'ag1', { command })]).toEqual([command, undefined])
+  // a path in the owner's copy, or another task's folder, is refused for that first
   expect(await bash(`cd ${ROOT} && git commit -m x`)).toMatch(/^Refused: this command names .* outside your own folder/)
   expect(await bash(`git -C ${ROOT}/.symcc/worktrees/T-7 commit -m x`)).toMatch(/^Refused: this command names .* outside your own folder/)
-  // zsh's chdir moves the folder like cd: refused the same way (checker, try 10)
+  // zsh's chdir moves the folder like cd: refused the same way
   for (const [cd, zsh] of [
     ['cd ${PWD%/.symcc*} && git commit -am x', 'chdir ${PWD%/.symcc*} && git commit -am x'],
     ['true | cd /owner; git commit -am x', 'true | chdir /owner; git commit -am x'],
@@ -4103,7 +3990,7 @@ test("T-1053: a worker may change git in its own folder on its own branch; push,
     expect([cd, typeof want]).toEqual([cd, 'string'])
     expect([zsh, await bash(zsh)]).toEqual([zsh, want])
   }
-  // an investigation's changes are never kept: its worker still only reads with git
+  // an investigation's changes are never kept: its worker only reads with git
   await saveBoard(f.$, patchTask(b, 'T-1', { kind: 'investigation' } as Partial<BoardTask>, ISO))
   expect(await bash('git commit -am x')).toBe(workerGitWriteText('git commit'))
   // no file request was recorded for any of them

@@ -192,7 +192,7 @@ export const register: Register = on => {
     const host = claudeHost($)
     useName(host)
     // read inside the hook, $.session.cwd() is the calling agent's own folder, which follows its shell's cd; when it
-    // can't be read, nothing earlier is trusted: ".." words are judged from deeper folders too (shellCwd, T-671)
+    // can't be read, nothing earlier is trusted: a worker's git writes are then refused (shellCwd, gitPlaceOk)
     const cwd = e.agentId && e.tool === 'Bash' ? shellCwd(await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined)) : undefined
     // an error in toolCheck is not swallowed here: the .catch below refuses the call of symcc's own agents
     const deny = await toolCheck(host, e.agentId, editTouch(e.tool, e.input), cwd)
