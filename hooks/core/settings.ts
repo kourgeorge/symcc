@@ -292,8 +292,6 @@ export const testMinutesRefusal = (v: unknown): string =>
 /** How many test commands a board keeps. */
 export const MAX_TEST_COMMANDS = 5
 
-/** Kept so hosts can still say who answers in the chat; the settings words no longer use it (they come from setting-notes). */
-
 export const SETTINGS: SettingInfo[] = [
   { name: 'test_commands', label: 'Test commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines' },
   { name: 'docs_test_commands', label: 'Docs test commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines' },

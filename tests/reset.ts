@@ -4,7 +4,6 @@
 // and puts S back to its start values, as a plugin reload does, so a test starts the same whatever ran before it.
 import { test as plainTest, type TestBody, type TestOptions, type TestRest } from 'claude-code/testing'
 import { emptyHeard } from '../hooks/board'
-import { SYMCC_WORDS } from '../hooks/host'
 import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRuns, checkerRuns, stopped, movedAgents, movedRefused, haltedAnywhere, boardAgents, reminded, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, adoptedCheckers, openDays, heard, sayQueue, keptDirty, changesCache, scratchUse, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/app/state'
 import { resetScoutRuns } from '../hooks/app/scouts'
 import { resetStarts } from '../hooks/app/starts'
