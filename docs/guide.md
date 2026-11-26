@@ -1157,7 +1157,8 @@ plain sentences on what the whole task has done so far. The worker writes them a
 every report, `Done: …`; symcc keeps the latest one on the task, puts it in the commit message and in
 the lead's `✓ merged` update. An old task, or one whose report has no `Done:` line, shows no ▍Done.
 
-Further down, ▍Report is one section for whichever agent's report you picked in ▍Runs (T-1104):
+Further down, ▍Runs comes right above ▍Report, the last section (you pick a report in Runs, so Runs
+comes first; the order is ▍What to do, ▍History, ▍Runs, ▍Report). ▍Report is one section for whichever agent's report you picked in ▍Runs (T-1104):
 its heading says exactly whose and which try, `▍Report · try 3 · worker af4…74a` or
 `▍Report · try 1 · checker a6f…53d` (`▍Report · try 2 · worker` when no agent id is known). The page
 opens on the latest try's worker report. The try keys, `1`-`9`, show that try's worker report and
@@ -1172,7 +1173,7 @@ when the list has more than one.
 
 #### The Runs section
 
-The last section of a task's page sums the task's own tries in its heading, and lists each try
+The section of a task's page right above ▍Report sums the task's own tries in its heading, and lists each try
 with one dim line per agent under it (every worker and checker the try had):
 
 ```

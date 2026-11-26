@@ -455,6 +455,30 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {
+            "type": "Text",
+            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
+            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
@@ -651,30 +675,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"report-try-2-key","label":"2","hotkey":"2"},"press":{"plugin":"symcc"}}
             ]
           }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
-            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
       {
@@ -1240,6 +1240,30 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {
+            "type": "Text",
+            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
+            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
@@ -1436,30 +1460,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"report-try-2-key","label":"2","hotkey":"2"},"press":{"plugin":"symcc"}}
             ]
           }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
-            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
       {
@@ -2045,6 +2045,30 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {
+            "type": "Text",
+            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
+            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
@@ -2233,30 +2257,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"text"},"children":["Tests: claude plugin test . passed."]}
             ]
           }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
-            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
       {
@@ -2762,18 +2762,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 1 · worker"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-1.md"]},
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"color":"text"},"children":["  "]},{"type":"Text","props":{"color":"text"},"children":["First try: the tests failed."]}]
-          }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
           {
             "type": "Text",
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
@@ -2787,6 +2775,18 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
           },
           {"type":"Text","props":{"color":"success"},"children":["  try 2: 5m (running)"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 25m · 4.6k tokens in all · ~$0.42"]}
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 1 · worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-1.md"]},
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"color":"text"},"children":["  "]},{"type":"Text","props":{"color":"text"},"children":["First try: the tests failed."]}]
+          }
         ]
       },
       {
@@ -3293,6 +3293,30 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {
+            "type": "Text",
+            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
+            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
@@ -3489,30 +3513,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"report-try-2-key","label":"2","hotkey":"2"},"press":{"plugin":"symcc"}}
             ]
           }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
-            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
       {
@@ -4937,6 +4937,30 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {
+            "type": "Text",
+            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
+            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
@@ -5133,30 +5157,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"report-try-2-key","label":"2","hotkey":"2"},"press":{"plugin":"symcc"}}
             ]
           }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
-            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
       {
@@ -5627,6 +5627,30 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {
+            "type": "Text",
+            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
+            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
@@ -5823,30 +5847,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"report-try-2-key","label":"2","hotkey":"2"},"press":{"plugin":"symcc"}}
             ]
           }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
-            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
       {
@@ -6546,6 +6546,30 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {
+            "type": "Text",
+            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
+            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
@@ -6742,30 +6766,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"report-try-2-key","label":"2","hotkey":"2"},"press":{"plugin":"symcc"}}
             ]
           }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
-            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
       {
@@ -7303,6 +7303,30 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
+          {
+            "type": "Text",
+            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
+            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
+        ]
+      },
+      {
+        "type": "Box",
+        "props": {"flexDirection":"column"},
+        "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
@@ -7491,30 +7515,6 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"text"},"children":["Tests: claude plugin test . passed."]}
             ]
           }
-        ]
-      },
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column"},
-        "children": [
-          {
-            "type": "Text",
-            "props": {"bold":true,"color":"suggestion","weight":"semibold"},
-            "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
-          },
-          {
-            "type": "Button",
-            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
-          },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
       {

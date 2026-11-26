@@ -493,8 +493,8 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
 
       {sectionEl('what')}
       {sectionEl('history')}
-      {sectionEl('report')}
       {sectionEl('runs')}
+      {sectionEl('report')}
 
       {footer(boxOpen ? boxKeys : taskKeys(actions, reports.map(r => r.try), choices.length > 0, place && place.of > 1 ? navHint('claude') : null, !!section('runs')?.lines.some(l => l.pick)), 'task-keys')}
     </Box>

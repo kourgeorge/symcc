@@ -2124,8 +2124,8 @@ test('T-580: OpenCode\'s task page has the same sections as Claude Code\'s (core
   expect(parseViewFile(viewFileText(f))?.view.changes).toEqual(f.view.changes)
   const page = (id: string, report?: { file: string; text: string | null | undefined }) => panelLines(f, { opened: id, cursor: 0, ...(report ? { taskReport: report } : {}) }, NOW, 100)
   const heads = (id: string) => page(id).lines.map(lineText).filter(l => l.startsWith('▍'))
-  expect(heads('T-2')).toEqual(['▍Details', '▍Changes (1 file, against main)', '▍What to do', '▍History (2, newest first)', '▍Report · try 2 · worker', '▍Runs   2 tries · 0s'])
-  expect(heads('T-4')).toEqual(['▍Why it failed', '▍Details', '▍What to do', '▍History (2, newest first)', '▍Report · try 2 · worker', '▍Runs   2 tries · 0s'])
+  expect(heads('T-2')).toEqual(['▍Details', '▍Changes (1 file, against main)', '▍What to do', '▍History (2, newest first)', '▍Runs   2 tries · 0s', '▍Report · try 2 · worker'])
+  expect(heads('T-4')).toEqual(['▍Why it failed', '▍Details', '▍What to do', '▍History (2, newest first)', '▍Runs   2 tries · 0s', '▍Report · try 2 · worker'])
   expect(heads('T-5')).toEqual(['▍Details', '▍What to do', '▍History (1, newest first)'])
   // each section's lines are the shared model's, in order
   const report = { file: '.symcc/reports/T-2-try-2.md', text: 'Fixed it.\n\nAll tests pass.' }
@@ -4756,4 +4756,12 @@ test('T-1105: a setting\'s pick dialog says what the setting does and gives each
   expect(prompts.at(-1)!.description).toBe(settingAbout('max_parallel'))
   expect(prompts.at(-1)!.description).toContain('1-8')
   board.stop()
+})
+
+test('T-1141: OpenCode\'s task page lists ▍Runs right above ▍Report', () => {
+  const f = threeTriesViewFile()
+  const heads = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 100).lines.map(lineText).filter(l => l.startsWith('▍'))
+  const runs = heads.findIndex(l => l.startsWith('▍Runs'))
+  expect(runs).toBeGreaterThan(-1)
+  expect(heads[runs + 1]!.startsWith('▍Report')).toBe(true)
 })

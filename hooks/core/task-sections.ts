@@ -1,6 +1,6 @@
 // The task page's sections (T-580), as plain data: what the Claude Code terminal's task page shows under its title and
 // buttons, in its order and with its headings: ▍Done (T-1080, what the whole task has done so far), ▍Why it failed, ▍Answer, ▍Details, ▍Branch (T-761), ▍Changes, ▍What to do, ▍History,
-// ▍Report (T-1104: the report of the agent picked in ▍Runs, worker or checker) and ▍Runs (time and cost, with a one-line sum). Each section is lines of colored pieces (Seg), some with what a press or click on
+// ▍Runs (time and cost, with a one-line sum) and ▍Report (T-1104: the report of the agent picked in ▍Runs, worker or checker). Each section is lines of colored pieces (Seg), some with what a press or click on
 // them does (a changed file opens its diff). The terminal (hooks/claude/ui/task-page.tsx) and OpenCode's panel
 // (hooks/opencode/board-view.ts) draw them; VS Code's card (vscode-task.tsx) takes their contents but keeps its own
 // layout. Nothing here reads a file: the report texts and the changed files come in as facts.
@@ -18,7 +18,7 @@ import { taskBranchLines, taskBranchTitle, type TaskBranchFacts } from './task-b
 import { cutTitle } from './width'
 
 /** The sections, in the page's order. */
-export type TaskSectionId = 'done' | 'why' | 'answer' | 'details' | 'branch' | 'changes' | 'what' | 'history' | 'report' | 'runs'
+export type TaskSectionId = 'done' | 'why' | 'answer' | 'details' | 'branch' | 'changes' | 'what' | 'history' | 'runs' | 'report'
 
 /** What a press on a line does: show a changed file's diff. */
 export type SectionAction = { diff: string }
@@ -243,9 +243,19 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
   }
   out.push({ id: 'what', title: 'What to do', lines: t.details.trim() ? detailsLines(t.details.trimEnd(), width) : [plainLine('(no details)', 'inactive')] })
   if (t.history.length) out.push({ id: 'history', title: `History (${t.history.length}, newest first)`, lines: historyLines(t, width, f.nowMs) })
-  // An answered investigation with one try: its report is the Answer above, so it is not shown twice.
   // T-1104: one Report section for the agent picked in Runs (its heading says whose report and which try)
   const shown = resolveReport(t, f.shown)
+  const summary = t.runs?.length ? runsSummary(t.runs, f.nowMs, usualTokens(f.detail.all)) : ''
+  if (t.runs?.length)
+    out.push({
+      id: 'runs',
+      // T-774: the heading sums this task's own tries ("3 tries · 21m · 10.1M tokens (3.6× the usual task) · checkers 2.4M"),
+      // and each try has one dim line per agent (worker or checker) under it
+      title: `Runs   ${summary}`,
+      summary,
+      lines: [...t.runs.flatMap((r, i) => runLines(t, r, i, f.nowMs, shown)), plainLine(`  total: ${fmtTotal(sumRuns(t.runs, f.nowMs))}`, 'text', { bold: true })],
+    })
+  // An answered investigation with one try: its report is the Answer above, so it is not shown twice.
   if ((reports.length > 0 || t.attempts > 0 || shown) && !(answerShown && latest && reports.length === 1 && shown?.kind !== 'checker')) {
     const body = shown ? textOf(f, shown.file) : null
     const read = shown ? f.texts?.[shown.file] !== undefined : false
@@ -261,15 +271,5 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
       ...(reports.length > 1 ? { tries: reports.map(r => ({ try: r.try, shown: r.try === shown?.try && shown.kind === 'worker', ...(r.try <= 9 && !f.numberKeysTaken ? { key: String(r.try) } : {}) })) } : {}),
     })
   }
-  const summary = t.runs?.length ? runsSummary(t.runs, f.nowMs, usualTokens(f.detail.all)) : ''
-  if (t.runs?.length)
-    out.push({
-      id: 'runs',
-      // T-774: the heading sums this task's own tries ("3 tries · 21m · 10.1M tokens (3.6× the usual task) · checkers 2.4M"),
-      // and each try has one dim line per agent (worker or checker) under it
-      title: `Runs   ${summary}`,
-      summary,
-      lines: [...t.runs.flatMap((r, i) => runLines(t, r, i, f.nowMs, shown)), plainLine(`  total: ${fmtTotal(sumRuns(t.runs, f.nowMs))}`, 'text', { bold: true })],
-    })
   return out
 }

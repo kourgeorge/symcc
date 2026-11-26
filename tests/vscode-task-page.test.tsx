@@ -392,3 +392,16 @@ test('vsHref encodes "(" and ")", so a file named src/a).ts or a(b.ts gets a who
   }
   expect(vsHref('file', 'src/a).ts')).toBe('https://symcc.invalid/file/src%2Fa%29.ts')
 })
+
+// T-1141: you pick a report in Runs, so Runs comes right above Report (terminal, VS Code, and the section list).
+test('T-1141: a task with 2 tries and reports shows Runs right above Report on the terminal and in VS Code', async ($, on) => {
+  seedRich(on, 'T-501')
+  const terminal = await $.ui.mount({ ...PANE, surface: 'terminal' })
+  const heads = texts(await terminal.drawn()).filter(s => /^(Runs|Report)( |$)/.test(s))
+  expect(heads.map(s => s.slice(0, 6))).toEqual(['Runs  ', 'Report'])
+  await terminal.unmount()
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
+  const secs = elements(await ui.drawn()).map(n => String(n.props?.key ?? n.key ?? '')).filter(k => k === 'vs-sec-time' || k === 'vs-sec-report')
+  expect(secs).toEqual(['vs-sec-time', 'vs-sec-report'])
+  await ui.unmount()
+})
