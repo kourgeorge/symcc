@@ -130,14 +130,15 @@
     const agents = [l.worker && `worker ${tok(l.worker)}`, l.checker && `checker ${tok(l.checker)}`].filter(Boolean)
     const split = agents.length ? [[[agents.join(' · '), 'dim']]] : []
     // (T-982) the send-backs "⌕ × 1", spaces around ×
-    const line = level => {
-      const parts = [...(level >= 1 ? [[[`⏱ ${dur(mins)}`, 'dim']]] : []), ...(level >= 2 ? [tokens(level >= 3)] : []), ...(level >= 4 ? split : []), ...(l.back ? [[[`⌕ × ${l.back}`, 'dim']]] : [])]
+    // (T-1080) a finished lane ends with its change size ("+212 −48"); it is the first part dropped
+    const line = (level, withSize = false) => {
+      const parts = [...(level >= 1 ? [[[`⏱ ${dur(mins)}`, 'dim']]] : []), ...(level >= 2 ? [tokens(level >= 3)] : []), ...(level >= 4 ? split : []), ...(l.back ? [[[`⌕ × ${l.back}`, 'dim']]] : []), ...(withSize && l.size ? [[[l.size, 'dim']]] : [])]
       return [[`  try ${l.tryNo}/${l.tries}`, 'dim'], ...parts.flatMap(x => [[' · ', 'dim'], ...x])]
     }
     const width = xs => 1 + xs.reduce((n, [t]) => n + t.length, 0)
     // (T-1074) the task type ends the second line (dim, two spaces after); dropped when it does not fit
     const withKind = xs => [...xs, ['  ' + l.kind, 'dim']]
-    const tries = [4, 3, 2, 1, 0].flatMap(n => [withKind(line(n)), line(n)])
+    const tries = [...(l.size ? [withKind(line(4, true))] : []), ...[4, 3, 2, 1, 0].flatMap(n => [withKind(line(n)), line(n)])]
     const pick = tries.find(xs => width(xs) <= PANEL_W) || tries[tries.length - 1]
     const two = ' ' + pick.map(([t, k]) => sp(t, k)).join('')
     return [one, two]
@@ -395,7 +396,7 @@
     [2600, at(16, 53, 0), s => { Object.assign(lane(s, 'T-747'), { at: 4, since: s.now }) }],
     [900, at(16, 53, 10), s => {
       // T-771: T-747 keeps its lane for a while, drawn finished (dim, ✓ at merged, "merged 0s ago")
-      Object.assign(lane(s, 'T-747'), { done: s.now, agent: false })
+      Object.assign(lane(s, 'T-747'), { done: s.now, agent: false, size: '+212 −48', worker: 0, checker: 0 })
       s.today.merged += 1
       s.today.tokens += T747_TOKENS
       s.commits += 1

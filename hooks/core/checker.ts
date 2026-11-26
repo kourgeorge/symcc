@@ -92,7 +92,11 @@ export function checkerVerdict(answer: string): CheckerVerdict | null {
   const text = splitLearned(String(answer ?? '')).body.trim()
   if (!text) return null
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-  return OK_LINE.test(lines.at(-1) ?? '') ? { ok: true } : { ok: false, report: text }
+  if (OK_LINE.test(lines.at(-1) ?? '')) return { ok: true }
+  // T-996: a Problems block whose only items say "worse than main: none" is no problem (gaps main already has are follow-ups)
+  const items = checkerProblems(text, Infinity)
+  if (items.length && items.every(i => /^[-*_`\s]*worse than main:\s*none[.*_`\s]*$/i.test(i.trim()))) return { ok: true }
+  return { ok: false, report: text }
 }
 
 
@@ -187,10 +191,10 @@ export function checkerProblems(report: string, max = CHECKER_PROBLEMS_MAX): str
   let cur: string | null = null
   const flush = () => { if (cur !== null && cur.trim()) out.push(oneLine(cur, 300)); cur = null }
   for (const l of lines.slice(h + 1)) {
-    if (/^- ?$/.test(l) || l.startsWith('- ')) {
+    if (/^[-*] ?$/.test(l) || /^[-*] /.test(l)) {
       flush()
       cur = l.slice(2)
-    } else if (cur === null && !l.trim()) continue // blank lines right under the heading
+    } else if (!l.trim()) continue // blank lines under the heading or between items
     else if (cur !== null && /^\s+\S/.test(l)) cur += ` ${l.trim()}` // an item running onto an indented line
     else break
   }
@@ -207,4 +211,29 @@ export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = '
 const oneLine = (s: string, max: number) => {
   const t = s.replace(/\s+/g, ' ').trim()
   return t.length > max ? `${t.slice(0, max - 1)}…` : t
+}
+
+/** T-996: the checker sends a task back this many times; the next send-back stops and asks the owner. */
+export const CHECKER_SEND_BACKS = 2
+
+/** How many times the checker sent task `t` back (its "checker found problems" history lines, all tries). */
+export const checkerSendBacks = (t: Pick<SymccTask, 'history'>): number => (t.history ?? []).filter(h => h.kind === 'checker-problems').length
+
+/** T-996: the choices of the question a task waits with after the checker sent it back twice. */
+export const CHECKER_ASK_OPTIONS = ['Merge as is', 'Keep fixing', 'Drop'] as const
+
+/** T-996: that question for task `id` sent back `n` times, with the last finding (one line). */
+export const checkerAskText = (id: string, n: number, finding: string): string =>
+  `${id} was sent back ${n === 2 ? 'twice' : `${n} times`} by the checker: ${oneLine(finding, 300).replace(/[.\s]+$/, '')}. Merge as is / Keep fixing / Drop`
+
+/** Whether `q` is that question. */
+export const isCheckerAsk = (q: string | null | undefined): boolean => /^T-\d+ was sent back (twice|\d+ times) by the checker: [\s\S]*\. Merge as is \/ Keep fixing \/ Drop$/.test(String(q ?? '').trim())
+
+/** The owner's answer to that question: which choice it names (its words at the start, any case), or undefined. */
+export function parseCheckerAnswer(answer: string): 'merge' | 'fix' | 'drop' | undefined {
+  const a = String(answer ?? '').trim().toLowerCase()
+  if (a.startsWith('merge')) return 'merge'
+  if (a.startsWith('keep') || a.startsWith('fix')) return 'fix'
+  if (a.startsWith('drop')) return 'drop'
+  return undefined
 }

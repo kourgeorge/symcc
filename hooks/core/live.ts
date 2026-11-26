@@ -3,7 +3,7 @@
 // a client needs is worked out here, the lane text included (cut titles, station marks, the blinking current station),
 // so each client (Claude Code's terminal panel now; VS Code and OpenCode later) only draws the segments.
 import type { SymccMode, SymccTask } from '../../types'
-import { type BoardTask, OPEN, byRunOrder, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
+import { type BoardTask, type ChangeSize, OPEN, byRunOrder, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
 import { stageStep, taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { median, taskFigures } from './stats'
@@ -23,6 +23,7 @@ import { newestFirst } from './settings'
 import { isAnswered } from './task'
 import { viewMarks } from './board-parts'
 import { STATUS_MARK } from './details'
+import { sizeText } from './commits'
 
 /**
  * The kinds and times of task `t`'s history lines. A board view's done or dropped task (viewTask, e.g. OpenCode's)
@@ -262,6 +263,8 @@ export type LiveLane = {
   /** T-771: set on a finished lane (a task merged in the last LIVE_FINISHED_MS):
    *  when it merged and the word its right column says ("merged 3m ago"). */
   done?: { atMs: number; word: 'merged' }
+  /** T-1080: a finished lane's change size (the task's saved size); ends its second line as "+539 −3,722" */
+  size?: ChangeSize
 }
 
 /** T-771: how long a just-merged task keeps its lane (drawn finished, dim), and at most how many such lanes there are. */
@@ -450,6 +453,7 @@ export function liveFinishedLanes(view: LiveView, nowMs: number): LiveLane[] {
         tries: Math.max(tryNo, tryNo - auto + retries),
         ...(total > 0 ? { tokens: total } : {}),
         ...(usual ? { usual } : {}),
+        ...((t as BoardTask).size ? { size: (t as BoardTask).size } : {}),
         ...usageOf(t),
         sentBack: marksOf(t).filter(h => h.kind === 'checker-problems').length,
         enteredMs: done.atMs,
@@ -798,15 +802,17 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   const split: LiveSeg[] = agents.length ? [{ text: agents.join(' · '), tone: 'dim' }] : []
   /** The line with the parts up to `level` (4: all; 3: no split; 2: no "×median"; 1: no ⌀; 0: no ⏱).
    *  T-931: the clock first, then the tokens, then the split; the clock is dropped only after the tokens. */
-  const line = (level: number): LiveSeg[] => {
+  // T-1080: a finished lane's change size ends the line ("+539 −3,722", no files part); it is the first part dropped
+  const size: LiveSeg[] = lane.size ? [{ text: sizeText(lane.size, false), tone: 'dim' }] : []
+  const line = (level: number, withSize = false): LiveSeg[] => {
     const lead: LiveSeg = { text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }
-    const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], back ? [back] : []].filter(x => x.length)
+    const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], back ? [back] : [], withSize ? size : []].filter(x => x.length)
     return segs(lead, ...parts.flatMap((x, i): LiveSeg[] => [{ text: ' · ', tone: 'dim' }, ...x]))
   }
   // T-1074: the task type ends the second line (dim, two spaces after the meta text); dropped (never wrapped) when it does not fit
   const withKind = (xs: LiveSeg[]): LiveSeg[] => [...xs, { text: `  ${lane.kind}`, tone: 'dim' as const }]
   // each level with the kind, then without it, before a part of the meta text goes
-  const tries: LiveSeg[][] = [4, 3, 2, 1, 0].flatMap(n => (o.noKind ? [line(n)] : [withKind(line(n)), line(n)]))
+  const tries: LiveSeg[][] = [...(size.length ? [o.noKind ? line(4, true) : withKind(line(4, true))] : []), ...[4, 3, 2, 1, 0].flatMap(n => (o.noKind ? [line(n)] : [withKind(line(n)), line(n)]))]
   tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
   const second = tries.find(fits) ?? tries[tries.length - 1]!
   // T-771: a finished lane's second line is dim throughout

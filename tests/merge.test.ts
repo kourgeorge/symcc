@@ -7362,3 +7362,42 @@ test('T-805: taking off a fresh try keeps its worker id on the try before, with 
   expect(workerIdOf({ runs: back })).toBe('w1')
   expect(agentLines(back[0]!).join('|')).not.toContain('wx')
 })
+
+// T-1080: the change size (a shortstat diff) and the worker's "Done:" line are saved on the task
+const SHORTSTAT = (a: string[]) => (a[0] === 'diff' && a.includes('--shortstat') ? ok(' 25 files changed, 539 insertions(+), 3722 deletions(-)\n') : undefined)
+
+test("T-1080: a merged try saves its size and its Done line; the lead's update and the commit message say what was done", async () => {
+  const { w, t } = await finishes('Done: Git is checked against a short list.\n\nI changed src/a.ts.', { answer: SHORTSTAT })
+  expect(t.status).toBe('done')
+  expect(t.size).toEqual({ files: 25, added: 539, removed: 3722 })
+  expect(t.done).toBe('Git is checked against a short list.')
+  expect(leadQueue.join('\n')).toContain('Done: Git is checked against a short list.')
+  expect(w.calls.filter(c => c.includes('commit')).join('@@')).toContain('Git is checked')
+})
+
+test('T-1080: a try that goes to review has its size saved before it merges; approve measures it again', async () => {
+  const { t } = await finishes('Done: It is half done.\nrest', { answer: SHORTSTAT }, { needs_review: true })
+  expect(t.status).toBe('review')
+  expect(t.size).toEqual({ files: 25, added: 539, removed: 3722 })
+  expect(t.done).toBe('It is half done.')
+  const w2 = await inReview({ answer: SHORTSTAT })
+  await runTool(w2.$, 'approve', { task: 'T-1' })
+  const after = find(await load(w2.$), 'T-1')!
+  expect(after.status).toBe('done')
+  expect(after.size).toEqual({ files: 25, added: 539, removed: 3722 })
+})
+
+test("T-1080: the 'bring up to date' merge commit that lands on main carries the Done sentence", async () => {
+  const w = world({ upToDate: false })
+  const [b, t0] = boardWith('auto', ['npm test'])
+  const t = { ...t0, done: 'Git is checked against a short list.' } as typeof t0
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit --no-verify -m /.test(c) && c.includes('bring up to date with main') && c.includes('Git is checked against a short list.'))).toBe(true)
+})
+
+test('T-1080: a report with no Done line saves none, and the merged update has no Done', async () => {
+  const { t } = await finishes('I changed src/a.ts.')
+  expect(t.done).toBe(undefined)
+  expect(t.size).toBe(undefined)
+  expect(leadQueue.join('\n')).not.toContain('Done:')
+})

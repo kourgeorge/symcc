@@ -29,7 +29,8 @@ import { viewTask, viewStubFilled } from '../../core/board-parts'
 import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
 import { PLUGIN_ROOT } from '../host'
 import { inGroups, pillText, taskListIds, scoutListNames } from '../../core/page-header'
-import { PANEL_TABS } from '../board-view'
+import { PANEL_TABS, headerLines } from '../board-view'
+import { sizeSegs } from '../../core/page-header'
 import { startTui as startTuiLive, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
@@ -4632,4 +4633,12 @@ test('T-918: startTui: Enter on the edit page\'s Writes switches code and prose 
   await t.click('[ Save ]')
   expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role docs save {"code":"false"}' }])
   t.board.stop()
+})
+
+test('T-1080: the size line under the title wraps to the panel width, never cut', () => {
+  const size = sizeSegs({ size: { files: 25, added: 539, removed: 3722 }, status: 'review', branch: 'symcc/T-1063-a-very-long-branch-name' })
+  const lines = headerLines({ from: 'tasks', label: 'T-1063', place: null, title: 'In review', color: 'x', size, state: [[{ text: 'review', color: 'x' }]], buttons: [] }, 40)
+  const texts = lines.map(l => l.map(p => p.text).join(''))
+  expect(texts.every(t => t.length <= 40)).toBe(true)
+  expect(texts.join('\n')).toContain('+539')
 })

@@ -5,6 +5,7 @@ import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
 import { notProse, checkerProblems } from '../hooks/core/checker'
+import { makeAsk } from '../hooks/board'
 import { historyEvent, historyLineWords, workerStartedEntry, withHistory, noteAddedLine } from '../hooks/core/history'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped, adoptedCheckers } from '../hooks/app/state'
 import { pump, workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
@@ -1815,6 +1816,20 @@ test('T-1072: in board mode review a move to tests runs the tests and ends in re
   expect(w.git.moves.length).toBe(0)
 })
 
+test('T-1081: a move to tests that stops at review writes a finished try: history line, untested flag, secrets text', async () => {
+  const w = world(['src/a.ts', 'src/.env'])
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }, { mode: 'review' }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.history.map(h => h.text).join('\n')).toMatch(/checks passed/)
+  expect(t.note).toContain('ready for review')
+  const told = leadQueue.join('\n')
+  expect(told).toContain('changed code but no test')
+  expect(told).toContain('.env')
+})
+
 test('T-1072: in mode auto a failed task with needs_review moved to tests ends in review, nothing merged', async () => {
   const w = world()
   inRepo(w)
@@ -1954,4 +1969,52 @@ test('T-1079: one try read top to bottom: each history line has one actor, in or
   ])
   // symcc's own steps (prep, checker started, ...) have no actor, and no line mixes two
   expect(next.history.map(h => historyEvent(h)).filter(e => !e.by).every(e => e.who === '')).toBe(true)
+})
+
+test('T-996: a report whose only findings say "worse than main: none" is OK, and a follow-ups section before OK is OK', () => {
+  expect(checkerVerdict('Problems:\n- worse than main: none')).toEqual({ ok: true })
+  const mixed = 'Problems:\n- worse than main: none, but src/a.ts:3 opens a new hole'
+  expect(checkerVerdict(mixed)).toEqual({ ok: false, report: mixed })
+  expect(checkerVerdict('Follow-ups (not blocking):\n- src/a.ts:3 main already lacks a check\n\nOK')).toEqual({ ok: true })
+  const six = 'Problems:\n' + Array(5).fill('- worse than main: none').join('\n') + '\n- src/a.ts:3 new hole'
+  expect(checkerVerdict(six)).toEqual({ ok: false, report: six })
+  expect(checkerVerdict('Problems:\n- worse than main: none\n- src/a.ts:3 new hole: run x')).toEqual({ ok: false, report: 'Problems:\n- worse than main: none\n- src/a.ts:3 new hole: run x' })
+})
+
+test('T-996: the 2nd checker send-back makes the task wait for the owner with Merge as is / Keep fixing / Drop; Keep fixing starts one more try with the report', async () => {
+  const w = world()
+  const prior = { at: ISO, kind: 'checker-problems' as const, text: 'try 1: checker found problems: src/a.ts:1 old', try: 1 }
+  await saveBoard(w.$, boardWith(true, { attempts: 2, test_tries: 1, history: [prior] }))
+  const t = await finish(w, async id => checkerFinished(id, 'Problems:\n- src/a.ts:12 new hole: run x'))
+  expect(t.status).toBe('waiting')
+  expect(t.ask!.text).toBe('T-1 was sent back twice by the checker: src/a.ts:12 new hole: run x. Merge as is / Keep fixing / Drop')
+  expect(t.ask!.options).toEqual(['Merge as is', 'Keep fixing', 'Drop'])
+  expect(t.test_tries).toBe(1)
+  expect(w.git.main).toBe(M1)
+  expect(leadQueue.join('\n')).not.toContain('retrying on its own')
+  await runTool(w.$, 'change', { task: 'T-1', answer: 'Keep fixing' })
+  const k = find(await load(w.$), 'T-1')!
+  expect(k.status).toBe('todo')
+  expect(isCheckerOutput(k.test_output)).toBe(true)
+})
+
+test('T-996: answering Drop to that question drops the task', async () => {
+  const w = world()
+  const prior = { at: ISO, kind: 'checker-problems' as const, text: 'try 1: checker found problems: src/a.ts:1 old', try: 1 }
+  await saveBoard(w.$, boardWith(true, { attempts: 2, history: [prior] }))
+  await finish(w, async id => checkerFinished(id, 'Problems:\n- src/a.ts:12 new hole: run x'))
+  await runTool(w.$, 'change', { task: 'T-1', answer: 'Drop' })
+  expect(find(await load(w.$), 'T-1')!.status).toBe('dropped')
+})
+
+test('T-996: answering Merge as is runs the tests with no checker and merges', async () => {
+  const w = world()
+  inRepo(w)
+  const ask = 'T-1 was sent back twice by the checker: src/a.ts:12 new hole. Merge as is / Keep fixing / Drop'
+  await saveBoard(w.$, boardWith(true, { status: 'waiting', ask: makeAsk('symcc', ask, ISO, { options: ['Merge as is', 'Keep fixing', 'Drop'] }) }))
+  const said = await runTool(w.$, 'change', { task: 'T-1', answer: 'Merge as is' })
+  expect(said).toContain('merged')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(w.spawns.length).toBe(0)
+  expect(w.calls.some(c => c.includes('npm test'))).toBe(true)
 })

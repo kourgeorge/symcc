@@ -1,5 +1,5 @@
 // The task page's sections (T-580), as plain data: what the Claude Code terminal's task page shows under its title and
-// buttons, in its order and with its headings: ▍Why it failed, ▍Answer, ▍Details, ▍Branch (T-761), ▍Changes, ▍What to do, ▍History,
+// buttons, in its order and with its headings: ▍Done (T-1080, what the whole task has done so far), ▍Why it failed, ▍Answer, ▍Details, ▍Branch (T-761), ▍Changes, ▍What to do, ▍History,
 // ▍Report, ▍Checker (T-1079, the checker's full report of the try) and ▍Runs (time and cost, with a one-line sum). Each section is lines of colored pieces (Seg), some with what a press or click on
 // them does (a changed file opens its diff). The terminal (hooks/claude/ui/task-page.tsx) and OpenCode's panel
 // (hooks/opencode/board-view.ts) draw them; VS Code's card (vscode-task.tsx) takes their contents but keeps its own
@@ -18,7 +18,7 @@ import { taskBranchLines, taskBranchTitle, type TaskBranchFacts } from './task-b
 import { cutTitle } from './width'
 
 /** The sections, in the page's order. */
-export type TaskSectionId = 'why' | 'answer' | 'details' | 'branch' | 'changes' | 'what' | 'history' | 'report' | 'checker' | 'runs'
+export type TaskSectionId = 'done' | 'why' | 'answer' | 'details' | 'branch' | 'changes' | 'what' | 'history' | 'report' | 'checker' | 'runs'
 
 /** What a press on a line does: show a changed file's diff. */
 export type SectionAction = { diff: string }
@@ -151,6 +151,9 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
   const at = picked >= 0 ? picked : reports.length - 1
   const shown = reports[at]
   const latest = reports[reports.length - 1]
+  // T-1080: what the whole task has done so far, from its worker's latest "Done:" line; none on a task that has none (an old one)
+  const doneText = bt.done?.trim()
+  if (doneText) out.push({ id: 'done', title: 'Done', lines: indented(doneText, 'text', width, 'done') })
   // A failed task: why (the same sentence as its board row), what the failed try's report asks for, and what to do
   // next. Only the report of the try that failed counts.
   if (t.status === 'failed') {
