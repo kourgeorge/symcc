@@ -214,7 +214,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // so they are not in the history that merges (a fast-forward would bring in every commit as it is).
   // Only the ones still there at the end are taken out of the new commit (and reported); a deletion
   // stays a deletion (commits that only delete such a file are not counted, see above).
-  const inHistory = secretFiles(await touchedSince($, base, head))
+  const inHistory = secretFiles(await touchedSince($, base, head, true))
   const inBranch = secretFiles(await changedSince($, base, head, true))
   if (inHistory.length || inBranch.length) {
     const why = await dropFromBranch($, t, dir, base, inBranch, made)
@@ -328,12 +328,12 @@ async function changedSince($: Host, base: string, head: string, noDeleted = fal
 
 /**
  * Every file added or changed by any single commit from `base` to `head` (not just the net change: a file
- * added and later deleted again is listed too, and so is a file a commit only deletes);
+ * added and later deleted again is listed too, and so is a file a commit only deletes, unless `noDeleted`);
  * a merge commit lists the files it changed against every parent (--cc: what the merge itself added, T-1053), not
  * the ones it only brought in from one side (those are listed by their own commits).
  */
-async function touchedSince($: Host, base: string, head: string): Promise<string[]> {
-  const d = await git($, ['log', '--cc', '--format=', '--name-only', '--no-renames', '-z', `${base}..${head}`])
+async function touchedSince($: Host, base: string, head: string, noDeleted = false): Promise<string[]> {
+  const d = await git($, ['log', '--cc', '--format=', '--name-only', '--no-renames', ...(noDeleted ? ['--diff-filter=d'] : []), '-z', `${base}..${head}`])
   if (d.exitCode !== 0) throw new Error(`git log --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
   return [...new Set(d.stdout.split('\0').map(f => f.replace(/^\n+/, '')).filter(Boolean))]
 }
