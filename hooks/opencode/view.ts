@@ -49,7 +49,7 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>):
         const names = (v.scouts ?? []).map(sc => sc.name)
         const scout_results = names.length ? await loadScoutResults(host, names, v.tasks ?? [], at).catch(() => ({})) : {}
         const defs = await defsOf(host as Host).catch(() => ({}))
-        const changes = await changesOf(host as Host, v)
+        const changes = await changesOf(host as Host, v, opened)
         const org_mem = await orgMemNow(host as Host).then(r => r.notes).catch(() => [])
         const text = viewFileText({ root, home: S.home, name: S.N.name, version: S.version, written_at: at, ...(openNow ? { open_now: openNow } : {}), view: { ...(v as PaneView), tasks: (v.tasks ?? []).map(viewTask), ...(Object.keys(scout_runs).length ? { scout_runs } : {}), ...(Object.keys(scout_results).length ? { scout_results } : {}), ...defs, ...(Object.keys(changes).length ? { changes } : {}), org_mem } })
         await safeWrite(host as Host, file, text, 'the board view')
@@ -59,7 +59,12 @@ export function viewFilePanel(host: Pick<Host, 'fs' | 'run' | 'ui' | 'plugin'>):
   }
   return {
     readOpened: async () => opened,
-    updateOpened: async change => (opened = change(opened)),
+    updateOpened: async change => {
+      const was = opened
+      opened = change(opened)
+      if (opened !== was) await write(view) // the open done task's Changes are read now
+      return opened
+    },
     readTab: async () => tab,
     updateTab: async change => (tab = change(tab)),
     readScoutOpen: async () => scout,
@@ -90,13 +95,19 @@ export async function scoutRunsOf(host: Pick<Host, 'fs'>, root: string, v: Symcc
   return out
 }
 
+/** T-1086: how many of the newest done tasks get their Changes read for the panel (the open task's too). */
+const DONE_CHANGES = 20
+
 /** The files each task in review changed (T-580; not an answered investigation's: nothing to merge), against the
  *  branch it merges into, or why they can't be read: the TUI's task page lists them under Changes. */
-export async function changesOf(host: Host, v: SymccView): Promise<ViewChanges> {
+export async function changesOf(host: Host, v: SymccView, opened = ''): Promise<ViewChanges> {
   const out: ViewChanges = {}
-  for (const t of v.tasks ?? []) {
-    // T-1086: a done change task's list comes from its merged commits (see mergedChanges; answers are kept in memory)
+  let done = 0
+  for (const t of [...(v.tasks ?? [])].sort((x, y) => String(y.updated_at).localeCompare(String(x.updated_at)))) {
+    // T-1086: a done change task's list comes from its merged commits (see mergedChanges; answers are kept in memory):
+    // the newest few and the open task are read, never every done task
     if (hasMergedChanges(t)) {
+      if (done++ >= DONE_CHANGES && t.id !== opened) continue
       const got = await mergedChanges(host, t).catch(() => null)
       if (got) out[t.id] = { files: got.files, error: '' }
       continue

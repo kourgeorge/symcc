@@ -4694,7 +4694,7 @@ test('T-1105: a setting\'s pick dialog says what the setting does and gives each
   board.stop()
 })
 
-test('T-1094: Changes are read for every done task, not just the 20 newest', async () => {
+test('T-1094: Changes of an older done task are read only when it is the open one', async () => {
   const sha = (c: string) => c.repeat(40)
   const host = fakeHost({
     run: async argv => {
@@ -4707,6 +4707,9 @@ test('T-1094: Changes are read for every done task, not just the 20 newest', asy
   })
   const tasks = Array.from({ length: 25 }, (_, i) => ({ id: `T-${i + 1}`, title: 't', details: '', files: [], status: 'done', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, merged: sha('a'), created_at: '2026-11-01T00:00:00.000Z', updated_at: `2026-11-01T00:00:${String(i).padStart(2, '0')}.000Z` })) as unknown as SymccTask[]
   const got = await changesOf(host.host, { tasks } as never)
-  expect(Object.keys(got).length).toBe(25)
-  expect(got['T-1']!.files.length).toBe(1)
+  expect(Object.keys(got).length).toBe(20)
+  expect(got['T-1']).toBe(undefined)
+  const open = await changesOf(host.host, { tasks } as never, 'T-1')
+  expect(Object.keys(open).length).toBe(21)
+  expect(open['T-1']!.files.length).toBe(1)
 })
