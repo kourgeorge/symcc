@@ -567,18 +567,44 @@ export const normId = (id: string) => {
 
 export const find = (b: Board, id: string) => b.tasks.find(t => t.id === normId(id))
 
-/** Repository-relative paths only ("." anywhere in the list means the whole project, so the list is empty); never the plugin's data folder `dir` (the board) or Git internals. */
-export function cleanFiles(files: unknown, dir: string = DATA_DIR): string[] {
+/** Repository-relative paths only (an errand, with `outside`, may also list absolute folders outside the project, T-1129;"." anywhere in the list means the whole project, so the list is empty); never the plugin's data folder `dir` (the board) or Git internals. */
+export function cleanFiles(files: unknown, dir: string = DATA_DIR, outside = false): string[] {
   if (!Array.isArray(files)) return []
   const all = files.map(f => String(f).trim().replace(/\\/g, '/'))
   // "." or "./" is the whole project: the same as an empty list (anywhere).
   if (all.some(f => f === '.' || f === './')) return []
   return all
     .map(f => f.replace(/^\.\//, ''))
-    .filter(f => f && !f.startsWith('/') && !f.split('/').includes('..') && !f.startsWith(dir) && !f.startsWith('.git/') && f !== '.git')
+    .filter(f => f && (outside || !f.startsWith('/')) && !f.split('/').includes('..') && !f.startsWith(dir) && !f.startsWith('.git/') && f !== '.git')
   // T-713: no limit on how many files a task lists. A silent cut here made allowFiles say "allowed"
   // for files it dropped, and the worker was refused the same file again, round after round.
 }
+/**
+ * T-1129: the absolute folders an errand's worker may write in. A leading "~/" is the home folder; an
+ * absolute path that is the project folder or inside it (its board, `.git`), is "/" or is the home folder
+ * itself is dropped. Relative paths are not returned (they never leave the project).
+ */
+export function errandFolders(files: readonly string[] | undefined, root: string, home: string): string[] {
+  // Like path.resolve: collapse repeated slashes, drop "." parts, no trailing slash; null when it has "..".
+  const norm = (p: string): string | null => {
+    const parts = p.replace(/\\/g, '/').split('/').filter(s => s && s !== '.')
+    return parts.includes('..') ? null : `/${parts.join('/')}`
+  }
+  const r = norm(root)?.toLowerCase() ?? ''
+  const h = home ? norm(home)?.toLowerCase() ?? '' : ''
+  const out: string[] = []
+  for (const f0 of files ?? []) {
+    const f = f0.startsWith('~/') && home ? `${home}/${f0.slice(2)}` : f0
+    if (!f.startsWith('/')) continue
+    const n = norm(f)
+    if (n === null || n === '/') continue
+    const p = n.toLowerCase()
+    if ((h && p === h) || (r && r !== '/' && (p === r || p.startsWith(`${r}/`)))) continue
+    out.push(f.endsWith('/') ? `${n}/` : n)
+  }
+  return out
+}
+
 /** The three board modes, in the order they are shown. */
 export const MODES: SymccMode[] = ['paused', 'review', 'auto']
 

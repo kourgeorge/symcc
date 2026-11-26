@@ -5275,7 +5275,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["errand                         "]},
           {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
-          {"type":"Text","props":{"color":"text"},"children":["ge…"]}
+          {"type":"Text","props":{"color":"text"},"children":["wo…"]}
         ]
       },
       {
@@ -5550,7 +5550,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["errand                         "]},
           {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
-          {"type":"Text","props":{"color":"text"},"children":["ge…"]}
+          {"type":"Text","props":{"color":"text"},"children":["wo…"]}
         ]
       },
       {
@@ -5837,7 +5837,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["errand                         "]},
           {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
-          {"type":"Text","props":{"color":"text"},"children":["ge…"]}
+          {"type":"Text","props":{"color":"text"},"children":["wo…"]}
         ]
       },
       {
@@ -6223,7 +6223,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
             ]
           },
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["a general change when no other task type fits (the default)"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["a general coding task (code, tests, config) when no other task type fits (the default)"]}
         ]
       },
       {
@@ -6245,7 +6245,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Body"]},
-          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["The worker changes files, which are committed, tested and merged."]}]}
+          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["The worker changes project files, which are committed, tested and merged."]}]}
         ]
       },
       {
@@ -6298,7 +6298,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
             ]
           },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a general change when no other task type fits (the default)"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a general coding task (code, tests, config) when no other task type fits (the default)"]}
         ]
       },
       {
@@ -6320,7 +6320,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Body"]},
-          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["The worker changes files, which are committed, tested and merged."]}]}
+          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["The worker changes project files, which are committed, tested and merged."]}]}
         ]
       },
       {
@@ -6381,7 +6381,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"inactive"},"children":[" · ","built-in"]}
             ]
           },
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a general change when no other task type fits (the default)"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["a general coding task (code, tests, config) when no other task type fits (the default)"]}
         ]
       },
       {
@@ -6403,7 +6403,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Body"]},
-          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["The worker changes files, which are committed, tested and merged."]}]}
+          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["The worker changes project files, which are committed, tested and merged."]}]}
         ]
       },
       {

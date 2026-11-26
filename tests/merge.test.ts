@@ -2052,6 +2052,25 @@ test('/symcc-enable when symcc is already enabled says "already enabled" and tel
   }
 })
 
+test('T-1129: an errand whose files name a folder outside the project starts its worker with those files; an investigation gets none', async () => {
+  for (const [kind, want] of [['errand', ['/Users/me/Desktop/talk/']], ['investigation', undefined]] as const) {
+    const { w } = await liveWorld()
+    const starts: { files?: string[] }[] = []
+    w.$.agents.spawn = async e => (starts.push(e as { files?: string[] }), { agentId: `ag${starts.length + 1}` })
+    try {
+      const [b] = boardWith('auto', [], { kind, files: ['/Users/me/Desktop/talk/'], live: { session: 'me' }, agent: 'ag1', branch: 'symcc/T-1', history: [], runs: [{ started: ISO }] } as Partial<BoardTask>)
+      await saveBoard(w.$, b)
+      await setSymcc(w.$, false)
+      await setSymcc(w.$, true)
+      await settle(w, () => workerOn('T-1'))
+      expect(starts.length).toBe(1)
+      expect(starts[0]!.files).toEqual(want as string[] | undefined)
+    } finally {
+      cleanUp()
+    }
+  }
+})
+
 test('T-571: /symcc-enable with the board paused says plainly that the mode stops the work and how to start it, and keeps the mode', async () => {
   const { w, spawned } = await liveWorld()
   try {
