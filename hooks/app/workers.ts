@@ -1685,7 +1685,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
     if (r.ok && r.review && !r.merged) {
       // A move to tests in board mode "review": the tests passed; it waits for the owner's approve like any finished task.
       // T-1081: written like a finished try's review (history line, untested flag, secrets text, the real detail)
-      await settle(host, cur ?? t, b, r, by, dir, undefined, false, undefined, who)
+      await settle(host, t, b, r, by, dir, undefined, false, undefined, who)
       await change(host, x => (find(x, t.id)?.status === 'review' ? patchTask(x, t.id, { live: { merge_wait: undefined } }, now()) : x))
       return `${t.id} passed its tests and is ready for review (nothing merged yet); approve it to merge`
     }
