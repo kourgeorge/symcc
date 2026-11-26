@@ -13,7 +13,7 @@
 // No key hints: the search is a box at the top. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { isFinished, statusMark, archivedNote, archivedOf, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, kindTag, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus, LIST_TONE } from '../../board'
+import { openAfter, isFinished, statusMark, archivedNote, archivedOf, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, kindTag, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus, LIST_TONE } from '../../board'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -120,7 +120,7 @@ export async function listPageVs($: $, pane: PaneParts) {
     const tagged = body.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
     // the "waits for" list comes from the task's own `after` field (its unfinished ones, as rowExtra shows them), never
     // from text that only starts with the word: a question or note "after you look at …" is a normal text
-    const ids = x.status === 'todo' || x.status === 'paused' ? (x.after ?? []).filter(id => v.tasks.some(t => t.id === id && t.status !== 'done')) : []
+    const ids = x.status === 'todo' || x.status === 'paused' ? openAfter({ tasks: v.tasks, archived_done: x.after }, x) : []
     const after = ids.length && body === `${WAITS_FOR} ${ids.join(', ')}` ? body : ''
     const role = !after && body && body === kindTag(x) ? body : ''
     // the row's end, in order: "→ branch", "waits for …", the kind (when not tagged yet), the kind tag, else the

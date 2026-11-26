@@ -12,7 +12,7 @@ import { checkStepNow } from './lead'
 import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_NOTE, STEP_WORD } from './panel'
 import { stageStep, taskPhase } from './phase'
 import { ranNowThisTry } from './history'
-import { depDone } from './archive'
+import { depDone, openAfter } from './archive'
 import { runNowShares, runNowShareText } from './run-now'
 
 /** A piece of text on the task page with its theme color name (see C() in claude/ui/parts.tsx). */
@@ -184,7 +184,7 @@ export function prioritySegs(t: SymccTask, all: SymccTask[], archivedDone: strin
   const segs: Seg[] = [{ text: String(p), color: 'text', ...(p ? { bold: true } : {}) }]
   if (t.status !== 'todo') return segs
   const b = { tasks: all.some(x => x.id === t.id) ? all : [...all, t], archived_done: archivedDone }
-  const open = t.after.filter(id => !depDone(b, id))
+  const open = openAfter(b, t)
   if (open.length) return [...segs, { text: ` · waits on ${open[0]} first`, color: 'inactive' }]
   const at = b.tasks.filter(x => x.status === 'todo' && x.after.every(a => depDone(b, a))).sort(byRunOrder).findIndex(x => x.id === t.id)
   return [...segs, { text: ` · ${at <= 0 ? 'next to start' : `${ordinal(at + 1)} in line`}`, color: 'inactive' }]
