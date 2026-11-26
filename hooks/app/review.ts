@@ -612,7 +612,13 @@ export async function mergedBefore($: Host, t: Pick<SymccTask, 'id' | 'runs'>, m
   if (second) {
     // symcc's own merge commit (the task's trailer): main is its second parent. A merge made by hand on main: its first parent is main.
     const m = await git($, ['log', '-n', '1', '--format=%B', merged]).catch(() => null)
-    return m && m.exitCode === 0 && own(merged, String(m.stdout ?? '')) ? second : first
+    if (m && m.exitCode === 0 && isTaskCommit(String(m.stdout ?? ''), t.id, S.N.name)) return second
+    // the worker's own merge of main (saved in the runs) sits on the task's line: its first parent is the task's own commit
+    if (saved.has(merged)) {
+      const f = await git($, ['log', '-n', '1', '--format=%B', first]).catch(() => null)
+      if (f && f.exitCode === 0 && own(first, String(f.stdout ?? ''))) return second
+    }
+    return first
   }
   const log = await git($, ['log', '--first-parent', '-n', '200', '--format=%H%x1f%P%x1f%B%x1e', merged]).catch(() => null)
   if (!log || log.exitCode !== 0) return first

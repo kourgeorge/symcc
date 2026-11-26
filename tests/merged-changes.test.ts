@@ -120,6 +120,14 @@ test('T-1086: a hand merge on main (parents: main, task tip): main before is the
   expect(got?.before).toBe(sha('a'))
 })
 
+test('T-1096: a hand merge saved in the runs still has main as its first parent', async () => {
+  const merged = sha('8')
+  const w = gitWorld({ commits: { [merged]: { parents: [sha('a'), sha('b')], message: "Merge branch 'task'" }, [sha('a')]: { parents: [sha('c')], message: 'main work' } }, numstat: NUMSTAT })
+  const runs = [{ started: 'x', commits: [sha('b'), merged] }] as BoardTask['runs']
+  const got = await mergedChanges(w.$, task({ merged, runs }))
+  expect(got?.before).toBe(sha('a'))
+})
+
 test('T-1086: a file\'s diff comes from git; "diff not available" when git no longer has the commits', async () => {
   const merged = sha('1')
   const w = gitWorld({ commits: { [merged]: { parents: [sha('2'), sha('3')], message: 'Symcc-Task: T-7' } }, numstat: NUMSTAT, diff: 'diff --git a/hooks/a.ts b/hooks/a.ts\n+new\n' })
