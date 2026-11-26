@@ -400,7 +400,7 @@ const DAM_IMAGE = { PLATFORM_HARNESS: 'claude-code' }
 
 const COMPOSE = { model: 'claude-opus-5-5', promptModel: 'claude-opus-5-5', surfaces: ['terminal'], tools: [], outputStyle: null, traits: [] } as never
 
-/** Whether the lead's guide in the system prompt ends with the post-to-Slack line (S.dam is on in the plugin). */
+/** Whether the lead's guide in the system prompt ends with the post-to-Slack line (S.chat is "dam" in the plugin). */
 async function slackLine($: Eng): Promise<boolean> {
   const lead = (await $.prompt.compose(COMPOSE)).sections.find(x => x.id === 'symcc:lead')
   expect(lead).toBeDefined()
@@ -417,7 +417,7 @@ async function damStart($: Eng, on: On, env: Record<string, string> = DAM_IMAGE)
   return w
 }
 
-test("T-943: in a DAM image, an owner's sdk prompt through prompt.submit turns the Slack line on (S.dam)", async ($, on) => {
+test("T-943: in a DAM image, an owner's sdk prompt through prompt.submit turns the Slack line on (S.chat)", async ($, on) => {
   await damStart($, on)
   await say($, 'add a search box', { origin: { kind: 'sdk' } })
   expect(await slackLine($)).toBe(true)

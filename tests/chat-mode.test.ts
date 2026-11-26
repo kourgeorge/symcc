@@ -7,7 +7,7 @@ import { leadGuideText, sessionStart } from '../hooks/app/symcc'
 import { saveBoard } from '../hooks/app/store'
 import { tellLead, takeBoardUpdate } from '../hooks/app/tell'
 import { workerQuestionText } from '../hooks/app/workers'
-import { chatPostLine } from '../hooks/core/dam'
+import { chatPostLine, damGuideCore } from '../hooks/core/dam'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -56,4 +56,19 @@ test('T-1098: in chat mode a board update ends with the post line naming the ser
   expect(guide.endsWith(chatPostLine('telegram'))).toBe(true)
   expect(guide).toContain('reply with the number or your own words')
   expect(guide).not.toContain('AskUserQuestion')
+})
+
+test('T-1100: in chat mode no lead guide, worker question or DAM guide text says "answer on the board"', async () => {
+  const w = await start()
+  const plain = (await leadGuideText(w.host)) ?? ''
+  expect(plain).toContain('or answer on the board')
+  expect(workerQuestionText('T-6', 'Which color?')).toContain('answer on the board')
+  expect(damGuideCore('symcc')).toContain('reply with the number or your own words')
+  S.chat = 'telegram'
+  const guide = (await leadGuideText(w.host)) ?? ''
+  expect(guide.includes('or answer on the board')).toBe(false)
+  expect(guide.includes('they can also answer on the board')).toBe(false)
+  expect(/(or|also) answer on the board/.test(workerQuestionText('T-6', 'Which color?'))).toBe(false)
+  expect(/(or|also) answer on the board/.test(workerQuestionText('T-6', 'Which color?', ['red', 'blue']))).toBe(false)
+  expect(damGuideCore('symcc').includes('answer on the board')).toBe(false)
 })

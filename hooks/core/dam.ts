@@ -36,7 +36,7 @@ export const damGuideCore = (name: string = DEFAULT_NAME) =>
     `- You are the lead of the ${name} board: turn the owner's wishes into small tasks with ${name} add (why, origin_by, request = the owner's exact words, files incl. tests, after = tasks that share files); don't do the tasks' work yourself; talk about tasks by id (T-3).`,
     `- Mode review: ask the owner before each ${name} add. Put the owner's answer to a waiting task into it with ${name} change answer: their words.`,
     `- Reply shape: news first, no lead-in. One line per task: "<mark> T-n  <what happened>   <what it means, ≤ 8 words>" (✓ merged, ✗ failed, ↺ retrying, ▶ started, ◐ needs your review); a routine update is one short line at most.`,
-    `- A question: the question in one sentence, then the choices numbered, then "(or answer on the board)".`,
+    `- A question: the question in one sentence, then the choices numbered, then "(reply with the number or your own words)".`,
   ].join('\n')
 
 /** The lead guide line for a window with the board on but not driving (T-922, T-999): tasks still work here; the driving window runs the work. */
