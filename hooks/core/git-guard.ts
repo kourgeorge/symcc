@@ -106,13 +106,13 @@ const GIT_OPTION_OK = new Set(['--no-pager', '-P', '-p', '--paginate', '--no-opt
  * A git call in a command's text: `git` (or `/usr/bin/git`), or a git program by its own name (`git-push`), where a
  * command starts: at the start, after `&&`, `||`, `;`, `|`, `&`, `(`, `)` (a `case` label), `$(`, `{`, a backquote, a line end or
  * `sh -c` (`bash -lc`, `eval`...), and after leading redirects (`2>/dev/null`, `> out`), `VAR=x` settings or env, sudo, command, exec, time, timeout, nice,
- * nohup, xargs, eval, if, then... with their options, an option's value (`sudo -u root`) and a number (`timeout 5`).
+ * nohup, xargs, eval, if, then, zsh's noglob, nocorrect, coproc, repeat and `-`... with their options, an option's value (`sudo -u root`) and a number (`timeout 5`).
  * gitWriteIn takes out quotes and backslashes first (`"git" push`, `\git push` run git), so
  * `grep "git push" docs/` and `git commit -m "make git simpler"` hold no git call (git is not where a command starts).
  */
 const GIT_AT = new RegExp(
   String.raw`(?:^|&&|\|\||[;|&(){\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n]|(?<!\S)-(?:exec|execdir|ok|okdir)[^\S\n])` +
-    String.raw`(?:[^\S\n]*(?:(?:(?:/[\w.-]+)*/)?(?:env|sudo|doas|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|!)` +
+    String.raw`(?:[^\S\n]*(?:(?:(?:/[\w.-]+)*/)?(?:env|sudo|doas|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|noglob|nocorrect|coproc|builtin|repeat|!|-)` +
     // each word fits one pattern only (a short option, a longer option, a number; a value is none of them), so the
     // regex never tries many splits of the same words (`env -i -i -i ... git push` checks fast)
     String.raw`(?:[^\S\n]+(?:-[a-zA-Z](?![^\s;&|])(?:[^\S\n]+(?!-)(?!\d[\w.]*(?![^\s;&|]))(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]{2,}|\d[\w.]*(?![^\s;&|])))*|\w+=[^\s;&|]*` +
@@ -181,7 +181,7 @@ export function gitPlaceOk(command: string, cwd: string | undefined, places: Fol
 }
 
 /** Programs often put in front of git; the Node host's rules refuse git after them. */
-const GIT_WRAPPERS = ['env', 'sudo', 'command', 'exec', 'xargs', 'nohup', 'time', 'nice', 'caffeinate', 'watch', 'stdbuf']
+const GIT_WRAPPERS = ['env', 'sudo', 'command', 'exec', 'xargs', 'nohup', 'time', 'nice', 'caffeinate', 'watch', 'stdbuf', 'noglob', 'nocorrect', 'coproc', 'builtin', 'repeat', '-']
 
 /**
  * The same deny list as Claude Code rules for every `claude -p` agent (the Node host has no symcc hook; a deny rule

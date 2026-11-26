@@ -269,7 +269,7 @@ test('T-1062: a redirect before the git command, a wrapper by its full path, ~us
   expect(no('cd ~o/ && cat repo/README.md')).toBe(BASH_ABOVE)
   for (const c of ['ls /Users/o/*/README.md', 'rm ~/re*/README.md', 'rm /Users/o/rep?/README.md', 'cat /Users/o/{repo,x}/README.md', 'rm -r /Users/o/r*', 'ls /U*/o/repo', 'cd /Users/*/repo'])
     expect([c, no(c)]).toEqual([c, ''])
-  for (const c of ['ls /tmp/*', `ls ${WT}/*.ts`, 'ls /Users/o/repository', 'cat ~/notes/*.md', 'ls /Users/other/*', 'echo ~1 HEAD~2'])
+  for (const c of ['ls /tmp/*', `ls ${WT}/*.ts`, 'ls /Users/o/repository', 'cat ~/notes/*.md', 'ls /Users/other/*', 'echo HEAD~2', 'git log main~1', 'cd ~+ && ls'])
     expect([c, no(c)]).toEqual([c, undefined])
 })
 
@@ -283,9 +283,29 @@ test('T-1062: many option words after a wrapper still find the git call, fast', 
     'timeout' + ' 5'.repeat(40) + ' ' + push,
     'if' + ' -ab'.repeat(40) + ' ' + push,
     ('env -i ' + 'time -p ').repeat(30) + push,
+    ('- ' + 'noglob -x ').repeat(30) + push,
   ]) {
     const start = Date.now()
     expect([c, gitWriteIn(c, 'worker'), gitWriteIn(c, 'reader')]).toEqual([c, 'git push', 'git push'])
     expect([c, Date.now() - start < 500]).toEqual([c, true])
   }
+})
+
+test("T-1062: zsh's noglob, nocorrect, coproc and `-` before git, ~- and the folder stack, and a project path glued to an option are caught", () => {
+  for (const who of ['reader', 'worker'] as const) {
+    for (const c of ['noglob git push', 'nocorrect git push', '- git push', 'coproc git push', 'builtin git push', 'repeat 2 git push', 'x; noglob nocorrect git push'])
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+    for (const c of ['noglob git push', 'nocorrect git push', '- git push', 'coproc git push'])
+      expect([c, who, nodeRefuses(gitDeniedRules(who === 'worker'), c)]).toEqual([c, who, true])
+    expect([who, gitWriteIn('noglob git log -3', who)]).toEqual([who, undefined])
+  }
+  const no = (c: string) => bashOutsideFolder(c, WT, ROOT, '/Users/o')
+  // the previous folder (`~-`, like `cd -`) and zsh's folder stack may be the owner's copy
+  for (const c of ['rm ~-/README.md', 'cd ~- && rm README.md', 'cat ~-', 'cd $OLDPWD && rm x', 'rm ${OLDPWD}/x', 'cd ~1 && rm x', 'ls ~-2/x', 'cd +1 && rm x', 'pushd -1'])
+    expect([c, no(c)]).toEqual([c, BASH_ABOVE])
+  expect(bashOutsideFolder('rm ~-/README.md', WT, ROOT)).toBe(BASH_ABOVE)
+  // the project path glued to an option still counts
+  for (const [c, rel] of [[`sort -o${ROOT}/README.md x`, 'README.md'], [`curl -o${ROOT}/a https://example.com`, 'a'], [`tar -xf a.tar -C${ROOT}`, ''], ['ls -d/Users/o/*/README.md', '']] as const)
+    expect([c, no(c)]).toEqual([c, rel])
+  for (const c of [`sort -o${WT}/a x`, `tar -xf a.tar -C${WT}/src`]) expect([c, no(c)]).toEqual([c, undefined])
 })

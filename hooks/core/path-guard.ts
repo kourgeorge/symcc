@@ -149,7 +149,7 @@ const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * dropped) may not hold the project folder `root` (any of its names, also as `~/...` or `$HOME/...` from `home`)
  * unless that place is inside the worker's own folder `worktree` (any of its names): the answer is the named path
  * relative to the project ('' for the project itself; also when a glob character follows, `<project>*`). A `..` path piece anywhere (`cd ..`, `../x`, `a/../b`)
- * answers BASH_DOTDOT: "use full paths"; a cd, chdir or pushd to a folder above the project (`cd /`, `cd`, `cd ~`
+ * answers BASH_DOTDOT: "use full paths"; the previous folder (`~-`, $OLDPWD, like `cd -`), zsh's folder stack (`~1`, `cd +1`) and a cd, chdir or pushd to a folder above the project (`cd /`, `cd`, `cd ~`
  * when home holds the project) answers BASH_ABOVE, as a relative path from there reaches it. Plain text, no shell parsing: a path built at run time ($X, $(...), a
  * script) is not seen. Letter case is ignored, as macOS folders usually do.
  */
@@ -160,7 +160,9 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
   // quotes and backslashes only group words: `.''.`, `\..` and `.\./` are `..` to the shell
   const plain = joinLines(command).replace(/["'\\]/g, '')
   if (/(?:^|[\s/=:(<>&|;,{])\.\.(?=$|[\s/`;&|)<>,}])/.test(plain)) return BASH_DOTDOT
-  // `a//b` and `a/./b` name the same place as `a/b`
+  // the previous folder (`~-`, $OLDPWD) and zsh's folder stack (`~1`, `~-2`, `cd +1`) are unknown here: the owner's
+  // copy may be one of them (`rm ~-/README.md`, like `cd -`)
+  if (/(?<![^\s;&|<>(){}=:,`])~(?:-\d*|\+?\d+)(?=$|[\/\s;&|<>(){}:,`])|\$\{?OLDPWD\b|(?<![\w.-])(?:cd|chdir|pushd|popd)[^\S\n]+[+-]\d/.test(plain)) return BASH_ABOVE
   const h = home?.startsWith('/') ? resolvePath('/', home) : undefined
   // home written as `~`, `~<user>`, `$HOME` or `${HOME}` is home's full path
   const user = h ? reEscape(h.split('/').pop() ?? '') : ''
@@ -175,7 +177,7 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
     if (to !== undefined && tops.some(t => t.toLowerCase() !== to.toLowerCase() && inside(t, to, false) !== undefined)) return BASH_ABOVE
   }
   // a wildcard (`*`, `?`, `[`, `{`) at or above the project's own level may reach it (`/Users/o/*/README.md`)
-  for (const m of flat.matchAll(/(?<![^\s;&|<>()=:`])\/[^\s;&|<>()`]*/g)) {
+  for (const m of flat.matchAll(/\/[^\s;&|<>()`]*/g)) {
     const parts = m[0].split('/').slice(1)
     for (const top of tops) {
       const own = top.split('/').slice(1)
@@ -185,8 +187,9 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
       if (parts.slice(0, k).every((p, i) => like(p, own[i]!))) return ''
     }
   }
+  // anywhere in the text, also glued to an option (`sort -o<project>/README.md`, `tar -C<project>`)
   for (const top of tops) {
-    for (const m of flat.matchAll(new RegExp(`(?<![^${PATH_END}])${reEscape(top)}(?=$|[/*?[${PATH_END}])(?:/[^${PATH_END}]*)?`, 'gi'))) {
+    for (const m of flat.matchAll(new RegExp(`${reEscape(top)}(?=$|[/*?[${PATH_END}])(?:/[^${PATH_END}]*)?`, 'gi'))) {
       const abs = resolvePath('/', top + m[0].slice(top.length))
       if (insideAny(abs, wts, false) === undefined) return insideAny(abs, tops, false) ?? ''
     }
