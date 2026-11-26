@@ -113,11 +113,15 @@ export function bringBack(b: Board, t: BoardTask, now: string): Board {
 }
 
 /** Whether task `id`, which another task waits for, counts as done: done on the board, or archived as done. */
-export function depDone(b: Pick<Board, 'tasks'> & Partial<Pick<Board, 'archived_done'>>, id: string): boolean {
+export function depDone(b: { tasks: readonly Pick<BoardTask, 'id' | 'status'>[] } & Partial<Pick<Board, 'archived_done'>>, id: string): boolean {
   const n = normId(id)
   const t = b.tasks.find(x => x.id === n)
   return t ? t.status === 'done' : (b.archived_done ?? []).includes(n)
 }
+
+/** The tasks `t` still waits for: its after list without itself and without done ones (a dropped one still counts as open). */
+export const openAfter = (b: { tasks: readonly Pick<BoardTask, 'id' | 'status'>[] } & Partial<Pick<Board, 'archived_done'>>, t: { id: string; after?: readonly string[] }): string[] =>
+  [...new Set(t.after ?? [])].filter(a => a !== t.id && !depDone(b, a))
 
 /** "(+96 archived)" after the Done count, or '' when nothing done was archived. */
 export const archivedNote = (n: number) => (n > 0 ? `(+${n} archived)` : '')

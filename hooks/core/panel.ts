@@ -1,5 +1,6 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
+import { openAfter } from './archive'
 import { asBlockers, byRunOrder, type BoardTask, type CheckStep, type TurnStep, emptyBoard, OPEN, intoOf, isFinished, hasMergedChanges, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
@@ -314,7 +315,7 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
       return roleTag(t)
     case 'todo':
     case 'paused': {
-      const open = (t.after ?? []).filter(id => tasks.some(x => x.id === id && x.status !== 'done'))
+      const open = openAfter({ tasks }, t)
       return open.length ? `${WAITS_FOR} ${open.join(', ')}` : roleTag(t)
     }
     case 'review':

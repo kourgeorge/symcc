@@ -3,7 +3,8 @@
 // characters; one task per line ("T-5 running: test, try 2, 12m: title"); a question is its own line with its choices
 // numbered under it, never dropped (a very long one is cut with …); each text at most CHAT_MAX characters, cut at a line end with a "+N more" line.
 import type { SymccTask } from '../../types'
-import { type BoardTask, isFinished, STATUS_WORD } from './board-file'
+import { type BoardTask, STATUS_WORD } from './board-file'
+import { openAfter } from './archive'
 import { boardSections, localOffset } from './days'
 import { panelSections, rowCell } from './panel'
 import { taskAsks } from './panel'
@@ -76,7 +77,7 @@ export function stateWord(t: BoardTask, all: readonly SymccTask[]): string {
   if (asksMoreTime(t)) return 'needs more time?'
   if (t.status === 'review') return 'review'
   if (t.status === 'todo' || t.status === 'paused') {
-    const open = (t.after ?? []).filter(id => all.some(x => x.id === id && !isFinished(x)))
+    const open = openAfter({ tasks: all }, t)
     if (open.length) return `${t.status === 'paused' ? 'paused, ' : ''}waiting for ${open.join(', ')}`
     return t.status === 'paused' ? 'paused' : 'to do'
   }
