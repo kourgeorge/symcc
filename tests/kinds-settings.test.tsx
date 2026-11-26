@@ -128,7 +128,7 @@ test('a kind opens in full; Turn off / on, Reset and Remove write its file; chan
   const { mine } = fakeKinds(on, { 'chore.md': '---\ndescription: small upkeep\n---\n' })
   const ui = await settings($)
   await ui.press({ key: 'kindRow:change' })
-  expect(await ui.find({ type: 'Text', text: /The worker changes files/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /The worker changes project files/ })).toBeDefined()
   expect(await ui.find({ key: 'kind-off' })).toBeUndefined()
   expect(await ui.find({ key: 'kind-edit' })).toBeDefined()
   await ui.press({ key: 'kind-back' })
