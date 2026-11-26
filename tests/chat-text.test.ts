@@ -6,7 +6,7 @@ import { S } from '../hooks/app/state'
 import { taskText } from '../hooks/app/tools'
 import { addTask, patchTask } from '../hooks/core/task'
 import { boardText } from '../hooks/core/banner'
-import { chatTasksText, chatStatusText, CHAT_MAX } from '../hooks/core/chat-text'
+import { chatTasksText, chatStatusText, chatTaskText, CHAT_MAX } from '../hooks/core/chat-text'
 import { tasksListText } from '../hooks/core/task-list'
 import { taskListBoard } from './task-list-fixture'
 
@@ -38,6 +38,7 @@ test('T-1101: the tasks list, board and status in chat shape', () => {
   S.chat = 'telegram'
   try {
     check(boardText(b, now, '/some/where', 'symcc', 0, { chat: true }))
+    expect(/[⏵⏸]/.test(boardText(b, now, "/x", "symcc", 0, { chat: true }))).toBe(false)
     const status = chatStatusText(b, [{ n: 1, date: '', topic: 't', text: 'x' }], now, 0)
     check(status)
     expect(status).toContain('Org-mem: 1 notes')
@@ -64,7 +65,8 @@ test('T-1101: one task page in chat shape, and unchanged outside chat mode', () 
   expect(before).toContain('.symcc/reports/T-1-try-1.md')
   S.chat = 'telegram'
   try {
-    const text = taskText(t, false, b.tasks, report)
+    expect(taskText(t, false, b.tasks, report)).toBe(before)
+    const text = chatTaskText(t, report, now)
     expect(text.length <= CHAT_MAX && !text.includes('.symcc/') && !text.split('\n').some(l => /^\s/.test(l)) && !/[─━]/.test(text)).toBe(true)
     expect(text).toContain('? Postgres or SQLite?\n1. Postgres\n2. SQLite')
     expect(text.split('\n')[0]).toBe('T-1: Pick the database')

@@ -14,6 +14,7 @@ import { S, workers, scoutState } from './state'
 import { load, findRoot, startingText } from './store'
 import { noteForLead, tellLead, brief } from './tell'
 import { playable } from './voice'
+import { chatTaskText } from '../core/chat-text'
 import { runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
 import { tasksListText } from '../core/task-list'
@@ -259,6 +260,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
         return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).\n${taskText(old, false, b.tasks, undefined, b.archived_done)}`)
       }
       await openPane(host, { tab: 'tasks', task: t.id })
+      if (S.chat) return say(chatTaskText(t, await latestReport(host, t), Date.now()))
       return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport(host, t), b.archived_done))
     }
     case 'task-do': {

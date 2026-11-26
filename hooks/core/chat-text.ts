@@ -28,7 +28,7 @@ const PART_MAX = 600
 export function plain(s: string): string {
   return s
     .replace(/\S*\.symcc\/\S*/g, 'a saved file')
-    .replace(/[𝄞♟◆◇‖⧗⊛✎⌕⇢✧⌀⏱Σ•●○◉◎─━│┃┌┐└┘├┤┬┴┼▍▕▏█▁▂▃▄▅▆▇]/gu, '')
+    .replace(/[𝄞♟◆◇‖⧗⊛✎⌕⇢⏵⏸✧⌀⏱Σ•●○◉◎─━│┃┌┐└┘├┤┬┴┼▍▕▏█▁▂▃▄▅▆▇]/gu, '')
     .replace(/\s+/g, ' ')
     .trim()
 }
