@@ -1617,3 +1617,71 @@ test('T-1068: an adopted checker that moves HEAD and then says OK: the branch is
   expect(t.status).toBe('done')
   expect(t.history.map(h => h.text)).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
 })
+
+// ---------------- the lead moves a task to a stage (T-1072) ----------------
+
+/** The fake repo answers the probe like a real repo with commits, so the merge step is allowed to run. */
+function inRepo(w: ReturnType<typeof world>) {
+  const run = w.$.run
+  w.$.run = async (argv, o) => (argv[0] === 'git' && argv.includes('--is-inside-work-tree') ? ok('true\n') : run(argv, o))
+}
+
+test('T-1072: stage tests while the checker runs stops it, and the task merges after its tests, with no checker', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(true))
+  let said = ''
+  await finish(w, async () => {
+    said = await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
+  })
+  expect(said).toContain('T-1')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(w.git.moves.length).toBe(1)
+  expect(w.spawns.length).toBe(1)
+  expect(t.history.map(h => h.text)).toContain('moved to tests by the lead')
+})
+
+test('T-1072: stage tests on a failed task runs its tests and merges it, with no checker', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(true, { status: 'failed', note: 'x' }))
+  const said = await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(said).toContain('merged')
+  expect(t.status).toBe('done')
+  expect(w.spawns.length).toBe(0)
+  expect(w.calls.some(c => c.includes('npm test'))).toBe(true)
+})
+
+test('T-1072: stage check on a failed task starts a checker on the kept branch, with no new worker try', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'check' })
+  await until(() => checkerRuns.size > 0)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('doing')
+  expect(t.attempts).toBe(1)
+  expect(t.history.map(h => h.text)).toContain('moved to check by the lead')
+  await runTool(w.$, 'drop', { task: 'T-1' })
+})
+
+test('T-1072: stage work from a running checker queues a new worker try; stage review waits for the owner', async () => {
+  for (const [stage, status] of [['work', 'todo'], ['review', 'review']] as const) {
+    const w = world()
+    await saveBoard(w.$, boardWith(true))
+    await finish(w, async () => {
+      await runTool(w.$, 'change', { task: 'T-1', stage })
+    })
+    const t = find(await load(w.$), 'T-1')!
+    expect(t.status === status || (stage === 'work' && t.status === 'doing')).toBe(true)
+    expect(w.git.moves.length).toBe(0)
+    expect(t.history.map(h => h.text)).toContain(`moved to ${stage} by the lead`)
+  }
+})
+
+test('T-1072: a move refuses a done task and a bad stage', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
+  await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'soon' })).rejects.toThrow('stage must be one of')
+})

@@ -1113,7 +1113,7 @@ export async function restartCheckers(host: Host, agents: HostAgent[]) {
  * as a worker's hand-back (workerFinished). When its folder can't be read, the task goes back to "todo"
  * instead (its branch is kept, so the next try goes on from there and the merge path runs again).
  */
-async function checkAgain(host: Host, t0: BoardTask) {
+export async function checkAgain(host: Host, t0: BoardTask) {
   const id = t0.id
   const tryNo = t0.attempts
   if (finishing.has(id)) return
@@ -1560,7 +1560,7 @@ export async function mergeWaiting(host: Host, id: string): Promise<string> {
  * Merges task `t`'s finished work: `kind` 'approve' (the owner approved it, in "review") or 'merge'
  * (it was "waiting" only for the owner's files). The same checked merge as for a finished worker.
  */
-async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'approve' | 'merge'): Promise<string> {
+export async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'approve' | 'merge', force = false): Promise<string> {
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
   if (approving.has(t.id)) return `${t.id} is already being merged`
   if (!(await gitReady(host, b))) return `${t.id} ${stays}: ${gitNote(S.gitState)}`
@@ -1573,7 +1573,7 @@ async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'approve'
   // The step shown on the board (BoardTask.live?.checking) is refreshed like a finishing mark, and removed when the merge ends or is given up.
   const beat = everyMs(host, FINISH_BEAT_MS, () => void markChecking(host, t.id, t.status, t.attempts).catch(() => undefined))
   try {
-    const how = await withLimit(host, limitMs, (gaveUp, over, limit) => mergeWork(host, t, b, kind, gaveUp, over, limit))
+    const how = await withLimit(host, limitMs, (gaveUp, over, limit) => mergeWork(host, t, b, kind, gaveUp, over, limit, force))
     if (how !== OVER) return how
     beat?.cancel()
     await markChecking(host, t.id, t.status, t.attempts, false).catch(() => undefined)
@@ -1624,17 +1624,17 @@ async function mergeRanOver(host: Host, id: string, status: SymccTask['status'],
 const STATUS_WORD_OF = (s: SymccTask['status']) => (s === 'review' ? 'in review' : s)
 
 /** The body of mergeFinished, once the task is marked as being merged. `gaveUp`, `release`, `limit`: as for finishWork. */
-async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit): Promise<string> {
+async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit, force = false): Promise<string> {
   const status = t.status
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
-  const by = kind === 'approve' ? 'approved by the owner' : 'merged once your files were out of the way'
+  const by = force ? 'moved to tests by the lead' : kind === 'approve' ? 'approved by the owner' : 'merged once your files were out of the way'
   try {
     const dir = worktreeDir(t.id)
     if (!(await host.fs.exists(`${dir}/.git`))) await prepareWorktree(host, t, intoOf(t))
     // The owner's own edits in the folder since review (or edits whose tests failed on an
     // earlier approve, kept as test_output): those are committed with the task and always tested.
     const edits = await ownerEdits(host, t, dir).catch(() => [] as string[])
-    const retest = edits.length > 0 || (kind === 'approve' && t.test_output !== undefined)
+    const retest = force || edits.length > 0 || (kind === 'approve' && t.test_output !== undefined)
     if (gaveUp()) return ''
     await change(host, x => {
       const cur = find(x, t.id)
