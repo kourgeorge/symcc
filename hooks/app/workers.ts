@@ -228,7 +228,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.live?.session === S.me && cur.attempts === t.attempts
     }
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince(host, t, dir, Date.parse(now()))) + reportsNote(reports, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(isProseRole(role) && !isInvestigation(t) ? { prose: true as const } : {}), ...(!isInvestigation(t) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince(host, t, dir, Date.parse(now()))) + reportsNote(reports, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(isProseRole(role) && !isInvestigation(t) ? { prose: true as const } : {}), ...((!isInvestigation(t) || isErrand(t)) && t.files?.length ? { files: t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }

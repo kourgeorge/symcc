@@ -35,7 +35,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     id: `T-${b.next_id}`,
     title,
     details: clean(f.details ?? title, DETAILS_MAX),
-    files: cleanFiles(f.files, dir),
+    files: cleanFiles(f.files, dir, isErrand({ kind: f.kind })),
     status: f.backlog === true ? 'backlog' : 'todo',
     note: '',
     priority: isPriority(f.priority) ? f.priority : 0,
@@ -95,7 +95,7 @@ export function patchTask(b: Board, id: string, patch: TaskPatch, now: string, d
   }
   if (patch.title !== undefined) next.title = clean(patch.title, 200)
   if (patch.details !== undefined) next.details = clean(patch.details, DETAILS_MAX)
-  if (patch.files !== undefined) next.files = cleanFiles(patch.files, dir)
+  if (patch.files !== undefined) next.files = cleanFiles(patch.files, dir, isErrand(patch.kind !== undefined ? { kind: patch.kind } : t))
   if (patch.role !== undefined) {
     const role = cleanRole(patch.role)
     if (role) next.role = role

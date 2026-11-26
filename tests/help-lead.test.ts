@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { SETTINGS } from '../hooks/board'
+import { claudePermissions } from '../hooks/process/claude-runner'
 import { settingWords } from '../hooks/core/setting-notes'
 import { TOOLS, manual, MANUAL, leadGuide } from '../hooks/app/tools'
 import { ALL_FEATURES } from '../hooks/host'
@@ -67,6 +68,23 @@ test('the kind option text names errand and investigation as not merged', () => 
   expect(text).toContain('Every task type but investigation and errand runs like change')
   expect(text).toContain('errand:')
   expect(text).toContain('nothing is merged')
+})
+
+test('T-1129: the kind option text says change is a general coding task and errand is work outside the project', () => {
+  const add = TOOLS().find(t => t.name === 'add')!
+  const props = (add.inputSchema as unknown as { properties: Record<string, { description?: string }> }).properties
+  const text = props.kind!.description!
+  expect(text).toContain('a general coding task')
+  expect(text).toContain('errand: work outside the project or with nothing to merge')
+  expect(text).toContain('name an outside folder in its files')
+})
+
+test('T-1129: an errand worker may edit an absolute folder outside the project (Claude Code // rule)', () => {
+  const allowed = claudePermissions({ kind: 'worker', files: ['/Users/me/Desktop/talk/', 'notes.md'] }, true).allowed
+  expect(allowed).toContain('Edit(//Users/me/Desktop/talk/**)')
+  expect(allowed).toContain('Write(//Users/me/Desktop/talk/**)')
+  expect(allowed).toContain('Edit(./notes.md)')
+  expect(claudePermissions({ kind: 'worker' }, true).allowed).toContain('Edit(./**)')
 })
 
 test('the checker texts say it runs before the merge queue, not after the tests pass; a test time-out is a normal failed try', () => {

@@ -1978,7 +1978,7 @@ The built-in task types (in the plugin, one file each: `kinds/<name>.ts`):
 | `investigation` | Find an answer and hand it back; nothing is merged. |
 | `errand` | Work outside the project or with nothing to merge (make or tidy files elsewhere such as ~/Desktop, gather, write, run something); ends done with a report. |
 
-**Errands.** An `errand` runs like an investigation (no file list, no checks, no tests, its folder is removed after), with one difference: when the worker hands back, the task ends done on its own, in every mode, with the report kept. Use an investigation when you want an answer to read, an errand when you want something done. A failing errand fails like any task. An errand's worker may write outside the project, for example in a folder on your Desktop that the task names; only edits inside the project but outside its own copy are refused.
+**Errands.** An `errand` runs like an investigation (no file list, no checks, no tests, its folder is removed after), with one difference: when the worker hands back, the task ends done on its own, in every mode, with the report kept. Use an investigation when you want an answer to read, an errand when you want something done. A failing errand fails like any task. An errand's worker may write outside the project, for example in a folder on your Desktop: name that folder in the errand's files as an absolute path (for example `/Users/me/Desktop/talk/`) and the worker may edit there; only edits inside the project but outside its own copy are refused.
 
 **Three ways a task runs.** `investigation` is one of them: its worker hands back an answer,
 nothing is committed, tested or merged, and it waits for you to read it (see
