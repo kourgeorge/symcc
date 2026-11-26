@@ -458,6 +458,20 @@ test('T-1116: a command substitution glued to the command word counts as empty (
   expect(gitWriteIn('{ true;}; git push', 'reader')).toBe('git push')
 })
 
+test('T-1138: a git command word built by the shell ($(...), `...`, $X, ${X}) is refused for readers and workers', () => {
+  const built = ['git $(echo push)', 'git ${A} push', 'git $X', 'git `echo stash`', 'git "$(echo reset)" --hard', 'git -P $(echo push)',
+    'git "$X"', 'git x$X', 'sudo git $(echo push)', 'find . -exec git $X ;', "sh -c 'git $(echo push)'", 'eval git \\$X', 'git $1',
+    'env -S "git $X"', 'env -u sh git $X', 'x; git `echo push` origin', 'git $(echo -C) /x push']
+  for (const who of ['reader', 'worker'] as const) {
+    for (const c of built) expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'a git command built by the shell'])
+    // reads, quoted dollars, words after the command, and plain non-names keep today's rule
+    for (const c of ['git status', "git log --format='$x'", 'git log --format="%H $(echo x)"', "git '$x'", 'git log $X', 'git a.ts', "git $'status'", 'git show "$REV"'])
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, undefined])
+  }
+  expect(gitWriteIn('git commit -m "$MSG"', 'worker')).toBe(undefined)
+  expect(gitWriteIn('git push $X', 'worker')).toBe('git push')
+})
+
 test('T-1128: a { or } right after a redirect is its file name, not a command break (`git >} push` runs git push)', () => {
   for (const who of ['reader', 'worker'] as const) {
     for (const c of ['git >} push', 'git > } push', 'git 2> { push', 'git -P >} push', 'git <{ push', 'git >{ push'])

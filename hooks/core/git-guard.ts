@@ -126,6 +126,26 @@ const TOO_COMPLEX = 'a command too complex to read'
 /** How much reading is left (characters), so that `eval`/`sh -c` inside each other can't make a check slow. */
 type Budget = { left: number }
 
+/** What gitWriteIn returns when git's command word is made by the shell (`git $(echo push)`, `git $X`): refused. */
+const BUILT = 'a git command built by the shell'
+
+/**
+ * For each command splitCommands makes: the places whose word the shell builds ($(...), `...`, $X, ${X}), as word
+ * indexes; an empty substitution word, which is left out, marks the index of the word after it.
+ */
+const BUILT_AT = new WeakMap<readonly string[], ReadonlySet<number>>()
+
+/** words.slice(a, b), keeping the built-word places (BUILT_AT). */
+const sliceWords = (words: string[], a: number, b = words.length): string[] => {
+  const part = words.slice(a, b)
+  const at = BUILT_AT.get(words)
+  if (at) BUILT_AT.set(part, new Set([...at].filter(k => k >= a && k <= b).map(k => k - a)))
+  return part
+}
+
+/** Whether `$` at s[p] starts a variable ($X, ${X}, $1, $@...), not $'...' or a lone `$`. */
+const isVar = (s: string, p: number) => /[A-Za-z_0-9{@*#?$!-]/.test(s[p + 1] ?? '')
+
 /** The name a command word runs: its last path piece, in lower case (macOS finds `GIT` and `/usr/bin/git` alike). */
 const nameOf = (w: string) => w.slice(w.lastIndexOf('/') + 1).toLowerCase()
 const isGit = (w: string) => {
@@ -180,6 +200,8 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
 
   /** Whether the word being read had a command substitution: its output is unknown, so it counts as empty. */
   let subst = false
+  /** Whether the word being read had a variable ($X, ${X}): the shell makes its text. */
+  let built = false
 
   const doubleQuoted = () => {
     let v = ''
@@ -197,6 +219,7 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
         list(true)
         subst = true
       } else {
+        if (c === '$' && isVar(s, p)) built = true
         v += c
         p++
       }
@@ -208,6 +231,7 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
   /** One word from p, and whether it had no quote or escape (so `2` in `2>x` is a file number). */
   const word = () => {
     subst = false
+    built = false
     let v = ''
     let plain = true
     let braces = 0
@@ -247,29 +271,37 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
         p++
         plain = false
       } else if (c === '$' && s[p + 1] === '{') {
+        built = true
         braces++
         v += '${'
         p += 2
       } else {
         if (c === '}' && braces > 0) braces--
+        if (c === '$' && isVar(s, p)) built = true
         v += c
         p++
       }
     }
-    return { v, plain, subst }
+    return { v, plain, subst, built: subst || built }
   }
 
   /** Commands from p to the text's end, or (`nested`) to the `)` that closes a $( or <(. */
   function list(nested: boolean): void {
     let cmd: string[] = []
+    /** cmd's built-word places (BUILT_AT). */
+    let at = new Set<number>()
     let depth = 0
     /** After a redirect, the next word is its target, not part of the command. */
     let target = false
     /** After `<<`, the next word ends a here-document (`true`: `<<-`, leading tabs dropped). */
     let docEnd: boolean | undefined
     const end = () => {
-      if (cmd.length) out.push(cmd)
+      if (cmd.length) {
+        if (at.size) BUILT_AT.set(cmd, at)
+        out.push(cmd)
+      }
       cmd = []
+      at = new Set()
       target = false
     }
     while (p < s.length) {
@@ -306,7 +338,7 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
           if (op === '<<' || op === '<<-') docEnd = op === '<<-'
         }
       } else {
-        const { v, plain, subst: had } = word()
+        const { v, plain, subst: had, built } = word()
         // a file number right before a redirect (`2>x`) belongs to it
         if (plain && /^\d+$/.test(v) && (s[p] === '<' || s[p] === '>')) continue
         if (docEnd !== undefined) {
@@ -316,7 +348,10 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
         // a substitution's output is unknown: it counts as nothing, so `$(true)git push` is git push, and so is
         // `$(true) git push`, where the empty word goes away
         if (target) target = false
-        else if (!(had && v === '')) cmd.push(v)
+        else {
+          if (built) at.add(cmd.length)
+          if (!(had && v === '')) cmd.push(v)
+        }
       }
     }
     end()
@@ -348,7 +383,7 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
       // the command runs to `;`, `+` or the next -exec
       let e = j + 1
       while (e < words.length && words[e] !== ';' && words[e] !== '+' && !FIND_EXEC.has(words[e]!)) e++
-      const bad = checkCommand(words.slice(j + 1, e), who, budget, false)
+      const bad = checkCommand(sliceWords(words, j + 1, e), who, budget, false)
       if (bad) return bad
     }
   let i = 0
@@ -371,7 +406,7 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
       let j = i + 1
       while (j < words.length && /^[-+]/.test(words[j]!)) j++
       if (words.slice(i + 1, j).some(o => /^-[a-zA-Z]*c/.test(o))) return undefined
-      const rest = words.slice(j)
+      const rest = sliceWords(words, j)
       budget.left -= rest.length + 1
       if (budget.left < 0) throw new Error(TOO_COMPLEX)
       return rest.length ? checkCommand(rest, who, budget, true) : undefined
@@ -411,10 +446,12 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
       } else if (takes && i < words.length && SHELLS.has(nameOf(words[i]!))) {
         // a shell name may be the value too (`env -u sh git push`, `timeout -s ksh 5 git push`): that reading is
         // checked here, and the reading as the next command goes on below
-        const rest = words.slice(i + 1)
-        budget.left -= rest.length + 1
+        // the wrapper and the words after the shell name: words[i] is put back as the wrapper
+        const rest = sliceWords(words, i)
+        rest[0] = wrapper
+        budget.left -= rest.length
         if (budget.left < 0) throw new Error(TOO_COMPLEX)
-        const bad = checkCommand([wrapper, ...rest], who, budget, false)
+        const bad = checkCommand(rest, who, budget, false)
         if (bad) return bad
         valueShell = true
         break
@@ -430,7 +467,10 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
         const rest = words.slice(i)
         budget.left -= rest.length + 1
         if (budget.left < 0) throw new Error(TOO_COMPLEX)
-        words = [...(parts[0] ?? []), ...rest]
+        const first = parts[0] ?? []
+        const at = [...(BUILT_AT.get(first) ?? []), ...[...(BUILT_AT.get(words) ?? [])].filter(k => k >= i).map(k => k - i + first.length)]
+        words = [...first, ...rest]
+        if (at.length) BUILT_AT.set(words, new Set(at))
         i = 0
       }
     }
@@ -445,11 +485,18 @@ function gitCall(words: string[], i: number, who: 'reader' | 'worker'): string |
   let sub: string | undefined
   let j = i + 1
   if (n === 'git') {
-    for (; words[j]?.startsWith('-'); j++) if (!GIT_OPTION_OK.has(words[j]!)) return `git ${words[j]!.split('=')[0]}`
+    // a command word the shell builds (`git $(echo push)`, `git ${A} push`, `git "$(echo reset)"`) can be any
+    // command, so it is refused for everyone (T-1138); one among git's options counts too
+    const at = BUILT_AT.get(words)
+    for (; words[j]?.startsWith('-'); j++) {
+      if (at?.has(j)) return BUILT
+      if (!GIT_OPTION_OK.has(words[j]!)) return `git ${words[j]!.split('=')[0]}`
+    }
+    if (at?.has(j)) return BUILT
     sub = words[j++]?.toLowerCase()
   } else if (n.startsWith('git-') && GIT_ALL.includes(n.slice(4))) sub = n.slice(4)
   // an allow list (T-1062): any name but the reads (and a worker's own writes) is refused, aliases and add-ons too;
-  // a word that is no command name (`$X`, `a.ts`) is not seen, and `git-x` counts only as one of git's own programs
+  // a word that is no command name (`a.ts`) is not seen, and `git-x` counts only as one of git's own programs
   if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub)) return undefined
   const args = words.slice(j)
   // `git grep -O<program>` runs that program (a hidden `git push`)
