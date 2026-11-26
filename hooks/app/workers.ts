@@ -16,6 +16,7 @@ import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, che
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, startCancelled, claimNote, rewakeStarts } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait, holdPublish } from './store'
+import { timed } from './slow-log'
 import { tellLead, noteForLead } from './tell'
 import { sayDone, sayNeedsYou } from './voice'
 import { answerTail, optionsVia, popupTied } from './questions'
@@ -375,7 +376,11 @@ export type TurnRefusal = { category: string | null; explanation: string | null 
 
 /** A worker's hand-back `answer` arrived; `end`: why its turn ended. */
 /** `cost`: what the try cost in US dollars, when the host knows it (e.g. a `claude -p` process's result says it). */
-export async function workerFinished(host: Host, agentId: string, answer: string, end: TurnEnd = { reason: 'answer' }, tokens?: SymccTokens, cost?: number) {
+export function workerFinished(host: Host, agentId: string, answer: string, end: TurnEnd = { reason: 'answer' }, tokens?: SymccTokens, cost?: number) {
+  return timed(host, 'workerFinished', () => workerFinishedNow(host, agentId, answer, end, tokens, cost))
+}
+
+async function workerFinishedNow(host: Host, agentId: string, answer: string, end: TurnEnd, tokens?: SymccTokens, cost?: number) {
   const w = workers.get(agentId)
   if (!w) return
   workers.delete(agentId)
@@ -686,7 +691,11 @@ function everyMs(host: Host, ms: number, f: () => void): { cancel(): void } | nu
 }
 
 /** Refreshes (`on`) or removes task `id`'s "being tested and merged" mark and its check step (Live.checking), only while it is still "doing" with try `tryNo`. */
-async function markFinishing(host: Host, id: string, tryNo: number, on = true) {
+function markFinishing(host: Host, id: string, tryNo: number, on = true) {
+  return timed(host, 'markFinishing', () => markFinishingNow(host, id, tryNo, on))
+}
+
+async function markFinishingNow(host: Host, id: string, tryNo: number, on: boolean) {
   // nothing to remove (the task already left "doing", which drops the mark): don't write the board
   if (!on && !hasMark(find(await load(host), id))) return
   await change(host, x => {

@@ -2,6 +2,7 @@ import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, 
 import { homeBranch } from './git'
 import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, fitView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
+import { timed } from './slow-log'
 import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
 import { openPane } from './open'
 import { playable } from './voice'
@@ -65,7 +66,11 @@ export async function carryDriver(host: Host, old: string): Promise<boolean> {
   return moved
 }
 
-export async function claimLead(host: Host, fresh = false): Promise<boolean> {
+export function claimLead(host: Host, fresh = false): Promise<boolean> {
+  return timed(host, 'claimLead', () => claimLeadNow(host, fresh))
+}
+
+async function claimLeadNow(host: Host, fresh: boolean): Promise<boolean> {
   await refreshMe(host)
   // T-793: a window turned off here never drives (nor takes driving back)
   if (S.offHere || S.fresh) {
@@ -477,7 +482,11 @@ export async function readTodayTeam(host: Host, scouts: readonly string[], nowMs
   return out.lead === undefined && out.scouts === undefined && out.scout_ms === undefined && out.usd === undefined ? undefined : out
 }
 
-export async function publish(host: Host, b: Board) {
+export function publish(host: Host, b: Board) {
+  return timed(host, 'publish', () => publishView(host, b))
+}
+
+async function publishView(host: Host, b: Board) {
   // the board drawn here is the one last loaded or saved, so its mtime now counts as seen (T-431)
   S.boardMtime = S.readMtime
   const working = [...workers.values()].map(w => ({ task: w.task, since: w.since }))
