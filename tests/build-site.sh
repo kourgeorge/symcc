@@ -92,6 +92,16 @@ else
   grep -q 'href="llms.txt"' "$tmp/small/index.html" || bad "footer of the landing page has no llms.txt link"
 fi
 
+# (T-1148) the site check passes on a copy of the real docs with a heading-and-table-only note
+mkdir -p "$tmp/real2"
+for e in $(ls "$here" | grep -v -e '^node_modules$' -e '^_site$'); do cp -R "$here/$e" "$tmp/real2/$e"; done
+printf '# Table note\n\n| a | b |\n|---|---|\n| 1 | 2 |\n' > "$tmp/real2/docs/research/tabled.md"
+if bun "$here/scripts/build-site.ts" --root "$tmp/real2" --out "$tmp/real2out" >"$tmp/log" 2>&1; then
+  bun "$here/tests/build-site-check.mjs" "$tmp/real2out" "$here/.github/workflows/pages.yml" "$tmp/real2" || bad "site check fails with a heading-and-table-only note"
+else
+  bad "build with a table-only note failed: $(cat "$tmp/log")"
+fi
+
 # (T-1087) the blog: with posts: list (newest first), one page per post with date and prev/next links, a valid
 # RSS feed, the Blog link on every page; (T-1143) no posts: the Blog link stays and the blog list says so
 grep -q 'No posts yet.' "$tmp/small/blog/index.html" || bad "no posts: the blog list does not say 'No posts yet.'"

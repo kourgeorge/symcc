@@ -305,7 +305,7 @@ export function llmsTxt(pages: Page[], root: string): string {
   const line = (p: Page) => {
     const md = readFileSync(join(root, p.src), 'utf8').replace(/\r\n?/g, '\n')
     const title = firstHeading(md) ?? p.title
-    const sum = MAIN_SUMMARY[p.src] ?? summary(md)
+    const sum = MAIN_SUMMARY[p.src] ?? (summary(md) || p.title)
     return `- [${title}](${SITE}/${mdOut(p)})${sum ? `: ${sum}` : ''}`
   }
   const main = pages.filter(p => p === RESEARCH_INDEX || (!p.src.startsWith('docs/research/') && !p.src.startsWith('docs/blog/')))
