@@ -6,7 +6,7 @@ import { S } from '../hooks/app/state'
 import { taskText } from '../hooks/app/tools'
 import { addTask, patchTask } from '../hooks/core/task'
 import { boardText } from '../hooks/core/banner'
-import { chatTasksText, chatRowsText, chatStatusText, chatTaskText, askLines, CHAT_MAX } from '../hooks/core/chat-text'
+import { chatTasksText, chatRowsText, chatStatusText, chatTaskText, askLines, fitChat, CHAT_MAX } from '../hooks/core/chat-text'
 import { tasksListText } from '../hooks/core/task-list'
 import { taskListBoard } from './task-list-fixture'
 
@@ -123,4 +123,12 @@ test('T-1106: "more" pages list every task once; long questions keep every choic
   const c = askLines('Q?', ['a'.repeat(1300), 'b'.repeat(1300), 'c'.repeat(1300)])
   expect(c.length === 4 && c[3]!.startsWith('3. c')).toBe(true)
   expect(c.join('\n').length < CHAT_MAX).toBe(true)
+})
+
+test('T-1111: a text between a page and CHAT_MAX characters has "Nothing more." on page 2', () => {
+  const lines = [...Array(40).keys()].map(i => `${String(i).padStart(2, '0')}${'y'.repeat(84)}`)
+  const whole = lines.join('\n')
+  expect(whole.length > CHAT_MAX - 60 && whole.length <= CHAT_MAX).toBe(true)
+  expect(fitChat(lines, 'x', 1)).toBe(whole)
+  expect(fitChat(lines, 'x', 2)).toBe('Nothing more.')
 })

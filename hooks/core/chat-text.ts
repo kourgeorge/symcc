@@ -43,7 +43,7 @@ export const cut = (s: string, n: number): string => {
 export function fitChat(lines: readonly string[], more: string, page = 1): string {
   const room = CHAT_MAX - 60
   const all = lines.map(l => l.trimStart()).map(l => (l.length > room ? `${l.slice(0, room - 1).trimEnd()}…` : l))
-  if (page <= 1 && all.join('\n').length <= CHAT_MAX) return all.join('\n')
+  if (all.join('\n').length <= CHAT_MAX) return page <= 1 ? all.join('\n') : 'Nothing more.'
   const pages: string[][] = [[]]
   let used = 0
   for (const l of all) {

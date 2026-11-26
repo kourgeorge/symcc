@@ -251,11 +251,11 @@ export async function runCommand(host: Host, command: string, args: string): Pro
         // not on the board: it may have been moved to archive.json (read-only, shown as text)
         const old = await findArchived(host, cmd.id)
         if (!old) return say(`${cmd.id} is not on the board.`)
-        if (S.chat) return say(`${old.id} is archived (read-only).\n${chatTaskText(old, undefined, Date.now())}`)
+        if (S.chat) return say(`${old.id} is archived (read-only).\n${chatTaskText(old, undefined, Date.now(), cmd.page)}`)
         return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).\n${taskText(old, false, b.tasks, undefined, b.archived_done)}`)
       }
       await openPane(host, { tab: 'tasks', task: t.id })
-      if (S.chat) return say(chatTaskText(t, await latestReport(host, t), Date.now()))
+      if (S.chat) return say(chatTaskText(t, await latestReport(host, t), Date.now(), cmd.page))
       return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport(host, t), b.archived_done))
     }
     case 'task-do': {
