@@ -1760,6 +1760,15 @@ test('T-1072: in board mode review a move to tests runs the tests and ends in re
   expect(w.git.moves.length).toBe(0)
 })
 
+test('T-1072: in mode auto a failed task with needs_review moved to tests ends in review, nothing merged', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x', needs_review: true }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
+  expect(find(await load(w.$), 'T-1')!.status).toBe('review')
+  expect(w.git.moves.length).toBe(0)
+})
+
 test('T-1072: stage with other fields is refused, and stage tests without git leaves the task alone', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))

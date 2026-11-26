@@ -1651,7 +1651,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
     })
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-    const r: CheckResult = await checkAndMerge(host, t, dir, b, force && kind === 'merge' && modeOf(b) === 'review' ? 'finish' : kind, made, stop, retest, release, limit).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge(host, t, dir, b, force && kind === 'merge' ? 'finish' : kind, made, stop, retest, release, limit).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     // Given up meanwhile: mergeRanOver already wrote its note; this late outcome is not written over
     // it, unless the work reached the branch after all (landedLate).
     if (gaveUp()) {
