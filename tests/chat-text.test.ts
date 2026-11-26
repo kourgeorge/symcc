@@ -6,7 +6,7 @@ import { S } from '../hooks/app/state'
 import { taskText } from '../hooks/app/tools'
 import { addTask, patchTask } from '../hooks/core/task'
 import { boardText } from '../hooks/core/banner'
-import { chatTasksText, chatStatusText, chatTaskText, askLines, CHAT_MAX } from '../hooks/core/chat-text'
+import { chatTasksText, chatRowsText, chatStatusText, chatTaskText, askLines, CHAT_MAX } from '../hooks/core/chat-text'
 import { tasksListText } from '../hooks/core/task-list'
 import { taskListBoard } from './task-list-fixture'
 
@@ -98,8 +98,28 @@ test('T-1106: "more" pages list every task once; long questions keep every choic
   expect(ids.length >= 80).toBe(true)
   expect(chatTasksText(b, now, 0, '', 50)).toBe('Nothing more.')
 
-  const q = askLines('Which one? ' + 'x'.repeat(4000), ['A', 'B'])
-  expect(q[0]!.startsWith('? Which one?') && q.length === 3 && q[1] === '1. A').toBe(true)
+  const lq = patchTask(b, 'T-1', { ask: { by: 'worker', text: 'Which one? ' + 'x'.repeat(4000), options: ['A', 'B', 'C'], asked_at: at } }, at)
+  const lt = chatTasksText(lq, now, 0)
+  expect(lt).toContain('? Which one?')
+  expect(lt).toContain('1. A\n2. B\n3. C')
+
+  // "more tasks" only while a later page exists
+  expect(chatTasksText(taskListBoard(now), now, 0)).not.toContain('more tasks')
+  expect(chatTasksText(b, now, 0, '', 2)).not.toContain('more tasks')
+  // a last page holding only the "Say:" line
+  for (const [pad, n] of [[23, 156], [24, 152], [25, 149]] as const) {
+    let pb = taskListBoard(now)
+    for (let i = 0; i < n; i++) pb = addTask(pb, { origin: { why: 'a test' }, title: 'T ' + i + ' ' + 'y'.repeat(pad), files: ['src/'], after: [], backlog: false }, at)[0]
+    const pages = [1, 2, 3, 4, 5].map(pg => chatTasksText(pb, now, 0, '', pg))
+    expect(pages.some(p => p.startsWith('Say:'))).toBe(true)
+    for (const p of pages) expect(p.endsWith(', more tasks')).toBe(false)
+  }
+  const tt = chatTasksText(patchTask(taskListBoard(now), 'T-5', { title: 'Write it, more tasks later' }, at), now, 0)
+  expect(tt).toContain('Write it, more tasks later')
+  const rows = b.tasks.filter(t => t.status === 'todo')
+  const f = chatRowsText(rows, b.tasks, now, `${rows.length} of ${b.tasks.length} tasks`)
+  expect(f).toContain('more match')
+  expect(f).not.toContain('more tasks')
   const c = askLines('Q?', ['a'.repeat(1300), 'b'.repeat(1300), 'c'.repeat(1300)])
   expect(c.length === 4 && c[3]!.startsWith('3. c')).toBe(true)
   expect(c.join('\n').length < CHAT_MAX).toBe(true)
