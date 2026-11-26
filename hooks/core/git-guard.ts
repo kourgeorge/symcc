@@ -114,8 +114,9 @@ const GIT_AT = new RegExp(
   String.raw`(?:^|&&|\|\||[;|&(){\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n]|(?<!\S)-(?:exec|execdir|ok|okdir)[^\S\n])` +
     String.raw`(?:[^\S\n]*(?:(?:(?:/[\w.-]+)*/)?(?:env|sudo|doas|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|noglob|nocorrect|coproc|builtin|repeat|!|-)` +
     // each word fits one pattern only (a short option, a longer option, a number; a value is none of them), so the
-    // regex never tries many splits of the same words (`env -i -i -i ... git push` checks fast)
-    String.raw`(?:[^\S\n]+(?:-[a-zA-Z](?![^\s;&|])(?:[^\S\n]+(?!-)(?!\d[\w.]*(?![^\s;&|]))(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]{2,}|\d[\w.]*(?![^\s;&|])))*|\w+=[^\s;&|]*` +
+    // regex never tries many splits of the same words (`env -i -i -i ... git push` checks fast); a short option is a
+    // dash and any one character, so a lone `--` (`env -- git push`) and `-0` (`xargs -0 git push`) count too
+    String.raw`(?:[^\S\n]+(?:-[^\s;&|](?![^\s;&|])(?:[^\S\n]+(?!-)(?!\d[\w.]*(?![^\s;&|]))(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]{2,}|\d[\w.]*(?![^\s;&|])))*|\w+=[^\s;&|]*` +
     String.raw`|\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()]+)(?=\s))*` +
     String.raw`[^\S\n]*(?:(?:/[\w.-]+)*/)?git(?:-([a-z][\w-]*))?(?=$|[\s'"` + '`' + String.raw`;&|()<>\\])`,
   'gi',
