@@ -35,6 +35,8 @@ This extension shows symcc's board and the lead's chat in your editor. The agent
 
 ## How it finds symcc
 
+![You install symcc once with a harness; the extension finds and starts that copy, and symcc runs the agents](https://raw.githubusercontent.com/kourgeorge/symcc/main/docs/cursor/how-it-works.png)
+
 The extension looks in this order:
 
 1. The folder in the `symcc.pluginPath` setting, when you set one.
