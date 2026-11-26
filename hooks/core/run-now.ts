@@ -6,7 +6,7 @@
 // (app/tools.ts) and the three task pages share.
 import type { SymccStatus, SymccTask } from '../../types'
 import { type Board, OPEN, STATUS_WORD } from './board-file'
-import { depDone } from './archive'
+import { openAfter } from './archive'
 import { shareFiles } from './health'
 
 /** Whether task `t` can be run now: only a task that is to do (T-1023; retry or move others to to do first). */
@@ -29,7 +29,7 @@ export type RunNowWait = { id: string; state: string }
 
 /** The tasks of `t`'s after list that are not done yet (an archived done one counts as done), with their state. */
 export function runNowWaits(b: Pick<Board, 'tasks'> & Partial<Pick<Board, 'archived_done'>>, t: Pick<SymccTask, 'id' | 'after'>): RunNowWait[] {
-  return [...new Set(t.after ?? [])].filter(a => a !== t.id && !depDone(b, a)).map(a => {
+  return openAfter(b, t).map(a => {
     const d = b.tasks.find(x => x.id === a)
     return { id: a, state: d ? stateWord(d.status) : 'missing' }
   })

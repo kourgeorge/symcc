@@ -11,7 +11,7 @@ import { cutTitle, fitSegs, padWidth, textWidth, wrapLine } from './width'
 import { activeFrom, restartsOf, gapsOf, agentsOf, agentsOnTask, sumRuns,checkerIdOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, sumTokens, tokenCount, TOKEN_SIGN, fmtTok } from './runs'
 import { type KeyHint, LIVE_VIEW_KEYS, hintLineText, hintLines, rowDuration, waitOrder } from './panel'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, ORG_MEM_ALL, orgMemNewest, orgMemShortDay, orgMemTopicCounts, type OrgMemNote } from './org-mem'
-import { depDone } from './archive'
+import { depDone, openAfter } from './archive'
 import { dayOf, localOffset } from './days'
 import { modeLabel, needsReview } from './review'
 import { num, plural } from './text'
@@ -84,7 +84,7 @@ function idleReason(t: BoardTask, view: LiveView, nowMs: number): string {
   if (t.status === 'doing') return 'stopped'
   if (t.status === 'todo') {
     const board = { tasks: view.tasks as BoardTask[], archived_done: view.archived_done ?? [] }
-    const open = [...new Set((t.after ?? []).filter(a => a !== t.id && !depDone(board, a)))]
+    const open = openAfter(board, t)
     // only the first open task, plus a count of the rest: no ", " inside one reason (", " parts the tasks' reasons)
     if (open.length) return `waits for ${open[0]}${open.length > 1 ? ` +${open.length - 1}` : ''}`
     return 'ready'
@@ -856,7 +856,7 @@ export function liveTrains(view: LiveView, nowMs: number, lanes: readonly LiveLa
   const laneOf = new Map(lanes.map(l => [l.id, l]))
   const todo = waitOrder(view.tasks.filter(t => t.status === 'todo'), byRunOrder)
   const rank = new Map(todo.map((t, i) => [t.id, i]))
-  const open = new Map(todo.map(t => [t.id, [...new Set((t.after ?? []).filter(a => a !== t.id && !depDone(board, a)))]]))
+  const open = new Map(todo.map(t => [t.id, openAfter(board, t)]))
   const parent = new Map<string, string>()
   /** Whether `id`'s chain of parents (up to a lane) passes `through`. */
   const under = (id: string, through: string) => {
