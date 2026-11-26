@@ -104,13 +104,16 @@ const GIT_OPTION_OK = new Set(['--no-pager', '-P', '-p', '--paginate', '--no-opt
 
 /**
  * A git call in a command's text: `git` (or `/usr/bin/git`), or a git program by its own name (`git-push`), where a
- * command starts: at the start, after `&&`, `||`, `;`, `|`, `&`, `(`, `$(`, `{`, a backquote, a line end or a quote
- * opened by `sh -c` (`bash -lc`, `eval`...), and after leading `VAR=x` settings or env, sudo, command, exec, time,
- * nohup, xargs, eval, if, then... So `grep "git push" docs/` and `git commit -m "make git simpler"` hold no git call.
+ * command starts: at the start, after `&&`, `||`, `;`, `|`, `&`, `(`, `$(`, `{`, a backquote, a line end or
+ * `sh -c` (`bash -lc`, `eval`...), and after leading `VAR=x` settings or env, sudo, command, exec, time, timeout, nice,
+ * nohup, xargs, eval, if, then... with their options, an option's value (`sudo -u root`) and a number (`timeout 5`).
+ * gitWriteIn takes out quotes and backslashes first (`"git" push`, `\git push` run git), so
+ * `grep "git push" docs/` and `git commit -m "make git simpler"` hold no git call (git is not where a command starts).
  */
 const GIT_AT = new RegExp(
-  String.raw`(?:^|&&|\|\||[;|&({\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)[^\S\n]+(?:-\w+[^\S\n]+)*["'])` +
-    String.raw`(?:[^\S\n]*(?:(?:env|sudo|command|exec|time|nohup|xargs|eval|if|then|do|else|elif|while|until|!)(?:[^\S\n]+-[^\s;&|]+)*|\w+=[^\s;&|]*)(?=\s))*` +
+  String.raw`(?:^|&&|\|\||[;|&({\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n])` +
+    String.raw`(?:[^\S\n]*(?:(?:env|sudo|command|exec|time|timeout|nice|nohup|xargs|eval|if|then|do|else|elif|while|until|!)` +
+    String.raw`(?:[^\S\n]+(?:-[a-zA-Z](?:[^\S\n]+(?!-)(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]+|\d[\w.]*))*|\w+=[^\s;&|]*)(?=\s))*` +
     String.raw`[^\S\n]*(?:(?:/[\w.-]+)*/)?git(?:-([a-z][\w-]*))?(?=$|[\s'"` + '`' + String.raw`;&|()<>\\])`,
   'gi',
 )
@@ -127,7 +130,8 @@ const GIT_AT = new RegExp(
 export function gitWriteIn(text: unknown, who: 'reader' | 'worker' = 'reader'): string | undefined {
   if (typeof text !== 'string') return undefined
   // the shell joins a backslash at a line's end with the next line (`git \` + newline + `push` runs `git push`)
-  const command = joinLines(text)
+  // and quotes and backslashes only group words: `"git" push`, `'git' push` and `\git push` run `git push`
+  const command = joinLines(text).replace(/["'\\]/g, '')
   if (/(?<![\w])GIT_\w*=/.test(command)) return 'a GIT_ setting'
   if (/core\.hookspath/i.test(command)) return 'core.hooksPath'
   // git's own folder holds every branch as a file (`--output=$(git rev-parse --git-common-dir)/refs/heads/main`)
@@ -170,7 +174,7 @@ export function gitPlaceOk(command: string, cwd: string | undefined, places: Fol
 }
 
 /** Programs often put in front of git; the Node host's rules refuse git after them. */
-const GIT_WRAPPERS = ['env', 'command', 'exec', 'xargs', 'nohup', 'time']
+const GIT_WRAPPERS = ['env', 'sudo', 'command', 'exec', 'xargs', 'nohup', 'time', 'nice']
 
 /**
  * The same deny list as Claude Code rules for every `claude -p` agent (the Node host has no symcc hook; a deny rule

@@ -119,6 +119,16 @@ test('T-1062: the git text is read whole: git inside quotes, after a wrapper, or
     expect([c, gitWriteIn(c, 'worker')]).toEqual([c, what])
 })
 
+test('T-1062: a quoted or backslashed git and git after a wrapper with options still count', () => {
+  // the shell runs `"git" push`, `'git' push` and `\git push` (skips aliases) as plain git
+  for (const c of ['"git" push', "'git' push", '\\git push', '"/usr/bin/git" push', 'env -u X git push', 'sudo -u root git push', 'timeout 5 git push', 'nice git push', 'nice -n 5 git push', "env -S 'git push'"])
+    for (const who of ['reader', 'worker'] as const) expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+  expect(gitWriteIn('"git" reset --hard')).toBe('git reset')
+  // a search for the word git after a wrapper is no git call
+  for (const c of ['find . | xargs grep -l git', 'time grep git x'])
+    expect([c, gitWriteIn(c)]).toEqual([c, undefined])
+})
+
 test("T-1062: a worker's git init only makes a new repository under /tmp; readers keep git branch's listing words", () => {
   const node = gitDeniedRules(true)
   for (const c of ['git init /tmp/x', 'git init /private/tmp/a/b']) expect([c, gitWriteIn(c, 'worker')]).toEqual([c, undefined])
