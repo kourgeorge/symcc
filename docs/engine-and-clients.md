@@ -49,6 +49,8 @@ open a folder, reveal a file, the clipboard, confirms and notifications, the sta
 session documents, the proxy settings, restart, and the log. It is released on its own track
 ([Releasing](releasing.md)).
 
+![How the extension and symcc talk: the board page and the extension in the editor window; editor/webview/, editor/serve.mjs, the engine and the agents in the installed symcc; and the five steps when the board opens](editor-parts.svg)
+
 `editor/` is the plugin's built editor entry. It is committed, like the Copilot CLI host's `extension.mjs`:
 
 | File | What it is |

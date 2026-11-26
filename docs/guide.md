@@ -2802,7 +2802,7 @@ With no files in `docs/blog/`, there is no Blog link and no blog pages.
 - **Layout:** `hooks/core/` holds the logic you can test (plain data, no Claude Code calls). `hooks/app/` holds what symcc does, also with no Claude Code. `hooks/claude/` and `hooks/claude/ui/` do the wiring to Claude Code, and `hooks/register.tsx` only connects events. Put new logic in `hooks/core/` when you can. See the code map above.
 - **Test the Node host:** `sh scripts/test-node-host.sh` (bun test, not `claude plugin test`: it needs files and processes).
 - **Test the OpenCode plugin:** `sh scripts/test-opencode-host.sh` (bun test with a fake OpenCode context; OpenCode itself is not needed).
-- **Rebuild the SVG pictures:** the pictures are made by scripts, so don't edit them by hand. The steps are in "How to change it" in [`architecture.md`](architecture.md) (for `architecture.svg`) and in [`demo.md`](demo.md) (for `demo.svg`).
+- **Rebuild the SVG pictures:** the pictures are made by scripts, so don't edit them by hand. The steps are in "How to change it" in [`architecture.md`](architecture.md) (for `architecture.svg`), in [`demo.md`](demo.md) (for `demo.svg`) and in [`editor-pictures.md`](editor-pictures.md) (for the `editor-*.svg` pictures of the VS Code and Cursor extension).
 
 ### Running symcc without Claude Code
 
@@ -2973,6 +2973,8 @@ Copilot runs one JavaScript file per extension, so symcc's TypeScript is bundled
 ## Using symcc in VS Code and Cursor
 
 The symcc extension (`kourgeorge.symcc`, on the VS Code Marketplace and Open VSX) shows the board, a sidebar and the lead's chat in VS Code or Cursor. The agents are Cursor's or GitHub Copilot's. The extension brings no symcc of its own: it runs the symcc you installed with Claude Code, Copilot CLI or OpenCode. Nothing changes for those harnesses.
+
+![symcc in VS Code and Cursor: the extension finds and starts the symcc a harness installed, and that symcc runs the agents](editor-extension.svg)
 
 ### Install in VS Code or Cursor
 

@@ -11,6 +11,8 @@ The plugin is the product. The extension is only a client: it finds the plugin a
 `editor/serve.mjs`, and shows that copy's `editor/webview/`. So most changes need only a plugin release, and the
 extension is released rarely. See [Engine and clients](engine-and-clients.md#the-editor-extension).
 
+![Two things to release: the plugin for most changes, through the harnesses' updates; the extension rarely, through the stores; when the protocol number is raised, the extension first](editor-releases.svg)
+
 ## I changed X, so I release Y
 
 | I changed | Release |
