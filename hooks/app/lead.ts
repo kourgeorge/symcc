@@ -495,7 +495,7 @@ async function publishView(host: Host, b: Board) {
   const branch = S.gitState === 'ok' ? await homeBranch(host) : ''
   // T-675: a data file close to the 4 MB read limit is warned about where the git warning goes (banner and status line)
   const size_note = [...sizeNotes.values()].join('; ')
-  const branch_note = [gitNote(S.gitState), size_note].filter(Boolean).join('; ')
+  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), size_note].filter(Boolean).join('; ')
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const can = await playable(host)
   // T-727: the Live tab's Branches figures: the last ones read (a stale read starts in the background, never waited for here)
@@ -515,7 +515,7 @@ async function publishView(host: Host, b: Board) {
   const size_now = [...sizeNotes.values()].join('; ')
   if (size_now !== size_note) {
     for (const x of new Set([v, fit.view as PaneView])) {
-      x.branch_note = [gitNote(S.gitState), size_now].filter(Boolean).join('; ')
+      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), size_now].filter(Boolean).join('; ')
       if (size_now) x.size_note = size_now
       else delete x.size_note
     }

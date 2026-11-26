@@ -587,6 +587,7 @@ test('T-1136: a folder whose subfolders are their own repos: the view carries th
     const v = w.panel.view() as unknown as { git_state: string; git_workspace?: string }
     expect(v.git_state).toBe(noCommit ? 'no-commits' : 'no-repo')
     expect(v.git_workspace).toContain('workspace of several repos')
+    expect((w.panel.view() as unknown as { branch_note?: string }).branch_note ?? '').not.toContain('set up git')
     const out = await setupGit(w.host, 'you')
     expect(out).toContain('workspace of several repos')
     expect(w.ran.some(x => x.args.includes('commit') || x.args.startsWith('add'))).toBe(false)
