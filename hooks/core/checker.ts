@@ -159,7 +159,13 @@ export const checkerLine = (tryLabel: string, v: CheckerVerdict | null, why = ''
 export function firstProblemOf(report: string): string {
   const first = checkerProblems(report)[0]
   if (first) return first
-  const lines = String(report ?? '').split('\n').map(l => l.trim()).filter(Boolean)
+  const raw = String(report ?? '').split('\n').map(l => l.trim())
+  const h = raw.findLastIndex(l => /^(#{1,6}\s*)?(\*\*|__|\*|_)?Problems:?(\*\*|__|\*|_)?:?$/.test(l))
+  if (h >= 0) {
+    const item = raw.slice(h + 1).find(Boolean)
+    if (item?.startsWith('- ') && item.slice(2).trim()) return oneLine(item.slice(2).trim(), 300)
+  }
+  const lines = raw.filter(Boolean)
   const inline = lines.findLast(l => /^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?\s*\S/.test(l))
   const after = inline?.replace(/^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?\s*/, '').replace(/^[-*]\s+/, '')
   return oneLine(after || lines.find(l => l !== CHECKER_MARK) || '', 300)
@@ -175,12 +181,10 @@ export const CHECKER_PROBLEMS_MAX = 5
  */
 export function checkerProblems(report: string): string[] {
   const lines = String(report ?? '').split('\n').map(l => l.trimEnd())
-  const h = lines.findLastIndex(l => /^(#{1,6}\s*)?(\*\*|__|\*|_)?Problems:?(\*\*|__|\*|_)?:?$/.test(l.trim()))
+  const h = lines.findLastIndex(l => /^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?$/.test(l))
   if (h < 0) return []
   const out: string[] = []
-  let rest = lines.slice(h + 1)
-  while (rest.length && !rest[0]!.trim()) rest = rest.slice(1)
-  for (const l of rest) {
+  for (const l of lines.slice(h + 1)) {
     if (!/^- ?$/.test(l) && !l.startsWith('- ')) break
     if (out.length >= CHECKER_PROBLEMS_MAX) break
     const t = l.slice(2).trim()
