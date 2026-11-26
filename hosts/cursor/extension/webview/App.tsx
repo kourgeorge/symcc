@@ -2,7 +2,7 @@
 // what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
 // with the message box under it, and the running work beside it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { AgentChoice, BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelFollows, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelSize, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
+import type { AgentChoice, BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelChecker, PanelFollows, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelSize, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
 import { LEAD_AGENT, addStep } from '../../steps'
 import { ask, onMessage, tell } from './bridge'
 import { Icon, IdleNote, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
@@ -775,6 +775,8 @@ function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; ste
               <Markdown text={task.details} onTask={onTask} />
             </div>
           )}
+          {!!task.history?.length && <TaskHistory task={task} />}
+          {task.checker && <CheckerReport checker={task.checker} onTask={onTask} />}
           <TaskSession task={task} steps={steps} />
           {box ? (
             <form
@@ -812,6 +814,52 @@ function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; ste
         </div>
       )}
     </li>
+  )
+}
+
+/** A task's history, newest first: each line's mark in its tone, when, who wrote it, its try, what was said and the try's result. */
+function TaskHistory({ task }: { task: PanelTask }) {
+  const lines = task.history ?? []
+  const older = (task.historyCount ?? lines.length) - lines.length
+  return (
+    <details className="report">
+      <summary>
+        History <span className="count">{task.historyCount ?? lines.length}</span>
+      </summary>
+      <ol className="history">
+        {lines.map((h, i) => (
+          <li key={i} className={`is-${h.tone}`}>
+            <span className="history-mark">{h.mark}</span>
+            <span>
+              {h.at && <span className="history-dim">{h.at} </span>}
+              {h.by && <span className="history-dim">{h.by}: </span>}
+              {h.label && <b>{h.label}: </b>}
+              <span className={h.tone === 'bad' && !h.result ? 'history-bad' : 'history-dim'}>{h.said}</span>
+              {h.result && <span className="history-result"> → {h.result}</span>}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {older > 0 && <p className="quiet">and {older} older</p>}
+    </details>
+  )
+}
+
+/** The checker's saved report of the task's latest try, and its file to open. */
+function CheckerReport({ checker, onTask }: { checker: PanelChecker; onTask: (id: string) => void }) {
+  return (
+    <details className="report checker">
+      <summary>
+        <Icon name={checker.ok ? 'pass' : 'warning'} /> {checker.title}
+      </summary>
+      {checker.text === null ? <p className="quiet">Could not read the checker report file.</p> : <Markdown text={checker.text} onTask={onTask} />}
+      <p className="checker-file">
+        {checker.cut ? 'The rest is in ' : ''}
+        <button type="button" className="link" onClick={() => tell({ type: 'open-file', path: checker.file })}>
+          {checker.file}
+        </button>
+      </p>
+    </details>
   )
 }
 

@@ -18,13 +18,13 @@ import { nodeHost } from '../node/host'
 import { sdkAgents, type SdkAgents } from './agents'
 import { leadChat, type LeadChat, type LeadChoice, type LeadEvent } from './lead'
 import type { Sdk, SdkImage, SdkModelInfo, SdkStep, SdkTool } from './sdk'
-import { panelView } from './view'
+import { checkerOf, panelView } from './view'
 import { LEAD_AGENT, addStep, isWords, sessionPath } from './steps'
 import { listSkills, skillMessage } from './skills'
 import { projectWorktrees, type Worktrees } from './worktrees'
 import type { PanelActionId, PanelMode, PanelStep, PanelView, SlashItem } from './protocol'
 import { appendFile, mkdir } from 'node:fs/promises'
-import { dirname } from 'node:path'
+import { dirname, join } from 'node:path'
 import { homedir } from 'node:os'
 
 /** What this host can do: it runs the lead chat itself, so updates wake it at once; the extension's webview is its
@@ -222,19 +222,27 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
   })
   const base = nodeHost({ root: o.root, agents, say: line => log(line), ...(o.sessionId ? { sessionId: o.sessionId } : {}), ...(o.pluginRoot ? { pluginRoot: o.pluginRoot } : {}) })
   // the board panel: the published view in memory, and the panel's view of it handed on after each publish; the
-  // changed files of each task in review are read with git once per change of the task
+  // changed files of each task in review are read with git once per change of the task, and a checker's saved
+  // report once (it doesn't change after)
   const project = o.root.split('/').filter(Boolean).pop() ?? o.root
   let published: SymccView = emptyView()
   let shown = panelView(published as PaneView, { project, dir: S.N.dir, name: S.N.name, nowMs: Date.now() })
   const changes = new Map<string, { at: string; files: DiffFile[] }>()
+  const checkers = new Map<string, string>()
   const draw = async () => {
     const v = published as PaneView
     for (const t of v.tasks ?? []) {
       if (t.status !== 'review' || isAnswered(t as BoardTask) || changes.get(t.id)?.at === t.updated_at) continue
       changes.set(t.id, { at: t.updated_at, files: await changedFiles(ref.host!, intoOf(t), t).catch(() => []) })
     }
+    for (const t of v.tasks ?? []) {
+      const c = checkerOf(t)
+      if (!c || checkers.has(c.file)) continue
+      const text = await ref.host!.fs.read(join(o.root, c.file)).catch(() => null)
+      if (text !== null) checkers.set(c.file, text)
+    }
     const orgMem = await orgMemNow(ref.host!).catch(() => undefined)
-    shown = panelView(v, { project, dir: S.N.dir, name: S.N.name, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])), ...(orgMem ? { orgMem } : {}) })
+    shown = panelView(v, { project, dir: S.N.dir, name: S.N.name, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])), ...(orgMem ? { orgMem } : {}), checkers: Object.fromEntries(checkers) })
     o.onView?.(shown)
   }
   let drawing: Promise<void> = Promise.resolve()

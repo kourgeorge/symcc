@@ -45060,7 +45060,7 @@ import {
 import { createHash as createHash3 } from "node:crypto";
 import { createRequire } from "node:module";
 import { homedir as homedir4 } from "node:os";
-import { dirname as dirname4, join as join4, relative as relative2, sep as sep2 } from "node:path";
+import { dirname as dirname4, join as join5, relative as relative2, sep as sep2 } from "node:path";
 function validateFile(path2, label) {
   if (!existsSync(path2)) {
     throw new Error(`${label} not found at ${path2}.`);
@@ -45083,7 +45083,7 @@ function collectRuntimeAssets(sources) {
   const assets = [];
   const visit = (directory) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const source = join4(directory, entry.name);
+      const source = join5(directory, entry.name);
       const sourceRelative = relative2(sources.packageRoot, source);
       if (isExcluded(sourceRelative)) {
         continue;
@@ -45126,37 +45126,37 @@ function makeExecutable(path2) {
   }
 }
 function defaultRuntimeCacheRoot(platform = process.platform, home = homedir4(), environment = process.env) {
-  const cacheDirectory = platform === "win32" ? environment.LOCALAPPDATA ?? join4(home, "AppData", "Local") : platform === "darwin" ? join4(home, "Library", "Caches") : environment.XDG_CACHE_HOME ?? join4(home, ".cache");
-  return join4(cacheDirectory, "copilot-sdk", "runtime");
+  const cacheDirectory = platform === "win32" ? environment.LOCALAPPDATA ?? join5(home, "AppData", "Local") : platform === "darwin" ? join5(home, "Library", "Caches") : environment.XDG_CACHE_HOME ?? join5(home, ".cache");
+  return join5(cacheDirectory, "copilot-sdk", "runtime");
 }
 function materializeRuntimeBundle(sources, cacheRoot = defaultRuntimeCacheRoot(), cacheKey = `${sources.platform}-${sourceFingerprint(collectRuntimeAssets(sources))}`) {
   const assets = collectRuntimeAssets(sources);
   const wrapperName = sources.platform.startsWith("win32") ? "copilot-runtime.exe" : "copilot-runtime";
-  const prebuildDir = join4("prebuilds", sources.platform);
-  const wrapperRelative = join4(prebuildDir, wrapperName);
-  const runtimeNodeRelative = join4(prebuildDir, "runtime.node");
+  const prebuildDir = join5("prebuilds", sources.platform);
+  const wrapperRelative = join5(prebuildDir, wrapperName);
+  const runtimeNodeRelative = join5(prebuildDir, "runtime.node");
   const sourceWrapper = assets.find((asset) => asset.relativePath === wrapperRelative)?.source;
   const sourceRuntimeNode = assets.find(
     (asset) => asset.relativePath === runtimeNodeRelative
   )?.source;
   validateRuntimeBundle(sourceWrapper ?? "", sourceRuntimeNode ?? "");
-  const installDir = join4(cacheRoot, cacheKey);
-  const installedWrapper = join4(installDir, wrapperRelative);
-  const installedRuntimeNode = join4(installDir, runtimeNodeRelative);
+  const installDir = join5(cacheRoot, cacheKey);
+  const installedWrapper = join5(installDir, wrapperRelative);
+  const installedRuntimeNode = join5(installDir, runtimeNodeRelative);
   if (existsSync(installDir)) {
     validateRuntimeBundle(installedWrapper, installedRuntimeNode);
     makeExecutable(installedWrapper);
     return installedWrapper;
   }
   mkdirSync(cacheRoot, { recursive: true });
-  const stagingDir = mkdtempSync(join4(cacheRoot, ".runtime-"));
+  const stagingDir = mkdtempSync(join5(cacheRoot, ".runtime-"));
   try {
     for (const asset of assets) {
-      const destination = join4(stagingDir, asset.relativePath);
+      const destination = join5(stagingDir, asset.relativePath);
       mkdirSync(dirname4(destination), { recursive: true });
       copyFileSync(asset.source, destination);
     }
-    const stagedWrapper = join4(stagingDir, wrapperRelative);
+    const stagedWrapper = join5(stagingDir, wrapperRelative);
     makeExecutable(stagedWrapper);
     renameSync(stagingDir, installDir);
   } catch (error) {
@@ -45192,7 +45192,7 @@ function getRuntimePackageName(platform) {
   return `@microsoft/copilot-sdk-${platform}`;
 }
 function resolvePackageRoot(packageName, searchPaths = require2.resolve.paths(packageName) ?? []) {
-  return searchPaths.map((base) => join4(base, ...packageName.split("/"))).find((candidate) => existsSync(join4(candidate, "package.json")));
+  return searchPaths.map((base) => join5(base, ...packageName.split("/"))).find((candidate) => existsSync(join5(candidate, "package.json")));
 }
 async function ensureRuntimeBundle(version, options = {}) {
   const platform = options.platform ?? getRuntimePlatform();
@@ -45203,7 +45203,7 @@ async function ensureRuntimeBundle(version, options = {}) {
       throw new Error(`Could not resolve ${packageName2} for Copilot CLI ${version}.`);
     }
     validateFile(
-      join4(packageRoot2, "prebuilds", platform, "runtime.node"),
+      join5(packageRoot2, "prebuilds", platform, "runtime.node"),
       "Copilot runtime.node"
     );
     return materializeRuntimeBundle(
@@ -45220,10 +45220,10 @@ async function ensureRuntimeBundle(version, options = {}) {
     );
   }
   const wrapperName = platform.startsWith("win32") ? "copilot-runtime.exe" : "copilot-runtime";
-  const prebuildDir = join4(packageRoot, "prebuilds", platform);
-  const wrapper = join4(prebuildDir, wrapperName);
+  const prebuildDir = join5(packageRoot, "prebuilds", platform);
+  const wrapper = join5(prebuildDir, wrapperName);
   try {
-    validateRuntimeBundle(wrapper, join4(prebuildDir, "runtime.node"));
+    validateRuntimeBundle(wrapper, join5(prebuildDir, "runtime.node"));
   } catch (error) {
     throw new Error(
       `${packageName} is missing required Copilot CLI runtime files. Reinstall @microsoft/copilot-sdk.`,
@@ -46035,7 +46035,7 @@ import {
   statSync as statSync2
 } from "node:fs";
 import { isIPv6, Socket } from "node:net";
-import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute2, join as join5, resolve as resolve3, sep as sep3, win32 } from "node:path";
+import { basename as basename2, dirname as dirname5, isAbsolute as isAbsolute2, join as join6, resolve as resolve3, sep as sep3, win32 } from "node:path";
 function groupHostSessionSettings(settings) {
   const paths = {
     enableExperimentalMode: ["experiments", "enableExperimentalMode"],
@@ -46456,11 +46456,11 @@ function getBundledRuntimePath() {
 }
 async function resolveInProcessRuntimeLibraryPath(explicitEntrypoint) {
   if (!explicitEntrypoint) {
-    return join5(dirname5(await getBundledRuntimePath()), "runtime.node");
+    return join6(dirname5(await getBundledRuntimePath()), "runtime.node");
   }
   const entrypointDirectory = dirname5(resolve3(explicitEntrypoint));
-  const adjacentRuntime = join5(entrypointDirectory, "runtime.node");
-  return existsSync3(adjacentRuntime) ? adjacentRuntime : join5(
+  const adjacentRuntime = join6(entrypointDirectory, "runtime.node");
+  return existsSync3(adjacentRuntime) ? adjacentRuntime : join6(
     entrypointDirectory,
     "prebuilds",
     getNapiPrebuildsFolder(explicitEntrypoint),
@@ -46515,7 +46515,7 @@ function walkPhysicalPath(absolutePath) {
       resolved = dirname5(resolved);
       continue;
     }
-    const next = join5(resolved, part);
+    const next = join6(resolved, part);
     if (!lstatSync2(next).isSymbolicLink()) {
       resolved = next;
       continue;
@@ -49447,7 +49447,7 @@ var init_client = __esm({
         if (this.options.baseDirectory) {
           env.COPILOT_HOME = this.options.baseDirectory;
           if (this.connectionConfig.kind === "inprocess") {
-            env.COPILOT_CACHE_HOME = join5(this.options.baseDirectory, "cache");
+            env.COPILOT_CACHE_HOME = join6(this.options.baseDirectory, "cache");
           }
         }
         if (this.options.mode === "empty") {
@@ -49510,7 +49510,7 @@ var init_client = __esm({
           }
           const cliPath = this.resolvedCliPath;
           const workingDirectory = this.options.workingDirectory;
-          const launchedCliPath = isAbsolute2(cliPath) || basename2(cliPath) === cliPath ? cliPath : cliPath.endsWith(".js") ? join5(
+          const launchedCliPath = isAbsolute2(cliPath) || basename2(cliPath) === cliPath ? cliPath : cliPath.endsWith(".js") ? join6(
             process.platform !== "win32" && existsSync3(workingDirectory) ? physicalDirectory(workingDirectory) : workingDirectory,
             cliPath
           ) : `${workingDirectory}${sep3}${cliPath}`;
@@ -67830,8 +67830,26 @@ function laneSize(z) {
   const [added = "", removed = ""] = sizeText(z, false).split(" ");
   return sizePieces([{ text: added, color: "success" }, { text: " ", color: "text" }, { text: removed, color: "error" }]);
 }
-function panelTask(t, nowMs) {
+var HISTORY_SHOWN = 30;
+var CHECKER_SHOWN_CHARS = 12e3;
+function panelHistory(t, nowMs) {
+  return t.history.slice(-HISTORY_SHOWN).reverse().map((h) => {
+    const e = historyEvent(h);
+    const at2 = historyTime(e.at, nowMs);
+    return { mark: e.mark, tone: e.tone, said: e.said, ...at2 ? { at: at2 } : {}, ...e.by ? { by: e.by } : {}, ...e.label ? { label: e.label } : {}, ...e.result ? { result: e.result } : {} };
+  });
+}
+var checkerOf = (t) => checkerReportOf(t, taskReports(t).at(-1)?.try ?? t.attempts);
+function panelChecker(t, texts) {
+  const c = checkerOf(t);
+  if (!c) return void 0;
+  const text2 = texts[c.file]?.trimEnd();
+  const cut = text2 !== void 0 && text2.length > CHECKER_SHOWN_CHARS;
+  return { title: `Checker (try ${c.try})${c.agent ? ` \xB7 ${c.agent}` : ""}`, ok: c.ok, file: c.file, text: text2 === void 0 ? null : cut ? text2.slice(0, CHECKER_SHOWN_CHARS) : text2, ...cut ? { cut } : {} };
+}
+function panelTask(t, nowMs, checkers = {}) {
   const size = sizeSegs(t);
+  const checker = panelChecker(t, checkers);
   return {
     id: t.id,
     title: t.title,
@@ -67845,6 +67863,8 @@ function panelTask(t, nowMs) {
     ...t.details?.trim() ? { details: t.details.trim() } : {},
     ...t.done?.trim() ? { done: t.done.trim() } : {},
     ...size ? { size: sizePieces(size) } : {},
+    ...t.history?.length ? { history: panelHistory(t, nowMs), historyCount: t.history.length } : {},
+    ...checker ? { checker } : {},
     needsYou: needsYou(t, nowMs),
     actions: actionsOf(t),
     sessions: taskSessions(t)
@@ -67951,8 +67971,8 @@ function panelView(v, o) {
     maxParallel: v.max_parallel ?? 0,
     needs,
     lanes,
-    next: next.map((t) => panelTask(t, nowMs)),
-    tasks: open.map((t) => panelTask(t, nowMs)),
+    next: next.map((t) => panelTask(t, nowMs, o.checkers)),
+    tasks: open.map((t) => panelTask(t, nowMs, o.checkers)),
     news: newsOf(tasks, nowMs),
     scouts,
     counts: {
@@ -68224,7 +68244,7 @@ ${added.map((f) => `#   ${f}`).join("\n")}` : "", patch].filter(Boolean).join("\
 
 // session.ts
 import { appendFile, mkdir as mkdir2 } from "node:fs/promises";
-import { dirname as dirname2 } from "node:path";
+import { dirname as dirname2, join as join3 } from "node:path";
 import { homedir as homedir2 } from "node:os";
 var CURSOR_FEATURES = { panel: true, band: false, wakeLead: "now", planMode: false, leadUsage: false, startQueue: false };
 var ACTION_COMMANDS = {
@@ -68338,14 +68358,21 @@ async function openCursorSession(o) {
   let published = emptyView();
   let shown = panelView(published, { project, dir: S.N.dir, name: S.N.name, nowMs: Date.now() });
   const changes = /* @__PURE__ */ new Map();
+  const checkers = /* @__PURE__ */ new Map();
   const draw = async () => {
     const v = published;
     for (const t of v.tasks ?? []) {
       if (t.status !== "review" || isAnswered(t) || changes.get(t.id)?.at === t.updated_at) continue;
       changes.set(t.id, { at: t.updated_at, files: await changedFiles(ref.host, intoOf(t), t).catch(() => []) });
     }
+    for (const t of v.tasks ?? []) {
+      const c = checkerOf(t);
+      if (!c || checkers.has(c.file)) continue;
+      const text2 = await ref.host.fs.read(join3(o.root, c.file)).catch(() => null);
+      if (text2 !== null) checkers.set(c.file, text2);
+    }
     const orgMem = await orgMemNow(ref.host).catch(() => void 0);
-    shown = panelView(v, { project, dir: S.N.dir, name: S.N.name, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])), ...orgMem ? { orgMem } : {} });
+    shown = panelView(v, { project, dir: S.N.dir, name: S.N.name, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])), ...orgMem ? { orgMem } : {}, checkers: Object.fromEntries(checkers) });
     o.onView?.(shown);
   };
   let drawing = Promise.resolve();
@@ -68460,7 +68487,7 @@ async function openCursorSession(o) {
 import { createHash } from "node:crypto";
 import { access as access2, mkdir as mkdir3, rename, rm, writeFile as writeFile2 } from "node:fs/promises";
 import { homedir as homedir3 } from "node:os";
-import { dirname as dirname3, join as join3 } from "node:path";
+import { dirname as dirname3, join as join4 } from "node:path";
 import { pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 var CURSOR_SDK = [
@@ -68478,9 +68505,9 @@ var integrityOf = (data) => `sha512-${createHash("sha512").update(data).digest("
 function cacheDir(env = process.env, os = process.platform) {
   if (env.SYMCC_CACHE) return env.SYMCC_CACHE;
   const home = homedir3();
-  if (os === "win32") return join3(env.LOCALAPPDATA || join3(home, "AppData", "Local"), "symcc", "Cache");
-  if (os === "darwin") return join3(home, "Library", "Caches", "symcc");
-  return join3(env.XDG_CACHE_HOME || join3(home, ".cache"), "symcc");
+  if (os === "win32") return join4(env.LOCALAPPDATA || join4(home, "AppData", "Local"), "symcc", "Cache");
+  if (os === "darwin") return join4(home, "Library", "Caches", "symcc");
+  return join4(env.XDG_CACHE_HOME || join4(home, ".cache"), "symcc");
 }
 function untar(tar) {
   const words = (b) => new TextDecoder().decode(b).replace(/\0[\s\S]*$/, "");
@@ -68515,8 +68542,8 @@ var why = (err) => {
 async function cachedImport(o) {
   const main2 = o.files[0];
   const key = createHash("sha256").update(JSON.stringify(o.files)).digest("hex").slice(0, 10);
-  const dir = join3(o.cache, `${main2.name.replace(/^@/, "").replace(/\//g, "-")}-${main2.version}-${key}`);
-  const loader = join3(dir, "load.mjs");
+  const dir = join4(o.cache, `${main2.name.replace(/^@/, "").replace(/\//g, "-")}-${main2.version}-${key}`);
+  const loader = join4(dir, "load.mjs");
   if (!await exists(loader)) await install(o, dir);
   return await import(pathToFileURL(loader).href);
 }
@@ -68538,16 +68565,16 @@ async function install(o, dir) {
         const rel = f.path.split("/").slice(1).filter((s) => s && s !== ".");
         if (!rel.length) continue;
         if (rel.includes("..")) throw new Error(`${url} has a file outside its folder: ${f.path}`);
-        const to = join3(tmp, "node_modules", ...p.name.split("/"), ...rel);
+        const to = join4(tmp, "node_modules", ...p.name.split("/"), ...rel);
         await mkdir3(dirname3(to), { recursive: true });
         await writeFile2(to, f.data);
       }
     }
-    await writeFile2(join3(tmp, "load.mjs"), `export * from ${JSON.stringify(o.files[0].name)}
+    await writeFile2(join4(tmp, "load.mjs"), `export * from ${JSON.stringify(o.files[0].name)}
 `);
     await mkdir3(dirname3(dir), { recursive: true });
     await rename(tmp, dir).catch(async (err) => {
-      if (!await exists(join3(dir, "load.mjs"))) throw err;
+      if (!await exists(join4(dir, "load.mjs"))) throw err;
     });
   } finally {
     await rm(tmp, { recursive: true, force: true });
@@ -68702,24 +68729,24 @@ async function loadCopilot() {
 var nodeFs2 = { exists: existsSync4, real: (p) => realpathSync2(p), read: (p) => readFileSync(p, "utf8") };
 function copilotCli(env = process.env, os = process.platform, fs = nodeFs2) {
   const win = os === "win32";
-  const { join: join7 } = win ? win322 : posix;
+  const { join: join8 } = win ? win322 : posix;
   const home = env.HOME || env.USERPROFILE || homedir5();
-  const known = win ? [join7(env.LOCALAPPDATA || join7(home, "AppData", "Local"), "Microsoft", "WinGet", "Links"), join7(env.APPDATA || join7(home, "AppData", "Roaming"), "npm")] : [join7(home, ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin"];
+  const known = win ? [join8(env.LOCALAPPDATA || join8(home, "AppData", "Local"), "Microsoft", "WinGet", "Links"), join8(env.APPDATA || join8(home, "AppData", "Roaming"), "npm")] : [join8(home, ".local", "bin"), "/opt/homebrew/bin", "/usr/local/bin"];
   const dirs = [...(env.PATH ?? env.Path ?? "").split(win ? ";" : ":").filter(Boolean), ...known];
   const npmEntry = (dir) => {
-    const pkg = join7(dir, "node_modules", "@github", "copilot");
+    const pkg = join8(dir, "node_modules", "@github", "copilot");
     try {
-      const bin = JSON.parse(fs.read(join7(pkg, "package.json"))).bin;
+      const bin = JSON.parse(fs.read(join8(pkg, "package.json"))).bin;
       const entry = typeof bin === "string" ? bin : bin?.copilot;
-      return entry && fs.exists(join7(pkg, entry)) ? join7(pkg, entry) : void 0;
+      return entry && fs.exists(join8(pkg, entry)) ? join8(pkg, entry) : void 0;
     } catch {
       return void 0;
     }
   };
   for (const dir of dirs) {
-    if (!win && fs.exists(join7(dir, "copilot"))) return fs.real(join7(dir, "copilot"));
-    if (win && fs.exists(join7(dir, "copilot.exe"))) return join7(dir, "copilot.exe");
-    if (win && fs.exists(join7(dir, "copilot.cmd"))) {
+    if (!win && fs.exists(join8(dir, "copilot"))) return fs.real(join8(dir, "copilot"));
+    if (win && fs.exists(join8(dir, "copilot.exe"))) return join8(dir, "copilot.exe");
+    if (win && fs.exists(join8(dir, "copilot.cmd"))) {
       const entry = npmEntry(dir);
       if (entry) return entry;
     }
@@ -69103,7 +69130,7 @@ var copilotGuard = (agent) => async (call) => {
 // board.ts
 import { mkdir as mkdir4, readFile as readFile4, readdir as readdir3, stat as stat3, writeFile as writeFile3 } from "node:fs/promises";
 import { homedir as homedir6 } from "node:os";
-import { basename as basename3, isAbsolute as isAbsolute3, join as join6 } from "node:path";
+import { basename as basename3, isAbsolute as isAbsolute3, join as join7 } from "node:path";
 var NETWORK_ERROR = /network request failed|fetch failed|ECONNREFUSED|ECONNRESET|ENOTFOUND|ETIMEDOUT|EAI_AGAIN|getaddrinfo|socket hang up|proxy/i;
 var CHAT_KEPT = 300;
 var TURN_STEPS_KEPT = 120;
@@ -69150,11 +69177,11 @@ function openBoard(o) {
     if (!o.stateDir) return;
     const dir = o.stateDir;
     const text2 = JSON.stringify(data);
-    writing = writing.then(() => mkdir4(dir, { recursive: true })).then(() => writeFile3(join6(dir, file), text2)).catch((err) => o.log?.(`couldn't keep ${file}: ${err.message}`));
+    writing = writing.then(() => mkdir4(dir, { recursive: true })).then(() => writeFile3(join7(dir, file), text2)).catch((err) => o.log?.(`couldn't keep ${file}: ${err.message}`));
   };
   const kept = async (file) => {
     if (!o.stateDir) return void 0;
-    return readFile4(join6(o.stateDir, file), "utf8").then(
+    return readFile4(join7(o.stateDir, file), "utf8").then(
       (t) => JSON.parse(t),
       () => void 0
     );
@@ -69237,7 +69264,7 @@ function openBoard(o) {
       return "Copied the folder's path.";
     } else if (action === "changes") o.editor({ do: "show-text", name: `${name} changes.diff`, language: "diff", content: await s().worktrees.diff(dir) });
     else if (action === "file" && file) {
-      const there = await stat3(join6(dir, file)).then(
+      const there = await stat3(join7(dir, file)).then(
         () => true,
         () => false
       );
@@ -69254,12 +69281,12 @@ function openBoard(o) {
     return "";
   };
   const openFile = async (name, line) => {
-    const full = name.startsWith("~/") ? join6(homedir6(), name.slice(2)) : isAbsolute3(name) ? name : join6(o.root, name);
+    const full = name.startsWith("~/") ? join7(homedir6(), name.slice(2)) : isAbsolute3(name) ? name : join7(o.root, name);
     let found = await stat3(full).catch(() => null) ? full : void 0;
     if (!found && !isAbsolute3(name) && !name.startsWith("~/")) {
-      const dir = join6(o.root, view?.dir ?? ".symcc", "worktrees");
+      const dir = join7(o.root, view?.dir ?? ".symcc", "worktrees");
       const ids = await readdir3(dir).catch(() => []);
-      const there = (await Promise.all(ids.map(async (id) => await stat3(join6(dir, id, name)).catch(() => null) ? join6(dir, id, name) : null))).filter((x) => !!x);
+      const there = (await Promise.all(ids.map(async (id) => await stat3(join7(dir, id, name)).catch(() => null) ? join7(dir, id, name) : null))).filter((x) => !!x);
       if (there.length === 1) found = there[0];
     }
     if (!found) throw new Error(`There's no ${name} in this project.`);
@@ -69267,7 +69294,7 @@ function openBoard(o) {
     o.editor({ do: "open-file", path: found, ...line ? { line } : {} });
   };
   const openSession = async (agent, title) => {
-    const file = join6(o.root, sessionPath(view?.dir ?? ".symcc", agent));
+    const file = join7(o.root, sessionPath(view?.dir ?? ".symcc", agent));
     const saved = await readFile4(file, "utf8").then(readSteps, () => []);
     o.editor({ do: "show-text", name: `${agent}.md`, language: "markdown", content: sessionMarkdown(title, saved.length ? saved : steps[agent] ?? []) });
   };

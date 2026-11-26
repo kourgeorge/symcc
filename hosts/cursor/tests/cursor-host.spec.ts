@@ -13,9 +13,9 @@ import { actionCommand, openCursorSession } from '../session'
 import type { PanelSize, PanelStep, PanelView } from '../protocol'
 import { PROTOCOL } from '../contract'
 import { addStep, readSteps, sessionMarkdown } from '../steps'
-import { panelView, taskSessions } from '../view'
+import { CHECKER_SHOWN_CHARS, HISTORY_SHOWN, panelView, taskSessions } from '../view'
 import type { PaneView } from '../../../hooks/app/state'
-import { driveWarning } from '../../../hooks/board'
+import { driveWarning, historyTime } from '../../../hooks/board'
 import { modelInfos, type SdkToolVerdict } from '../sdk'
 import { copilotGuard } from '../guard'
 import { skillOf } from '../skills'
@@ -521,6 +521,66 @@ test("a task's change size and Done line reach the panel in the board's words, a
   const lane = p.lanes.find(l => l.id === 'T-7')!
   expect([lane.doneMs, words(lane.size)]).toEqual([nowMs - 60_000, '+539 −3,722'])
 })
+
+test("a task's history reaches the panel newest first with who wrote each line, and the checker's report of the try its latest report is about", () => {
+  const nowMs = Date.parse('2026-11-26T10:00:00Z')
+  const at = (min: number) => new Date(nowMs - min * 60_000).toISOString()
+  const file = '.symcc/reports/T-5-try-2-checker.md'
+  const history = [
+    { kind: 'created', at: at(50), text: 'created by the owner' },
+    { kind: 'stage', step: 'worker-start', at: at(40), text: 'try 1: worker started', agent: 'symcc-T-5' },
+    { kind: 'checker-problems', at: at(30), text: 'try 1: checker: found problems: no test for an empty file', agent: 'symcc-T-5-checker', try: 1, report: '.symcc/reports/T-5-try-1-checker.md' },
+    { kind: 'rejected', at: at(25), text: 'try 1: sent back: add the empty-file test' },
+    { kind: 'checker-ok', at: at(10), text: 'try 2: checker: OK', agent: 'symcc-T-5-checker', try: 2, report: file },
+  ]
+  // try 3 runs and has no report yet: the checker shown is try 2's
+  const runs = [{ started: at(40), ended: at(31), report: '.symcc/reports/T-5-try-1.md' }, { started: at(20), ended: at(11), report: '.symcc/reports/T-5-try-2.md' }, { started: at(5) }]
+  const t5 = { id: 'T-5', title: 'Empty files', status: 'doing', details: '', attempts: 3, created_at: at(50), updated_at: at(5), history, runs }
+  const long = { id: 'T-6', title: 'A long one', status: 'doing', details: '', attempts: 1, created_at: at(90), updated_at: at(1), history: Array.from({ length: HISTORY_SHOWN + 5 }, (_, i) => ({ kind: 'note', at: at(80 - i), text: `note ${i + 1}` })) }
+  const view = (checkers?: Record<string, string>) => panelView({ tasks: [t5, long], on_here: true, driving: true } as unknown as PaneView, { project: 'p', dir: '.symcc', nowMs, ...(checkers ? { checkers } : {}) })
+  const task = (p: PanelView, id: string) => p.tasks.find(t => t.id === id)!
+
+  const t = task(view({ [file]: 'All good.\n\n- tests pass\n' }), 'T-5')
+  expect(t.history!.map(h => [h.by, h.label, h.said])).toEqual([
+    ['checker symcc-T-5-checker', undefined, 'OK'],
+    ['you', 'try 1', 'sent back: add the empty-file test'],
+    ['checker symcc-T-5-checker', undefined, 'found problems: no test for an empty file'],
+    ['worker symcc-T-5', 'try 1', 'worker started'],
+    [undefined, undefined, 'created by the owner'],
+  ])
+  expect([t.history![0]!.tone, t.history![2]!.tone, t.history![0]!.at, t.historyCount]).toEqual(['good', 'bad', historyTime(at(10), nowMs), 5])
+  expect(t.checker).toEqual({ title: 'Checker (try 2) · symcc-T-5-checker', ok: true, file, text: 'All good.\n\n- tests pass' })
+  expect(task(view(), 'T-5').checker!.text).toBe(null)
+  const cut = task(view({ [file]: 'x'.repeat(CHECKER_SHOWN_CHARS + 5) }), 'T-5').checker!
+  expect([cut.text!.length, cut.cut]).toEqual([CHECKER_SHOWN_CHARS, true])
+
+  const l = task(view(), 'T-6')
+  expect([l.history!.length, l.historyCount, l.history![0]!.said, l.history!.at(-1)!.said, l.history![0]!.by]).toEqual([HISTORY_SHOWN, HISTORY_SHOWN + 5, `note ${HISTORY_SHOWN + 5}`, 'note 6', 'lead'])
+  expect(l.checker).toBe(undefined)
+})
+
+test("a checker's saved report is read from its file and reaches the panel with its task", async () => {
+  const repo = await scratchRepo()
+  const sdk = fakeSdk(async () => ({ status: 'finished', result: 'ok' }))
+  const s = await openCursorSession({ root: repo, sdk, pluginRoot: PLUGIN_ROOT, sessionId: 'cursor-checker-report' })
+  try {
+    await s.command('symcc-init')
+    await s.mode('paused')
+    const now = new Date().toISOString()
+    const report = '.symcc/reports/T-1-try-1-checker.md'
+    await mkdir(`${repo}/.symcc/reports`, { recursive: true })
+    await writeFile(`${repo}/${report}`, 'Found no problems.\n\n- the test covers the greeting\n')
+    const b = JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')) as BoardFile
+    b.tasks = [{ id: 'T-1', title: 'Say hello', status: 'review', details: '', attempts: 1, created_at: now, updated_at: now, history: [{ kind: 'checker-ok', at: now, text: 'try 1: checker: OK', try: 1, agent: 'symcc-T-1-checker', report }] } as unknown as BoardFile['tasks'][number]]
+    await writeFile(`${repo}/.symcc/board.json`, JSON.stringify(b, null, 2))
+    await s.mode('review')
+    await until(() => !!s.view().tasks.find(t => t.id === 'T-1')?.checker, 10_000, 'the checker report on the panel')
+    expect(s.view().tasks.find(t => t.id === 'T-1')!.checker).toEqual({ title: 'Checker (try 1) · symcc-T-1-checker', ok: true, file: report, text: 'Found no problems.\n\n- the test covers the greeting' })
+  } finally {
+    await s.close()
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 60_000)
 
 test('panel actions are sent as the owner’s own commands', () => {
   expect(actionCommand('symcc', 'T-5', 'approve')).toEqual({ command: 'symcc-approve', args: 'T-5' })

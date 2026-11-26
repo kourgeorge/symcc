@@ -81,11 +81,28 @@ export type PanelTask = {
   done?: string
   /** its change's size: where the change is, its files, the lines added and removed */
   size?: PanelSize
+  /** its history, newest first: the latest lines, out of `historyCount` */
+  history?: PanelHistory[]
+  historyCount?: number
+  /** the checker's saved report of the try its latest report is about */
+  checker?: PanelChecker
   needsYou: boolean
   actions: PanelAction[]
   /** the agents that worked on it, newest first ("Try 5", "Try 4 checker"), for their sessions */
   sessions: PanelSession[]
 }
+
+/**
+ * A line of a task's history in the board's words (hooks/core/history.ts historyEvent): its mark and tone, when ("10:42",
+ * "Nov 23 10:42"), who wrote it ("worker symcc-T-3", "checker", "you"), its try label, what was said and the try's result.
+ */
+export type PanelHistory = { mark: string; tone: 'good' | 'bad' | 'step' | 'other'; at?: string; by?: string; label?: string; said: string; result?: string }
+
+/**
+ * A checker's saved report: its heading ("Checker (try 2) · symcc-T-3-checker"), its verdict, its file in the project,
+ * and its text (null: it can't be read; `cut`: only its start is here, the rest is in the file).
+ */
+export type PanelChecker = { title: string; ok: boolean; file: string; text: string | null; cut?: boolean }
 
 export type PanelSession = { label: string; agent: string; running: boolean }
 

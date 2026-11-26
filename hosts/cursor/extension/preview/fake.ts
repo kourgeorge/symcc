@@ -128,6 +128,8 @@ const SESSIONS: Record<string, PanelTask['sessions']> = {
   'T-39': [{ label: 'Try 1', agent: 'cursor-4-d', running: false }],
 }
 
+/** A time as the board's history writes it ("14:05"). */
+const hm = (ms: number) => new Date(ms).toTimeString().slice(0, 5)
 const step = (min: number, kind: PanelStep['kind'], text: string, more: Partial<PanelStep> = {}): PanelStep => ({ atMs: m(min), kind, text, ...more })
 const tool = (min: number, name: string, text: string, status: PanelStep['status'] = 'completed') => step(min, 'tool', text, { tool: name, status, callId: `${name}-${min}` })
 const steps: Record<string, PanelStep[]> = {
@@ -234,7 +236,26 @@ function busyView(): PanelView {
       ...needs.filter(n => n.id.startsWith('T-')).map(n => task(n.id, n.id === 'T-44' ? 'CSV export for invoices' : n.title, n.kind === 'failed' ? 'failed' : n.kind === 'review' ? 'review' : 'waiting', n.kind === 'failed' ? 'failed' : n.kind === 'review' ? 'ready for review' : 'waits for you', { needsYou: true, actions: n.actions, sessions: SESSIONS[n.id] ?? [] })),
       task('T-42', 'CSV export for invoices', 'doing', 'running'),
       task('T-43', 'Fix the flaky date test', 'doing', 'running', { kind: 'bug', details: 'The date test fails around midnight UTC because it builds “today” from the local clock.' }),
-      task('T-45', 'Webhook retry backoff', 'doing', 'running', { attempts: 2, sessions: SESSIONS['T-45']!, actions: [{ id: 'pause', label: 'Pause', primary: true }, { id: 'drop', label: 'Drop', ask: 'Why (optional)' }] }),
+      task('T-45', 'Webhook retry backoff', 'doing', 'running', {
+        attempts: 2,
+        sessions: SESSIONS['T-45']!,
+        actions: [{ id: 'pause', label: 'Pause', primary: true }, { id: 'drop', label: 'Drop', ask: 'Why (optional)' }],
+        historyCount: 6,
+        history: [
+          { mark: '●', tone: 'step', at: hm(m(1.1)), by: 'worker symcc-T-45', label: 'try 2', said: 'worker started' },
+          { mark: '✗', tone: 'bad', at: hm(m(9)), by: 'you', label: 'try 1', said: 'sent back: retry with backoff, not at once' },
+          { mark: '✗', tone: 'bad', at: hm(m(12)), by: 'checker symcc-T-45-checker', said: 'found problems: retries at once, no backoff; 2 tests skipped' },
+          { mark: '○', tone: 'other', at: hm(m(14)), by: 'worker symcc-T-45', label: 'try 1', said: 'handed back for review' },
+          { mark: '●', tone: 'step', at: hm(m(22)), by: 'worker symcc-T-45', label: 'try 1', said: 'worker started' },
+          { mark: '○', tone: 'other', at: hm(m(40)), said: 'created by the lead' },
+        ],
+        checker: {
+          title: 'Checker (try 1) · symcc-T-45-checker',
+          ok: false,
+          file: '.symcc/reports/T-45-try-1-checker.md',
+          text: 'Found problems.\n\n1. `deliver()` retries at once after a 5xx; the task asks for exponential backoff.\n2. `test/webhooks/retry.test.ts` skips the two timeout tests (`it.skip`).\n\nThe rest looks right: the payload is signed once and reused.',
+        },
+      }),
       ...next,
       task('T-38', 'Dark mode toggle', 'done', 'done', {
         done: 'Added a dark mode toggle to the settings page. The choice is kept per user and follows the system theme until set.',
