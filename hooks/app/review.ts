@@ -607,11 +607,15 @@ export async function mergedBefore($: Host, t: Pick<SymccTask, 'id'>, merged: st
   const [, first, second] = String(p.stdout ?? '').trim().split(/\s+/)
   if (second) return second
   if (!first) return ''
-  const log = await git($, ['log', '--first-parent', '-n', '200', '--format=%H%x1f%B%x1e', merged]).catch(() => null)
+  const log = await git($, ['log', '--first-parent', '-n', '200', '--format=%H%x1f%P%x1f%B%x1e', merged]).catch(() => null)
   if (!log || log.exitCode !== 0) return first
   for (const entry of String(log.stdout ?? '').split('\x1e')) {
-    const [sha, msg] = entry.trim().split('\x1f')
-    if (sha && !isTaskCommit(msg ?? '', t.id, S.N.name)) return sha
+    const [sha, parents, msg] = entry.trim().split('\x1f')
+    if (!sha) continue
+    if (!isTaskCommit(msg ?? '', t.id, S.N.name)) return sha
+    // the task's own catch-up merge (retry): main as it was then is its second parent
+    const second = (parents ?? '').split(' ')[1]
+    if (second) return second
   }
   return first
 }

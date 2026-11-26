@@ -29,7 +29,7 @@ function gitWorld(o: { commits: Record<string, { parents: string[]; message: str
       }
       if (a[0] === 'log') {
         const out: string[] = []
-        for (let s: string | undefined = a[a.length - 1]; s && o.commits[s]; s = o.commits[s]!.parents[0]) out.push(`${s}\x1f${o.commits[s]!.message}\x1e`)
+        for (let s: string | undefined = a[a.length - 1]; s && o.commits[s]; s = o.commits[s]!.parents[0]) out.push(`${s}\x1f${o.commits[s]!.parents.join(' ')}\x1f${o.commits[s]!.message}\x1e`)
         return { exitCode: 0, stdout: out.join('\n'), stderr: '' }
       }
       if (a[0] === 'diff' && a.includes('--numstat')) return { exitCode: 0, stdout: o.numstat ?? '', stderr: '' }
@@ -69,6 +69,22 @@ test('T-1086: with no catch-up merge, main before is the first commit down the l
   const got = await mergedChanges(w.$, task({ merged }))
   expect(got?.before).toBe(sha('f'))
   expect(got?.files.length).toBe(2)
+})
+
+test('T-1086: a retry\'s catch-up merge inside the line: main before is its second parent, not the task\'s first base', async () => {
+  const own = (n: number) => `T-7: Do it\n\nSymcc-Task: T-7\nSymcc-Try: ${n}`
+  const merged = sha('7')
+  const w = gitWorld({
+    commits: {
+      [merged]: { parents: [sha('e')], message: own(2) },
+      [sha('e')]: { parents: [sha('f'), sha('9')], message: own(2) },
+      [sha('f')]: { parents: [sha('0')], message: own(1) },
+      [sha('0')]: { parents: [], message: 'base' },
+    },
+    numstat: NUMSTAT,
+  })
+  const got = await mergedChanges(w.$, task({ merged }))
+  expect(got?.before).toBe(sha('9'))
 })
 
 test('T-1086: a file\'s diff comes from git; "diff not available" when git no longer has the commits', async () => {
