@@ -1044,7 +1044,7 @@ function secretWorld(changed: string[], committed = false, deleted: string[] = [
   w.git.answer = (args, cwd) => {
     if (cwd === WT && args[0] === 'diff' && args.includes('--cached')) return ok(committed ? '' : listed(args).join('\0'))
     // `history`: files any of the branch's commits added or changed, even ones a later commit deleted again
-    if (args[0] === 'log' && args.includes('--name-only')) return ok(history.join('\0'))
+    if (args[0] === 'log' && args.includes('--name-only')) return ok((args.includes('--diff-filter=d') ? history.filter(f => !deleted.includes(f)) : history).join('\0'))
     if (args[0] === 'diff' && args.includes('--name-only')) return ok(listed(args).join('\0'))
     if (cwd === WT && args[0] === 'restore' && args.includes('--staged') && !args.includes('--worktree')) {
       const files = args.slice(args.indexOf('--') + 1).map(a => a.replace(/^:\(literal\)/, ''))
@@ -1170,6 +1170,14 @@ test('deleting a tracked secret-looking file is allowed: the deletion is committ
   expect(w.git.main).toBe(H1)
   expect(told).not.toContain('left out')
   expect(t.history.at(-1)?.text).not.toContain('left out')
+})
+
+test('a task that only deletes a tracked .env in its own commit merges with its commits kept (no squash)', async () => {
+  const { w, restored, t } = await finishedWithSecrets(['src/a.ts', 'tests/.env'], true, { deleted: ['tests/.env'], history: ['src/a.ts', 'tests/.env'] })
+  expect(t.status).toBe('done')
+  expect(restored).toEqual([])
+  expect(w.calls.some(c => c.includes(' reset '))).toBe(false)
+  expect(w.git.main).toBe(w.git.head)
 })
 
 test('a deletion of a secret-looking file the worker committed is not put back by taking secrets out of the branch', async () => {
