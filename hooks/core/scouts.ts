@@ -25,6 +25,8 @@ const scoutsAction = (input: Record<string, unknown>): string => (typeof input.a
  * stats for both; for a scout (`who` 'scout') also scouts with action list (T-895). Any other action is refused.
  */
 export function scoutToolRefusal(tool: string, name: string = DEFAULT_NAME, input: Record<string, unknown> = {}, who: 'scout' | 'checker' = 'scout'): string | null {
+  // T-1110: the board's html view writes a file, so it is only for the lead
+  if (tool === 'board' && input.view === 'html') return `Refused: ${name} scouts and checkers can only read the board; board view html writes a file and is only for the lead.`
   if (SCOUT_BOARD_TOOLS.includes(tool)) return null
   if (tool === SCOUT_LIST_TOOL && who === 'scout' && scoutsAction(input) === 'list') return null
   const what = tool === SCOUT_LIST_TOOL && who === 'scout' ? `scouts with action "${scoutsAction(input)}"` : `"${tool}"`

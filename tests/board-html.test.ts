@@ -5,6 +5,8 @@ import { test } from './reset'
 import { S } from '../hooks/app/state'
 import { runTool, boardHtmlText } from '../hooks/app/tools'
 import { boardHtml } from '../hooks/core/board-html'
+import { scoutToolRefusal } from '../hooks/core/scouts'
+import { COMMANDS } from '../hooks/app/slash-commands'
 import { parseCommand } from '../hooks/core/commands'
 import { taskListBoard } from './task-list-fixture'
 import { fakeHost, memoryFs } from './fake-host'
@@ -56,4 +58,11 @@ test('T-1103: the board tool view html writes the file and answers its path; the
   expect(said.split('\n').length).toBe(2)
   expect((await boardHtmlText(w.host, taskListBoard(now))).startsWith(file!)).toBe(true)
   expect(files.get(file!)).toContain('Postgres or SQLite?')
+})
+
+test('T-1110: board view html is refused for scouts and checkers, and the page wraps a long h1', () => {
+  for (const who of ['scout', 'checker'] as const) expect(scoutToolRefusal('board', 'symcc', { view: 'html' }, who)).toContain('only for the lead')
+  expect(scoutToolRefusal('board', 'symcc', { view: 'tasks' }, 'scout')).toBe(null)
+  expect(COMMANDS().find(c => c.name.endsWith('-board'))?.argumentHint).toBe('[html]')
+  expect(boardHtml(taskListBoard(now), 'p', now)).toContain('h1{font-size:1.3rem;margin:.2em 0;overflow-wrap:anywhere}')
 })
