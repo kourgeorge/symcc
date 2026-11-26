@@ -107,10 +107,12 @@ test('T-1106: "more" pages list every task once; long questions keep every choic
   expect(chatTasksText(taskListBoard(now), now, 0)).not.toContain('more tasks')
   expect(chatTasksText(b, now, 0, '', 2)).not.toContain('more tasks')
   // a last page holding only the "Say:" line
-  for (const [pad, n] of [[23, 75], [24, 73], [25, 71]] as const) {
+  for (const [pad, n] of [[23, 156], [24, 152], [25, 149]] as const) {
     let pb = taskListBoard(now)
     for (let i = 0; i < n; i++) pb = addTask(pb, { origin: { why: 'a test' }, title: 'T ' + i + ' ' + 'y'.repeat(pad), files: ['src/'], after: [], backlog: false }, at)[0]
-    for (let pg = 1; pg < 6; pg++) expect(chatTasksText(pb, now, 0, '', pg).endsWith(', more tasks')).toBe(false)
+    const pages = [1, 2, 3, 4, 5].map(pg => chatTasksText(pb, now, 0, '', pg))
+    expect(pages.some(p => p.startsWith('Say:'))).toBe(true)
+    for (const p of pages) expect(p.endsWith(', more tasks')).toBe(false)
   }
   const tt = chatTasksText(patchTask(taskListBoard(now), 'T-5', { title: 'Write it, more tasks later' }, at), now, 0)
   expect(tt).toContain('Write it, more tasks later')
