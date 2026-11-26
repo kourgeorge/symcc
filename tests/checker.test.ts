@@ -4,7 +4,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
-import { notProse, checkerProblems, problemsBlockLines } from '../hooks/core/checker'
+import { notProse, checkerProblems, problemsBlockLines, parseCheckerAnswer } from '../hooks/core/checker'
 import { makeAsk } from '../hooks/board'
 import { historyEvent, historyLineWords, workerStartedEntry, withHistory, noteAddedLine } from '../hooks/core/history'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped, adoptedCheckers } from '../hooks/app/state'
@@ -1996,4 +1996,25 @@ test('T-996: answering Merge as is runs the tests with no checker and merges', a
   expect(find(await load(w.$), 'T-1')!.status).toBe('done')
   expect(w.spawns.length).toBe(0)
   expect(w.calls.some(c => c.includes('npm test'))).toBe(true)
+})
+
+test('T-1095: an answer naming two choices, or none, names no choice; a clear one still does', () => {
+  for (const a of ['merge later, keep fixing for now', 'Merged? no. Drop', 'Drop? no, keep fixing', 'dropdown', 'not sure']) expect(parseCheckerAnswer(a)).toBeUndefined()
+  const right: [string, 'merge' | 'fix' | 'drop'][] = [['Merge as is', 'merge'], ['Merge', 'merge'], ['merge it', 'merge'], ['keep fixing', 'fix'], ['fix it please', 'fix'], ['drop.', 'drop'], ['DROP', 'drop']]
+  for (const [a, pick] of right) expect(parseCheckerAnswer(a)).toBe(pick)
+})
+
+test('T-1095: the change tool refuses an answer naming two choices; the task keeps waiting, not dropped, no new try', async () => {
+  const w = world()
+  const ask = 'T-1 was sent back twice by the checker: src/a.ts:12 new hole. Merge as is / Keep fixing / Drop'
+  await saveBoard(w.$, boardWith(true, { status: 'waiting', ask: makeAsk('symcc', ask, ISO, { options: ['Merge as is', 'Keep fixing', 'Drop'] }) }))
+  const before = find(await load(w.$), 'T-1')!
+  let err = ''
+  try { await runTool(w.$, 'change', { task: 'T-1', answer: 'Drop? no, keep fixing' }) } catch (e) { err = String((e as Error).message) }
+  expect(err).toContain('Nothing changed: T-1 waits for one of Merge as is, Keep fixing, Drop')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('waiting')
+  expect(t.ask!.text).toBe(ask)
+  expect(t.attempts).toBe(before.attempts)
+  expect(w.spawns.length).toBe(0)
 })
