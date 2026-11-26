@@ -713,6 +713,7 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
       }),
       ...(g.items.some(isSettingPage) ? ['roles and task types: use the roles and kinds tools (the owner sees roles and task types as pages in the Settings view)', 'org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board\'s Live tab, and may delete them there)'] : []),
     ]),
+    ...Object.entries(b.projects ?? {}).filter(([, v]) => v?.test_commands?.length).map(([name, v]) => `project ${name}: test_commands: ${testCommandsText(v.test_commands ?? [])} (stored for now, not used yet)`),
   ].join('\n')
 }
 

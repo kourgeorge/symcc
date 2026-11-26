@@ -857,6 +857,15 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         await change($, x => patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir))
         return `${t.id} ${note ? 'note added' : 'updated'} (still in the backlog)`
       }
+      // A change that sets only the project keeps the status and the worker: the project is only a label for now.
+      if (project !== undefined && ['title', 'details', 'add_details', 'files', 'after', 'priority', 'needs_review', 'role', 'kind', 'answer', 'merge_into'].every(k => a[k] === undefined)) {
+        const p = fields()
+        await change($, x => {
+          const lines = leadLines(changeLines(t, p, false))
+          return patchTask(x, t.id, { ...p, ...(lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {}) }, now(), S.N.dir)
+        })
+        return `${t.id} updated (its worker keeps running if it has one; its status stays ${t.status})`
+      }
       const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'add_details', 'files', 'after', 'priority', 'role', 'kind', 'answer', 'merge_into', 'project'].every(k => a[k] === undefined)
       if (flagOnly) {
         await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), S.N.dir))
@@ -1007,6 +1016,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       return setupGit($, 'the lead')
     case 'settings': {
       if (a.sound_set !== undefined) return SOUND_SET_GONE
+      if (a.project !== undefined && typeof a.project !== 'string') return 'Nothing changed: project must be a project folder name (text)'
       if (!SETTING_NAMES.some(k => a[k] !== undefined)) return leadSettingsText(await load($), await playable($), S.root)
       const r = await saveSettings($, a, 'the lead')
       if (r.error) return r.error

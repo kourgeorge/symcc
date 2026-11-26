@@ -16,7 +16,7 @@ import { dayOf, localOffset } from './days'
 import { modeLabel, needsReview } from './review'
 import { num, plural } from './text'
 import { asksMoreTime, needsYou } from './commands'
-import { fileWaitText, rowMark, STEP_WORD, taskAsks } from './panel'
+import { fileWaitText, rowMark, rowTitle, STEP_WORD, taskAsks } from './panel'
 import { isOpenQuestion } from './questions'
 import { whyFailed } from './failure'
 import { newestFirst } from './settings'
@@ -132,7 +132,7 @@ export function liveIdle(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'
   const first = last ? `${LIVE_IDLE.done} · last merged ${last.t.id}, ${idleAgo(nowMs - last.at)} ago` : LIVE_IDLE.done
   const second = `${LIVE_IDLE.next}${backlog ? `, or move ${backlog === 1 ? 'the backlog item' : `one of ${backlog} backlog items`} to todo` : ''}.`
   // T-924: the next backlog items (lowest priority first, then oldest), one line each, then how many more
-  const next = items.slice(0, IDLE_BACKLOG).map(t => fitText(`  ${STATUS_MARK.backlog} ${t.id}  ${t.title}`, w))
+  const next = items.slice(0, IDLE_BACKLOG).map(t => fitText(`  ${STATUS_MARK.backlog} ${t.id}  ${rowTitle(t)}`, w))
   const more = backlog - next.length
   return [fitText(first, w), ...wrap(second), ...next, ...(more > 0 ? [fitText(`  … ${more} more in the backlog`, w)] : [])]
 }
@@ -161,7 +161,7 @@ export function liveIdleFacts(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_
   if (modeOf(view) === 'paused') return { kind: 'paused', text, ...none }
   if (tasks.some(t => OPEN.includes(t.status))) return { kind: 'waiting', text, ...none }
   const { last, items } = idleDone(tasks)
-  const next = items.slice(0, IDLE_BACKLOG).map(t => ({ id: t.id, title: t.title }))
+  const next = items.slice(0, IDLE_BACKLOG).map(t => ({ id: t.id, title: rowTitle(t) }))
   return { kind: 'done', text, ...(last ? { last: { id: last.t.id, ago: idleAgo(nowMs - last.at) } } : {}), next, more: items.length - next.length, backlog: items.length }
 }
 
@@ -384,7 +384,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
       const total = tokenCount(sumTokens(runs.map(tryTokens)))
       return {
         id: t.id,
-        title: t.title,
+        title: rowTitle(t),
         kind: kindOf(t),
         stations,
         station,
@@ -443,7 +443,7 @@ export function liveFinishedLanes(view: LiveView, nowMs: number): LiveLane[] {
       const total = tokenCount(sumTokens((t.runs ?? []).map(tryTokens)))
       return {
         id: t.id,
-        title: t.title,
+        title: rowTitle(t),
         kind: kindOf(t),
         stations,
         station: stations[at]!,
@@ -884,14 +884,14 @@ export function liveTrains(view: LiveView, nowMs: number, lanes: readonly LiveLa
     }
   }
   const build = (id: string): LiveTrain[] =>
-    todo.filter(t => parent.get(t.id) === id).map(t => ({ id: t.id, title: t.title, also: open.get(t.id)!.filter(a => a !== id), trains: build(t.id) }))
+    todo.filter(t => parent.get(t.id) === id).map(t => ({ id: t.id, title: rowTitle(t), also: open.get(t.id)!.filter(a => a !== id), trains: build(t.id) }))
   const next: NextUp[] = []
   let more = 0
   for (const t of todo) {
     if (parent.has(t.id)) continue
     const waits = open.get(t.id)!
     const stuck = waits.every(a => !laneOf.has(a) && byId.get(a)?.status !== 'todo')
-    if (stuck) next.push({ id: t.id, title: t.title, stuck: waits.map(a => ({ id: a, status: STUCK_WORD[byId.get(a)?.status ?? 'done'] ?? (byId.has(a) ? byId.get(a)!.status : 'not found') })) })
+    if (stuck) next.push({ id: t.id, title: rowTitle(t), stuck: waits.map(a => ({ id: a, status: STUCK_WORD[byId.get(a)?.status ?? 'done'] ?? (byId.has(a) ? byId.get(a)!.status : 'not found') })) })
     else more++
   }
   return { lanes: Object.fromEntries(lanes.map(l => [l.id, build(l.id)])), next, more, hung: parent.size }

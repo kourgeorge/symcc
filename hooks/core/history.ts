@@ -7,13 +7,14 @@ import { ellipsis, isObj, squash } from './text'
 export const ANSWER_LINE_CHARS = 300
 
 /** The fields of a change that count as "what changed" in a restart line, in this order. */
-const CHANGE_FIELDS = ['title', 'details', 'files', 'after', 'priority', 'role', 'needs_review', 'merge_into'] as const
+const CHANGE_FIELDS = ['title', 'details', 'files', 'after', 'priority', 'role', 'needs_review', 'merge_into', 'project', 'kind'] as const
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
 
 /** The names of the fields `patch` really changes on task `t` (e.g. ["details", "files"]). */
 export function changedFields(t: Partial<SymccTask>, patch: Partial<SymccTask>): string[] {
-  return CHANGE_FIELDS.filter(k => patch[k] !== undefined && !same(patch[k], t[k]))
+  const x = t as Record<string, unknown>, y = patch as Record<string, unknown>
+  return CHANGE_FIELDS.filter(k => y[k] !== undefined && !same(y[k], x[k]))
 }
 
 /** "restarted: the task was changed (details, files)": why a running worker was stopped by a change. */
@@ -152,6 +153,8 @@ export function changeLines(t: Pick<SymccTask, 'role' | 'attempts' | 'files'> & 
   if (waits) lines.push(['waits-changed', waits])
   if (answer?.trim()) lines.push(['answer', ownerAnsweredLine(answer)])
   if (note?.trim()) lines.push(['note', noteAddedLine(note)])
+  const pj = (patch as { project?: string }).project
+  if (pj !== undefined && pj !== ((t as { project?: string }).project ?? '')) lines.push(['project', `project: ${pj || 'none'} (was ${(t as { project?: string }).project || 'none'})`])
   if (patch.merge_into !== undefined && patch.merge_into !== (t.merge_into ?? 'main')) lines.push(['merge-into', `now merges into ${patch.merge_into} (was ${t.merge_into ?? 'main'})`])
   return lines
 }
@@ -199,6 +202,8 @@ export const HISTORY_KINDS = {
   resumed: 'other',
   /** T-954: the owner's Run now started this try at once ("try 2: started now by the owner"), past the slots, a paused board or its after list */
   'run-now': 'other',
+  /** the label of the task changed */
+  project: 'other',
   /** the branch it merges into changed */
   'merge-into': 'other',
   /** someone asked something: the worker asked the owner, the lead asked the owner */

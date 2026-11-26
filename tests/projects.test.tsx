@@ -105,3 +105,33 @@ for (const surface of ['terminal', 'vscode'] as const)
     expect(JSON.stringify(await ui.drawn())).toMatch(/\[client\\*\] Fix login/)
     await ui.unmount()
   })
+
+test('T-1146: a change that sets only the project keeps a running or finished task as it is, and writes a history line', async () => {
+  const { w, files } = await world(['server', 'client'])
+  await runTool(w.host, 'add', { ...WISH, title: 'Fix login', project: 'client' })
+  await runTool(w.host, 'add', { ...WISH, title: 'Other', project: 'client' })
+  await change(w.host, b => ({ ...b, tasks: b.tasks.map(t => (t.id === 'T-1' ? { ...t, status: 'doing' as const } : { ...t, status: 'review' as const })) }))
+  expect(await runTool(w.host, 'change', { task: 'T-1', project: 'server' })).toContain('keeps running')
+  const doing = (await load(w.host)).tasks.find(t => t.id === 'T-1')!
+  expect(doing.status).toBe('doing')
+  expect(doing.history?.some(h => h.text.includes('project: server (was client)'))).toBe(true)
+  expect(doing.history?.some(h => h.text.includes('restarted'))).toBe(false)
+  await runTool(w.host, 'change', { task: 'T-2', project: 'server' })
+  expect((await load(w.host)).tasks.find(t => t.id === 'T-2')!.status).toBe('review')
+  expect(boardOf(files).tasks[1]!.project).toBe('server')
+})
+
+test('T-1146: settings with no input lists the per-project test_commands; a project that is not text is refused', async () => {
+  const { w } = await world(['server', 'client'])
+  await runTool(w.host, 'settings', { project: 'server', test_commands: ['make test'] })
+  expect(await runTool(w.host, 'settings', {})).toContain('project server: test_commands')
+  expect(await runTool(w.host, 'settings', { project: 5 })).toContain('Nothing changed')
+})
+
+test('T-1146: a running task in VS Code Live shows its tag', async ($, on) => {
+  const tasks = BOARD_TASKS.map(t => (t.id === 'T-402' ? { ...t, title: 'Keep search open', project: 'client' } : t))
+  seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks } }, tab: 'live' })
+  const ui = await $.ui.mount({ ...PANE, surface: 'vscode', props: { ...PANE.props, bodyColumns: 100 } })
+  expect(JSON.stringify(await ui.drawn())).toMatch(/\[client\\*\] Keep search open/)
+  await ui.unmount()
+})
