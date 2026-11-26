@@ -283,6 +283,12 @@ export const ANSWER_CELL = 'answer'
 /** The tag of a task's kind in the board list: "[investigation]", "[bug]"; '' for a plain change (to keep lines short). */
 export const kindTag = (t: { kind?: unknown }): string => (kindMark(t) ? `[${kindMark(t)}]` : '')
 
+/** T-1137: the small tag of a task's project, "[client]"; '' for a task with no project. */
+export const projectTag = (t: { project?: unknown }): string => (typeof t.project === 'string' && t.project.trim() ? `[${t.project.trim()}]` : '')
+
+/** T-1137: a task's title with its project tag in front ("[client] Fix login"); the plain title when it has no project. */
+export const rowTitle = (t: { title: string; project?: unknown }): string => [projectTag(t), t.title].filter(Boolean).join(' ')
+
 /** The tag at the right end of a task row (doing, to do, paused): only its kind, "[bug]", "[docs]"; '' for a plain
  *  change. The role is not in it (T-722): the task page's Role row shows it. */
 export const roleTag = (t: { kind?: unknown }): string => kindTag(t)

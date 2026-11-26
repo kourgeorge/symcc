@@ -155,6 +155,22 @@ async function holdsRepos($: Host): Promise<boolean> {
 }
 
 /**
+ * T-1137: the projects of this board: the folders directly below the board folder that hold their own .git (found by
+ * folder name, nothing stored), sorted. None when the board folder is itself a repo (a board inside one repo).
+ */
+export async function projectNames($: Host): Promise<string[]> {
+  if (await $.fs.exists(`${S.root}/.git`)) return []
+  const dirs = (await $.fs.list(S.root).catch(() => [])).filter(e => e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== S.N.dir).map(e => e.name)
+  const found: string[] = []
+  for (const d of dirs) if (await $.fs.exists(`${S.root}/${d}/.git`)) found.push(d)
+  return found.sort()
+}
+
+/** T-1137: why `name` is not a project, or '' when it is one of `names`. */
+export const projectRefusal = (name: string, names: readonly string[]): string =>
+  names.includes(name) ? '' : names.length ? `'${name}' is not a project here. The project folders are: ${names.join(', ')}.` : `'${name}' is not a project: this board has no project folders (a project is a folder below the board folder with its own .git).`
+
+/**
  * Sets up git in the project, once the owner said yes: git init on main (if there is no repo),
  * a .gitignore with the data folder and common safe lines, and a first commit of the current
  * files, leaving out files that look like secrets or are over 50 MB (they go in .gitignore).

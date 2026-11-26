@@ -95,14 +95,16 @@ Decision 2 says symcc keeps no repo list, so only projects with settings would b
 
 ## Still open
 
-- **Where a worker copy lives.** Under the workspace (`<workspace>/.symcc/worktrees/T-n`, as
-  decision 8 and the probe assume) or inside the repo (`<repo>/.symcc/worktrees/T-n`, as
-  today). Under the workspace keeps one guard root and one place to find copies.
 - **How a test command is found per repo.** Guessed from the repo's files, asked once and
   stored, or both. How the guess works is not decided.
 - **Whether a session opened inside a repo finds the workspace board above it.** Today symcc
   never looks above the session folder (T-860). A repo may also have its own board, so this
   needs a rule.
+
+## Decided since
+
+- **Where a worker copy lives (2026-11-26).** Under the workspace: `<workspace>/.symcc/worktrees/T-n`. One guard root and
+  one place to find copies.
 
 ## Left out for now
 
@@ -119,7 +121,7 @@ Each step depends on the one before. The probe has the files and tests for each.
      is not recognised, so a session in it runs with no guard.
    - Block "Set up git" over a folder of repos. Today it runs `git init` in the workspace and
      commits the repos as broken pointers, so a worker would see empty folders.
-2. **Projects.** The `project` field on tasks, optional per-project settings, and the lead's
+2. **Projects (built, T-1137: data and display only; git, merges and tests still run in the board's own repo).** The `project` field on tasks, optional per-project settings, and the lead's
    `add` taking a project.
 3. **Per-project git and tests.** Every git call runs in the task's repo (the probe counts
    about 110), git readiness is checked per project, the merge runs in the task's repo, and

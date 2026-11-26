@@ -571,6 +571,23 @@ export function applySettings(b: Board, a: SettingsInput): { board: Board; chang
   return { board: y, changes }
 }
 
+/**
+ * T-1137: the settings of one project (a repo folder below the board folder). Only test_commands for now: stored in
+ * board.projects[project], not used yet. [] clears it. Same limit as the board's test_commands.
+ */
+export function applyProjectSettings(b: Board, project: string, a: SettingsInput): { board: Board; text: string } {
+  if (!Array.isArray(a.test_commands)) return { board: b, text: '' }
+  const all = a.test_commands.map(x => String(x).trim()).filter(Boolean)
+  const cmds = all.slice(0, MAX_TEST_COMMANDS)
+  const projects = { ...(b.projects ?? {}) }
+  if (cmds.length) projects[project] = { ...(projects[project] ?? {}), test_commands: cmds }
+  else delete projects[project]
+  const { projects: _old, ...rest } = b
+  const board: Board = Object.keys(projects).length ? { ...rest, projects } : rest
+  const cut = all.length > MAX_TEST_COMMANDS ? ` (only the first ${MAX_TEST_COMMANDS} kept)` : ''
+  return { board, text: `${project}: tests: ${testCommandsText(cmds)}${cut}` }
+}
+
 /** With findings backlog, a task added from a scout finding (origin_by scout) always goes to the backlog. The scout's own choice (`own`) decides; without one, the board's scout_findings. */
 export const findingToBacklog = (b: Partial<Pick<Board, 'scout_findings'>>, originBy: unknown, own?: 'auto' | 'backlog'): boolean => originBy === 'scout' && (own ?? scoutFindingsOf(b)) === 'backlog'
 

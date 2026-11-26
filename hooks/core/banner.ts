@@ -497,7 +497,7 @@ function boardRow(t: SymccTask, autoRetries: number | undefined, nowMs: number, 
   const extra = end ? ` — ${asks}${end}` : t.status === 'review' ? ` — ${STATUS_WORD.review}` : ''
   const after = t.after.length && (t.status === 'todo' || t.status === 'backlog') ? ` (after ${t.after.join(', ')})` : ''
   // the kind, the role and a priority other than 0, e.g. " [bug · tester · p-1]" (a plain change with the general role and priority 0 shows nothing)
-  const tag = [kindMark(t), roleMark(t), isFinished(t) ? '' : priorityMark(t.priority)].filter(Boolean).join(' · ')
+  const tag = [(t as BoardTask).project ? `project: ${(t as BoardTask).project}` : '', kindMark(t), roleMark(t), isFinished(t) ? '' : priorityMark(t.priority)].filter(Boolean).join(' · ')
   const role = tag ? ` [${tag}]` : ''
   // a later try: "T-5   ▶ doing   · try 2/3 <title>" (see tryMark)
   const mark = tryMark(t, autoRetries)
