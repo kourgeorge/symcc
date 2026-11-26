@@ -22,8 +22,11 @@ import { moveStage } from './move'
 import { isCheckerAsk, parseCheckerAnswer, CHECKER_ASK_OPTIONS } from '../board'
 import { questionTool, boardAnswered, popup, answerTail } from './questions'
 import { markMerged } from './merged'
-import { publish, enableHere } from './lead'
-import { orgMemTool } from './org-mem'
+import { publish, enableHere, statusView } from './lead'
+import { orgMemTool, orgMemNow } from './org-mem'
+import { tasksListText } from '../core/task-list'
+import { liveStatusText } from '../core/live-text'
+import { chatTasksText, chatStatusText } from '../core/chat-text'
 import { ORG_MEM_MAX_LINES, TOPIC_MAX_CHARS } from '../core/org-mem'
 import { backlogMovedText, canRunNow, runNowLine, runNowPlanText, runNowQuestion, runNowRefusal, runNowShares, runNowWaits } from '../core/run-now'
 
@@ -394,7 +397,7 @@ ${
 - Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask in the chat with ${popup()}, with the same options (where a line here says numbered plain chat text, use ${popup()} with those options), with the question's header set to exactly the task id (T-5; an id only mentioned in the question text doesn't tie it). ${S.N.name} ties that pop-up to the task's own board question (no Q-n is added): whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into the task for you (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a note), and the tool result says what was done and what is left for you (e.g. a reject's reason: then ${S.N.name} reject yourself). ${popup()} takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board" (or the owner types one under Other); when the owner picks "the rest on the board", the board question stays open and a board update brings their answer. Don't stack two questions under the same numbers: ask one at a time.`
     : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "${answerTail()}". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
 - Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "${answerTail()}". Don't stack two questions under the same numbers: ask one at a time.`
-}
+}${S.chat ? `\n- When the owner asks "status", "tasks", "what's running" or "show T-5" in plain words, answer with ${S.N.name} board view status, view tasks, or task T-5, and post that text to the chat.` : ''}
 - The board has one mode (${S.N.name} settings mode): "paused" stops every worker and scout and starts nothing new, "review" (shown to the owner as "approve merge") runs work but every finished task that passes waits for the owner, "auto" (shown as "auto merge"; the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - In mode "review", ask the owner before every ${S.N.name} add, whatever the task comes from (the owner's words, a scout finding, a worker's report, your own idea): say in one or two lines what the task would be, and add it only after a yes. In mode "auto" you add tasks as usual. Plain answers, notes (add_details) and board actions (approve, pause, settings) need no asking.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
@@ -445,8 +448,8 @@ const KIND_PARAM = () => ({ type: 'string', description: `The task type: ${[...n
 export const TOOLS = () => [
   {
     name: 'board',
-    description: `Show the ${S.N.name} task board. With nothing: the open tasks and the backlog in full, done and dropped ones only as counts. With status and/or search: only the tasks that match (search takes filter words like last:5, top:3, since:2d, type:bug, waits-on:T-3, blocks:T-3, stuck); limit / sort keep the newest or next-to-run ones. With task: that one task in full (also an archived one), with its latest worker report and the files of older tries' reports.`,
-    inputSchema: { type: 'object', properties: { task: { type: 'string', description: 'A task id, e.g. T-12, to see in full with its latest report.' }, status: { type: 'array', items: { type: 'string', enum: [...BOARD_STATUSES, 'open'] }, description: 'Only tasks with one of these statuses; "open" = everything not done, dropped or backlog. E.g. ["done"] to see the done tasks.' }, search: { type: 'string', description: 'Words; only tasks matching every word (id, title, details, role, status, origin), the same way as the board panel\'s search. Filter words too: last:N (the N changed most recently, newest first), top:N (the next N to run), since:30m / 2h / 2d / 2026-11-18 (changed since), status:done (or open), type:bug, role:tester, waits-on:T-3 (tasks waiting on T-3, directly or through a chain), blocks:T-3 (the not-done tasks T-3 still waits for), stuck (todo tasks that can\'t start: something they wait for is failed, paused, waiting, dropped or missing). E.g. "last:5 status:done" or "waits-on:T-3 status:todo".' }, limit: { type: 'number', description: 'Show at most this many (the same as last:N, or top:N with sort "order").' }, sort: { type: 'string', enum: ['newest', 'order'], description: 'newest: most recently changed first (as last:); order: what runs next first (as top:).' } } },
+    description: `Show the ${S.N.name} task board. With nothing: the open tasks and the backlog in full, done and dropped ones only as counts. With status and/or search: only the tasks that match (search takes filter words like last:5, top:3, since:2d, type:bug, waits-on:T-3, blocks:T-3, stuck); limit / sort keep the newest or next-to-run ones. With task: that one task in full (also an archived one), with its latest worker report and the files of older tries' reports. With view "tasks" or "status": exactly the text of /${S.N.name}-tasks or /${S.N.name}-status (in chat mode the short chat shape), to post to a chat.`,
+    inputSchema: { type: 'object', properties: { view: { type: 'string', enum: ['tasks', 'status'], description: 'tasks: the open tasks list (as /symcc-tasks); status: the Live status (as /symcc-status). Chat shape in chat mode.' }, task: { type: 'string', description: 'A task id, e.g. T-12, to see in full with its latest report.' }, status: { type: 'array', items: { type: 'string', enum: [...BOARD_STATUSES, 'open'] }, description: 'Only tasks with one of these statuses; "open" = everything not done, dropped or backlog. E.g. ["done"] to see the done tasks.' }, search: { type: 'string', description: 'Words; only tasks matching every word (id, title, details, role, status, origin), the same way as the board panel\'s search. Filter words too: last:N (the N changed most recently, newest first), top:N (the next N to run), since:30m / 2h / 2d / 2026-11-18 (changed since), status:done (or open), type:bug, role:tester, waits-on:T-3 (tasks waiting on T-3, directly or through a chain), blocks:T-3 (the not-done tasks T-3 still waits for), stuck (todo tasks that can\'t start: something they wait for is failed, paused, waiting, dropped or missing). E.g. "last:5 status:done" or "waits-on:T-3 status:todo".' }, limit: { type: 'number', description: 'Show at most this many (the same as last:N, or top:N with sort "order").' }, sort: { type: 'string', enum: ['newest', 'order'], description: 'newest: most recently changed first (as last:); order: what runs next first (as top:).' } } },
   },
   {
     name: 'add',
@@ -644,6 +647,14 @@ async function defChanged($: Host, a: In, said: string): Promise<string> {
   return said
 }
 
+/** The text /symcc-tasks (view "tasks") or /symcc-status (view "status") prints: the chat shape while S.chat is set. */
+export async function viewText($: Host, b: Awaited<ReturnType<typeof load>>, view: 'tasks' | 'status'): Promise<string> {
+  if (view === 'tasks') return S.chat ? chatTasksText(b, Date.now()) : tasksListText(b, Date.now(), S.N.name)
+  const sv = await statusView($, b)
+  const notes = (await orgMemNow($)).notes
+  return S.chat ? chatStatusText(sv, notes, Date.now()) : liveStatusText(sv, notes, Date.now(), S.N.name)
+}
+
 export async function runTool($: Host, name: string, a: In): Promise<string> {
   const id = str(a.task) ?? ''
   // A task moved to archive.json is read-only; only retry brings back a dropped one.
@@ -663,7 +674,9 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       return questionTool($, a)
     case 'board': {
       const b = await load($)
-      if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { status: parseStatusFilter(a.status), search: str(a.search), limit: typeof a.limit === 'number' ? a.limit : undefined, sort: a.sort === 'order' || a.sort === 'newest' ? a.sort : undefined, kinds: [...BUILT_IN_KINDS, ...kindNames(S.kinds)], driving: S.driving, chat: !!S.chat }, S.version)
+      if (a.view === 'tasks' || a.view === 'status') return viewText($, b, a.view)
+      if (a.view !== undefined && a.view !== '') throw new Error('view must be "tasks" or "status"')
+      if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { status: parseStatusFilter(a.status), search: str(a.search), limit: typeof a.limit === 'number' ? a.limit : undefined, sort: a.sort === 'order' || a.sort === 'newest' ? a.sort : undefined, kinds: [...BUILT_IN_KINDS, ...kindNames(S.kinds)], driving: S.driving }, S.version)
       const t = find(b, id) ?? (await findArchived($, id))
       if (!t) throw new Error(`${id} is not on the board or in the archive`)
       const archived = !find(b, id)

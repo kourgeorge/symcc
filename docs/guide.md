@@ -2742,6 +2742,9 @@ the same mode):
   shape there: plain lines (no columns, rules or bars), one task per line like
   `T-5 running: test, try 2, 12m: title`, "Needs you" first, the backlog only as a count, and at
   most 3,500 characters (a "+N more" line says what was left out).
+- **Plain words work.** Slash commands may not reach symcc from a chat app, so the lead has the
+  same views as a tool: ask "status", "tasks", "what's running" or "show T-5" and it posts the same
+  text as `/symcc-status`, `/symcc-tasks` or `/symcc-task T-5`.
 - **Back at the terminal.** When you next type at the terminal, chat mode goes off.
 
 ---

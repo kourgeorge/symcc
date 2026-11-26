@@ -77,7 +77,8 @@ function stateWord(t: BoardTask, all: readonly SymccTask[]): string {
 function runningState(t: BoardTask, nowMs: number): string {
   const step = checkStepNow(t, nowMs)
   const n = Number(t.attempts)
-  return [step ? STEP_WORD[step] : '', n > 1 ? `try ${n}` : '', plain(rowCell(t, nowMs))].filter(Boolean).join(', ')
+  const time = plain(rowCell(t, nowMs))
+  return [step ? STEP_WORD[step] : '', n > 1 ? `try ${n}` : '', step || n > 1 || !/^0s?$/.test(time) ? time : 'starting'].filter(Boolean).join(', ')
 }
 
 /** The choices of a task's question: the real ones only (not the board's "answer here" extras). */
@@ -156,7 +157,7 @@ const cutPart = (s: string, n: number): string => {
 export function chatTaskText(t: SymccTask, report: ChatReport | null | undefined, nowMs: number): string {
   const L = [`${t.id}: ${plain(t.title)}`]
   const changed = historyLineText({ at: t.updated_at } as never, nowMs).split('  ')[0]
-  L.push(`Status: ${STATUS_WORD[t.status]}, try ${t.attempts}${changed ? `, changed ${changed}` : ''}`)
+  L.push(`Status: ${STATUS_WORD[t.status]}${Number(t.attempts) > 0 ? `, try ${t.attempts}` : ''}${changed ? `, changed ${changed}` : ''}`)
   L.push(t.origin?.why ? `Why: ${plain(t.origin.why)}` : plain(fromText(t, 100)))
   if (t.status === 'waiting' && t.ask?.text) L.push(...askLines(taskAsks(t as BoardTask)?.text ?? t.ask.text, askChoices(t as BoardTask, taskAsks(t as BoardTask))))
   L.push('What to do:', t.details.trim() ? cutPart(t.details, PART_MAX) : '(no details)')
