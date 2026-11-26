@@ -12,7 +12,7 @@ import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
 import { runChecker, checkerName, cleanFolder, STOPPED_AGAIN } from './checker'
 import { loadKinds } from './kinds'
-import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, adoptedCheckers, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
+import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, movedAway, isOwnAgent, rememberOnBoard, halt, checkerRuns, adoptedCheckers, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, startCancelled, claimNote, rewakeStarts } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait, holdPublish } from './store'
@@ -784,7 +784,6 @@ export const stopAsked = new Map<string, string>()
 
 /** Tasks whose check was stopped because symcc was disabled or the board paused: task id → why (e.g. "symcc was disabled"). */
 export const offAsked = new Map<string, string>()
-
 /**
  * Symcc was disabled or the board paused (`why`): every check and merge running now stops before the
  * merge. A finishing task goes back to "todo" at once (its files are kept); an approve in progress
@@ -833,6 +832,7 @@ export const MERGING_TEXT = (id: string) => `${id} is being merged; wait a momen
 /** The check of task `id` has ended: forget a stop asked meanwhile, and remove the folder of a task dropped meanwhile. */
 export async function endCheck(host: Host, id: string) {
   offAsked.delete(id)
+  movedAway.delete(id)
   if (!stopAsked.has(id)) return
   stopAsked.delete(id)
   try {
@@ -894,6 +894,7 @@ async function writeIfSame(host: Host, t: SymccTask, patch: (cur: SymccTask) => 
  */
 async function changedMeanwhile(host: Host, t: SymccTask, b: Board, r: CheckResult, line: HistoryAdd, worktree: string, agentId?: string) {
   const merged = r.ok && !r.review && !!r.merged
+  if (!merged && movedAway.has(t.id)) return // the lead moved the task: its own "moved to ..." line is the only one
   const off = offAsked.get(t.id)
   const was = await change(host, x => {
     const cur = find(x, t.id)
@@ -1113,7 +1114,7 @@ export async function restartCheckers(host: Host, agents: HostAgent[]) {
  * as a worker's hand-back (workerFinished). When its folder can't be read, the task goes back to "todo"
  * instead (its branch is kept, so the next try goes on from there and the merge path runs again).
  */
-async function checkAgain(host: Host, t0: BoardTask) {
+export async function checkAgain(host: Host, t0: BoardTask, moved = false) {
   const id = t0.id
   const tryNo = t0.attempts
   if (finishing.has(id)) return
@@ -1140,13 +1141,13 @@ async function checkAgain(host: Host, t0: BoardTask) {
     if (await folderGone(host, t0, note, `${id} "${t.title}": its checker stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next try goes on from the same branch. This is not counted as a retry.`)) return
     await markFinishing(host, id, tryNo).catch(() => undefined)
     // told once: a start tried again because the agent type wasn't loaded yet is the same restart
-    if (!checkerNotReady.has(id) && !adoptedCheckers.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
+    if (!moved && !checkerNotReady.has(id) && !adoptedCheckers.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
     go = { b, t, dir }
   } finally {
     if (!go) await endFinishing(host, id, tryNo)
   }
   const { b, t, dir } = go
-  await finishUnderLimit(host, id, tryNo, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, true, gaveUp, over, limit))
+  await finishUnderLimit(host, id, tryNo, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, true, gaveUp, over, limit, moved))
 }
 
 /**
@@ -1171,11 +1172,12 @@ async function folderGone(host: Host, t0: BoardTask, note: string, tell: string)
  * hand-back: prep, the checker, and on its OK the merge line. Without it (its test and merge was cut off, see mergeAgain)
  * a checker runs first only when the checker setting is on and this try has no checker OK yet.
  */
-async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string, fromChecker: boolean, gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit) {
+async function checkerStepAgain(host: Host, t: SymccTask, b: Board, dir: string, fromChecker: boolean, gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit, moved = false) {
   const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
   const made: string[] = []
   const why = fromChecker ? stop() : undefined
-  if (fromChecker && !why && !adoptedCheckers.has(t.id)) await cleanFolder(host, dir)
+  // a move by the lead (moved) keeps uncommitted edits: the prep step commits them, so they are checked
+  if (fromChecker && !moved && !why && !adoptedCheckers.has(t.id)) await cleanFolder(host, dir)
   // T-1068: a checker that kept running over the reload is only waited for (no prep, no folder clean: its try's prep ran before);
   // its verdict then goes on as a fresh checker's would, through the merge line's prep
   const adoptedWas = fromChecker && !why && adoptedCheckers.has(t.id)
@@ -1567,7 +1569,7 @@ export async function mergeWaiting(host: Host, id: string): Promise<string> {
  * Merges task `t`'s finished work: `kind` 'approve' (the owner approved it, in "review") or 'merge'
  * (it was "waiting" only for the owner's files). The same checked merge as for a finished worker.
  */
-async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'approve' | 'merge'): Promise<string> {
+export async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'approve' | 'merge', force = false): Promise<string> {
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
   if (approving.has(t.id)) return `${t.id} is already being merged`
   if (!(await gitReady(host, b))) return `${t.id} ${stays}: ${gitNote(S.gitState)}`
@@ -1580,7 +1582,7 @@ async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'approve'
   // The step shown on the board (BoardTask.live?.checking) is refreshed like a finishing mark, and removed when the merge ends or is given up.
   const beat = everyMs(host, FINISH_BEAT_MS, () => void markChecking(host, t.id, t.status, t.attempts).catch(() => undefined))
   try {
-    const how = await withLimit(host, limitMs, (gaveUp, over, limit) => mergeWork(host, t, b, kind, gaveUp, over, limit))
+    const how = await withLimit(host, limitMs, (gaveUp, over, limit) => mergeWork(host, t, b, kind, gaveUp, over, limit, force))
     if (how !== OVER) return how
     beat?.cancel()
     await markChecking(host, t.id, t.status, t.attempts, false).catch(() => undefined)
@@ -1631,17 +1633,17 @@ async function mergeRanOver(host: Host, id: string, status: SymccTask['status'],
 const STATUS_WORD_OF = (s: SymccTask['status']) => (s === 'review' ? 'in review' : s)
 
 /** The body of mergeFinished, once the task is marked as being merged. `gaveUp`, `release`, `limit`: as for finishWork. */
-async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit): Promise<string> {
+async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | 'merge', gaveUp: () => boolean, release: Promise<unknown>, limit?: TurnLimit, force = false): Promise<string> {
   const status = t.status
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
-  const by = kind === 'approve' ? 'approved by the owner' : 'merged once your files were out of the way'
+  const by = force ? 'moved to tests by the lead' : kind === 'approve' ? 'approved by the owner' : 'merged once your files were out of the way'
   try {
     const dir = worktreeDir(t.id)
     if (!(await host.fs.exists(`${dir}/.git`))) await prepareWorktree(host, t, intoOf(t))
     // The owner's own edits in the folder since review (or edits whose tests failed on an
     // earlier approve, kept as test_output): those are committed with the task and always tested.
     const edits = await ownerEdits(host, t, dir).catch(() => [] as string[])
-    const retest = edits.length > 0 || (kind === 'approve' && t.test_output !== undefined)
+    const retest = force || edits.length > 0 || (kind === 'approve' && t.test_output !== undefined)
     if (gaveUp()) return ''
     await change(host, x => {
       const cur = find(x, t.id)
@@ -1650,7 +1652,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
     })
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-    const r: CheckResult = await checkAndMerge(host, t, dir, b, kind, made, stop, retest, release, limit).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge(host, t, dir, b, force && kind === 'merge' ? 'finish' : kind, made, stop, retest, release, limit).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     // Given up meanwhile: mergeRanOver already wrote its note; this late outcome is not written over
     // it, unless the work reached the branch after all (landedLate).
     if (gaveUp()) {
@@ -1659,6 +1661,11 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
     }
     await recordCommits(host, t.id, made, r.merged)
     const cur = find(await load(host), t.id)
+    if (r.ok && r.review && !r.merged) {
+      // A move to tests in board mode "review": the tests passed; it waits for the owner's approve like any finished task.
+      await change(host, x => (find(x, t.id)?.status === status ? patchTask(x, t.id, { note: `ready for review: the tests passed, nothing merged yet`, test_output: undefined, live: { merge_wait: undefined } }, now()) : x))
+      return `${t.id} passed its tests and is ready for review (nothing merged yet); approve it to merge`
+    }
     if (r.merged) {
       outcomes.set(t.id, 'merged')
       // The work is on the target branch: the task is done, whatever happened to it meanwhile

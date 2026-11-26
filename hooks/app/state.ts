@@ -263,6 +263,9 @@ export type CheckerEnd = { answer: string | null; why?: string; tokens?: SymccTo
 export const checkerRuns = new Map<string, { task: string; worktree: string; end: (e: CheckerEnd) => void; held?: { answer: string; tokens?: SymccTokens } }>()
 /** agents this plugin has stopped: every tool they try is refused, so they can't change anything and end soon */
 export const stopped = new Set<string>()
+
+/** Tasks whose running checker the lead stopped to move the task to another stage: its result is dropped with no line and no message. */
+export const movedAway = new Set<string>()
 /** Why a session stops its runs when the owner moves driving the board to another session (/<name>-drive there, see stepDown). */
 export const MOVED_WHY = 'the owner moved driving to another session'
 /** Why a session stops its runs when another session took the board over (this one stopped answering for too long). */
