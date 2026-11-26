@@ -588,9 +588,9 @@ test('when its retries are used up, a checker report fails the task with the rep
   expect(w.git.main).toBe(M1)
 })
 
-test('checkerProblems counts every item after a blank line, a "## Problems" heading and indented follow-on lines', () => {
+test('checkerProblems counts every item after a blank line, and a "## Problems" heading (problemsBlockLines) and indented follow-on lines', () => {
   expect(checkerProblems('Problems:\n\n- a\n- b', Infinity)).toEqual(['a', 'b'])
-  expect(checkerProblems('## Problems\n- a\n- b', Infinity)).toEqual(['a', 'b'])
+  expect(problemsBlockLines('## Problems\n- a\n- b', Infinity)).toEqual(['a', 'b'])
   expect(checkerProblems('Problems:\n- a\n  more\n- b', Infinity)).toEqual(['a more', 'b'])
   expect(checkerProblems('Intro.\nProblems:\n- a\n\n- b', Infinity)).toEqual(['a', 'b'])
   expect(checkerProblems('Problems:\n- a\n\nDone text', Infinity)).toEqual(['a'])
