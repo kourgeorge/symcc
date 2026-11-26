@@ -937,8 +937,11 @@ export function endFailure(end: TurnEnd): string {
 }
 
 /** What the lead is told when a worker asked a question (ask_owner) and its task now waits for the owner. */
+/** Where a plain question says the owner may answer too: on the board, or by writing in the chat app (S.chat). */
+const canAnswerNote = (): string => (S.chat ? 'they can reply with their own words' : 'they can also answer on the board')
+
 export const workerQuestionText = (id: string, question: string, options?: readonly string[]) =>
-  `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? '' : '.'}${options?.length ? ` Options: ${options.join(' | ')}.` : ''} Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change ${id} with answer: that answer, and tell the owner what you answered. Otherwise ask the owner in the chat now, plain and short${options?.length ? `, offering the options ${optionsVia(options.length)}, plus "${answerTail()}"` : ', and say they can also answer on the board'}; put their answer into the task with ${S.N.name} change ${id} and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again.${popupTied(id)}`
+  `${id} is waiting for the owner: ${question}${/[.?!]$/.test(question) ? '' : '.'}${options?.length ? ` Options: ${options.join(' | ')}.` : ''} Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change ${id} with answer: that answer, and tell the owner what you answered. Otherwise ask the owner in the chat now, plain and short${options?.length ? `, offering the options ${optionsVia(options.length)}, plus "${answerTail()}"` : `, and say ${canAnswerNote()}`}; put their answer into the task with ${S.N.name} change ${id} and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again.${popupTied(id)}`
 
 /** Whether a report that could not be saved was already told (once per session, so it never floods). */
 let reportWarned = false
@@ -1464,7 +1467,7 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
       return
     }
     sayNeedsYou(host, b, t, ask)
-    tellLead(host, `${ask} The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`, { urgent: true })
+    tellLead(host, `${ask} The task now waits for the owner. Ask them in the chat, plain and short (${canAnswerNote()}); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words, or ${S.N.name} drop ${t.id}.`, { urgent: true })
     return
   }
   if (r.review) {
@@ -1483,7 +1486,7 @@ export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult,
       return
     }
     sayNeedsYou(host, b, t, ask)
-    tellLead(host, `${ask}. The task now waits for the owner. Ask them in the chat, plain and short (they can also answer on the board); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words (Merge as is moves it on to the tests with no checker; Keep fixing starts one more try with the checker's report; Drop drops it).`, { urgent: true })
+    tellLead(host, `${ask}. The task now waits for the owner. Ask them in the chat, plain and short (${canAnswerNote()}); put their answer into the task with ${S.N.name} change ${t.id} with answer: their words (Merge as is moves it on to the tests with no checker; Keep fixing starts one more try with the checker's report; Drop drops it).`, { urgent: true })
     return
   }
   const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES
