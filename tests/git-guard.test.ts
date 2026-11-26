@@ -354,6 +354,49 @@ test('T-1099: grep after a no-value short option of xargs is a command, so a quo
   }
 })
 
+test('T-1116: the command is split into words first: a redirect or setting among a wrapper\'s options is looked past', () => {
+  for (const who of ['reader', 'worker'] as const)
+    for (const c of [
+      'sudo -u root>x git push', 'nice -n 2>x 5 git push', 'xargs -n >x 1 git push', 'env -u >x -i git push', 'sudo -u >x -i git push',
+      'timeout -s >x KILL 5 git push', 'env -u A=1 -i git push', 'env -u A=1 B=2 -i git push', 'sudo -iu root git push', 'sudo --user root git push',
+      'eval "git push"', "watch -n 1 'git push'", 'cat <(git push)', 'echo "a $(echo `git push`) b"', 'x # a comment\ngit push',
+      "cat <<'EOF'\nit's here\nEOF\ngit push", 'cat <<EOF\ngit push\nEOF', 'find . -exec sh -c "git push" \\;', '{ git push; }', 'f() { git push; }',
+      'echo ${X:-$(git push)}', 'GIT push', "$'git' push",
+    ])
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+  // a quoted git is a word, not a command; a comment runs nothing
+  for (const c of ['xargs -0 grep "git push"', 'echo x # git push', 'echo "a; git push"', "printf '%s' 'x && git push'", 'cat <<EOF\nnot git push\nEOF'])
+    expect([c, gitWriteIn(c, 'reader')]).toEqual([c, undefined])
+})
+
+test('T-1116: repeated wrappers, redirects and a long random command check fast', () => {
+  const push = 'gi' + 't push'
+  for (const r of ['xargs -0 ', 'env -i A=1 ', 'nice >x - ', '<x - ', '- 5 >x ', 'env -i >x - ', 'sudo -u a -s ', 'timeout -s >x KILL 5 ']) {
+    const c = r.repeat(40) + push
+    const start = Date.now()
+    expect([c, gitWriteIn(c, 'reader'), gitWriteIn(c, 'worker')]).toEqual([c, 'git push', 'git push'])
+    expect([r, Date.now() - start < 20]).toEqual([r, true])
+  }
+  // a random 20,000-character command (a fixed seed, so every run is the same)
+  const parts = ['git', ' ', 'push', '-u', '>', '<', '2>', '&', '|', ';', '"', "'", '\\', '$(', ')', '`', 'env', 'sudo', 'x', '=', '-', '\n', '{', '}', '#', 'eval', 'sh -c ', '<<', 'EOF']
+  let seed = 7
+  let big = ''
+  while (big.length < 20_000) {
+    seed = (seed * 1103515245 + 12345) % 2147483648
+    big += parts[seed % parts.length]
+  }
+  const start = Date.now()
+  gitWriteIn(big, 'reader')
+  gitWriteIn(big, 'worker')
+  expect(Date.now() - start < 40).toBe(true)
+  // eval inside eval can't make a check slow: past a limit the command is refused
+  const evals = 'nice eval '.repeat(2000) + 'true'
+  const t = Date.now()
+  expect(gitWriteIn(evals, 'reader')).toBe('a command too complex to read')
+  expect(Date.now() - t < 200).toBe(true)
+  expect(gitWriteIn('$('.repeat(20_000), 'reader')).toBe('a command too complex to read')
+})
+
 test("T-1062: zsh's noglob, nocorrect, coproc and `-` before git, ~- and the folder stack, and a project path glued to an option are caught", () => {
   for (const who of ['reader', 'worker'] as const) {
     for (const c of ['noglob git push', 'nocorrect git push', '- git push', 'coproc git push', 'builtin git push', 'repeat 2 git push', 'x; noglob nocorrect git push'])

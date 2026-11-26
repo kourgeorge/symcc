@@ -1,4 +1,5 @@
-// The git guard (T-1062): one deny list, read from a command's plain text (no shell parsing), used both by the hook
+// The git guard (T-1062): one deny list, read from a command's text split into commands and words in one pass
+// (T-1116: no big regular expression, so no slow check), used both by the hook
 // guard (gitWriteIn, gitPlaceOk) and by the Node host's Claude Code rules (gitDeniedRules). It stops honest
 // mistakes; a script that builds its git command at run time still gets through (the merge-time scope check over
 // every commit of a try is the backstop for files, T-1053).
@@ -102,78 +103,332 @@ const branchListOnly = (args: string[]) => {
 /** git's own options (before the command name) that change nothing; any other (-C, -c, --git-dir, --work-tree, --exec-path, --config-env...) is refused. */
 const GIT_OPTION_OK = new Set(['--no-pager', '-P', '-p', '--paginate', '--no-optional-locks', '--version', '--help'])
 
-/**
- * A git call in a command's text: `git` (or `/usr/bin/git`), or a git program by its own name (`git-push`), where a
- * command starts: at the start, after `&&`, `||`, `;`, `|`, `&`, `(`, `)` (a `case` label), `$(`, `{`, a backquote, a line end or
- * `sh -c` (`bash -lc`, `eval`...), and after leading redirects (`2>/dev/null`, `> out`), `VAR=x` settings or env, sudo, command, exec, time, timeout, nice,
- * nohup, xargs, eval, if, then, zsh's noglob, nocorrect, coproc, repeat and `-`... with their options, an option's value (`sudo -u root`) and a number (`timeout 5`).
- * gitWriteIn takes out quotes and backslashes first (`"git" push`, `\git push` run git), so
- * `grep "git push" docs/` and `git commit -m "make git simpler"` hold no git call (git is not where a command starts).
- */
-const WRAPPER_PATH = String.raw`(?:(?:/[\w.-]+)*/)?`
-const SUDO_WORDS = 'sudo|doas'
-const OTHER_WRAPPER_WORDS = 'env|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|noglob|nocorrect|coproc|builtin|repeat|!|-'
-const WRAPPERS = String.raw`${WRAPPER_PATH}(?:${SUDO_WORDS}|${OTHER_WRAPPER_WORDS})`
-/** Letters of wrapper short options that take a word (sudo -u, env -u, timeout -s, xargs -I...; the regex ignores case). */
+/** Words put in front of a command that run the words after them (with their options): sudo, env, xargs, if, then, zsh's `-`... */
+const SUDO_WORDS = new Set(['sudo', 'doas'])
+const WRAPPERS = new Set([...SUDO_WORDS, ...`env command exec time timeout gtimeout nice ionice nohup setsid xargs parallel caffeinate watch stdbuf
+unbuffer chronic if then do else elif while until noglob nocorrect coproc builtin repeat ! -`.split(/\s+/)])
+/** Shells whose words are a script (`sh -c 'git push'`, `bash -lc ...`): each word after the options is read as commands. */
+const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh'])
+/** Letters of wrapper short options that take the next word (sudo -u, env -u, timeout -s, xargs -I...; either case). Sudo and doas also -r role, -t type, -R folder, -T timeout. */
 const VALUE_LETTERS = 'ugcdhpskieaofwjnl'
+/** Long wrapper options that take the next word (`sudo --user root`, `timeout --signal KILL`). */
+const LONG_VALUES = new Set(['--user', '--group', '--other-user', '--chdir', '--role', '--type', '--host', '--prompt', '--close-from', '--command-timeout', '--unset', '--split-string', '--signal', '--kill-after', '--adjustment', '--max-args', '--max-lines', '--max-chars', '--max-procs', '--delimiter', '--arg-file', '--process-slot-var', '--input', '--output', '--error', '--class', '--classdata', '--interval'])
+/** find's options that run the words after them as a command (`find . -exec git push \;`). */
+const FIND_EXEC = new Set(['-exec', '-execdir', '-ok', '-okdir'])
+const SETTING = /^\w+\+?=/
+const NUMBER = /^\d[\w.]*$/
+/** The shell's redirect operators, longest first. */
+const REDIRECTS = ['&>>', '&>', '<<<', '<<-', '<<', '<>', '<&', '<(', '>>', '>&', '>|', '>(', '<', '>']
+
+/** What gitWriteIn returns when a command is too big or too deeply nested to read in time (it is refused). */
+const TOO_COMPLEX = 'a command too complex to read'
+
+/** How much reading is left (characters), so that `eval`/`sh -c` inside each other can't make a check slow. */
+type Budget = { left: number }
+
+/** The name a command word runs: its last path piece, in lower case (macOS finds `GIT` and `/usr/bin/git` alike). */
+const nameOf = (w: string) => w.slice(w.lastIndexOf('/') + 1).toLowerCase()
+const isGit = (w: string) => {
+  const n = nameOf(w)
+  return n === 'git' || n.startsWith('git-')
+}
+
 /**
- * A wrapper's options: each word fits one pattern only (a short option, a longer option, a number; a value is none of
- * them, and no wrapper either), so the regex never tries many splits of the same words (`env -i -i -i ... git push` and
- * `xargs -n xargs -n ... x` check fast); a short option is a dash and any one character, so a lone `--`
- * (`env -- git push`) and `-0` (`xargs -0 git push`) count too. Only `letters` take a word, so in
- * `xargs -0 grep "git push"` and `xargs -r grep -l "git push"` grep is the next command, not a value, and git is not
- * where a command starts (T-1099).
+ * Splits shell text `s` into its simple commands, each a list of words with quotes taken out, in one pass (no
+ * regular expression, so no slow case), and adds them to `out`. Commands end at ; & && || | newline ( ) and a `{`
+ * or `}` that starts a word. '...' is literal; "..." and \ escape as the shell does. Redirects (`>x`, `2>x`, `> x`,
+ * `<x`, `&>x`, `>&2`, `<<EOF`) and their target word are left out of the words. The commands inside $(...), `...`,
+ * <(...) and >(...) are added too; a here-document's lines are each read as commands. A `#` that starts a word
+ * starts a comment to the line's end.
  */
-const wrapperOptions = (letters: string) =>
-  String.raw`(?:[^\S\n]+(?:-[${letters}](?![^\s;&|])(?:[^\S\n]+(?!-)(?!\d[\w.]*(?![^\s;&|]))(?!(?:\S*/)?git(?![\w.]))(?!${WRAPPERS}(?![^\s;&|]))[^\s;&|]+)?|-(?![${letters}])[^\s;&|](?![^\s;&|])|-[^\s;&|]{2,}|\d[\w.]*(?![^\s;&|])))*`
-const GIT_AT = new RegExp(
-  String.raw`(?:^|&&|\|\||[;|&(){\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n]|(?<!\S)-(?:exec|execdir|ok|okdir)[^\S\n])` +
-    // sudo also takes a word after -r role, -t type, -R folder and -T timeout (xargs -r and -t take none)
-    String.raw`(?:[^\S\n]*(?:${WRAPPER_PATH}(?:(?:${SUDO_WORDS})${wrapperOptions(VALUE_LETTERS + 'rt')}|(?:${OTHER_WRAPPER_WORDS})${wrapperOptions(VALUE_LETTERS)})|\w+=[^\s;&|]*` +
-    String.raw`|\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()]+)(?=\s))*` +
-    String.raw`[^\S\n]*(?:(?:/[\w.-]+)*/)?git(?:-([a-z][\w-]*))?(?=$|[\s'"` + '`' + String.raw`;&|()<>\\])`,
-  'gi',
-)
+function splitCommands(s: string, out: string[][], budget: Budget): void {
+  budget.left -= s.length + 1
+  if (budget.left < 0) throw new Error(TOO_COMPLEX)
+  let p = 0
+  /** Here-documents waiting for the next line end: their end word, and whether leading tabs are dropped (`<<-`). */
+  const docs: { end: string; tabs: boolean }[] = []
+
+  const backquote = () => {
+    let inner = ''
+    let q = p + 1
+    for (; q < s.length && s[q] !== '`'; q++) {
+      if (s[q] === '\\' && '`$\\'.includes(s[q + 1] ?? '')) q++
+      inner += s[q] ?? ''
+    }
+    p = q + 1
+    splitCommands(inner, out, budget)
+  }
+
+  const docLines = () => {
+    for (const doc of docs) {
+      while (p < s.length) {
+        const e = s.indexOf('\n', p)
+        const stop = e < 0 ? s.length : e
+        const line = s.slice(p, stop)
+        p = stop + 1
+        if ((doc.tabs ? line.replace(/^\t+/, '') : line) === doc.end) break
+        splitCommands(line, out, budget)
+      }
+    }
+    docs.length = 0
+  }
+
+  const doubleQuoted = () => {
+    let v = ''
+    p++
+    while (p < s.length && s[p] !== '"') {
+      const c = s[p]!
+      if (c === '\\' && '$`"\\'.includes(s[p + 1] ?? '')) {
+        v += s[p + 1]
+        p += 2
+      } else if (c === '`') {
+        backquote()
+        v += '$()'
+      } else if (c === '$' && s[p + 1] === '(') {
+        p += 2
+        list(true)
+        v += '$()'
+      } else {
+        v += c
+        p++
+      }
+    }
+    p++
+    return v
+  }
+
+  /** One word from p, and whether it had no quote or escape (so `2` in `2>x` is a file number). */
+  const word = () => {
+    let v = ''
+    let plain = true
+    let braces = 0
+    while (p < s.length) {
+      const c = s[p]!
+      if (braces === 0 && ' \t\r\n;&|()<>'.includes(c)) break
+      if (c === '\\') {
+        v += s[p + 1] ?? ''
+        p += 2
+        plain = false
+      } else if (c === "'") {
+        const e = s.indexOf("'", p + 1)
+        const stop = e < 0 ? s.length : e
+        v += s.slice(p + 1, stop)
+        p = stop + 1
+        plain = false
+      } else if (c === '"') {
+        v += doubleQuoted()
+        plain = false
+      } else if (c === '`') {
+        backquote()
+        v += '$()'
+        plain = false
+      } else if (c === '$' && s[p + 1] === '(') {
+        p += 2
+        list(true)
+        v += '$()'
+        plain = false
+      } else if (c === '$' && s[p + 1] === "'") {
+        // $'...': backslash escapes, ends at an unescaped quote
+        p += 2
+        while (p < s.length && s[p] !== "'") {
+          if (s[p] === '\\') p++
+          v += s[p] ?? ''
+          p++
+        }
+        p++
+        plain = false
+      } else if (c === '$' && s[p + 1] === '{') {
+        braces++
+        v += '${'
+        p += 2
+      } else {
+        if (c === '}' && braces > 0) braces--
+        v += c
+        p++
+      }
+    }
+    return { v, plain }
+  }
+
+  /** Commands from p to the text's end, or (`nested`) to the `)` that closes a $( or <(. */
+  function list(nested: boolean): void {
+    let cmd: string[] = []
+    let depth = 0
+    /** After a redirect, the next word is its target, not part of the command. */
+    let target = false
+    /** After `<<`, the next word ends a here-document (`true`: `<<-`, leading tabs dropped). */
+    let docEnd: boolean | undefined
+    const end = () => {
+      if (cmd.length) out.push(cmd)
+      cmd = []
+      target = false
+    }
+    while (p < s.length) {
+      const c = s[p]!
+      if (c === '\n') {
+        end()
+        p++
+        if (docs.length) docLines()
+      } else if (c === ' ' || c === '\t' || c === '\r') p++
+      else if (c === '#') {
+        const e = s.indexOf('\n', p)
+        p = e < 0 ? s.length : e
+      } else if (c === ')' && nested && depth === 0) {
+        end()
+        p++
+        return
+      } else if (c === '(' || c === ')') {
+        end()
+        depth += c === '(' ? 1 : depth > 0 ? -1 : 0
+        p++
+      } else if (c === ';' || c === '|' || c === '{' || c === '}' || (c === '&' && s[p + 1] !== '>')) {
+        end()
+        p++
+      } else if (c === '<' || c === '>' || c === '&') {
+        const op = REDIRECTS.find(o => s.startsWith(o, p))!
+        p += op.length
+        if (op === '<(' || op === '>(') {
+          list(true)
+          if (target) target = false
+          else cmd.push('$()')
+        } else {
+          target = true
+          if (op === '<<' || op === '<<-') docEnd = op === '<<-'
+        }
+      } else {
+        const { v, plain } = word()
+        // a file number right before a redirect (`2>x`) belongs to it
+        if (plain && /^\d+$/.test(v) && (s[p] === '<' || s[p] === '>')) continue
+        if (docEnd !== undefined) {
+          docs.push({ end: v, tabs: docEnd })
+          docEnd = undefined
+        }
+        if (target) target = false
+        else cmd.push(v)
+      }
+    }
+    end()
+  }
+
+  list(false)
+}
+
+/** The first git command in shell text `text` that `who` may not run, as gitWriteIn returns it. */
+function checkText(text: string, who: 'reader' | 'worker', budget: Budget): string | undefined {
+  const commands: string[][] = []
+  splitCommands(text, commands, budget)
+  for (const words of commands) {
+    const bad = checkCommand(words, who, budget, true)
+    if (bad) return bad
+  }
+  return undefined
+}
+
+/**
+ * The refused git call in one command's `words`: settings (`A=1`) and wrapper words with their options, option values
+ * and numbers are skipped (`sudo -u root`, `timeout -s KILL 5`, `nice -n 5`); the first word left is the command. The
+ * script after `sh -c`, `eval`, `watch` and `env -S` is read as commands again, and so is the command after find's -exec.
+ */
+function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget, findExec: boolean): string | undefined {
+  if (findExec)
+    for (let j = 0; j < words.length; j++) {
+      if (!FIND_EXEC.has(words[j]!)) continue
+      // the command runs to `;`, `+` or the next -exec
+      let e = j + 1
+      while (e < words.length && words[e] !== ';' && words[e] !== '+' && !FIND_EXEC.has(words[e]!)) e++
+      const bad = checkCommand(words.slice(j + 1, e), who, budget, false)
+      if (bad) return bad
+    }
+  let i = 0
+  for (;;) {
+    while (i < words.length && SETTING.test(words[i]!)) i++
+    if (i >= words.length) return undefined
+    const name = nameOf(words[i]!)
+    if (name === 'eval') return checkText(words.slice(i + 1).join(' '), who, budget)
+    if (SHELLS.has(name)) {
+      for (const a of words.slice(i + 1)) {
+        const bad = /^[-+]/.test(a) ? undefined : checkText(a, who, budget)
+        if (bad) return bad
+      }
+      return undefined
+    }
+    if (!WRAPPERS.has(name)) break
+    i++
+    const letters = SUDO_WORDS.has(name) ? VALUE_LETTERS + 'rt' : VALUE_LETTERS
+    while (i < words.length) {
+      const a = words[i]!
+      if (SETTING.test(a) || NUMBER.test(a)) {
+        i++
+        continue
+      }
+      if (a.length < 2 || a[0] !== '-') break
+      i++
+      if (name === 'env' && /^-S./.test(a)) {
+        const bad = checkText(a.slice(2), who, budget)
+        if (bad) return bad
+      }
+      // a short option (or a group of them, `-iu`) ending in a value letter, or a long one, takes the next word; git never is a value
+      const takes = (/^-[a-zA-Z]+$/.test(a) && letters.includes(a[a.length - 1]!.toLowerCase())) || LONG_VALUES.has(a)
+      if (takes && i < words.length && !isGit(words[i]!)) {
+        if (name === 'env' && (a.endsWith('S') || a === '--split-string')) {
+          const bad = checkText(words[i]!, who, budget)
+          if (bad) return bad
+        }
+        i++
+      }
+    }
+    if (name === 'watch') return checkText(words.slice(i).join(' '), who, budget)
+  }
+  return gitCall(words, i, who)
+}
+
+/** The refused git call when `words[i]` is the command: `git` (also by a path, `\git`, `"git"`) or git-<command>. */
+function gitCall(words: string[], i: number, who: 'reader' | 'worker'): string | undefined {
+  const n = nameOf(words[i]!)
+  let sub: string | undefined
+  let j = i + 1
+  if (n === 'git') {
+    for (; words[j]?.startsWith('-'); j++) if (!GIT_OPTION_OK.has(words[j]!)) return `git ${words[j]!.split('=')[0]}`
+    sub = words[j++]?.toLowerCase()
+  } else if (n.startsWith('git-') && GIT_ALL.includes(n.slice(4))) sub = n.slice(4)
+  // an allow list (T-1062): any name but the reads (and a worker's own writes) is refused, aliases and add-ons too;
+  // a word that is no command name (`$X`, `a.ts`) is not seen, and `git-x` counts only as one of git's own programs
+  if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub)) return undefined
+  const args = words.slice(j)
+  // `git grep -O<program>` runs that program (a hidden `git push`)
+  if (sub === 'grep' && args.some(a => /^-[a-zA-Z]*O/.test(a) || longStart(a, 'open-files-in-pager'))) return 'git grep -O'
+  if (GIT_READS.has(sub)) return undefined
+  if (sub === 'branch' && branchListOnly(args)) return undefined
+  if (sub === 'init' && who === 'worker' && scratchInit(args)) return undefined
+  if (who === 'reader' || !WORKER_GIT.has(sub)) return `git ${sub}`
+  return WORKER_LIMITS[sub]?.bad(args)
+}
 
 /**
  * The first git command in Bash `command` that `who` may not run, as `git <command>` (or the option or setting that
- * refuses it), or undefined. Plain text: every git call where a command starts counts (GIT_AT, also
- * `sh -c 'git push'` and `$(git stash)`); its words run up to the next `;`, `&`, `|`,
- * bracket, backquote, redirection or line end. Refused for everyone: a GIT_ setting, core.hooksPath, a look-up of
- * git's own folder (--git-dir, --git-common-dir...), any git option before the command but GIT_OPTION_OK. An allow
- * list: 'reader' (a scout, a checker, an investigation) may run only GIT_READS (and `git branch` only listing);
- * 'worker' also WORKER_GIT, within WORKER_LIMITS. Every other name is refused: writes, aliases (`git co`), add-ons.
+ * refuses it), or undefined. The text is split into commands and words first (splitCommands), so every git call where
+ * a command starts counts (also after `&&`, `|`, a wrapper like sudo or env, inside `$(...)` and `sh -c '...'`), and a
+ * git inside a quoted word (`grep "git push"`, `git commit -m "make git simpler"`) is none. Refused for everyone: a
+ * GIT_ setting, core.hooksPath, a look-up of git's own folder (--git-dir, --git-common-dir...), any git option before
+ * the command but GIT_OPTION_OK, and a command too big or nested to read. An allow list: 'reader' (a scout, a checker,
+ * an investigation) may run only GIT_READS (and `git branch` only listing); 'worker' also WORKER_GIT, within
+ * WORKER_LIMITS. Every other name is refused: writes, aliases (`git co`), add-ons.
  */
 export function gitWriteIn(text: unknown, who: 'reader' | 'worker' = 'reader'): string | undefined {
   if (typeof text !== 'string') return undefined
   // the shell joins a backslash at a line's end with the next line (`git \` + newline + `push` runs `git push`)
-  // and quotes and backslashes only group words: `"git" push`, `'git' push` and `\git push` run `git push`
-  const command = joinLines(text).replace(/["'\\]/g, '')
-  if (/(?<![\w])GIT_\w*=/.test(command)) return 'a GIT_ setting'
-  if (/core\.hookspath/i.test(command)) return 'core.hooksPath'
+  const joined = joinLines(text)
+  const flat = joined.replace(/["'\\]/g, '')
+  if (/(?<![\w])GIT_\w*=/.test(flat)) return 'a GIT_ setting'
+  if (/core\.hookspath/i.test(flat)) return 'core.hooksPath'
   // git's own folder holds every branch as a file (`--output=$(git rev-parse --git-common-dir)/refs/heads/main`)
-  if (/--(?:git-common-dir|absolute-git-dir|git-path|git-dir)(?![\w-])/.test(command)) return "git's own folder"
-  for (const m of command.matchAll(GIT_AT)) {
-    // redirects are taken out first: `git 2>/dev/null push` and `git >out push` run `git push`
-    const rest = command.slice(m.index + m[0].length).replace(/\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()`]*/g, ' ').split(/[;&|()`\n]/)[0]!
-    const words = rest.split(/\s+/).map(w => w.replace(/["'\\]/g, '')).filter(Boolean)
-    let i = 0
-    if (!m[1]) for (; words[i]?.startsWith('-'); i++) if (!GIT_OPTION_OK.has(words[i]!)) return `git ${words[i]!.split('=')[0]}`
-    const sub = (m[1] ?? words[i++])?.toLowerCase()
-    // an allow list (T-1062): any name but the reads (and a worker's own writes) is refused, aliases and add-ons too;
-    // a word that is no command name (`$X`, `a.ts`) is not seen, and `git-x` counts only as one of git's own programs
-    if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub) || (m[1] && !GIT_ALL.includes(sub))) continue
-    const args = words.slice(i)
-    // `git grep -O<program>` runs that program (a hidden `git push`)
-    if (sub === 'grep' && args.some(a => /^-[a-zA-Z]*O/.test(a) || longStart(a, 'open-files-in-pager'))) return 'git grep -O'
-    if (GIT_READS.has(sub)) continue
-    if (sub === 'branch' && branchListOnly(args)) continue
-    if (sub === 'init' && who === 'worker' && scratchInit(args)) continue
-    if (who === 'reader' || !WORKER_GIT.has(sub)) return `git ${sub}`
-    const bad = WORKER_LIMITS[sub]?.bad(args)
-    if (bad) return bad
+  if (/--(?:git-common-dir|absolute-git-dir|git-path|git-dir)(?![\w-])/.test(flat)) return "git's own folder"
+  try {
+    return checkText(joined, who, { left: 20 * joined.length + 100_000 })
+  } catch {
+    // too much to read (the budget) or nested too deep (the call stack): refused, never let through
+    return TOO_COMPLEX
   }
-  return undefined
 }
 
 /**
