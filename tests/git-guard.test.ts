@@ -291,6 +291,35 @@ test('T-1062: many option words after a wrapper still find the git call, fast', 
   }
 })
 
+test('T-1092: git after a lone `--` or a non-letter short option (`-0`, `-5`) is still seen', () => {
+  for (const who of ['reader', 'worker'] as const) {
+    for (const c of ['env -- git push', 'sudo -- git push', 'time -- git push', 'xargs -0 git push', 'nice -5 git push', 'xargs -0 -- git push', 'env -i -- git push', 'sudo -u root -- git push'])
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+    expect([who, gitWriteIn('nohup -- git update-ref refs/heads/main HEAD', who)]).toEqual([who, 'git update-ref'])
+  }
+  // a worker may commit in its own folder; a reader may not
+  expect(gitWriteIn('command -- git commit -m x', 'reader')).toBe('git commit')
+  // still no git call where git is not a command's start
+  for (const c of ['grep -- "git push" docs/', 'git log -- a.ts', 'echo -- git push'])
+    expect([c, gitWriteIn(c, 'reader')]).toEqual([c, undefined])
+})
+
+test('T-1092: many `--` and `-0` words after a wrapper still find the git call, fast', () => {
+  const push = 'gi' + 't push origin main'
+  for (const c of [
+    'env' + ' --'.repeat(40) + ' ' + push,
+    'xargs' + ' -0'.repeat(40) + ' ' + push,
+    'xargs' + ' -0 --'.repeat(40) + ' ' + push,
+    'env' + ' --'.repeat(40) + ' true; ' + push,
+    'xargs' + ' -0'.repeat(40) + ' x',
+  ]) {
+    const start = Date.now()
+    const want = c.endsWith(' x') ? undefined : 'git push'
+    expect([c, gitWriteIn(c, 'worker'), gitWriteIn(c, 'reader')]).toEqual([c, want, want])
+    expect([c, Date.now() - start < 500]).toEqual([c, true])
+  }
+})
+
 test("T-1062: zsh's noglob, nocorrect, coproc and `-` before git, ~- and the folder stack, and a project path glued to an option are caught", () => {
   for (const who of ['reader', 'worker'] as const) {
     for (const c of ['noglob git push', 'nocorrect git push', '- git push', 'coproc git push', 'builtin git push', 'repeat 2 git push', 'x; noglob nocorrect git push'])
