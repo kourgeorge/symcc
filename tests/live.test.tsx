@@ -238,7 +238,10 @@ test('T-690: lane lines fit the width with nothing cut, and the current station 
   {
     const one = [{ ...liveLanes(view(true), T0)[0]!, id: 'T-99', title: 'A rather long title that fills the room', kind: 'bug' }]
     expect(liveLayout(one, liveStations(true), 95).rightW).toBe(0)
-    expect(liveLayout(one, liveStations(true), 95).titleW).toBeGreaterThan(12 + 6 + 2 - 1)
+    // main (before T-1074) gave titleW 12 / gap 6 at 60 columns and titleW 26 at 80; the gap stays, the title grows
+    const at60 = liveLayout(one, liveStations(true), 60)
+    expect([at60.gap, at60.titleW > 12]).toEqual([6, true])
+    expect(liveLayout(one, liveStations(true), 80).titleW).toBeGreaterThan(26)
   }
   // T-867: the tokens against the median per merged task: from twice it, "(n×median)" in the warning tone
   const over = laneLines(lanes.find(x => x.id === 'T-685')!, l, { nowMs: T0, frame: 0 })[1]

@@ -687,9 +687,10 @@ export function liveLayout(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Par
       }
     }
   for (let gap = MAX_GAP; gap >= MIN_GAP; gap--) {
-    if (laneWidth(idW, base, k, gap, 2, right) <= width) {
+    // the gap is chosen as if the right column were still there (the track stays as it was); the minutes' room goes to the title
+    if (laneWidth(idW, base, k, gap, 2, RIGHT_W) <= width) {
       const room = width - laneWidth(idW, base, k, gap, 2, right)
-      return make(gap === MAX_GAP ? Math.min(TITLE_MAX, longest, base + room) : base, gap, 2)
+      return make(Math.min(TITLE_MAX, longest, base + room), gap, 2)
     }
   }
   for (let titleW = base - 1; titleW >= 3; titleW--) if (laneWidth(idW, titleW, k, MIN_GAP, 2, right) <= width) return make(titleW, MIN_GAP, 2)
