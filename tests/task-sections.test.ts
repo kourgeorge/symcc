@@ -181,3 +181,10 @@ test('T-1104: an agent with no report file is plain text; a worker restarted on 
   // no id known: the heading names only the kind
   expect(sec(taskSections(old, facts({ shown: { try: 1, kind: 'worker' } })), 'report')!.title).toBe('Report · try 1 · worker')
 })
+
+test('T-1104: an answered one-try investigation still shows its checker report when that is picked', () => {
+  const t = task('review', { kind: 'investigation', answer: 'Short answer.', attempts: 1, runs: [{ started: iso(NOW - 900_000), ended: iso(NOW - 300_000), report: rp(1), agents: [{ id: AGENTS[0]![0]!, kind: 'worker' as const, started: iso(NOW - 900_000) }, { id: AGENTS[0]![1]!, kind: 'checker' as const, started: iso(NOW - 600_000) }] }], history: [{ at: iso(NOW), kind: 'checker-problems', text: 'x', try: 1, agent: 'symcc-T-1-checker', report: ck(1) }] as unknown as SymccTask['history'] })
+  expect(ids(taskSections(t, facts({ texts: texts3 })))).not.toContain('report')
+  const s = taskSections(t, facts({ texts: texts3, shown: { try: 1, kind: 'checker', id: AGENTS[0]![1] } }))
+  expect(text(sec(s, 'report'))).toContain('  C1 said this')
+})

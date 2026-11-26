@@ -246,7 +246,7 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
   // An answered investigation with one try: its report is the Answer above, so it is not shown twice.
   // T-1104: one Report section for the agent picked in Runs (its heading says whose report and which try)
   const shown = resolveReport(t, f.shown)
-  if ((reports.length > 0 || t.attempts > 0 || shown) && !(answerShown && latest && reports.length === 1)) {
+  if ((reports.length > 0 || t.attempts > 0 || shown) && !(answerShown && latest && reports.length === 1 && shown?.kind !== 'checker')) {
     const body = shown ? textOf(f, shown.file) : null
     const read = shown ? f.texts?.[shown.file] !== undefined : false
     out.push({
