@@ -2,6 +2,27 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.47 (2026-11-26)
+
+### Added
+- Chat mode views: the board, tasks, status and task pages come in one short chat shape; "status", "tasks" or "show T-5" in plain words give the same text as the slash commands; "more" (or `/symcc-task T-5 more`, `page N`) shows the next part, and a long question is shortened, never dropped.
+- `/symcc-board html` (and the lead's board tool `view: "html"`) writes the board as one self-contained web page the lead can send to a chat. Scouts and checkers can't write it.
+- Task page: one ▍Report shows the report of the agent you pick in ▍Runs (worker or checker, any try); the Try buttons and the separate ▍Checker section are gone.
+- Settings: each pick box starts with a short grey description of the setting and a note per choice; the same words are used by the lead's settings tool and the reference.
+- A slow-step log, `.symcc/slow.log`: one line for each symcc step over 200 ms, so the cause of a "hooks worker is wedged" restart can be found.
+
+### Changed
+- Board updates that need no reply (retries, restarts after a reload, plain merges) no longer wake the lead; they come as one "Meanwhile (nothing to answer):" block with the next update.
+- The git guard splits a command into words first, then checks each command's first word. It is fast on every input (no more checks that took seconds) and catches git behind `sh -c`, `eval`, `watch`, `env -S`, redirects and settings among a wrapper's options.
+- Task-page Branch facts: one board redraw per refresh instead of one per task, and finished tasks are read again only when main moves.
+- The merge tests also run the Cursor host's tests.
+
+### Fixed
+- A "don't merge" or "never drop" answer to the checker question is refused instead of obeyed.
+- A task waiting on a dropped task shows as waiting (not "to do") in chat text, board.html and the tasks list.
+- A failed git read no longer hides a done task's Changes or ▍Branch section until symcc restarts.
+- The docs say a task waits for you after two checker send-backs.
+
 ## 0.5.46 (2026-11-26)
 
 ### Added

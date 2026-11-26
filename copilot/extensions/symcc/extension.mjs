@@ -2707,6 +2707,7 @@ function depDone(b, id) {
   const t = b.tasks.find((x) => x.id === n);
   return t ? t.status === "done" : (b.archived_done ?? []).includes(n);
 }
+var openAfter = (b, t) => [...new Set(t.after ?? [])].filter((a) => a !== t.id && !depDone(b, a));
 function archivedLine(b, name = DEFAULT_NAME) {
   const a = archivedOf(b);
   if (!a.done && !a.dropped)
@@ -3284,45 +3285,356 @@ var branchListOnly = (args) => {
   return opts.every((o) => BRANCH_LIST.has(o)) && (opts.length === args.length || opts.some((o) => BRANCH_LIST_MODE.has(o)));
 };
 var GIT_OPTION_OK = new Set(["--no-pager", "-P", "-p", "--paginate", "--no-optional-locks", "--version", "--help"]);
-var GIT_AT = new RegExp(String.raw`(?:^|&&|\|\||[;|&(){\n` + "`" + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n]|(?<!\S)-(?:exec|execdir|ok|okdir)[^\S\n])` + String.raw`(?:[^\S\n]*(?:(?:(?:/[\w.-]+)*/)?(?:env|sudo|doas|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|noglob|nocorrect|coproc|builtin|repeat|!|-)` + String.raw`(?:[^\S\n]+(?:-[^\s;&|](?![^\s;&|])(?:[^\S\n]+(?!-)(?!\d[\w.]*(?![^\s;&|]))(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]{2,}|\d[\w.]*(?![^\s;&|])))*|\w+=[^\s;&|]*` + String.raw`|\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()]+)(?=\s))*` + String.raw`[^\S\n]*(?:(?:/[\w.-]+)*/)?git(?:-([a-z][\w-]*))?(?=$|[\s'"` + "`" + String.raw`;&|()<>\\])`, "gi");
-function gitWriteIn(text, who = "reader") {
-  if (typeof text !== "string")
-    return;
-  const command = joinLines(text).replace(/["'\\]/g, "");
-  if (/(?<![\w])GIT_\w*=/.test(command))
-    return "a GIT_ setting";
-  if (/core\.hookspath/i.test(command))
-    return "core.hooksPath";
-  if (/--(?:git-common-dir|absolute-git-dir|git-path|git-dir)(?![\w-])/.test(command))
-    return "git's own folder";
-  for (const m of command.matchAll(GIT_AT)) {
-    const rest = command.slice(m.index + m[0].length).replace(/\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()`]*/g, " ").split(/[;&|()`\n]/)[0];
-    const words = rest.split(/\s+/).map((w) => w.replace(/["'\\]/g, "")).filter(Boolean);
-    let i = 0;
-    if (!m[1]) {
-      for (;words[i]?.startsWith("-"); i++)
-        if (!GIT_OPTION_OK.has(words[i]))
-          return `git ${words[i].split("=")[0]}`;
+var SUDO_WORDS = new Set(["sudo", "doas"]);
+var WRAPPERS = new Set([...SUDO_WORDS, ...`env command exec time timeout gtimeout nice ionice nohup setsid xargs parallel caffeinate watch stdbuf
+unbuffer chronic if then do else elif while until noglob nocorrect coproc builtin repeat ! -`.split(/\s+/)]);
+var SHELLS = new Set(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
+var VALUE_LETTERS = "ugcdhpskieaofwjnl";
+var LONG_VALUES = new Set(["--user", "--group", "--other-user", "--chdir", "--role", "--type", "--host", "--prompt", "--close-from", "--command-timeout", "--unset", "--split-string", "--signal", "--kill-after", "--adjustment", "--max-args", "--max-lines", "--max-chars", "--max-procs", "--delimiter", "--arg-file", "--process-slot-var", "--input", "--output", "--error", "--class", "--classdata", "--interval"]);
+var FIND_EXEC = new Set(["-exec", "-execdir", "-ok", "-okdir"]);
+var SETTING = /^\w+\+?=/;
+var NUMBER = /^\d[\w.]*$/;
+var REDIRECTS = ["&>>", "&>", "<<<", "<<-", "<<", "<>", "<&", "<(", ">>", ">&", ">|", ">(", "<", ">"];
+var TOO_COMPLEX = "a command too complex to read";
+var nameOf = (w) => w.slice(w.lastIndexOf("/") + 1).toLowerCase();
+var isGit = (w) => {
+  const n = nameOf(w);
+  return n === "git" || n.startsWith("git-");
+};
+var runsCommand = (w) => {
+  const n = nameOf(w);
+  return isGit(w) || WRAPPERS.has(n) || SHELLS.has(n) || n === "eval";
+};
+function splitCommands(s, out, budget) {
+  budget.left -= s.length + 1;
+  if (budget.left < 0)
+    throw new Error(TOO_COMPLEX);
+  let p = 0;
+  const docs = [];
+  const backquote = () => {
+    let inner = "";
+    let q = p + 1;
+    for (;q < s.length && s[q] !== "`"; q++) {
+      if (s[q] === "\\" && "`$\\".includes(s[q + 1] ?? ""))
+        q++;
+      inner += s[q] ?? "";
     }
-    const sub = (m[1] ?? words[i++])?.toLowerCase();
-    if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub) || m[1] && !GIT_ALL.includes(sub))
-      continue;
-    const args = words.slice(i);
-    if (sub === "grep" && args.some((a) => /^-[a-zA-Z]*O/.test(a) || longStart(a, "open-files-in-pager")))
-      return "git grep -O";
-    if (GIT_READS.has(sub))
-      continue;
-    if (sub === "branch" && branchListOnly(args))
-      continue;
-    if (sub === "init" && who === "worker" && scratchInit(args))
-      continue;
-    if (who === "reader" || !WORKER_GIT.has(sub))
-      return `git ${sub}`;
-    const bad = WORKER_LIMITS[sub]?.bad(args);
+    p = q + 1;
+    splitCommands(inner, out, budget);
+  };
+  const docLines = () => {
+    for (const doc of docs) {
+      while (p < s.length) {
+        const e = s.indexOf(`
+`, p);
+        const stop = e < 0 ? s.length : e;
+        const line = s.slice(p, stop);
+        p = stop + 1;
+        if ((doc.tabs ? line.replace(/^\t+/, "") : line) === doc.end)
+          break;
+        splitCommands(line, out, budget);
+      }
+    }
+    docs.length = 0;
+  };
+  let subst = false;
+  const doubleQuoted = () => {
+    let v = "";
+    p++;
+    while (p < s.length && s[p] !== '"') {
+      const c = s[p];
+      if (c === "\\" && '$`"\\'.includes(s[p + 1] ?? "")) {
+        v += s[p + 1];
+        p += 2;
+      } else if (c === "`") {
+        backquote();
+        subst = true;
+      } else if (c === "$" && s[p + 1] === "(") {
+        p += 2;
+        list(true);
+        subst = true;
+      } else {
+        v += c;
+        p++;
+      }
+    }
+    p++;
+    return v;
+  };
+  const word = () => {
+    subst = false;
+    let v = "";
+    let plain = true;
+    let braces = 0;
+    while (p < s.length) {
+      const c = s[p];
+      if (braces === 0 && ` 	\r
+;&|()<>`.includes(c))
+        break;
+      if (c === "\\") {
+        v += s[p + 1] ?? "";
+        p += 2;
+        plain = false;
+      } else if (c === "'") {
+        const e = s.indexOf("'", p + 1);
+        const stop = e < 0 ? s.length : e;
+        v += s.slice(p + 1, stop);
+        p = stop + 1;
+        plain = false;
+      } else if (c === '"') {
+        v += doubleQuoted();
+        plain = false;
+      } else if (c === "`") {
+        backquote();
+        subst = true;
+        plain = false;
+      } else if (c === "$" && s[p + 1] === "(") {
+        p += 2;
+        list(true);
+        subst = true;
+        plain = false;
+      } else if (c === "$" && s[p + 1] === "'") {
+        p += 2;
+        while (p < s.length && s[p] !== "'") {
+          if (s[p] === "\\")
+            p++;
+          v += s[p] ?? "";
+          p++;
+        }
+        p++;
+        plain = false;
+      } else if (c === "$" && s[p + 1] === "{") {
+        braces++;
+        v += "${";
+        p += 2;
+      } else {
+        if (c === "}" && braces > 0)
+          braces--;
+        v += c;
+        p++;
+      }
+    }
+    return { v, plain, subst };
+  };
+  function list(nested) {
+    let cmd = [];
+    let depth = 0;
+    let target = false;
+    let docEnd;
+    const end = () => {
+      if (cmd.length)
+        out.push(cmd);
+      cmd = [];
+      target = false;
+    };
+    while (p < s.length) {
+      const c = s[p];
+      if (c === `
+`) {
+        end();
+        p++;
+        if (docs.length)
+          docLines();
+      } else if (c === " " || c === "\t" || c === "\r")
+        p++;
+      else if (c === "#") {
+        const e = s.indexOf(`
+`, p);
+        p = e < 0 ? s.length : e;
+      } else if (c === ")" && nested && depth === 0) {
+        end();
+        p++;
+        return;
+      } else if (c === "(" || c === ")") {
+        end();
+        depth += c === "(" ? 1 : depth > 0 ? -1 : 0;
+        p++;
+      } else if (c === ";" || c === "|" || (c === "{" || c === "}") && ` 	\r
+;&|()<>`.includes(s[p + 1] ?? " ") || c === "&" && s[p + 1] !== ">") {
+        end();
+        p++;
+      } else if (c === "<" || c === ">" || c === "&") {
+        const op = REDIRECTS.find((o) => s.startsWith(o, p));
+        p += op.length;
+        if (op === "<(" || op === ">(") {
+          list(true);
+          if (target)
+            target = false;
+        } else {
+          target = true;
+          if (op === "<<" || op === "<<-")
+            docEnd = op === "<<-";
+        }
+      } else {
+        const { v, plain, subst: had } = word();
+        if (plain && /^\d+$/.test(v) && (s[p] === "<" || s[p] === ">"))
+          continue;
+        if (docEnd !== undefined) {
+          docs.push({ end: v, tabs: docEnd });
+          docEnd = undefined;
+        }
+        if (target)
+          target = false;
+        else if (!(had && v === ""))
+          cmd.push(v);
+      }
+    }
+    end();
+  }
+  list(false);
+}
+function checkText(text, who, budget) {
+  const commands = [];
+  splitCommands(text, commands, budget);
+  for (const words of commands) {
+    const bad = checkCommand(words, who, budget, true);
     if (bad)
       return bad;
   }
   return;
+}
+function checkCommand(words, who, budget, findExec) {
+  if (findExec)
+    for (let j = 0;j < words.length; j++) {
+      if (!FIND_EXEC.has(words[j]))
+        continue;
+      let e = j + 1;
+      while (e < words.length && words[e] !== ";" && words[e] !== "+" && !FIND_EXEC.has(words[e]))
+        e++;
+      const bad = checkCommand(words.slice(j + 1, e), who, budget, false);
+      if (bad)
+        return bad;
+    }
+  let i = 0;
+  let valueShell = false;
+  for (;; ) {
+    while (i < words.length && SETTING.test(words[i]))
+      i++;
+    if (i >= words.length)
+      return;
+    const name = nameOf(words[i]);
+    if (name === "eval")
+      return checkText(words.slice(words[i + 1] === "--" ? i + 2 : i + 1).join(" "), who, budget);
+    if (SHELLS.has(name)) {
+      for (const a of words.slice(i + 1)) {
+        const bad = /^[-+]/.test(a) ? undefined : checkText(a, who, budget);
+        if (bad)
+          return bad;
+      }
+      if (valueShell)
+        return;
+      let j = i + 1;
+      while (j < words.length && /^[-+]/.test(words[j]))
+        j++;
+      if (words.slice(i + 1, j).some((o) => /^-[a-zA-Z]*c/.test(o)))
+        return;
+      const rest = words.slice(j);
+      budget.left -= rest.length + 1;
+      if (budget.left < 0)
+        throw new Error(TOO_COMPLEX);
+      return rest.length ? checkCommand(rest, who, budget, true) : undefined;
+    }
+    if (!WRAPPERS.has(name))
+      break;
+    const wrapper = words[i];
+    valueShell = false;
+    i++;
+    const letters = SUDO_WORDS.has(name) ? VALUE_LETTERS + "rt" : VALUE_LETTERS;
+    while (i < words.length) {
+      const a = words[i];
+      if (SETTING.test(a) || NUMBER.test(a)) {
+        i++;
+        continue;
+      }
+      if (a.length < 2 || a[0] !== "-")
+        break;
+      i++;
+      let split;
+      if (name === "env" && /^-[a-zA-Z]*S./.test(a))
+        split = a.slice(a.indexOf("S") + 1);
+      else if (name === "env" && a.startsWith("--split-string="))
+        split = a.slice(15);
+      const splitNext = name === "env" && (a.endsWith("S") || a === "--split-string");
+      const takes = split === undefined && (/^-[a-zA-Z]+$/.test(a) && letters.includes(a[a.length - 1].toLowerCase()) || LONG_VALUES.has(a)) && i < words.length && (splitNext || !words[i].startsWith("-"));
+      const value = name === "watch" && i < words.length ? words[i].trim().split(/\s+/)[0] : words[i] ?? "";
+      if (takes && !runsCommand(value)) {
+        if (splitNext)
+          split = words[i];
+        i++;
+      } else if (takes && i < words.length && SHELLS.has(nameOf(words[i]))) {
+        const rest = words.slice(i + 1);
+        budget.left -= rest.length + 1;
+        if (budget.left < 0)
+          throw new Error(TOO_COMPLEX);
+        const bad = checkCommand([wrapper, ...rest], who, budget, false);
+        if (bad)
+          return bad;
+        valueShell = true;
+        break;
+      }
+      if (split !== undefined) {
+        const parts = [];
+        splitCommands(split, parts, budget);
+        for (const more of parts.slice(1)) {
+          const bad = checkCommand(more, who, budget, true);
+          if (bad)
+            return bad;
+        }
+        const rest = words.slice(i);
+        budget.left -= rest.length + 1;
+        if (budget.left < 0)
+          throw new Error(TOO_COMPLEX);
+        words = [...parts[0] ?? [], ...rest];
+        i = 0;
+      }
+    }
+    if (name === "watch")
+      return checkText(words.slice(i).join(" "), who, budget);
+  }
+  return gitCall(words, i, who);
+}
+function gitCall(words, i, who) {
+  const n = nameOf(words[i]);
+  let sub;
+  let j = i + 1;
+  if (n === "git") {
+    for (;words[j]?.startsWith("-"); j++)
+      if (!GIT_OPTION_OK.has(words[j]))
+        return `git ${words[j].split("=")[0]}`;
+    sub = words[j++]?.toLowerCase();
+  } else if (n.startsWith("git-") && GIT_ALL.includes(n.slice(4)))
+    sub = n.slice(4);
+  if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub))
+    return;
+  const args = words.slice(j);
+  if (sub === "grep" && args.some((a) => /^-[a-zA-Z]*O/.test(a) || longStart(a, "open-files-in-pager")))
+    return "git grep -O";
+  if (GIT_READS.has(sub))
+    return;
+  if (sub === "branch" && branchListOnly(args))
+    return;
+  if (sub === "init" && who === "worker" && scratchInit(args))
+    return;
+  if (who === "reader" || !WORKER_GIT.has(sub))
+    return `git ${sub}`;
+  return WORKER_LIMITS[sub]?.bad(args);
+}
+function gitWriteIn(text, who = "reader") {
+  if (typeof text !== "string")
+    return;
+  const joined = joinLines(text);
+  const flat = joined.replace(/["'\\]/g, "");
+  if (/(?<![\w])GIT_\w*=/.test(flat))
+    return "a GIT_ setting";
+  if (/core\.hookspath/i.test(flat))
+    return "core.hooksPath";
+  if (/--(?:git-common-dir|absolute-git-dir|git-path|git-dir)(?![\w-])/.test(flat))
+    return "git's own folder";
+  try {
+    return checkText(joined, who, { left: 20 * joined.length + 1e5 });
+  } catch {
+    return TOO_COMPLEX;
+  }
 }
 function gitPlaceOk(command, cwd, places) {
   const list = folderList(places);
@@ -3728,6 +4040,118 @@ ${cas.stdout}`)?.[1];
   const after = back.exitCode === 0 ? `${o.target} is back where it was and your files are unchanged` : `and putting ${o.target} back failed too (${gitError(back)}); run "git reset --soft ${o.from.slice(0, 12)}" on ${o.target} to undo it`;
   return { ok: false, reason: "notmerged", detail: `not merged: your files on ${o.target} could not be updated (${gitError(rt)}); ${after}. Fix that, then ${thenDo(action, o.id)}` };
 }
+// hooks/core/width.ts
+var chars = (s) => {
+  const Seg = Intl.Segmenter;
+  return Seg ? Array.from(new Seg(undefined, { granularity: "grapheme" }).segment(s), (x) => x.segment) : Array.from(s);
+};
+var WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{1F000}-\u{1FAFF}\u{20000}-\u{3FFFD}]|\p{Extended_Pictographic}\uFE0F|\p{Emoji_Presentation}/u;
+var ZERO = /^[\p{M}\u200B-\u200F\uFE00-\uFE0F]+$/u;
+var charWidth = (c) => ZERO.test(c) ? 0 : WIDE.test(c) ? 2 : 1;
+var textWidth = (s) => chars(s).reduce((w, c) => w + charWidth(c), 0);
+var padWidth = (s, n) => s + " ".repeat(Math.max(0, n - textWidth(s)));
+function cutTitle(s, n = 35) {
+  if (textWidth(s) <= n)
+    return s;
+  let out = "";
+  let w = 0;
+  for (const c of chars(s)) {
+    const cw = charWidth(c);
+    if (w + cw > n - 1)
+      break;
+    out += c;
+    w += cw;
+  }
+  return `${out}…`;
+}
+function fitSegs(xs, width) {
+  const out = [];
+  let used = 0;
+  for (const x of xs) {
+    const w = textWidth(x.text);
+    if (used + w <= width) {
+      out.push(x);
+      used += w;
+      continue;
+    }
+    const room = width - used;
+    if (room > 0)
+      out.push({ ...x, text: cutTitle(x.text, room) });
+    break;
+  }
+  return out;
+}
+var STATS_WIDTH = 80;
+function wrapLine(l, width = STATS_WIDTH) {
+  if (l.length <= width || textWidth(l) <= width)
+    return [l];
+  const gap = /^ *\S.*?\S {2,}(?=\S)/.exec(l)?.[0].length ?? 0;
+  const pad = " ".repeat(gap && gap <= 30 ? gap : Math.min(20, (/^ */.exec(l)?.[0].length ?? 0) + 4));
+  const out = [];
+  let rest = l;
+  while (rest.length > width) {
+    const cut = rest.lastIndexOf(" ", width);
+    if (cut <= pad.length)
+      break;
+    out.push(rest.slice(0, cut).trimEnd());
+    rest = pad + rest.slice(cut + 1).trimStart();
+  }
+  return [...out, rest];
+}
+
+// hooks/core/setting-notes.ts
+var UNIT = { test_minutes: " minutes", max_minutes: " minutes", archive_days: " days" };
+function settingAbout(name) {
+  const x = settingInfo(name);
+  if (!x)
+    return "";
+  const range = `${x.range.replace(/ \(.*\)$/, "")}${UNIT[x.name] ?? ""}`;
+  const zero = x.name === "archive_days" ? " (0 = never)" : "";
+  switch (x.name) {
+    case "test_commands":
+      return "Shell commands that must all pass before work is merged: one line, or up to 5 as a list.";
+    case "docs_test_commands":
+      return "Run instead of the test commands when only prose changed, such as a docs link check.";
+    case "test_minutes":
+      return `How long each test command may run before it fails: ${range}.`;
+    case "max_parallel":
+      return `How many workers run at once: ${range}.`;
+    case "max_minutes":
+      return `How long a worker runs before symcc asks you for more time: ${range}.`;
+    case "auto_retries":
+      return `How many new tries a task gets on its own after failing tests: ${range}.`;
+    case "archive_days":
+      return `Done and dropped tasks older than this move to the archive: ${range}${zero}.`;
+    case "open_on_start":
+      return "Whether the board panel opens when a session starts.";
+    case "notify":
+      return "What plays when a task is merged or a worker asks you something.";
+    case "scout_findings":
+      return "Where the tasks made from a scout finding go, for scouts without their own choice.";
+    case "tests_with_changes":
+      return "What happens to a change that edits code but no test file.";
+    case "checker":
+      return "Whether a fresh checker tries to break each change before it joins the merge queue.";
+    case "mode":
+      return "Whether work runs, and whether finished work merges on its own or waits for you.";
+    case "enabled":
+      return "Whether symcc works at all in this project.";
+  }
+}
+var NOTES = {
+  mode: { paused: "nothing starts; running work stops", review: "finished work waits for you to approve", auto: "finished work that passes merges on its own" },
+  notify: { voice: "says what happened out loud", "sound 1": "a short chime, sound set 1", "sound 2": "a short chime, sound set 2", "sound 3": "a short chime, sound set 3", off: "nothing plays" },
+  scout_findings: { auto: "the lead decides; a new task goes to todo and runs", backlog: "a new task waits in the backlog for you" },
+  tests_with_changes: { off: "not checked", ask: "it merges, and the lead is told it had no test", review: "it waits for your review instead of merging" },
+  checker: { on: "a checker looks at each change first", off: "changes go straight on" },
+  open_on_start: { on: "the panel opens with the session", off: "the panel stays closed" },
+  enabled: { on: "symcc works as normal", off: "symcc rests" }
+};
+function settingWords(name, raw = false) {
+  const notes = Object.entries(NOTES[name] ?? {}).map(([value, note]) => `${raw ? value : settingShown(name, value)}: ${note}`);
+  return [settingAbout(name), ...notes].join(" · ");
+}
+
 // hooks/core/test-timeout.ts
 function ranOutOfTime(r, thrown) {
   if (thrown !== undefined)
@@ -3916,27 +4340,21 @@ function spokenLine(items) {
 var SETTING_NAMES = ["test_commands", "docs_test_commands", "test_minutes", "max_parallel", "max_minutes", "auto_retries", "archive_days", "open_on_start", "notify", "scout_findings", "tests_with_changes", "checker", "mode", "enabled"];
 var testMinutesRefusal = (v) => typeof v === "number" && Number.isInteger(v) && v >= 1 && v <= MAX_TEST_MINUTES ? "" : `test_minutes must be a whole number of minutes from 1 to ${MAX_TEST_MINUTES} (got ${JSON.stringify(v)})`;
 var MAX_TEST_COMMANDS = 5;
-var assistantWord = "the assistant";
-function useAssistantWord(word) {
-  assistantWord = word;
-}
 var SETTINGS = [
-  { name: "test_commands", label: "Test commands", kind: "commands", default: "none", range: "one shell line, or a list of up to 5 lines", meaning: "must all pass before work is merged" },
-  { name: "docs_test_commands", label: "Docs test commands", kind: "commands", default: "none", range: "one shell line, or a list of up to 5 lines", meaning: "run instead of test_commands when a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test" },
-  { name: "test_minutes", label: "Time per test", kind: "number", min: 1, max: MAX_TEST_MINUTES, default: String(DEFAULT_TEST_MINUTES), range: `1-${MAX_TEST_MINUTES}`, meaning: "how long each test command may run before merging" },
-  { name: "max_parallel", label: "Workers at once", kind: "number", min: 1, max: 8, default: "3", range: "1-8", meaning: "how many workers run at once" },
-  { name: "max_minutes", label: "Time per worker", kind: "number", min: 5, max: 600, default: "45", range: "5-600", meaning: "a worker running longer makes symcc ask the owner for more time" },
-  { name: "auto_retries", label: "Retries on failure", kind: "number", min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: "0-10", meaning: "new tries on their own after failing tests" },
-  { name: "archive_days", label: "Archive after", kind: "number", min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: "0-3650 (0 = never)", meaning: "done and dropped tasks older than this move to archive.json" },
-  { name: "open_on_start", label: "Open on start", kind: "onoff", default: "on", range: "on / off", meaning: "open the board panel when a session starts" },
-  { name: "notify", label: "Alert", kind: "notify", default: "voice (else sound N, N picked from the project name, else off)", range: "voice / sound 1 / sound 2 / sound 3 / off", meaning: 'when a task is merged or a worker asks you something: "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice), or a chime from sound set N, so you can tell which project chimed (on macOS sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Submarine and Funk; the second one when a question waits); picking a sound plays its chime' },
-  { name: "scout_findings", label: "Scout findings", kind: "findings", default: "auto", range: "auto / backlog", meaning: "the default for scouts without their own findings choice. auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you" },
-  { name: "tests_with_changes", label: "Code without tests", kind: "untested", default: "ask", range: "off / ask / review", meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
-  { name: "checker", label: "Checker", kind: "onoff", default: "off", range: "off / on", meaning: "on: after the prep step and before a change joins the merge queue (where its tests run), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it" },
-  { name: "mode", label: "Mode", kind: "mode", default: "auto merge", range: "paused / approve merge / auto merge", meaning: "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own" },
-  { name: "enabled", label: "Symcc on", kind: "onoff", default: "on", range: "on / off", get meaning() {
-    return `off: the whole plugin rests and ${assistantWord} works as normal`;
-  } }
+  { name: "test_commands", label: "Test commands", kind: "commands", default: "none", range: "one shell line, or a list of up to 5 lines" },
+  { name: "docs_test_commands", label: "Docs test commands", kind: "commands", default: "none", range: "one shell line, or a list of up to 5 lines" },
+  { name: "test_minutes", label: "Time per test", kind: "number", min: 1, max: MAX_TEST_MINUTES, default: String(DEFAULT_TEST_MINUTES), range: `1-${MAX_TEST_MINUTES}` },
+  { name: "max_parallel", label: "Workers at once", kind: "number", min: 1, max: 8, default: "3", range: "1-8" },
+  { name: "max_minutes", label: "Time per worker", kind: "number", min: 5, max: 600, default: "45", range: "5-600" },
+  { name: "auto_retries", label: "Retries on failure", kind: "number", min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: "0-10" },
+  { name: "archive_days", label: "Archive after", kind: "number", min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: "0-3650 (0 = never)" },
+  { name: "open_on_start", label: "Open on start", kind: "onoff", default: "on", range: "on / off" },
+  { name: "notify", label: "Alert", kind: "notify", default: "voice (else sound N, N picked from the project name, else off)", range: "voice / sound 1 / sound 2 / sound 3 / off" },
+  { name: "scout_findings", label: "Scout findings", kind: "findings", default: "auto", range: "auto / backlog" },
+  { name: "tests_with_changes", label: "Code without tests", kind: "untested", default: "ask", range: "off / ask / review" },
+  { name: "checker", label: "Checker", kind: "onoff", default: "off", range: "off / on" },
+  { name: "mode", label: "Mode", kind: "mode", default: "auto merge", range: "paused / approve merge / auto merge" },
+  { name: "enabled", label: "Symcc on", kind: "onoff", default: "on", range: "on / off" }
 ];
 var SETTING_PAGES = ["roles", "kinds"];
 var SETTING_GROUPS = [
@@ -4113,7 +4531,7 @@ function parseSettingsCommand(args, name = DEFAULT_NAME) {
     return { kind: "bad", message: `There is no setting called ${word}; settings are: ${SETTING_NAMES.join(", ")}` };
   const rest = s.slice(word.length).trim();
   if (!rest)
-    return { kind: "bad", message: `Give a value: /${name}-settings ${info.name} <${info.range}> (${info.meaning})` };
+    return { kind: "bad", message: `Give a value: /${name}-settings ${info.name} <${info.range}> (${settingWords(info.name)})` };
   const r = parseSettingValue(info.name, rest);
   return r.ok ? { kind: "set", setting: info.name, input: r.input } : { kind: "bad", message: r.message };
 }
@@ -4123,7 +4541,7 @@ function settingsText(b, name = DEFAULT_NAME, root = "") {
     ...SETTING_GROUPS.flatMap((g) => {
       const rows = groupSettings(g);
       const pages = g.items.some(isSettingPage) ? ["  roles and task types: open them from the Settings view, or tell the lead", `  org-mem (organizational memory): its notes are in .${name}/org-mem.md; the Organizational memory section at the bottom of the board's Live tab shows the newest notes and topics and opens the page that lists and deletes them (/${name}-settings orgmem delete N)`] : [];
-      return [`${g.title}:`, ...rows.map((s) => `  ${s.name.padEnd(w)}  ${settingShown(s.name, settingValue(b, s.name, root))}  (default ${s.default} · ${s.range}) ${s.meaning}`), ...pages];
+      return [`${g.title}:`, ...rows.map((s) => `  ${s.name.padEnd(w)}  ${settingShown(s.name, settingValue(b, s.name, root))}  (default ${s.default} · ${s.range}) ${settingWords(s.name)}`), ...pages];
     }),
     `Change one: /${name}-settings NAME VALUE, e.g. /${name}-settings max_parallel 5`
   ].join(`
@@ -4137,8 +4555,8 @@ function leadSettingsText(b, can, root = "") {
       ...groupSettings(g).map((s) => {
         const value = s.name === "notify" ? notifyOf(b, can, root) : settingValue(b, s.name, root);
         const extra = s.name === "notify" ? `; this machine can play: ${notifyChoices(can).join(", ")}` : s.name === "enabled" ? "; only the owner can change it" : "";
-        const stored = s.name === "mode" ? { default: "auto", range: "paused / review / auto", meaning: s.meaning + ' (the owner reads review as "approve merge" and auto as "auto merge")' } : s;
-        return `${s.name}: ${value} (default ${stored.default}, can be ${stored.range}) ${stored.meaning}${extra}`;
+        const stored = s.name === "mode" ? { default: "auto", range: "paused / review / auto", words: settingWords(s.name, true) + ' (the owner reads review as "approve merge" and auto as "auto merge")' } : s;
+        return `${s.name}: ${value} (default ${stored.default}, can be ${stored.range}) ${"words" in stored ? stored.words : settingWords(s.name, true)}${extra}`;
       }),
       ...g.items.some(isSettingPage) ? ["roles and task types: use the roles and kinds tools (the owner sees roles and task types as pages in the Settings view)", "org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board's Live tab, and may delete them there)"] : []
     ])
@@ -4204,7 +4622,7 @@ function parseCommand(command, args, current = "auto", name = DEFAULT_NAME) {
     case "tasks":
       return s ? use(`/${name}-tasks`) : { kind: "tasks" };
     case "board":
-      return s ? use(`/${name}-board`) : { kind: "board" };
+      return s === "html" ? { kind: "board", html: true } : s ? use(`/${name}-board [html]`) : { kind: "board" };
     case "status":
       return s ? use(`/${name}-status`) : { kind: "status" };
     case "task": {
@@ -4212,7 +4630,12 @@ function parseCommand(command, args, current = "auto", name = DEFAULT_NAME) {
         return use(taskUsage(name));
       if (words.length === 1)
         return { kind: "show", id: normId(id) };
-      const verb = words[1].toLowerCase();
+      const w1 = words[1].toLowerCase();
+      if (w1 === "more" && words.length === 2)
+        return { kind: "show", id: normId(id), page: 2 };
+      if (w1 === "page" && words.length === 3 && /^\d+$/.test(words[2]) && Number(words[2]) >= 1)
+        return { kind: "show", id: normId(id), page: Number(words[2]) };
+      const verb = w1;
       if (!TASK_VERBS.includes(verb))
         return use(taskUsage(name));
       const rest = s.replace(/^\S+\s+\S+\s*/, "").trim();
@@ -4577,6 +5000,8 @@ var SCOUT_BOARD_TOOLS = ["board", "stats"];
 var SCOUT_LIST_TOOL = "scouts";
 var scoutsAction = (input) => typeof input.action === "string" && input.action.trim() ? input.action.trim().toLowerCase() : "list";
 function scoutToolRefusal(tool, name = DEFAULT_NAME, input = {}, who = "scout") {
+  if (tool === "board" && input.view === "html")
+    return `Refused: ${name} scouts and checkers can only read the board; board view html writes a file and is only for the lead.`;
   if (SCOUT_BOARD_TOOLS.includes(tool))
     return null;
   if (tool === SCOUT_LIST_TOOL && who === "scout" && scoutsAction(input) === "list")
@@ -5556,6 +5981,8 @@ var isCheckerAsk = (q) => /^T-\d+ was sent back (twice|\d+ times) by the checker
 function parseCheckerAnswer(answer) {
   const a = String(answer ?? "").trim().toLowerCase();
   const words = a.match(/[a-z]+/g) ?? [];
+  if (/\b(not|no|never|dont|don['’]t|didnt|wont|won['’]t|cannot|can['’]t|cant)\b/.test(a))
+    return;
   const picks = new Set;
   for (const w of words) {
     if (w === "merge" || w === "merged")
@@ -5605,7 +6032,7 @@ function taskReports(t) {
 }
 var researchNotes = (files) => [...new Set(files.filter((f) => /^docs\/research\/[^/].*/.test(f)))].sort();
 var REPORT_PREVIEW_CHARS = 4000;
-function reportPreview(text, file, lines = REPORT_PREVIEW_LINES, chars = REPORT_PREVIEW_CHARS) {
+function reportPreview(text, file, lines = REPORT_PREVIEW_LINES, chars2 = REPORT_PREVIEW_CHARS) {
   const all = text.trimEnd().split(`
 `);
   const kept = [];
@@ -5613,9 +6040,9 @@ function reportPreview(text, file, lines = REPORT_PREVIEW_LINES, chars = REPORT_
   for (const l of all) {
     if (kept.length >= lines)
       break;
-    if (used + l.length > chars) {
-      if (used < chars * 0.8)
-        kept.push(cutLine(l, chars - used));
+    if (used + l.length > chars2) {
+      if (used < chars2 * 0.8)
+        kept.push(cutLine(l, chars2 - used));
       break;
     }
     kept.push(l);
@@ -6039,7 +6466,7 @@ function healthText(found) {
 var canRunNow = (t) => t.status === "todo";
 var stateWord = (s) => s === "doing" ? "running" : STATUS_WORD[s];
 function runNowWaits(b, t) {
-  return [...new Set(t.after ?? [])].filter((a) => a !== t.id && !depDone(b, a)).map((a) => {
+  return openAfter(b, t).map((a) => {
     const d = b.tasks.find((x) => x.id === a);
     return { id: a, state: d ? stateWord(d.status) : "missing" };
   });
@@ -6355,65 +6782,6 @@ function panelSections(tasks, nowMs, offsetMin) {
     dropped: tasks.filter((t) => t.status === "dropped").sort(finishedFirst)
   };
 }
-// hooks/core/width.ts
-var chars = (s) => {
-  const Seg = Intl.Segmenter;
-  return Seg ? Array.from(new Seg(undefined, { granularity: "grapheme" }).segment(s), (x) => x.segment) : Array.from(s);
-};
-var WIDE = /[\u1100-\u115F\u2E80-\u303E\u3041-\u33FF\u3400-\u4DBF\u4E00-\u9FFF\uA000-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE30-\uFE4F\uFF00-\uFF60\uFFE0-\uFFE6\u{1F000}-\u{1FAFF}\u{20000}-\u{3FFFD}]|\p{Extended_Pictographic}\uFE0F|\p{Emoji_Presentation}/u;
-var ZERO = /^[\p{M}\u200B-\u200F\uFE00-\uFE0F]+$/u;
-var charWidth = (c) => ZERO.test(c) ? 0 : WIDE.test(c) ? 2 : 1;
-var textWidth = (s) => chars(s).reduce((w, c) => w + charWidth(c), 0);
-var padWidth = (s, n) => s + " ".repeat(Math.max(0, n - textWidth(s)));
-function cutTitle(s, n = 35) {
-  if (textWidth(s) <= n)
-    return s;
-  let out = "";
-  let w = 0;
-  for (const c of chars(s)) {
-    const cw = charWidth(c);
-    if (w + cw > n - 1)
-      break;
-    out += c;
-    w += cw;
-  }
-  return `${out}…`;
-}
-function fitSegs(xs, width) {
-  const out = [];
-  let used = 0;
-  for (const x of xs) {
-    const w = textWidth(x.text);
-    if (used + w <= width) {
-      out.push(x);
-      used += w;
-      continue;
-    }
-    const room = width - used;
-    if (room > 0)
-      out.push({ ...x, text: cutTitle(x.text, room) });
-    break;
-  }
-  return out;
-}
-var STATS_WIDTH = 80;
-function wrapLine(l, width = STATS_WIDTH) {
-  if (l.length <= width || textWidth(l) <= width)
-    return [l];
-  const gap = /^ *\S.*?\S {2,}(?=\S)/.exec(l)?.[0].length ?? 0;
-  const pad = " ".repeat(gap && gap <= 30 ? gap : Math.min(20, (/^ */.exec(l)?.[0].length ?? 0) + 4));
-  const out = [];
-  let rest = l;
-  while (rest.length > width) {
-    const cut = rest.lastIndexOf(" ", width);
-    if (cut <= pad.length)
-      break;
-    out.push(rest.slice(0, cut).trimEnd());
-    rest = pad + rest.slice(cut + 1).trimStart();
-  }
-  return [...out, rest];
-}
-
 // hooks/core/driver-notice.ts
 var MONTHS3 = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 var two = (n) => String(n).padStart(2, "0");
@@ -7421,7 +7789,7 @@ function idleReason(t, view, nowMs) {
     return "stopped";
   if (t.status === "todo") {
     const board = { tasks: view.tasks, archived_done: view.archived_done ?? [] };
-    const open = [...new Set((t.after ?? []).filter((a) => a !== t.id && !depDone(board, a)))];
+    const open = openAfter(board, t);
     if (open.length)
       return `waits for ${open[0]}${open.length > 1 ? ` +${open.length - 1}` : ""}`;
     return "ready";
@@ -7878,7 +8246,7 @@ function liveTrains(view, nowMs, lanes = liveLanes(view, nowMs)) {
   const laneOf = new Map(lanes.map((l) => [l.id, l]));
   const todo = waitOrder(view.tasks.filter((t) => t.status === "todo"), byRunOrder);
   const rank = new Map(todo.map((t, i) => [t.id, i]));
-  const open = new Map(todo.map((t) => [t.id, [...new Set((t.after ?? []).filter((a) => a !== t.id && !depDone(board, a)))]]));
+  const open = new Map(todo.map((t) => [t.id, openAfter(board, t)]));
   const parent = new Map;
   const under = (id, through) => {
     const seen = new Set;
@@ -8608,6 +8976,149 @@ function pickMove(before, after, isNothing2) {
   return null;
 }
 
+// hooks/core/chat-text.ts
+var CHAT_MAX = 3500;
+var TITLE_MAX2 = 70;
+var PART_MAX = 600;
+function plain(s) {
+  return s.replace(/\S*\.symcc\/\S*/g, "a saved file").replace(/[𝄞♟◆◇‖⧗⊛✎⌕⇢⏵⏸✧⌀⏱Σ•●○◉◎─━│┃┌┐└┘├┤┬┴┼▍▕▏█▁▂▃▄▅▆▇]/gu, "").replace(/\s+/g, " ").trim();
+}
+var cut = (s, n) => {
+  const p = plain(s);
+  return p.length > n ? `${p.slice(0, n - 1).trimEnd()}…` : p;
+};
+function fitChat(lines, more, page = 1) {
+  const room = CHAT_MAX - 60;
+  const all = lines.map((l) => l.trimStart()).map((l) => l.length > room ? `${l.slice(0, room - 1).trimEnd()}…` : l);
+  if (all.join(`
+`).length <= CHAT_MAX)
+    return page <= 1 ? all.join(`
+`) : "Nothing more.";
+  const pages = [[]];
+  let used = 0;
+  for (const l of all) {
+    if (used + l.length + 1 > room && pages[pages.length - 1].length) {
+      pages.push([]);
+      used = 0;
+    }
+    pages[pages.length - 1].push(l);
+    used += l.length + 1;
+  }
+  const n = Math.max(1, Math.floor(page));
+  if (n > pages.length)
+    return "Nothing more.";
+  const left = pages.slice(n).reduce((x, p) => x + p.length, 0);
+  return [...pages[n - 1], ...left ? [`+${left} more: ${more}`] : []].join(`
+`);
+}
+var ASK_MAX = 800;
+var CHOICE_MAX = 300;
+function askLines(text, choices) {
+  return [`? ${cut(text, ASK_MAX)}`, ...choices.map((c, i) => `${i + 1}. ${cut(c, CHOICE_MAX)}`)];
+}
+function stateWord2(t, all) {
+  if (asksMoreTime(t))
+    return "needs more time?";
+  if (t.status === "review")
+    return "review";
+  if (t.status === "todo" || t.status === "paused") {
+    const open = openAfter({ tasks: all, archived_done: t.after }, t);
+    if (open.length)
+      return `${t.status === "paused" ? "paused, " : ""}waiting for ${open.join(", ")}`;
+    return t.status === "paused" ? "paused" : "to do";
+  }
+  return t.status;
+}
+function runningState(t, nowMs) {
+  const step = checkStepNow(t, nowMs);
+  const n = Number(t.attempts);
+  const time = plain(rowCell(t, nowMs));
+  return [step ? STEP_WORD[step] : "", n > 1 ? `try ${n}` : "", step || n > 1 || !/^0s?$/.test(time) ? time : "starting"].filter(Boolean).join(", ");
+}
+function askChoices(t, a) {
+  if (!a || a.overtime)
+    return a?.choices ?? [];
+  return t.ask?.lead?.options?.length ? t.ask.lead.options : t.ask?.options ?? [];
+}
+function taskLines(t, all, nowMs, running = false) {
+  const detail = running ? runningState(t, nowMs) : "";
+  const head = `${t.id} ${running ? "running" : stateWord2(t, all)}: ${detail ? `${detail}: ` : ""}${cut(t.title, TITLE_MAX2)}`;
+  const out = [head];
+  if (needsYou(t, nowMs) && (t.status === "waiting" || asksMoreTime(t))) {
+    const a = taskAsks(t);
+    if (a)
+      out.push(...askLines(a.text, askChoices(t, a)));
+  }
+  return out;
+}
+function groupLines(view, nowMs, offsetMin) {
+  const p = panelSections(view.tasks, nowMs, offsetMin);
+  const all = view.tasks;
+  const asks = openQuestions(view);
+  const you = p.needsYou.filter((t) => t.status !== "review" && t.status !== "failed");
+  const waiting = p.todo.filter((t) => stateWord2(t, all).includes("waiting for"));
+  const groups = [
+    { label: "Needs you", lines: [...asks.flatMap((q) => [`${q.id} question:`, ...askLines(q.text, q.options ?? [])]), ...you.flatMap((t) => taskLines(t, all, nowMs))] },
+    { label: "Running", lines: p.doing.filter((t) => !you.includes(t)).flatMap((t) => taskLines(t, all, nowMs, true)) },
+    { label: "Review", lines: p.needsYou.filter((t) => t.status === "review").flatMap((t) => taskLines(t, all, nowMs)) },
+    { label: "Failed", lines: p.needsYou.filter((t) => t.status === "failed").flatMap((t) => taskLines(t, all, nowMs)) },
+    { label: "Waiting", lines: waiting.flatMap((t) => taskLines(t, all, nowMs)) },
+    { label: "To do", lines: p.todo.filter((t) => !waiting.includes(t)).flatMap((t) => taskLines(t, all, nowMs)) }
+  ].filter((g) => g.lines.length);
+  const lines = [];
+  for (const g of groups)
+    lines.push(...lines.length ? [""] : [], g.label, ...g.lines);
+  const s = boardSections(view.tasks, nowMs, offsetMin);
+  return { groups, lines, backlog: s.backlog.length, doneToday: s.today.filter((t) => t.status === "done").length };
+}
+function chatTasksText(view, nowMs, offsetMin = localOffset(nowMs), mode = "", page = 1) {
+  const g = groupLines(view, nowMs, offsetMin);
+  const lines = g.lines.length ? g.lines : ["No open tasks."];
+  const tail = ["", ...mode ? [`Mode: ${plain(mode)}`] : [], `Backlog: ${g.backlog} ideas`, `Done today: ${g.doneToday}`, "Say: status, show T-5, more tasks"];
+  const out = fitChat([...lines, ...tail], "say 'more tasks'", page);
+  return (/\n\+\d+ more: say 'more tasks'$/.test(out) ? out : out.replace(/((?:^|\n)Say: [^\n]*), more tasks$/, "$1")).replace(/\n{3,}/g, `
+
+`);
+}
+function chatRowsText(tasks, all, nowMs, count, page = 1) {
+  const lines = tasks.flatMap((t) => taskLines(t, all, nowMs, t.status === "doing"));
+  const out = fitChat([...lines.length ? lines : ["No tasks match."], "", plain(count)], "narrow the search", page);
+  return out.replace(/\n\+(\d+) more: narrow the search$/, `
++$1 more match: narrow the search`);
+}
+function chatStatusText(view, notes, nowMs, offsetMin = localOffset(nowMs), page = 1) {
+  const g = groupLines(view, nowMs, offsetMin);
+  const lines = g.groups.filter((x) => x.label === "Needs you" || x.label === "Running").flatMap((x, i) => [...i ? [""] : [], x.label, ...x.lines]);
+  const d = liveToday(view.tasks, nowMs, offsetMin);
+  const work = todayMore(view.tasks, view.today_team, nowMs, offsetMin).workMs;
+  const today = `Today: ${d.merged} merged, ${fmtTokens(d.tokens)} tokens, ${fmtDuration(work)} work`;
+  return fitChat([...lines.length ? lines : ["Nothing needs you or runs now."], "", today, `Org-mem: ${notes.length} notes`, "Say: tasks, show T-5"], "say 'more status'", page);
+}
+var cutPart = (s, n) => {
+  const lines = s.trim().split(`
+`).map((l) => plain(l)).filter((l, i, a) => l || i && a[i - 1]);
+  const joined = lines.join(`
+`);
+  return joined.length > n ? `${joined.slice(0, n).trimEnd()}…` : joined;
+};
+function chatTaskText(t, report, nowMs, page = 1) {
+  const L = [`${t.id}: ${plain(t.title)}`];
+  const changed = historyLineText({ at: t.updated_at }, nowMs).split("  ")[0];
+  L.push(`Status: ${STATUS_WORD[t.status]}${Number(t.attempts) > 0 ? `, try ${t.attempts}` : ""}${changed ? `, changed ${changed}` : ""}`);
+  L.push(t.origin?.why ? `Why: ${plain(t.origin.why)}` : plain(fromText(t, 100)));
+  if (t.status === "waiting" && t.ask?.text)
+    L.push(...askLines(taskAsks(t)?.text ?? t.ask.text, askChoices(t, taskAsks(t))));
+  L.push("What to do:", t.details.trim() ? cutPart(t.details, PART_MAX) : "(no details)");
+  if (t.history.length)
+    L.push("Last events:", ...t.history.slice(-5).reverse().map((h) => plain(historyLineText(h, nowMs))));
+  if (report?.text)
+    L.push(`Report (try ${report.try}):`, cutPart(report.text, PART_MAX));
+  L.push("Say: approve, reject, tasks");
+  return fitChat(L.join(`
+`).split(`
+`), `say 'more ${t.id}'`, page);
+}
+
 // hooks/core/banner.ts
 function folderName(path) {
   return path.replace(/\/+$/, "").split("/").pop() ?? "";
@@ -8743,6 +9254,10 @@ function boardText(b, nowMs, where, name = DEFAULT_NAME, offsetMin = localOffset
   const gone = archivedLine(b, name);
   const open = openQuestions(b);
   const asks = open.length ? [`${questionsLabel(open.length)}:`, ...open.map((q) => `  ${questionLine(q)}`)] : [];
+  const chatNow = nowMs ?? Date.now();
+  const plainFilter = !(filter.status?.length || filter.search?.trim() || filter.limit !== undefined || filter.sort);
+  if (filter.chat && plainFilter)
+    return chatTasksText(b, chatNow, offsetMin, modeText(modeOf(b)));
   if (!b.tasks.length)
     return [...top, ...asks, "The board is empty.", ...gone ? [gone] : []].join(`
 `);
@@ -8768,6 +9283,8 @@ function boardText(b, nowMs, where, name = DEFAULT_NAME, offsetMin = localOffset
     const picked = q.pick ? `${q.pick.by === "newest" ? "last" : "top"}${q.pick.n ? `: ${q.pick.n}` : ""}` : "";
     const asked = [picked, filter.status?.length ? `status: ${filter.status.join(", ")}` : "", search ? `search: ${search}` : ""].filter(Boolean).join("; ");
     const count = q.pick ? `${rows.length} of ${q.pick.by === "order" && !q.status ? matched.filter((t) => t.status === "todo").length : matched.length} matching shown (${b.tasks.length} tasks on the board; ${asked})` : `${rows.length} of ${b.tasks.length} tasks (${asked})`;
+    if (filter.chat)
+      return chatRowsText(rows, b.tasks, chatNow, count);
     body = rows.length ? [...rows.flatMap((t) => boardRow(t, b.auto_retries, nowMs ?? Date.now(), filter.driving)), count] : [`No tasks match (${asked}).`];
   } else {
     const hidden = hiddenLine(closed.filter((t) => t.status === "done").length, closed.filter((t) => t.status === "dropped").length);
@@ -8952,7 +9469,6 @@ function useName(host) {
     return;
   S.named = true;
   S.W = wordsOf2(host.words);
-  useAssistantWord(S.W.assistant);
   const name = cleanName(host.plugin.name);
   if (name === S.N.name)
     return;
@@ -9065,7 +9581,7 @@ function meanwhileText(lines, shown = MEANWHILE_SHOWN) {
   if (!lines.length)
     return "";
   const more = lines.length - shown;
-  return ["Meanwhile the owner (nothing to answer):", ...lines.slice(0, shown).map((l) => `- ${l}`), ...more > 0 ? [`- +${more} more`] : []].join(`
+  return ["Meanwhile (nothing to answer):", ...lines.slice(0, shown).map((l) => `- ${l}`), ...more > 0 ? [`- +${more} more`] : []].join(`
 `);
 }
 function tellLead(host, text, how) {
@@ -9093,7 +9609,7 @@ function sendBoardUpdate(host) {
   const update = takeBoardUpdate();
   if (!update)
     return;
-  (urgent ? host.lead.send(update, { urgent: true }) : host.lead.send(update)).catch((err) => {
+  (urgent ? host.lead.send(update, { urgent: true }) : host.lead.send(update)).then(() => {}, (err) => {
     if (!S.enabledNow)
       return;
     leadQueue.unshift(...lines);
@@ -9156,7 +9672,7 @@ function meanwhileForPrompt() {
     meanwhile.unshift(...lines);
   };
   return { text: `[${S.N.name}] ${meanwhileText(lines)}
-(Done on the board before this message from the owner; take it into account.)`, back };
+(Happened since your last message; take it into account.)`, back };
 }
 
 // hooks/app/health.ts
@@ -9448,8 +9964,8 @@ function oldFailReason(line) {
     return "stopped";
   if (/^(approved by the owner|merging\b|merged once your files)/.test(head))
     return null;
-  const cut = oldCutAt(l);
-  const outcome = cut < 0 ? "" : l.slice(cut + 3);
+  const cut2 = oldCutAt(l);
+  const outcome = cut2 < 0 ? "" : l.slice(cut2 + 3);
   if (/^tests failed\b|the tests failed after your edits/.test(outcome))
     return "tests";
   if (/^conflicts with the latest\b/.test(outcome))
@@ -11096,10 +11612,10 @@ async function migrateIfOld(host, all = true) {
   const failBackup = backupOfThisTry;
   const msg = `symcc couldn't move your old data to the current shape (${why}); nothing was saved. Run /${S.N.name}-doctor.`;
   lastFailure = { sig: await filesSignature(host), msg };
-  const plain = msg.replace(/\S*data\.before-migrate-\S*?\//g, "<backup>").replace(/[^\s/'"()]*\.\d+-[a-z0-9]+\.tmp/g, "<tmp>").replace(/(^|[\s'"(])\/[^\s'"()]*/g, "$1<path>");
-  failedBackup = failBackup && (!failedBackup || failedBackup.plain === plain) ? { plain, backup: failBackup } : null;
-  if (plain !== toldFailure) {
-    toldFailure = plain;
+  const plain2 = msg.replace(/\S*data\.before-migrate-\S*?\//g, "<backup>").replace(/[^\s/'"()]*\.\d+-[a-z0-9]+\.tmp/g, "<tmp>").replace(/(^|[\s'"(])\/[^\s'"()]*/g, "$1<path>");
+  failedBackup = failBackup && (!failedBackup || failedBackup.plain === plain2) ? { plain: plain2, backup: failBackup } : null;
+  if (plain2 !== toldFailure) {
+    toldFailure = plain2;
     host.ui.toast(S.N.toast(msg));
     tellLead(host, msg);
   }
@@ -11276,6 +11792,65 @@ async function migrateData(host, reuseBackup) {
   failedBackup = null;
   await host.fs.write(path(`${backup}/${MIGRATED_FILE}`), JSON.stringify({ at: now(), version: S.version })).catch(() => {});
   return { failed: "", done, backup };
+}
+
+// hooks/app/slow-log.ts
+var SLOW_MS = 200;
+var LAG_BEAT_MS = 250;
+var LAG_LATE_MS = 1000;
+var SLOW_LINES = 500;
+var SLOW_LOG_FILE = "slow.log";
+var slowClock = { now: () => Date.now() };
+var queue = Promise.resolve();
+function addLine(host, line) {
+  if (!S.root || S.fresh || S.guardOnly)
+    return Promise.resolve();
+  const file = `${S.root}/${S.N.dir}/${SLOW_LOG_FILE}`;
+  queue = queue.then(async () => {
+    const old = await host.fs.read(file).catch(() => "");
+    const lines = old.split(`
+`).filter(Boolean);
+    lines.push(line);
+    await host.fs.write(file, lines.slice(-SLOW_LINES).join(`
+`) + `
+`);
+  }).catch(() => {
+    return;
+  });
+  return queue;
+}
+function note(host, step, started2) {
+  const ms2 = slowClock.now() - started2;
+  if (ms2 > SLOW_MS)
+    addLine(host, `${new Date(slowClock.now()).toISOString()} ${step} ${ms2} ms`);
+}
+async function timed(host, step, fn) {
+  const started2 = slowClock.now();
+  try {
+    return await fn();
+  } finally {
+    note(host, step, started2);
+  }
+}
+function timedSync(host, step, fn) {
+  const started2 = slowClock.now();
+  try {
+    return fn();
+  } finally {
+    note(host, step, started2);
+  }
+}
+var lag;
+function startLagTimer(host) {
+  lag?.cancel();
+  let last = slowClock.now();
+  lag = host.clock.every(LAG_BEAT_MS, () => {
+    const t = slowClock.now();
+    const late = t - last - LAG_BEAT_MS;
+    last = t;
+    if (late > LAG_LATE_MS)
+      addLine(host, `${new Date(t).toISOString()} lag ${late} ms late`);
+  });
 }
 
 // hooks/core/events.ts
@@ -11789,7 +12364,10 @@ async function migratedBoard(host) {
     throw new Error(failed2);
   currentStamp = await boardStamp(host);
 }
-async function change(host, fn) {
+function change(host, fn) {
+  return timed(host, "change", () => changeBoard(host, fn));
+}
+async function changeBoard(host, fn) {
   await migratedBoard(host);
   return locked(host, async () => {
     const before = await load(host);
@@ -11873,13 +12451,13 @@ async function defFiles(host, k, dir, shown, broken) {
   return out;
 }
 function skippedDef(host, k, file, reason) {
-  const note = skippedRoleNote(file, reason, S.N.name);
-  host.ui.log(note, { to: "debug" });
+  const note2 = skippedRoleNote(file, reason, S.N.name);
+  host.ui.log(note2, { to: "debug" });
   if (k.skipped.get(file) === reason)
     return;
   k.skipped.set(file, reason);
   host.ui.toast(S.N.toast(`skipped ${file}: ${reason}`));
-  tellLead(host, `${note}. That ${k.noun} can't be used until the file is fixed ${k.fixHint}`);
+  tellLead(host, `${note2}. That ${k.noun} can't be used until the file is fixed ${k.fixHint}`);
 }
 async function builtInDefs(host, k) {
   return typeof k.builtIn === "string" ? defFiles(host, k, `${host.plugin.root}/${k.builtIn}`, k.builtIn) : k.builtIn();
@@ -12716,7 +13294,7 @@ async function upToDateTestMove($, t, dir, b, mode, made, stopped2, retest, targ
   let candidate = tip;
   await markStep($, t, "testing", stopped2);
   if ((await git($, ["merge-base", "--is-ancestor", main, tip])).exitCode !== 0) {
-    const m = await git($, [...asSymcc(), "merge", "--no-edit", "--no-verify", "-m", commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}`, ...t.done ? { done: t.done } : {} }), main], dir);
+    const m = await timed($, `${t.id} catch up`, () => git($, [...asSymcc(), "merge", "--no-edit", "--no-verify", "-m", commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}`, ...t.done ? { done: t.done } : {} }), main], dir));
     if (m.exitCode !== 0) {
       await git($, ["merge", "--abort"], dir);
       if (/^CONFLICT|fix conflicts|unmerged/im.test(`${m.stdout}
@@ -12745,7 +13323,7 @@ ${m.stderr}`))
       for (const cmd of cmds) {
         await refresh();
         let thrown;
-        const r = await $.run(["/bin/sh", "-c", cmd], { cwd: dir, timeoutMs: testTimeoutMs(b) }).catch((e) => (thrown = String(e?.message ?? e), { exitCode: 1, stdout: "", stderr: thrown }));
+        const r = await timed($, `${t.id} test run`, () => $.run(["/bin/sh", "-c", cmd], { cwd: dir, timeoutMs: testTimeoutMs(b) })).catch((e) => (thrown = String(e?.message ?? e), { exitCode: 1, stdout: "", stderr: thrown }));
         if (r.exitCode !== 0 && ranOutOfTime(r, thrown)) {
           const min = limitMinutes(testTimeoutMs(b));
           return stopped2() ?? { ok: false, reason: "timeout", timedOut: min, command: cmd, detail: timedOutDetail(cmd, min), testOutput: testTail(`${timedOutHead(cmd, min)}
@@ -12787,7 +13365,7 @@ ${r.stderr}`) };
     return goneResult(target);
   await markStep($, t, "merging", stopped2);
   const current = (await git($, ["symbolic-ref", "--short", "-q", "HEAD"])).stdout.trim();
-  const moved = await moveTarget((args) => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === "approve" ? "approve" : "retry" });
+  const moved = await timed($, `${t.id} merge`, () => moveTarget((args) => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === "approve" ? "approve" : "retry" }));
   if (!moved.ok && !await branchExists($, target))
     return goneResult(target);
   if (!moved.ok)
@@ -12808,14 +13386,18 @@ async function mergedBefore($, t, merged) {
   const saved = new Set((t.runs ?? []).flatMap((r) => Array.isArray(r?.commits) ? r.commits : []));
   const own = (sha, msg) => saved.has(sha) || isTaskCommit(msg, t.id, S.N.name);
   const p = await git($, ["rev-list", "--parents", "-n", "1", merged]).catch(() => null);
-  if (!p || p.exitCode !== 0)
-    return "";
+  if (!p || p.exitCode !== 0) {
+    const c = await git($, ["cat-file", "-e", `${merged}^{commit}`]).catch(() => null);
+    return c && (c.exitCode === 1 || c.exitCode === 128) ? "" : null;
+  }
   const [, first, second] = String(p.stdout ?? "").trim().split(/\s+/);
   if (!first)
     return "";
   if (second) {
     const m = await git($, ["log", "-n", "1", "--format=%B", merged]).catch(() => null);
-    if (m && m.exitCode === 0 && isTaskCommit(String(m.stdout ?? ""), t.id, S.N.name))
+    if (!m || m.exitCode !== 0)
+      return null;
+    if (isTaskCommit(String(m.stdout ?? ""), t.id, S.N.name))
       return second;
     if (saved.has(merged)) {
       const f = await git($, ["log", "-n", "1", "--format=%B", first]).catch(() => null);
@@ -12848,10 +13430,13 @@ async function mergedChanges($, t) {
   if (mergedMemo.has(key))
     return mergedMemo.get(key);
   const before = await mergedBefore($, t, merged);
+  if (before === null)
+    return null;
   const r = before ? await git($, ["diff", "--numstat", "--no-renames", before, merged]).catch(() => null) : null;
   const files = r && r.exitCode === 0 ? parseNumstat(String(r.stdout ?? "")) : [];
   const got = files.length ? { files, error: "", merged, before } : null;
-  mergedMemo.set(key, got);
+  if (!before || r?.exitCode === 0)
+    mergedMemo.set(key, got);
   return got;
 }
 var DIFF_GONE = "diff not available";
@@ -13557,7 +14142,7 @@ function spreadHtml(sp, colour) {
   const row2 = (r) => barRow2(r.label, r.n, max, String(r.n), colour, r.note ?? "");
   return `<h3>${E(`${sp.title} · median ${sp.medianText} · ${plural(sp.n, "task")}`)}</h3>${sp.rows.slice(0, 3).map(row2).join("")}<p class="muted median-line">── median ${E(sp.medianText ?? "")} ──</p>${sp.rows.slice(3).map(row2).join("")}`;
 }
-var card = (label, value, note = "", colour = "var(--blue)") => `<div class="card" style="--c:${colour}"><div class="cl">${E(label)}</div><div class="cv">${E(value)}</div>${note ? `<div class="cn">${E(note)}</div>` : ""}</div>`;
+var card = (label, value, note2 = "", colour = "var(--blue)") => `<div class="card" style="--c:${colour}"><div class="cl">${E(label)}</div><div class="cv">${E(value)}</div>${note2 ? `<div class="cn">${E(note2)}</div>` : ""}</div>`;
 var section = (title, body, wide = false) => `<section class="panel${wide ? " wide" : ""}"><h2>${E(title)}</h2>${body}</section>`;
 var kv = (rows) => `<dl class="kv">${rows.map(([k, v]) => `<dt>${E(k)}</dt><dd>${E(v)}</dd>`).join("")}</dl>`;
 var kinds2 = (t) => tokenCount(t) ? fmtTokenKinds(t) : "";
@@ -13723,6 +14308,50 @@ function openCommands(file, platform) {
   if (platform)
     return [linux];
   return [mac, linux, win];
+}
+
+// hooks/core/board-html.ts
+var TODO_MAX = 300;
+var CSS2 = `:root{--bg:#f6f7fa;--fg:#1c2230;--muted:#667085;--card:#fff;--line:#dfe3ea;--amber:#b25e00;--red:#c0262d;--blue:#1f5fbf;--green:#1a7f42;--purple:#7a3fc0}
+@media (prefers-color-scheme:dark){:root{--bg:#12151c;--fg:#e6e9f0;--muted:#98a0b3;--card:#1b2029;--line:#2b3240;--amber:#f0a040;--red:#ff7b80;--blue:#6aa5ff;--green:#4cc27a;--purple:#b98cff}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:12px}h1{font-size:1.3rem;margin:.2em 0;overflow-wrap:anywhere}h2{font-size:1.05rem;margin:1.2em 0 .4em;border-bottom:1px solid var(--line);padding-bottom:.2em}
+.task{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;margin:6px 0;overflow-wrap:anywhere}
+.head{font-weight:600}.mark{display:inline-block;min-width:1.2em}.meta{color:var(--muted);font-size:.85rem}
+.ask{margin:.4em 0;font-weight:600}ol{margin:.2em 0 .2em 1.4em;padding:0}.todo{margin:.3em 0 0;white-space:pre-wrap}
+.s-waiting{border-left:4px solid var(--amber)}.s-failed{border-left:4px solid var(--red)}.s-review{border-left:4px solid var(--purple)}.s-doing{border-left:4px solid var(--blue)}.s-done{border-left:4px solid var(--green)}
+.muted{color:var(--muted)}code{font-family:ui-monospace,Menlo,monospace}`;
+function card2(t, all, nowMs, opts = {}) {
+  const state = opts.running ? `${STATUS_WORD.doing}: ${runningState(t, nowMs)}` : t.status === "waiting" || t.status === "failed" || t.status === "review" || t.status === "done" ? STATUS_WORD[t.status] : stateWord2(t, all);
+  const meta = [state, t.kind ? `kind: ${t.kind}` : "", plain(fromText(t, 80))].filter(Boolean).join(" · ");
+  const a = opts.ask ? taskAsks(t) : null;
+  const ask2 = a ? `<div class="ask">${escapeHtml(a.text)}</div><ol>${askChoices(t, a).map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ol>` : "";
+  const why = opts.why && t.note ? `<div class="meta">why: ${escapeHtml(t.note)}</div>` : "";
+  const sha = opts.commit ? taskCommits(t).find((c) => c.merged) : undefined;
+  const commit = sha ? `<div class="meta">merged <code>${escapeHtml(shortSha(sha.sha))}</code></div>` : "";
+  const todo = (t.details ?? "").trim();
+  const short = todo.length > TODO_MAX ? `${todo.slice(0, TODO_MAX).trimEnd()}…` : todo;
+  return `<div class="task s-${escapeHtml(t.status)}"><div class="head"><span class="mark">${escapeHtml(statusMark(t))}</span>${escapeHtml(t.id)} ${escapeHtml(t.title)}</div><div class="meta">${escapeHtml(meta)}</div>${ask2}${why}${commit}${short ? `<div class="todo">${escapeHtml(short)}</div>` : ""}</div>`;
+}
+var section2 = (title, cards) => cards.length ? `<h2>${escapeHtml(title)} (${cards.length})</h2>${cards.join("")}` : "";
+function boardHtml(view, project, nowMs, offsetMin = localOffset(nowMs)) {
+  const all = view.tasks;
+  const p = panelSections(all, nowMs, offsetMin);
+  const asking = (t) => t.status === "waiting" || asksMoreTime(t);
+  const you = p.needsYou;
+  const questions2 = openQuestions(view).map((q) => `<div class="task s-waiting"><div class="head"><span class="mark">?</span>${escapeHtml(q.id)}</div><div class="ask">${escapeHtml(q.text)}</div><ol>${(q.options ?? []).map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ol></div>`);
+  const needs = [...questions2, ...you.map((t) => card2(t, all, nowMs, { ask: asking(t), why: t.status === "failed" }))];
+  const body = [
+    section2("Needs you", needs),
+    section2("Running", p.doing.filter((t) => !you.includes(t)).map((t) => card2(t, all, nowMs, { running: true }))),
+    section2("To do", p.todo.map((t) => card2(t, all, nowMs))),
+    section2("Done today", p.doneToday.map((t) => card2(t, all, nowMs, { commit: true })))
+  ].join("");
+  const counts = `<h2>Counts</h2><div class="task">Backlog: ${p.backlog.length} · Done: ${p.done.length} · Dropped: ${p.dropped.length}</div>`;
+  const empty = body ? "" : '<p class="muted">No open tasks.</p>';
+  const title = `${project} board`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>${CSS2}</style></head><body><main><h1>${escapeHtml(title)}</h1>${empty}${body}${counts}</main></body></html>
+`;
 }
 
 // hooks/app/doctor.ts
@@ -14289,9 +14918,9 @@ async function cleanLeftoverTmp(host) {
         failed2.push(`${sub}${name}: ${(r.stderr || r.stdout).trim().slice(0, 100)}`);
     }
   }
-  const nameOf = (f) => f.slice(0, f.indexOf(":"));
-  const fresh = failed2.filter((f) => !tmpWarned.has(nameOf(f)));
-  fresh.forEach((f) => tmpWarned.add(nameOf(f)));
+  const nameOf2 = (f) => f.slice(0, f.indexOf(":"));
+  const fresh = failed2.filter((f) => !tmpWarned.has(nameOf2(f)));
+  fresh.forEach((f) => tmpWarned.add(nameOf2(f)));
   if (fresh.length)
     host.ui.toast(S.N.toast(`couldn't remove leftover temp files in ${S.N.dir}/: ${fresh.join("; ")}`));
 }
@@ -14425,11 +15054,11 @@ async function moveStage($, id, word) {
   }
   const why = `moved to ${stage} by the lead`;
   let said = false;
-  const write = (status, note, extra = {}) => change($, (x) => {
+  const write = (status, note2, extra = {}) => change($, (x) => {
     const cur2 = find(x, t.id) ?? t;
     const history2 = said ? cur2.history : withHistory(cur2.history, now(), ["other", why]);
     said = true;
-    return patchTask(x, t.id, { status, note, test_tries: 0, ...extra, history: history2, ...endedBy(cur2, now(), "stopped", why) }, now(), S.N.dir);
+    return patchTask(x, t.id, { status, note: note2, test_tries: 0, ...extra, history: history2, ...endedBy(cur2, now(), "stopped", why) }, now(), S.N.dir);
   });
   if (checkingNow(t.id)) {
     if (t.live?.checking && t.live.checking.step !== "checker")
@@ -14588,6 +15217,135 @@ async function markMerged($, id, by) {
   return `${t.id} done: its work is already in ${into} (${shortSha(found.sha)}), merged outside the board; nothing was merged or tested${wasDoing ? "; its worker was stopped" : ""}${kept}`;
 }
 
+// hooks/core/task-list.ts
+var NO_OPEN_TASKS = "No open tasks.";
+var tasksHint = (name = DEFAULT_NAME) => `/${name}-board opens the board · /${name}-task T-n opens one task`;
+function tasksCounts(b, nowMs, offsetMin = localOffset(nowMs)) {
+  const s = boardSections(b.tasks, nowMs, offsetMin);
+  const done = s.today.filter((t) => t.status === "done").length;
+  const dropped = s.today.filter((t) => t.status === "dropped").length;
+  return `backlog ${s.backlog.length} · done today ${done} · dropped today ${dropped}`;
+}
+function stateOf(t, all, nowMs, group) {
+  if (asksMoreTime(t))
+    return MORE_TIME_CELL;
+  if (group === "run") {
+    const cell2 = rowCell(t, nowMs);
+    const n = Number(t.attempts);
+    const tries = n > 1 ? `↺${n}` : "";
+    return [cell2, tries].filter(Boolean).join(" ");
+  }
+  if (t.status === "todo" || t.status === "paused") {
+    const open = openAfter({ tasks: all, archived_done: t.after }, t);
+    if (open.length)
+      return `${t.status === "paused" ? "paused, " : ""}after ${open.join(", ")}`;
+    return t.status === "paused" ? "paused" : "to do";
+  }
+  return t.status === "waiting" ? "waiting" : t.status;
+}
+function tasksListText(b, nowMs, name = DEFAULT_NAME, width2 = 80, offsetMin = localOffset(nowMs)) {
+  const p = panelSections(b.tasks, nowMs, offsetMin);
+  const groups = [
+    { label: SECTION_LABEL.needsYou, key: "you", tasks: p.needsYou.filter((t) => t.status !== "review" && t.status !== "failed") },
+    { label: "Running", key: "run", tasks: p.doing },
+    { label: "In review", key: "review", tasks: p.needsYou.filter((t) => t.status === "review") },
+    { label: "Failed", key: "failed", tasks: p.needsYou.filter((t) => t.status === "failed") },
+    { label: "To do", key: "todo", tasks: p.todo }
+  ].filter((g) => g.tasks.length);
+  const asks = openQuestions(b);
+  const out = [];
+  if (asks.length) {
+    out.push(questionsLabel(asks.length));
+    for (const q of asks)
+      out.push(cutTitle(`  ? ${questionLine(q)}`, width2));
+  }
+  const rows = groups.flatMap((g) => g.tasks.map((t) => ({ t, g: g.key, state: stateOf(t, b.tasks, nowMs, g.key) })));
+  const idW = Math.max(0, ...rows.map((r) => r.t.id.length));
+  const stateW = Math.max(0, ...rows.map((r) => textWidth(r.state)));
+  for (const g of groups) {
+    if (out.length)
+      out.push("");
+    out.push(`${g.label} (${g.tasks.length})`);
+    for (const r of rows.filter((r2) => r2.g === g.key)) {
+      const lead2 = `  ${rowMark(r.t, nowMs)} ${r.t.id.padEnd(idW)}  ${padWidth(r.state, stateW)}  `;
+      out.push(lead2 + cutTitle(r.t.title, Math.max(8, width2 - textWidth(lead2))));
+    }
+  }
+  if (!rows.length) {
+    if (out.length)
+      out.push("");
+    out.push(NO_OPEN_TASKS);
+  }
+  out.push("", tasksCounts(b, nowMs, offsetMin), tasksHint(name));
+  return out.join(`
+`);
+}
+
+// hooks/core/live-text.ts
+var statusHint = (name = DEFAULT_NAME) => `/${name}-board opens the board · /${name}-tasks lists the tasks`;
+var tryText = (n) => n > 1 ? ` ↺${n}` : "";
+function liveStatusText(view, notes, nowMs, name = DEFAULT_NAME, width2 = 80, offsetMin = localOffset(nowMs)) {
+  const w = Math.max(20, Math.floor(width2));
+  const inner = liveInner(w);
+  const out = [];
+  const line = (xs) => out.push(segText(xs).trimEnd());
+  const under = (xs) => out.push((LIVE_INDENT + segText(xs)).trimEnd());
+  const heading2 = (label) => (out.length && out.push(""), line(liveHeading(label, w)));
+  const lanes = liveTaskLanes(view, nowMs);
+  const running = lanes.filter((l) => !l.done);
+  const needs = liveNeeds(view, nowMs, inner);
+  if (needs.length) {
+    heading2(LIVE_SECTIONS.needs);
+    for (const n of needs)
+      under(n.segs);
+  }
+  heading2(LIVE_SECTIONS.tasks);
+  if (!running.length)
+    for (const x of liveIdle(view, nowMs, inner))
+      out.push(LIVE_INDENT + x);
+  if (!running.length && lanes.length)
+    out.push("");
+  if (lanes.length) {
+    const room = Math.max(0, ...lanes.map((l) => l.done ? 0 : tryText(l.tryNo).length));
+    const layout = liveLayout(lanes, liveColumns(lanes, view.checker === true), Math.max(1, inner - room));
+    const trains = liveTrains(view, nowMs, lanes);
+    under(liveLabelSegs(layout));
+    for (const l of lanes) {
+      const [first, second] = laneLines(l, layout, { nowMs, frame: 0, steady: true });
+      out.push((LIVE_INDENT + segText(first) + (l.done ? "" : tryText(l.tryNo))).trimEnd());
+      if (!l.done)
+        under(second);
+      for (const r of trainRows(trains.lanes[l.id] ?? [], inner))
+        under(r.segs);
+    }
+  }
+  const br = liveBranches(view, nowMs, w);
+  if (br) {
+    out.push("");
+    line(br.head);
+    under(br.main);
+    for (const r of br.rows)
+      under(r.segs);
+  }
+  heading2(LIVE_SECTIONS.today);
+  under(liveNowSegs(view, running, nowMs, inner));
+  for (const t of liveTodayLines(view, nowMs, inner, offsetMin, !lanes.length))
+    under(t);
+  const om = liveOrgMem(notes, w);
+  out.push("");
+  line(om.head);
+  if (om.empty)
+    out.push(LIVE_INDENT + om.empty);
+  for (const x of om.newest)
+    under(x.segs);
+  out.push("", statusHint(name));
+  if (lanes.length)
+    for (const x of liveLegend(inner))
+      out.push(LIVE_INDENT + x);
+  return out.join(`
+`);
+}
+
 // hooks/app/tools.ts
 var TOPIC_RULES = "reuse an existing topic when it fits (a new one only when nothing fits); keep about 6-10 topics; split a topic past ~15 notes, and merge one with only 1-2 notes into a close one; a topic disappears when its last note goes.";
 var leadLine = (l) => l[0] === "answer" ? l : [l[0], l[1], { ...l[2], by: "lead" }];
@@ -14601,6 +15359,10 @@ async function latestReport($, t) {
   const read = (file) => $.fs.read(path(file)).then((x) => String(x), () => null);
   const c = checkerReportOf(t, r.try);
   return { ...r, text: await read(r.file), ...c ? { checker: { file: c.file, agent: c.agent, text: await read(c.file) } } : {} };
+}
+function chatArchivedTaskText(t, page) {
+  return `${t.id} is archived (read-only).
+${chatTaskText(t, undefined, Date.now(), page)}`;
 }
 function taskText(t, running, all = [], report, archivedDone = []) {
   const word = STATUS_WORD;
@@ -14683,6 +15445,7 @@ ${features.panel ? `  /${S.N.name} opens everything; /${S.N.name}-WORD does one 
   (approve, reject, diff), and mode and settings change how the board works.`}
 ${features.panel ? `  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, f searches the tasks, t / l / s / c switch views)
   /${S.N.name}-board               open the board panel (on Live), as /${S.N.name} does
+  /${S.N.name}-board html          write the board as one web page (${S.N.dir}/board.html) and open it
   /${S.N.name}-tasks               list the open tasks in the chat (what needs you, running, in review,
                        failed, to do), then the backlog and today's done and dropped counts
   /${S.N.name}-scout               open the panel on the scouts view and reload the scout files` : `  /${S.N.name}                     show the board
@@ -14948,10 +15711,11 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Keeping the board in order (triage): older tasks go first unless the owner says a task is urgent; bugs and safety fixes go before features. Use priority for urgency: lower runs first; every task starts at 0; give urgent work -1, -2…, later work 1, 2… (a whole number from -20 to 19; ties go to the older task). Use it, not only after. Chain tasks with after only when they really share files; tasks with different files should run side by side. Never leave a task waiting forever. When a new task shares files with an older task that is still waiting, the new one goes behind it (the new one gets after: the older one), not the other way round.
 - ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / priority, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged. Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
-- The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers to a task) and merges they approved don't send you a message: they come as "Meanwhile the owner:" lines: at the top of the next board update, or beside the owner's next message if that comes first. They need no reply; just take them into account. Only the owner setting up git, or allowing or refusing a task's files on the board, wakes you at once with a board update.
+- The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers to a task) and merges they approved don't send you a message: they come as "Meanwhile" lines (also quiet retries, reload restarts and plain merges): at the top of the next board update, or beside the owner's next message if that comes first. They need no reply; just take them into account. Only the owner setting up git, or allowing or refusing a task's files on the board, wakes you at once with a board update.
 ${popup() ? `- Ask every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") with ${popup()} (2 to 4 short options). ${S.N.name} puts each such question on the board by itself as a Q-n, so don't also add a ${S.N.name} question for it. Whichever the owner answers first closes the other: a board answer comes back as the pop-up's answer, and a pop-up answer closes the Q-n (the tool result says so). If the owner closes the pop-up without answering, the Q-n stays on the board, and a later board answer wakes you with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it." (already closed: act on it and don't ask again). Only for a question with 5 or 6 options, first add it with ${S.N.name} question (action add), then ask it with ${popup()} with the same question text and the first 3 options plus "the rest on the board": the pop-up is tied to that Q-n. Drop a question that no longer matters (${S.N.name} question action drop). A question about one task stays ${S.N.name} ask.
 - Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask in the chat with ${popup()}, with the same options (where a line here says numbered plain chat text, use ${popup()} with those options), with the question's header set to exactly the task id (T-5; an id only mentioned in the question text doesn't tie it). ${S.N.name} ties that pop-up to the task's own board question (no Q-n is added): whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into the task for you (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a note), and the tool result says what was done and what is left for you (e.g. a reject's reason: then ${S.N.name} reject yourself). ${popup()} takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board" (or the owner types one under Other); when the owner picks "the rest on the board", the board question stays open and a board update brings their answer. Don't stack two questions under the same numbers: ask one at a time.` : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "${answerTail()}". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
-- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "${answerTail()}". Don't stack two questions under the same numbers: ask one at a time.`}
+- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "${answerTail()}". Don't stack two questions under the same numbers: ask one at a time.`}${S.chat ? `
+- When the owner asks "status", "tasks", "what's running" or "show T-5" in plain words, answer with ${S.N.name} board view status, view tasks, or task T-5, and post that text to the chat. When the owner says "more" or "more tasks" (or the text ended with "say 'more …'"), call the same view (or task) again with page 2, then 3, and so on, and post that. Page again only on "say 'more …'": a filtered list's "+N more match: narrow the search" can't be paged. To show the board as a picture, make it with ${S.N.name} board view html and send the file it names with the chat's reply tool (Telegram's reply takes files).` : ""}
 - The board has one mode (${S.N.name} settings mode): "paused" stops every worker and scout and starts nothing new, "review" (shown to the owner as "approve merge") runs work but every finished task that passes waits for the owner, "auto" (shown as "auto merge"; the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - In mode "review", ask the owner before every ${S.N.name} add, whatever the task comes from (the owner's words, a scout finding, a worker's report, your own idea): say in one or two lines what the task would be, and add it only after a yes. In mode "auto" you add tasks as usual. Plain answers, notes (add_details) and board actions (approve, pause, settings) need no asking.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
@@ -14988,7 +15752,7 @@ Talk like a team lead about the board. News first: the first line says what happ
 - Board update: one line per task, "<mark> T-n  <what happened>   <what it means, ≤ 8 words>". Marks: ✓ merged, ✗ failed, ↺ sent back / retrying, ▶ started, ⌕ checker, ◐ needs your review. Then, only if something needs the owner, one line saying what. E.g.
     ✓ T-743  merged (b089022)    a reopen keeps the same try
     ▶ T-745  started             catch up with main before each try
-- Routine update with no news (a retry on its own, nothing to do): one short line at most, e.g. "▶ T-751 retrying (2/4)." Don't restate the task.
+- Quiet lines (own retries, reload restarts, plain merges) sit under "Meanwhile" and need no message to the owner.
 - Out of work (last task merged, nothing to do, running or waiting) with a backlog: name 2-3 backlog items to move to todo (bugs and safety first), so the owner can pick.
 - An update that only says an agent is starting ends with "No reply needed; end the turn without a message.": send no message at all.
 - New task: "Added T-n  <title in ≤ 10 words>", then one line for what waits on what, if anything.
@@ -14999,8 +15763,8 @@ var KIND_PARAM = () => ({ type: "string", description: `The task type: ${[...new
 var TOOLS = () => [
   {
     name: "board",
-    description: `Show the ${S.N.name} task board. With nothing: the open tasks and the backlog in full, done and dropped ones only as counts. With status and/or search: only the tasks that match (search takes filter words like last:5, top:3, since:2d, type:bug, waits-on:T-3, blocks:T-3, stuck); limit / sort keep the newest or next-to-run ones. With task: that one task in full (also an archived one), with its latest worker report and the files of older tries' reports.`,
-    inputSchema: { type: "object", properties: { task: { type: "string", description: "A task id, e.g. T-12, to see in full with its latest report." }, status: { type: "array", items: { type: "string", enum: [...BOARD_STATUSES, "open"] }, description: 'Only tasks with one of these statuses; "open" = everything not done, dropped or backlog. E.g. ["done"] to see the done tasks.' }, search: { type: "string", description: `Words; only tasks matching every word (id, title, details, role, status, origin), the same way as the board panel's search. Filter words too: last:N (the N changed most recently, newest first), top:N (the next N to run), since:30m / 2h / 2d / 2026-11-18 (changed since), status:done (or open), type:bug, role:tester, waits-on:T-3 (tasks waiting on T-3, directly or through a chain), blocks:T-3 (the not-done tasks T-3 still waits for), stuck (todo tasks that can't start: something they wait for is failed, paused, waiting, dropped or missing). E.g. "last:5 status:done" or "waits-on:T-3 status:todo".` }, limit: { type: "number", description: 'Show at most this many (the same as last:N, or top:N with sort "order").' }, sort: { type: "string", enum: ["newest", "order"], description: "newest: most recently changed first (as last:); order: what runs next first (as top:)." } } }
+    description: `Show the ${S.N.name} task board. With nothing: the open tasks and the backlog in full, done and dropped ones only as counts. With status and/or search: only the tasks that match (search takes filter words like last:5, top:3, since:2d, type:bug, waits-on:T-3, blocks:T-3, stuck); limit / sort keep the newest or next-to-run ones. With task: that one task in full (also an archived one), with its latest worker report and the files of older tries' reports. With view "tasks" or "status": exactly the text of /${S.N.name}-tasks or /${S.N.name}-status (in chat mode the short chat shape), to post to a chat.`,
+    inputSchema: { type: "object", properties: { view: { type: "string", enum: ["tasks", "status", "html"], description: "tasks: the open tasks list (as /symcc-tasks); status: the Live status (as /symcc-status). Chat shape in chat mode. html: writes the board as one page file and answers its path, to send as a file." }, page: { type: "number", description: 'Chat mode only: 2, 3, ... = the next part of a cut chat text (with view, or with task). Use it when the owner says "more".' }, task: { type: "string", description: "A task id, e.g. T-12, to see in full with its latest report. In chat mode: the short chat text of /symcc-task T-12 instead (page 1; page 2, 3, ... for the next parts)." }, status: { type: "array", items: { type: "string", enum: [...BOARD_STATUSES, "open"] }, description: 'Only tasks with one of these statuses; "open" = everything not done, dropped or backlog. E.g. ["done"] to see the done tasks.' }, search: { type: "string", description: `Words; only tasks matching every word (id, title, details, role, status, origin), the same way as the board panel's search. Filter words too: last:N (the N changed most recently, newest first), top:N (the next N to run), since:30m / 2h / 2d / 2026-11-18 (changed since), status:done (or open), type:bug, role:tester, waits-on:T-3 (tasks waiting on T-3, directly or through a chain), blocks:T-3 (the not-done tasks T-3 still waits for), stuck (todo tasks that can't start: something they wait for is failed, paused, waiting, dropped or missing). E.g. "last:5 status:done" or "waits-on:T-3 status:todo".` }, limit: { type: "number", description: 'Show at most this many (the same as last:N, or top:N with sort "order").' }, sort: { type: "string", enum: ["newest", "order"], description: "newest: most recently changed first (as last:); order: what runs next first (as top:)." } } }
   },
   {
     name: "add",
@@ -15054,7 +15818,7 @@ var TOOLS = () => [
   },
   {
     name: "settings",
-    description: "Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line, under the same category headings as the Settings view (Work, Checks before merging, Workers, Scouts, Board and alerts; notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), docs_test_commands (shell commands, same shape and limit as test_commands, default none: run instead of test_commands when a task of a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test), test_minutes (how many minutes each test command may run before merging, a whole number 1-120, default 10; a test command past it fails like a failing test: a new worker try starts with the output, using one of the auto_retries; anything else is refused), max_parallel (workers at once), max_minutes (a worker running longer makes symcc ask the owner for more time: +N min or Stop it), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify (\"voice\", \"sound 1\", \"sound 2\", \"sound 3\" or \"off\": what plays when a task is merged or a question from a worker waits for the owner: \"voice\" says \"symcc: T-3 done\" / \"symcc: T-5 needs you\" out loud (the project name first), \"sound N\" a short chime from sound set N, each set with its own \"done\" and \"needs you\" chime so the owner can tell which project chimed (on macOS 1: Glass / Ping, 2: Hero / Pop, 3: Submarine / Funk); only the session driving the board plays; default voice where this machine can speak, else the sound set picked from the project folder name, else off; a choice this machine cannot play is refused with the reason; there is no sound_set setting), scout_findings (\"auto\", the default: you decide, and a scout finding you add goes to todo and runs; \"backlog\": every task added with origin_by scout goes to the backlog, whatever you ask, and starts only when the owner moves it to todo), tests_with_changes (\"ask\", the default: a change task whose commit edits code but no test file still merges and you are told \"T-3 changed code but no test\"; \"review\": such a task waits for the owner to review it instead of merging; \"off\": not checked; docs-only changes are never flagged), checker (\"off\", the default, or \"on\": after the prep step and before a change task joins the merge queue (its tests run once in the queue, after the checker), a fresh checker agent tries to break it; OK goes on as usual, a list of problems sends the task back to its worker with the report, counting as one of its auto_retries, and fails it once those are used up (no test run for that try); investigations and docs-only changes skip it), mode (\"paused\": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; \"review\": work runs and every finished task that passes waits for the owner to approve or reject it; \"auto\", the default: work runs and finished work that passes merges on its own; going from paused to review or auto starts work again, and going from review to auto does not merge tasks already in review).",
+    description: "Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line, under the same category headings as the Settings view (Work, Checks before merging, Workers, Scouts, Board and alerts; notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), docs_test_commands (shell commands, same shape and limit as test_commands, default none: run instead of test_commands when a task of a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test), test_minutes (how many minutes each test command may run before merging, a whole number 1-120, default 10; a test command past it fails like a failing test: a new worker try starts with the output, using one of the auto_retries; anything else is refused), max_parallel (workers at once), max_minutes (a worker running longer makes symcc ask the owner for more time: +N min or Stop it), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify (\"voice\", \"sound 1\", \"sound 2\", \"sound 3\" or \"off\": what plays when a task is merged or a question from a worker waits for the owner: \"voice\" says \"symcc: T-3 done\" / \"symcc: T-5 needs you\" out loud (the project name first), \"sound N\" a short chime from sound set N, each set with its own \"done\" and \"needs you\" chime so the owner can tell which project chimed (on macOS 1: Glass / Ping, 2: Hero / Pop, 3: Submarine / Funk); only the session driving the board plays; default voice where this machine can speak, else the sound set picked from the project folder name, else off; a choice this machine cannot play is refused with the reason; there is no sound_set setting), scout_findings (\"auto\", the default: you decide, and a scout finding you add goes to todo and runs; \"backlog\": every task added with origin_by scout goes to the backlog, whatever you ask, and starts only when the owner moves it to todo), tests_with_changes (\"ask\", the default: a change task whose commit edits code but no test file still merges and you are told \"T-3 changed code but no test\"; \"review\": such a task waits for the owner to review it instead of merging; \"off\": not checked; docs-only changes are never flagged), checker (\"off\", the default, or \"on\": after the prep step and before a change task joins the merge queue (its tests run once in the queue, after the checker), a fresh checker agent tries to break it; OK goes on as usual, a list of problems sends the task back to its worker with the report, using one of its auto_retries (no test run for that try); after 2 send-backs the task waits for the owner with Merge as is / Keep fixing / Drop instead of a new try; investigations and docs-only changes skip it), mode (\"paused\": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; \"review\": work runs and every finished task that passes waits for the owner to approve or reject it; \"auto\", the default: work runs and finished work that passes merges on its own; going from paused to review or auto starts work again, and going from review to auto does not merge tasks already in review).",
     inputSchema: { type: "object", properties: { test_commands: { type: "array", items: { type: "string" } }, docs_test_commands: { type: "array", items: { type: "string" }, description: "Run instead of test_commands when a prose-only role (code: false) changed only prose; [] for none (such a change then runs no test)." }, test_minutes: { type: "number", description: "Minutes each test command may run before merging: a whole number 1-120 (default 10)." }, max_parallel: { type: "number" }, max_minutes: { type: "number" }, auto_retries: { type: "number" }, archive_days: { type: "number", description: "Done and dropped tasks older than this many days move to archive.json; 0 = never." }, open_on_start: { type: "boolean" }, notify: { type: "string", enum: ["voice", "sound 1", "sound 2", "sound 3", "off"] }, scout_findings: { type: "string", enum: ["auto", "backlog"], description: "auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog." }, tests_with_changes: { type: "string", enum: ["off", "ask", "review"], description: "A change task that edits code but no test file: ask (default) merges and tells you; review waits for the owner; off does nothing." }, checker: { type: "string", enum: ["off", "on"], description: "on: a fresh checker tries to break each change before it joins the merge queue, where its tests run; off (default): no checker." }, mode: { type: "string", enum: ["paused", "review", "auto"] } } }
   },
   {
@@ -15150,6 +15914,21 @@ async function defChanged($, a, said) {
     await publish($, await load($));
   return said;
 }
+async function viewText($, b, view, page = 1) {
+  if (view === "tasks")
+    return S.chat ? chatTasksText(b, Date.now(), undefined, "", page) : tasksListText(b, Date.now(), S.N.name);
+  const sv = await statusView($, b);
+  const notes = (await orgMemNow($)).notes;
+  return S.chat ? chatStatusText(sv, notes, Date.now(), undefined, page) : liveStatusText(sv, notes, Date.now(), S.N.name);
+}
+async function boardHtmlText($, b, open = false) {
+  const out = path(`${S.N.dir}/board.html`);
+  const project = S.root.split(/[\\/]/).filter(Boolean).pop() ?? S.root;
+  await $.fs.write(out, boardHtml(b, project, Date.now()));
+  const opened = open ? await openInBrowser($, out) : false;
+  return `${out}
+The board as one page: Needs you (questions with their choices, reviews, failed), Running, To do, Done today, and the counts.${open ? opened ? " (opened in your browser)" : " (open it in your browser)" : ""}`;
+}
 async function runTool($, name, a) {
   const id = str(a.task) ?? "";
   if (id && TASK_TOOLS.includes(name) && !find(await load($), id)) {
@@ -15168,12 +15947,21 @@ async function runTool($, name, a) {
       return questionTool($, a);
     case "board": {
       const b = await load($);
+      const page = typeof a.page === "number" && a.page >= 1 ? Math.floor(a.page) : 1;
+      if (a.view === "tasks" || a.view === "status")
+        return viewText($, b, a.view, page);
+      if (a.view === "html")
+        return boardHtmlText($, b);
+      if (a.view !== undefined && a.view !== "")
+        throw new Error('view must be "tasks", "status" or "html"');
       if (!id)
         return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { status: parseStatusFilter(a.status), search: str(a.search), limit: typeof a.limit === "number" ? a.limit : undefined, sort: a.sort === "order" || a.sort === "newest" ? a.sort : undefined, kinds: [...BUILT_IN_KINDS, ...kindNames(S.kinds)], driving: S.driving }, S.version);
       const t = find(b, id) ?? await findArchived($, id);
       if (!t)
         throw new Error(`${id} is not on the board or in the archive`);
       const archived = !find(b, id);
+      if (S.chat)
+        return archived ? chatArchivedTaskText(t, page) : chatTaskText(t, await latestReport($, t), Date.now(), page);
       return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)
 ` : ""}${taskText(t, [...workers.values()].some((w) => w.task === t.id), b.tasks, await latestReport($, t), b.archived_done)}`;
     }
@@ -15270,9 +16058,9 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
       const scratchGone = switching && !isInvestigation(kind) ? () => resetScratch($, t.id) : async () => {
         return;
       };
-      const note = str(a.add_details)?.trim();
-      const noted = note ? addDetailsText(t.details, note, dayOf(Date.now(), localOffset())) : undefined;
-      const noteHistory = (x) => note ? { history: withHistory((find(x, t.id) ?? t).history, now(), ["note", noteAddedLine(note)]) } : {};
+      const note2 = str(a.add_details)?.trim();
+      const noted = note2 ? addDetailsText(t.details, note2, dayOf(Date.now(), localOffset())) : undefined;
+      const noteHistory = (x) => note2 ? { history: withHistory((find(x, t.id) ?? t).history, now(), ["note", noteAddedLine(note2)]) } : {};
       const gone = parseGoneBranch(t.status === "waiting" ? t.ask?.text ?? null : null);
       if (!into && gone && saysMergeInstead(str(a.answer) ?? "", gone.instead))
         into = gone.instead;
@@ -15323,7 +16111,7 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
       if (t.status === "backlog") {
         await scratchGone();
         await change($, (x) => patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir));
-        return `${t.id} ${note ? "note added" : "updated"} (still in the backlog)`;
+        return `${t.id} ${note2 ? "note added" : "updated"} (still in the backlog)`;
       }
       const flagOnly = typeof a.needs_review === "boolean" && ["title", "details", "add_details", "files", "after", "priority", "role", "kind", "answer", "merge_into"].every((k) => a[k] === undefined);
       if (flagOnly) {
@@ -15353,13 +16141,13 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
 Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answer}`;
       await change($, (x) => {
         const cur = find(x, t.id) ?? t;
-        const lines = leadLines(changeLines(t, patch, wasDoing && !fresh, answer, note));
+        const lines = leadLines(changeLines(t, patch, wasDoing && !fresh, answer, note2));
         const end2 = fresh ? { attempts: Math.max(0, cur.attempts - 1), runs: withoutOpenRun(cur.runs) } : wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {};
         return patchTask(x, t.id, { ...patch, ...end2, ...lines.length ? { history: withHistory(cur.history, now(), ...lines) } : {} }, now(), S.N.dir);
       });
       pump($);
-      const how = fresh ? ` (its try had just started: it starts again${note ? " with the note" : ""} on the same try number)` : wasDoing ? ` (restarting${note ? " with the note" : ""})` : "";
-      return `${t.id} ${note ? "note added" : "updated"}${how}${t.status === "paused" ? ` (still paused; ${S.N.name} resume ${t.id} continues it)` : ""}${into ? `; it now merges into ${into}` : ""}`;
+      const how = fresh ? ` (its try had just started: it starts again${note2 ? " with the note" : ""} on the same try number)` : wasDoing ? ` (restarting${note2 ? " with the note" : ""})` : "";
+      return `${t.id} ${note2 ? "note added" : "updated"}${how}${t.status === "paused" ? ` (still paused; ${S.N.name} resume ${t.id} continues it)` : ""}${into ? `; it now merges into ${into}` : ""}`;
     }
     case "retry": {
       const t = await taskOrThrow($, id);
@@ -15905,7 +16693,10 @@ async function waitEnded(host, ids, ms2) {
     await host.clock.sleep(500);
   }
 }
-async function workerFinished(host, agentId, answer, end2 = { reason: "answer" }, tokens, cost) {
+function workerFinished(host, agentId, answer, end2 = { reason: "answer" }, tokens, cost) {
+  return timed(host, "workerFinished", () => workerFinishedNow(host, agentId, answer, end2, tokens, cost));
+}
+async function workerFinishedNow(host, agentId, answer, end2, tokens, cost) {
   const w = workers.get(agentId);
   if (!w)
     return;
@@ -16090,8 +16881,8 @@ function ranOverTry(t, min, retries) {
   const { live: _l, test_output: _o, ...rest } = t;
   const tries = t.test_tries ?? 0;
   const retry = onTestFail(t, retries) === "retry";
-  const note = retry ? `${ranOverNote(min)}; a new try will look at it (${tries + 1} of ${retries})` : `${ranOverNote(min)}; nothing was merged (after ${tries} automatic ${tries === 1 ? "retry" : "retries"})`;
-  return { ...rest, status: retry ? "todo" : "failed", note, ...retry ? { test_tries: tries + 1 } : {}, updated_at: now(), history: withHistory(t.history, now(), tryEntry(t, "failed", note, { reason: "timeout" })), ...t.status === "doing" ? endedBy(t, now(), "stopped", ranOverNote(min)) : {} };
+  const note2 = retry ? `${ranOverNote(min)}; a new try will look at it (${tries + 1} of ${retries})` : `${ranOverNote(min)}; nothing was merged (after ${tries} automatic ${tries === 1 ? "retry" : "retries"})`;
+  return { ...rest, status: retry ? "todo" : "failed", note: note2, ...retry ? { test_tries: tries + 1 } : {}, updated_at: now(), history: withHistory(t.history, now(), tryEntry(t, "failed", note2, { reason: "timeout" })), ...t.status === "doing" ? endedBy(t, now(), "stopped", ranOverNote(min)) : {} };
 }
 function ranOverText(t, min, retries) {
   if (t.status === "failed")
@@ -16139,7 +16930,10 @@ function everyMs(host, ms2, f) {
     return null;
   }
 }
-async function markFinishing(host, id, tryNo2, on = true) {
+function markFinishing(host, id, tryNo2, on = true) {
+  return timed(host, "markFinishing", () => markFinishingNow(host, id, tryNo2, on));
+}
+async function markFinishingNow(host, id, tryNo2, on) {
   if (!on && !hasMark(find(await load(host), id)))
     return;
   await change(host, (x) => {
@@ -16259,12 +17053,12 @@ async function warnEndedEarly(host, t, answer) {
   const line = endedEarlyLine(answer);
   if (!line)
     return;
-  const note = endedEarlyNote(t.id, line);
+  const note2 = endedEarlyNote(t.id, line);
   await change(host, (x) => {
     const cur = find(x, t.id);
-    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { history: withHistory(cur.history, now(), tryEntry(t, "step", `warning: ${note}`)) }, now()) : x;
+    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { history: withHistory(cur.history, now(), tryEntry(t, "step", `warning: ${note2}`)) }, now()) : x;
   });
-  tellLead(host, note);
+  tellLead(host, note2);
 }
 async function writeIfSame(host, t, patch) {
   return change(host, (x) => {
@@ -16494,14 +17288,14 @@ async function checkAgain(host, t0, moved = false) {
       return;
     }
     const dir2 = worktreeDir(id);
-    const note = "restarted: its checker stopped when the plugin reloaded, and its folder couldn't be read to start it again";
-    if (await folderGone(host, t0, note, `${id} "${t2.title}": its checker stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next try goes on from the same branch. This is not counted as a retry.`))
+    const note2 = "restarted: its checker stopped when the plugin reloaded, and its folder couldn't be read to start it again";
+    if (await folderGone(host, t0, note2, `${id} "${t2.title}": its checker stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next try goes on from the same branch. This is not counted as a retry.`))
       return;
     await markFinishing(host, id, tryNo2).catch(() => {
       return;
     });
     if (!moved && !checkerNotReady.has(id) && !adoptedCheckers.has(id))
-      tellLead(host, `${id} "${t2.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`);
+      noteForLead(`${id} "${t2.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`);
     go = { b: b2, t: t2, dir: dir2 };
   } finally {
     if (!go)
@@ -16510,16 +17304,16 @@ async function checkAgain(host, t0, moved = false) {
   const { b, t, dir } = go;
   await finishUnderLimit(host, id, tryNo2, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, true, gaveUp, over, limit, moved));
 }
-async function folderGone(host, t0, note, tell) {
+async function folderGone(host, t0, note2, tell) {
   const head = await git(host, ["rev-parse", "-q", "--verify", "HEAD"], worktreeDir(t0.id)).catch(() => null);
   if (head && head.exitCode === 0 && head.stdout.trim())
     return false;
   const back = await change(host, (x) => {
     const cur = find(x, t0.id);
-    return cur && sameTry(cur, t0) ? [putTask(x, backToTodo(cur, note, now())), true] : [x, false];
+    return cur && sameTry(cur, t0) ? [putTask(x, backToTodo(cur, note2, now())), true] : [x, false];
   });
   if (back)
-    tellLead(host, tell);
+    noteForLead(tell);
   return true;
 }
 async function checkerStepAgain(host, t, b, dir, fromChecker, gaveUp, release, limit, moved = false) {
@@ -16546,14 +17340,14 @@ async function mergeAgain(host, t0) {
     if (!t2 || !sameTry(t2, t0))
       return;
     const dir2 = worktreeDir(id);
-    const note = "restarted: its test and merge stopped before the end (the plugin reloaded), and its folder couldn't be read to test it again";
-    if (await folderGone(host, t0, note, `${id} "${t2.title}": its test and merge stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next worker goes on from the same folder and branch.`))
+    const note2 = "restarted: its test and merge stopped before the end (the plugin reloaded), and its folder couldn't be read to test it again";
+    if (await folderGone(host, t0, note2, `${id} "${t2.title}": its test and merge stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next worker goes on from the same folder and branch.`))
       return;
     await noteAgain(host, t2, RELOAD_AGAIN);
     await markFinishing(host, id, tryNo2).catch(() => {
       return;
     });
-    tellLead(host, `${id} "${t2.title}": its test and merge stopped when the plugin reloaded, so I put the same branch back in the merge line to test and merge it again. This is not a new try; nothing to do.`);
+    noteForLead(`${id} "${t2.title}": its test and merge stopped when the plugin reloaded, so I put the same branch back in the merge line to test and merge it again. This is not a new try; nothing to do.`);
     go = { b: b2, t: t2, dir: dir2 };
   } finally {
     if (!go)
@@ -16680,7 +17474,7 @@ async function doneAfterMerge(host, t, sha) {
 }
 async function holdForFiles(host, t, b, r, line, worktree, agentId, quiet = false) {
   const files = r.blocked;
-  const note = waitFilesNote(intoOf(t), files);
+  const note2 = waitFilesNote(intoOf(t), files);
   const res = await change(host, (x) => {
     const cur = find(x, t.id);
     if (!cur)
@@ -16689,7 +17483,7 @@ async function holdForFiles(host, t, b, r, line, worktree, agentId, quiet = fals
       return [x, cur];
     const first = !waitsForFiles(cur);
     const status = cur.status === "review" ? "review" : "waiting";
-    const y = patchTask(x, t.id, { status, live: { merge_wait: files }, note, ...first ? { history: withHistory(cur.history, now(), line) } : {}, ...endedBy(cur, now(), "finished", "waiting for your files") }, now());
+    const y = patchTask(x, t.id, { status, live: { merge_wait: files }, note: note2, ...first ? { history: withHistory(cur.history, now(), line) } : {}, ...endedBy(cur, now(), "finished", "waiting for your files") }, now());
     return [y, first];
   });
   if (res === "gone")
@@ -16698,7 +17492,7 @@ async function holdForFiles(host, t, b, r, line, worktree, agentId, quiet = fals
     return changedMeanwhile(host, t, b, r, line, worktree, agentId);
   if (!res)
     return;
-  const text = `${t.id} "${t.title}" passed its checks, but its merge into ${intoOf(t)} waits for the owner's files there (${note.replace(/^waiting for your files on \S+: /, "")}). It merges on its own at the next regular check once they are out of the way, with no new worker; ${S.N.name} retry ${t.id} merges it at once. Tell the owner.`;
+  const text = `${t.id} "${t.title}" passed its checks, but its merge into ${intoOf(t)} waits for the owner's files there (${note2.replace(/^waiting for your files on \S+: /, "")}). It merges on its own at the next regular check once they are out of the way, with no new worker; ${S.N.name} retry ${t.id} merges it at once. Tell the owner.`;
   if (quiet)
     noteForLead(text);
   else
@@ -16781,17 +17575,17 @@ async function settle(host, t, b, r, summary, worktree, agentId, approved = fals
   const retries = b.auto_retries ?? DEFAULT_AUTO_RETRIES;
   const tries = t.test_tries ?? 0;
   if (r.conflict && onTestFail(t, retries) === "retry") {
-    const note = `conflicts with the latest ${intoOf(t)}; a new try will merge it in (${tries + 1} of ${retries})`;
-    if (!await write((cur) => ({ status: "todo", note, test_tries: tries + 1, test_output: undefined, merge_main: true, history: withHistory(cur.history, now(), line) })))
+    const note2 = `conflicts with the latest ${intoOf(t)}; a new try will merge it in (${tries + 1} of ${retries})`;
+    if (!await write((cur) => ({ status: "todo", note: note2, test_tries: tries + 1, test_output: undefined, merge_main: true, history: withHistory(cur.history, now(), line) })))
       return;
-    tellLead(host, `${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; retrying on its own, the new try merges it in first (${tries + 1} of ${retries}). Nothing to do.`);
+    noteForLead(`${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; retrying on its own, the new try merges it in first (${tries + 1} of ${retries}). Nothing to do.`);
     return;
   }
   if (r.testOutput !== undefined && onTestFail(t, retries) === "retry") {
-    const note = r.timedOut !== undefined ? timedOutRetryNote(r.timedOut, tries + 1, retries) : `${r.checker ? "the checker found problems" : "tests failed"}; a new try will fix them (${tries + 1} of ${retries})`;
-    if (!await write((cur) => ({ status: "todo", note, test_tries: tries + 1, test_output: r.testOutput, merge_main: undefined, history: withHistory(cur.history, now(), line) })))
+    const note2 = r.timedOut !== undefined ? timedOutRetryNote(r.timedOut, tries + 1, retries) : `${r.checker ? "the checker found problems" : "tests failed"}; a new try will fix them (${tries + 1} of ${retries})`;
+    if (!await write((cur) => ({ status: "todo", note: note2, test_tries: tries + 1, test_output: r.testOutput, merge_main: undefined, history: withHistory(cur.history, now(), line) })))
       return;
-    tellLead(host, `${t.id} "${t.title}" ${r.checker ? "was sent back by the checker" : r.timedOut !== undefined ? `ran out of time in its tests (${r.timedOut} min)` : "failed its tests"}; retrying on its own (${tries + 1} of ${retries}). Nothing to do.`);
+    noteForLead(`${t.id} "${t.title}" ${r.checker ? "was sent back by the checker" : r.timedOut !== undefined ? `ran out of time in its tests (${r.timedOut} min)` : "failed its tests"}; retrying on its own (${tries + 1} of ${retries}). Nothing to do.`);
     return;
   }
   const detail = r.conflict ? `conflicts with the latest ${intoOf(t)} (after ${tries} automatic ${tries === 1 ? "retry" : "retries"})` : r.detail;
@@ -16830,7 +17624,7 @@ The full report is on the task page.`);
   }
   const doneSaid = r.ok ? find(await load(host).catch(() => b), t.id)?.done : undefined;
   const doneNote = doneSaid ? ` Done: ${doneSaid}` : "";
-  if (r.ok && approved)
+  if (r.ok && (approved || !r.untested && !r.secrets?.length))
     return noteForLead(`✓ ${t.id} "${t.title}" ${r.detail}.${doneNote}`);
   tellLead(host, r.ok ? `✓ ${t.id} "${t.title}" ${r.detail}.${doneNote}${r.untested ? ` ${r.untested}: add a test task, or ask the owner.` : ""}` : `✗ ${t.id} "${t.title}" was not merged: ${detail}${gaveUp}`);
 }
@@ -17149,7 +17943,7 @@ async function sendBackIdle(host, agents2) {
   for (const id of merged.keys())
     tellLead(host, `✓ ${id} is done: its work was already merged (${shortSha(merged.get(id))}) when the plugin reloaded.`);
   if (back.length)
-    tellLead(host, `${back.map((t) => `${t.id} "${t.title}"`).join(", ")}: no worker was working on ${back.length > 1 ? "them" : "it"} any more (${back.length > 1 ? "their workers" : "its worker"} stopped or ended), so ${back.length > 1 ? "they go" : "it goes"} back to todo; the next worker goes on from the same folder and branch.`);
+    noteForLead(`${back.map((t) => `${t.id} "${t.title}"`).join(", ")}: no worker was working on ${back.length > 1 ? "them" : "it"} any more (${back.length > 1 ? "their workers" : "its worker"} stopped or ended), so ${back.length > 1 ? "they go" : "it goes"} back to todo; the next worker goes on from the same folder and branch.`);
 }
 async function stoppedHandBack(host, agentId, tokens, cost) {
   if (!S.driving || !stopped.has(agentId))
@@ -17864,6 +18658,24 @@ function branchFacts(host, b, into, nowMs = Date.now()) {
 var TASK_BRANCH_MERGED = 5;
 var taskCache = new Map;
 var taskRunning = new Map;
+var mainTips = new Map;
+var tips = { at: -Infinity, running: undefined };
+function readTips(host, intos, nowMs) {
+  if (tips.running)
+    return tips.running;
+  if (!intos.length || nowMs - tips.at < BRANCH_CACHE_MS)
+    return;
+  tips.at = nowMs;
+  tips.running = Promise.all(intos.map(async (into) => {
+    const r = safe(into) ? await git(host, ["rev-parse", `refs/heads/${into}`], S.root, GIT_MS).catch(() => null) : null;
+    mainTips.set(into, r && r.exitCode === 0 ? String(r.stdout ?? "").trim() : "");
+  })).then(() => {
+    return;
+  }).finally(() => {
+    tips.running = undefined;
+  });
+  return tips.running;
+}
 var logFormat = () => {
   const k = trailerPrefix(S.N.name);
   return `--format=%H%x09%P%x09%ct%x09%(trailers:key=${k}-Task,valueonly,separator=%x2C)%x09%(trailers:key=${k}-Try,valueonly,separator=%x2C)`;
@@ -17878,10 +18690,10 @@ function logLines(stdout) {
 var MAIN_AFTER_MERGE = 3;
 var shaTimes = (stdout) => stdout.split(`
 `).map((l) => l.trim().split(/\s+/)).filter((p) => /^[0-9a-f]{7,64}$/.test(p[0] ?? "") && /^\d+$/.test(p[1] ?? "")).map((p) => ({ sha: p[0], at: Number(p[1]) * 1000 }));
-async function readTaskBranch(host, t, into, nowMs) {
+async function readTaskBranch(host, t, into, nowMs, status) {
   if (!safe(into))
     return null;
-  const run2 = (args) => git(host, args, S.root, GIT_MS).then((r) => r.exitCode === 0 ? String(r.stdout ?? "") : null, () => null);
+  const run2 = (args) => git(host, args, S.root, GIT_MS).then((r) => r.exitCode === 0 ? String(r.stdout ?? "") : (status && (status.failed = true), null), () => (status && (status.failed = true), null));
   const branch = typeof t.branch === "string" ? t.branch : "";
   const merged = t.status === "done" && isSha(t.merged) ? t.merged : "";
   let commits2 = [];
@@ -17965,7 +18777,8 @@ var hasTaskBranch = (t) => t.status === "done" ? isSha(t.merged) : typeof t.bran
 function taskBranchFacts(host, t, into, nowMs = Date.now(), onRead) {
   if (S.gitState !== "ok" || !S.root || !hasTaskBranch(t))
     return { facts: undefined };
-  const key = [into, t.status, t.branch ?? "", t.merged ?? "", t.attempts].join(" ");
+  const finished = isFinished(t);
+  const key = [into, t.status, t.branch ?? "", t.merged ?? "", t.attempts, finished ? mainTips.get(into) ?? "" : ""].join(" ");
   const got = taskCache.get(t.id);
   const facts = got?.key === key ? got.facts ?? undefined : undefined;
   const waiting2 = taskRunning.get(t.id);
@@ -17974,12 +18787,13 @@ function taskBranchFacts(host, t, into, nowMs = Date.now(), onRead) {
       waiting2.push(onRead);
     return { facts };
   }
-  if (got?.key === key && nowMs - got.readAt < BRANCH_CACHE_MS)
+  if (got?.key === key && (finished && !got.failed || nowMs - got.readAt < BRANCH_CACHE_MS))
     return { facts };
   const waiters = onRead ? [onRead] : [];
   taskRunning.set(t.id, waiters);
-  const done = readTaskBranch(host, t, into, nowMs).catch(() => null).then((read) => {
-    taskCache.set(t.id, { facts: read, key, readAt: nowMs });
+  const status = { failed: false };
+  const done = readTaskBranch(host, t, into, nowMs, status).catch(() => (status.failed = true, null)).then((read) => {
+    taskCache.set(t.id, { facts: read, key, readAt: nowMs, ...read === null && status.failed ? { failed: true } : {} });
     taskRunning.delete(t.id);
     for (const w of waiters) {
       try {
@@ -17996,31 +18810,56 @@ function viewBranchTasks(tasks) {
 }
 function taskBranchesView(host, b, nowMs = Date.now()) {
   const facts = {};
-  const done = [];
-  for (const t of viewBranchTasks(b.tasks)) {
-    const into = intoOf(t);
-    const put = () => {
-      if (S.gitState !== "ok")
-        return;
-      const f = taskCache.get(t.id)?.facts;
-      updateView(host, (v) => {
-        const all = { ...v.task_branches ?? {} };
+  const list2 = viewBranchTasks(b.tasks);
+  const pending2 = [];
+  const read = (t) => {
+    let end2 = () => {};
+    const ended = new Promise((r) => end2 = r);
+    const got = taskBranchFacts(host, t, intoOf(t), nowMs, end2);
+    if (taskRunning.has(t.id))
+      pending2.push(ended);
+    return got;
+  };
+  const finished = list2.filter((t) => isFinished(t));
+  for (const t of list2) {
+    if (isFinished(t)) {
+      const f = S.gitState === "ok" ? taskCache.get(t.id)?.facts : undefined;
+      if (f)
+        facts[t.id] = f;
+    } else {
+      const got = read(t);
+      if (got.facts)
+        facts[t.id] = got.facts;
+    }
+  }
+  const tipsRead = S.gitState === "ok" && S.root ? readTips(host, [...new Set(finished.map((t) => intoOf(t)))], nowMs) : undefined;
+  const done = (async () => {
+    if (tipsRead)
+      await tipsRead;
+    for (const t of finished)
+      read(t);
+    if (!pending2.length)
+      return;
+    await Promise.all(pending2);
+    if (S.gitState !== "ok")
+      return;
+    await updateView(host, (v) => {
+      const all = { ...v.task_branches ?? {} };
+      for (const t of list2) {
+        const f = taskCache.get(t.id)?.facts;
         if (f)
           all[t.id] = f;
         else
           delete all[t.id];
-        return { ...v, task_branches: all };
-      }).catch(() => {
-        return;
-      });
-    };
-    const got = taskBranchFacts(host, t, into, nowMs, put);
-    if (got.facts)
-      facts[t.id] = got.facts;
-    if (got.done)
-      done.push(got.done);
-  }
-  return { facts, done };
+      }
+      return { ...v, task_branches: all };
+    }).catch(() => {
+      return;
+    });
+  })().catch(() => {
+    return;
+  });
+  return { facts, done: [done] };
 }
 
 // hooks/app/lead.ts
@@ -18064,7 +18903,10 @@ async function carryDriver(host, old) {
     });
   return moved;
 }
-async function claimLead(host, fresh = false) {
+function claimLead(host, fresh = false) {
+  return timed(host, "claimLead", () => claimLeadNow(host, fresh));
+}
+async function claimLeadNow(host, fresh) {
   await refreshMe(host);
   if (S.offHere || S.fresh) {
     S.driving = false;
@@ -18088,12 +18930,12 @@ async function claimLead(host, fresh = false) {
     if (orphans.length)
       host.ui.toast(S.N.toast(`stopped ${orphans.length} old worker${orphans.length > 1 ? "s" : ""} left behind`));
     const alive = await waitEnded(host, orphans, ORPHAN_WAIT_MS);
-    const note = move === "claim" ? HANDOVER_NOTE : move === "takeover" ? "restarted: the session driving the board stopped answering" : move === "keep" ? "restarted: the plugin reloaded and the old worker was gone" : `restarted after ${S.W.app} was reopened`;
+    const note2 = move === "claim" ? HANDOVER_NOTE : move === "takeover" ? "restarted: the session driving the board stopped answering" : move === "keep" ? "restarted: the plugin reloaded and the old worker was gone" : `restarted after ${S.W.app} was reopened`;
     if (await host.fs.exists(path(S.N.boardFile)))
       await change(host, (b) => {
         const keep = b.tasks.filter((t) => liveWorkersFor(t, alive.map(agentState), S.N.name).length > 0 || [...workers.values()].some((w) => w.task === t.id) || queuedWorkers.has(t.id)).map((t) => t.id);
         const unqueued = unclaimQueued(b, S.me, liveDriver(leadBefore, Date.now()), now(), keep);
-        return resetDoing(unqueued, S.me, leadBefore, Date.now(), note, now(), keep);
+        return resetDoing(unqueued, S.me, leadBefore, Date.now(), note2, now(), keep);
       });
     if (move === "takeover" && !fresh)
       host.ui.toast(S.N.toast("the session driving the board stopped answering; this session drives it now"));
@@ -18400,7 +19242,10 @@ async function readTodayTeam(host, scouts2, nowMs) {
     out.hours = hours;
   return out.lead === undefined && out.scouts === undefined && out.scout_ms === undefined && out.usd === undefined ? undefined : out;
 }
-async function publish(host, b) {
+function publish(host, b) {
+  return timed(host, "publish", () => publishView(host, b));
+}
+async function publishView(host, b) {
   S.boardMtime = S.readMtime;
   const working = [...workers.values()].map((w) => ({ task: w.task, since: w.since }));
   const branch = S.gitState === "ok" ? await homeBranch(host) : "";
@@ -18473,6 +19318,7 @@ function refreshStatus(host) {
 }
 
 // hooks/app/ask.ts
+var gitWrite = ($, command, who) => timedSync($, "gitWriteIn", () => gitWriteIn(command, who));
 function recordOnTry($, w, attempts, patch) {
   return change($, (b) => {
     const cur = find(b, w.task);
@@ -18645,22 +19491,22 @@ var stoppedTextFor = (agentId) => movedAgents.has(agentId) ? movedText2() : stop
 var unknownAgentText = () => `Refused: ${S.N.name} has no record of this agent (it is not the lead, nor a worker, scout or checker the board names now), so it may not edit files or run shell commands. Do nothing more; answer "stopped" and end.`;
 var stoppedText = () => `${S.N.name} stopped this agent. Do nothing more; answer "stopped" and end.`;
 async function checkerCheck($, touch, worktree) {
-  const git2 = "command" in touch ? gitWriteIn(touch.command) : undefined;
+  const git2 = "command" in touch ? gitWrite($, touch.command) : undefined;
   if (git2)
     return { text: gitWriteText(git2), guard: "git", what: git2 };
   return outsideOwnFolder($, touch, worktree);
 }
 async function workerGitWrite($, w, command, cwd) {
-  if (!gitWriteIn(command))
+  if (!gitWrite($, command))
     return;
   const t = find(await load($), w.task);
   const reader = !t || isInvestigation(t) || !w.worktree.startsWith("/");
-  const git2 = gitWriteIn(command, reader ? "reader" : "worker") ?? (gitPlaceOk(command, cwd, [...await bothNames(diskLook($), w.worktree), "/tmp"]) ? undefined : "git in another folder");
+  const git2 = gitWrite($, command, reader ? "reader" : "worker") ?? (gitPlaceOk(command, cwd, [...await bothNames(diskLook($), w.worktree), "/tmp"]) ? undefined : "git in another folder");
   return git2 ? { text: workerGitWriteText(git2), guard: "git", what: git2 } : undefined;
 }
 async function scoutCheck($, touch) {
   if ("command" in touch) {
-    const git2 = gitWriteIn(touch.command);
+    const git2 = gitWrite($, touch.command);
     return git2 ? { text: scoutGitWriteText(git2), guard: "git", what: git2 } : undefined;
   }
   const real = await realEdit($, touch.path, S.root, S.root);
@@ -18839,6 +19685,7 @@ function startTimers(host) {
   S.watchdog = host.clock.every(2 * 60000, () => watchdogTick(host));
   S.beat?.cancel();
   S.beat = host.clock.every(LEAD_BEAT_MS, () => leadBeat(host));
+  startLagTimer(host);
 }
 async function createBoardIn(host, dir, setUpGit) {
   if (setUpGit) {
@@ -18926,135 +19773,6 @@ async function sessionEnd(host) {
   if (!S.guardOnly)
     await releaseLead(host);
 }
-// hooks/core/task-list.ts
-var NO_OPEN_TASKS = "No open tasks.";
-var tasksHint = (name = DEFAULT_NAME) => `/${name}-board opens the board · /${name}-task T-n opens one task`;
-function tasksCounts(b, nowMs, offsetMin = localOffset(nowMs)) {
-  const s = boardSections(b.tasks, nowMs, offsetMin);
-  const done = s.today.filter((t) => t.status === "done").length;
-  const dropped = s.today.filter((t) => t.status === "dropped").length;
-  return `backlog ${s.backlog.length} · done today ${done} · dropped today ${dropped}`;
-}
-function stateOf(t, all, nowMs, group) {
-  if (asksMoreTime(t))
-    return MORE_TIME_CELL;
-  if (group === "run") {
-    const cell2 = rowCell(t, nowMs);
-    const n = Number(t.attempts);
-    const tries = n > 1 ? `↺${n}` : "";
-    return [cell2, tries].filter(Boolean).join(" ");
-  }
-  if (t.status === "todo" || t.status === "paused") {
-    const open = (t.after ?? []).filter((id) => all.some((x) => x.id === id && !isFinished(x)));
-    if (open.length)
-      return `${t.status === "paused" ? "paused, " : ""}after ${open.join(", ")}`;
-    return t.status === "paused" ? "paused" : "to do";
-  }
-  return t.status === "waiting" ? "waiting" : t.status;
-}
-function tasksListText(b, nowMs, name = DEFAULT_NAME, width2 = 80, offsetMin = localOffset(nowMs)) {
-  const p = panelSections(b.tasks, nowMs, offsetMin);
-  const groups = [
-    { label: SECTION_LABEL.needsYou, key: "you", tasks: p.needsYou.filter((t) => t.status !== "review" && t.status !== "failed") },
-    { label: "Running", key: "run", tasks: p.doing },
-    { label: "In review", key: "review", tasks: p.needsYou.filter((t) => t.status === "review") },
-    { label: "Failed", key: "failed", tasks: p.needsYou.filter((t) => t.status === "failed") },
-    { label: "To do", key: "todo", tasks: p.todo }
-  ].filter((g) => g.tasks.length);
-  const asks = openQuestions(b);
-  const out = [];
-  if (asks.length) {
-    out.push(questionsLabel(asks.length));
-    for (const q of asks)
-      out.push(cutTitle(`  ? ${questionLine(q)}`, width2));
-  }
-  const rows = groups.flatMap((g) => g.tasks.map((t) => ({ t, g: g.key, state: stateOf(t, b.tasks, nowMs, g.key) })));
-  const idW = Math.max(0, ...rows.map((r) => r.t.id.length));
-  const stateW = Math.max(0, ...rows.map((r) => textWidth(r.state)));
-  for (const g of groups) {
-    if (out.length)
-      out.push("");
-    out.push(`${g.label} (${g.tasks.length})`);
-    for (const r of rows.filter((r2) => r2.g === g.key)) {
-      const lead2 = `  ${rowMark(r.t, nowMs)} ${r.t.id.padEnd(idW)}  ${padWidth(r.state, stateW)}  `;
-      out.push(lead2 + cutTitle(r.t.title, Math.max(8, width2 - textWidth(lead2))));
-    }
-  }
-  if (!rows.length) {
-    if (out.length)
-      out.push("");
-    out.push(NO_OPEN_TASKS);
-  }
-  out.push("", tasksCounts(b, nowMs, offsetMin), tasksHint(name));
-  return out.join(`
-`);
-}
-
-// hooks/core/live-text.ts
-var statusHint = (name = DEFAULT_NAME) => `/${name}-board opens the board · /${name}-tasks lists the tasks`;
-var tryText = (n) => n > 1 ? ` ↺${n}` : "";
-function liveStatusText(view, notes, nowMs, name = DEFAULT_NAME, width2 = 80, offsetMin = localOffset(nowMs)) {
-  const w = Math.max(20, Math.floor(width2));
-  const inner = liveInner(w);
-  const out = [];
-  const line = (xs) => out.push(segText(xs).trimEnd());
-  const under = (xs) => out.push((LIVE_INDENT + segText(xs)).trimEnd());
-  const heading2 = (label) => (out.length && out.push(""), line(liveHeading(label, w)));
-  const lanes = liveTaskLanes(view, nowMs);
-  const running = lanes.filter((l) => !l.done);
-  const needs = liveNeeds(view, nowMs, inner);
-  if (needs.length) {
-    heading2(LIVE_SECTIONS.needs);
-    for (const n of needs)
-      under(n.segs);
-  }
-  heading2(LIVE_SECTIONS.tasks);
-  if (!running.length)
-    for (const x of liveIdle(view, nowMs, inner))
-      out.push(LIVE_INDENT + x);
-  if (!running.length && lanes.length)
-    out.push("");
-  if (lanes.length) {
-    const room = Math.max(0, ...lanes.map((l) => l.done ? 0 : tryText(l.tryNo).length));
-    const layout = liveLayout(lanes, liveColumns(lanes, view.checker === true), Math.max(1, inner - room));
-    const trains = liveTrains(view, nowMs, lanes);
-    under(liveLabelSegs(layout));
-    for (const l of lanes) {
-      const [first, second] = laneLines(l, layout, { nowMs, frame: 0, steady: true });
-      out.push((LIVE_INDENT + segText(first) + (l.done ? "" : tryText(l.tryNo))).trimEnd());
-      if (!l.done)
-        under(second);
-      for (const r of trainRows(trains.lanes[l.id] ?? [], inner))
-        under(r.segs);
-    }
-  }
-  const br = liveBranches(view, nowMs, w);
-  if (br) {
-    out.push("");
-    line(br.head);
-    under(br.main);
-    for (const r of br.rows)
-      under(r.segs);
-  }
-  heading2(LIVE_SECTIONS.today);
-  under(liveNowSegs(view, running, nowMs, inner));
-  for (const t of liveTodayLines(view, nowMs, inner, offsetMin, !lanes.length))
-    under(t);
-  const om = liveOrgMem(notes, w);
-  out.push("");
-  line(om.head);
-  if (om.empty)
-    out.push(LIVE_INDENT + om.empty);
-  for (const x of om.newest)
-    under(x.segs);
-  out.push("", statusHint(name));
-  if (lanes.length)
-    for (const x of liveLegend(inner))
-      out.push(LIVE_INDENT + x);
-  return out.join(`
-`);
-}
-
 // hooks/app/slash-commands.ts
 var BOARD_OPENED = "Board opened: ↑↓ to move, Enter to open, f to search, t tasks, s scouts, c settings.";
 var boardOpened = () => S.W.backToBoard ? `${BOARD_OPENED} (${S.W.backToBoard} goes back to it.)` : BOARD_OPENED;
@@ -19064,7 +19782,7 @@ function COMMANDS(features = ALL_FEATURES) {
     { name: S.N.name, description: features.panel ? `Open the ${S.N.name} board panel: tasks and scouts` : `Show the ${S.N.name} board as text (the panel: /${S.N.name}-board)` },
     { name: `${S.N.name}-tasks`, description: `List the open ${S.N.name} tasks in the chat, grouped as on the board (what needs you, running, in review, failed, to do), with the backlog and today's counts` },
     { name: `${S.N.name}-status`, description: `Show the ${S.N.name} Live tab as text in the chat: what needs you, the running tasks and what waits for them, the branches, today's numbers and the newest notes` },
-    ...features.panel ? [{ name: `${S.N.name}-board`, description: `Open the ${S.N.name} board panel (on Live)` }] : [],
+    ...features.panel ? [{ name: `${S.N.name}-board`, description: `Open the ${S.N.name} board panel (on Live); html writes the board as a web page and opens it`, argumentHint: "[html]" }] : [],
     { name: `${S.N.name}-task`, description: `Open one ${S.N.name} task (/${S.N.name}-task T-3), or do one of its page's actions: /${S.N.name}-task T-3 pause, resume, retry, drop [reason], merged (already merged by hand), review on|off, stash (to the backlog), todo (out of the backlog), role <name>, note (an answered investigation: keep it as a note), or run [anyway] (start it now, even over the agent limit or on a paused board; anyway when it waits on unfinished tasks)`, argumentHint: "<T-id> [pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note|run [anyway]]" },
     { name: `${S.N.name}-approve`, description: `Approve a ${S.N.name} task that is ready for review (merge it): /${S.N.name}-approve T-5`, argumentHint: "<T-id>" },
     { name: `${S.N.name}-reject`, description: `Reject a ${S.N.name} task in review, with the reason: /${S.N.name}-reject T-5 <reason>`, argumentHint: "<T-id> <reason>" },
@@ -19170,17 +19888,19 @@ async function runCommand(host, command, args) {
     case "help":
       return say(manual(cmd.topic, host.features));
     case "tasks":
-      return say(tasksListText(b, Date.now(), S.N.name));
+      return say(await viewText(host, b, "tasks"));
     case "status":
-      return say(liveStatusText(await statusView(host, b), (await orgMemNow(host)).notes, Date.now(), S.N.name));
+      return say(await viewText(host, b, "status"));
     case "board":
+      if (cmd.html)
+        return say(!loaded.board ? `${loaded.broken} Then try again.` : await boardHtmlText(host, b, true).catch((err) => `Could not build the board page: ${err.message}`));
       if (!host.features.panel)
         return say(noPanelText());
       await openPane(host, { tab: "live" });
       return say(boardOpened());
     case "open":
       if (!host.features.panel)
-        return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving }, S.version) : `${loaded.broken} Then try again.`);
+        return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving, chat: !!S.chat }, S.version) : `${loaded.broken} Then try again.`);
       await openPane(host, { tab: "live" });
       return say(boardOpened());
     case "scouts": {
@@ -19270,10 +19990,14 @@ ${skipped}` : "") };
         const old = await findArchived(host, cmd.id);
         if (!old)
           return say(`${cmd.id} is not on the board.`);
+        if (S.chat)
+          return say(chatArchivedTaskText(old, cmd.page));
         return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).
 ${taskText(old, false, b.tasks, undefined, b.archived_done)}`);
       }
       await openPane(host, { tab: "tasks", task: t.id });
+      if (S.chat)
+        return say(chatTaskText(t, await latestReport(host, t), Date.now(), cmd.page));
       return say(taskText(t, [...workers.values()].some((w) => w.task === t.id), b.tasks, await latestReport(host, t), b.archived_done));
     }
     case "task-do": {
