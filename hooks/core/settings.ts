@@ -695,8 +695,8 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
       ...groupSettings(g).map(s => {
         const value = s.name === 'notify' ? notifyOf(b, can, root) : settingValue(b, s.name, root)
         const extra = s.name === 'notify' ? `; this machine can play: ${notifyChoices(can).join(', ')}` : s.name === 'enabled' ? '; only the owner can change it' : ''
-        const stored = s.name === 'mode' ? { default: 'auto', range: 'paused / review / auto', words: settingWords(s.name) + ' (the owner reads review as "approve merge" and auto as "auto merge")' } : s
-        return `${s.name}: ${value} (default ${stored.default}, can be ${stored.range}) ${'words' in stored ? stored.words : settingWords(s.name)}${extra}`
+        const stored = s.name === 'mode' ? { default: 'auto', range: 'paused / review / auto', words: settingWords(s.name, true) + ' (the owner reads review as "approve merge" and auto as "auto merge")' } : s
+        return `${s.name}: ${value} (default ${stored.default}, can be ${stored.range}) ${'words' in stored ? stored.words : settingWords(s.name, true)}${extra}`
       }),
       ...(g.items.some(isSettingPage) ? ['roles and task types: use the roles and kinds tools (the owner sees roles and task types as pages in the Settings view)', 'org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board\'s Live tab, and may delete them there)'] : []),
     ]),

@@ -93,6 +93,13 @@ test('the pick box fits 80 columns: the note shares the line when it fits, else 
   expect(pickBoxParts('mode', ['paused', 'review', 'auto'], 30).rows.every(r => !r.inline)).toBe(true)
 })
 
+test('T-1107: the owner-facing help names mode choices as the pick box does', () => {
+  const line = settingsHelpOf({ setting: 'mode' }).lines[0]!
+  expect(line).toContain('approve merge: ')
+  expect(line).toContain('auto merge: ')
+  expect(line).not.toContain('review: ')
+})
+
 test('T-1107: the lead\'s settings text and the help line use the same sentence and choice notes as the boxes', () => {
   const text = leadSettingsText({}, { sound: true, voice: true })
   for (const x of SETTINGS) {
