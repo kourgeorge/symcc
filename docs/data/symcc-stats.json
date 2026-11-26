@@ -1,0 +1,408 @@
+{
+  "from": "2026-11-09",
+  "to": "2026-11-26",
+  "days": 18,
+  "tasks": {
+    "done": 989,
+    "dropped": 59,
+    "answered": 48,
+    "errands": 3,
+    "total": 1145
+  },
+  "tries": {
+    "total": 2278,
+    "firstTry": 527,
+    "changeTasksWithData": 982,
+    "firstTryRate": 53.7
+  },
+  "endedHow": [
+    {
+      "key": "merged-on-its-own",
+      "label": "merged on its own",
+      "n": 909
+    },
+    {
+      "key": "approved-by-you",
+      "label": "approved by you",
+      "n": 64
+    },
+    {
+      "key": "merged-outside-the-board",
+      "label": "merged outside the board",
+      "n": 7
+    },
+    {
+      "key": "answered-investigation-",
+      "label": "answered (investigation)",
+      "n": 48
+    },
+    {
+      "key": "errand-done",
+      "label": "errand done",
+      "n": 3
+    },
+    {
+      "key": "not-clear-from-history",
+      "label": "not clear from history",
+      "n": 9
+    }
+  ],
+  "failedTries": [
+    {
+      "key": "checker",
+      "label": "sent back by checker",
+      "n": 573
+    },
+    {
+      "key": "changed",
+      "label": "restarted by a change",
+      "n": 151
+    },
+    {
+      "key": "clash",
+      "label": "clash with main",
+      "n": 91
+    },
+    {
+      "key": "tests",
+      "label": "tests failed",
+      "n": 86
+    },
+    {
+      "key": "stopped",
+      "label": "stopped",
+      "n": 13
+    },
+    {
+      "key": "scope",
+      "label": "files out of scope",
+      "n": 12
+    },
+    {
+      "key": "nochange",
+      "label": "no change",
+      "n": 9
+    },
+    {
+      "key": "timeout",
+      "label": "ran out of time",
+      "n": 3
+    },
+    {
+      "key": "other",
+      "label": "other",
+      "n": 36
+    }
+  ],
+  "workMs": 880538689,
+  "tokens": {
+    "workers": {
+      "all": 2450456151,
+      "billed": 530935898
+    },
+    "lead": {
+      "all": 3512911336,
+      "billed": 504030178
+    },
+    "scouts": {
+      "all": 307366765,
+      "billed": 83930894
+    },
+    "total": {
+      "all": 6270734252,
+      "billed": 1118896971
+    }
+  },
+  "perDone": {
+    "medianMs": 441244,
+    "avgMs": 803469,
+    "medianTokens": 1189158,
+    "avgTokens": 3094360,
+    "medianBilled": 267721,
+    "avgBilled": 674420
+  },
+  "stages": [
+    {
+      "stage": "free",
+      "label": "waiting to start",
+      "avgMs": 786304
+    },
+    {
+      "stage": "blocked",
+      "label": "waiting on tasks",
+      "avgMs": 2306396
+    },
+    {
+      "stage": "backlog",
+      "label": "in the backlog",
+      "avgMs": 2119589
+    },
+    {
+      "stage": "work",
+      "label": "work",
+      "avgMs": 873033
+    },
+    {
+      "stage": "prep",
+      "label": "prep",
+      "avgMs": 24533
+    },
+    {
+      "stage": "check",
+      "label": "check",
+      "avgMs": 382673
+    },
+    {
+      "stage": "queue",
+      "label": "merge queue",
+      "avgMs": 121709
+    },
+    {
+      "stage": "tests",
+      "label": "tests",
+      "avgMs": 311918
+    },
+    {
+      "stage": "merge",
+      "label": "merge",
+      "avgMs": 3300
+    },
+    {
+      "stage": "owner",
+      "label": "waiting for you",
+      "avgMs": 85759
+    }
+  ],
+  "roles": [
+    {
+      "role": "general",
+      "n": 794
+    },
+    {
+      "role": "docs",
+      "n": 102
+    },
+    {
+      "role": "refactor",
+      "n": 73
+    },
+    {
+      "role": "researcher",
+      "n": 61
+    },
+    {
+      "role": "tester",
+      "n": 56
+    },
+    {
+      "role": "security",
+      "n": 54
+    },
+    {
+      "role": "writer",
+      "n": 5
+    }
+  ],
+  "origins": [
+    {
+      "key": "owner",
+      "label": "the owner",
+      "n": 612
+    },
+    {
+      "key": "scout",
+      "label": "scouts",
+      "n": 296
+    },
+    {
+      "key": "lead",
+      "label": "the lead",
+      "n": 120
+    },
+    {
+      "key": "worker",
+      "label": "workers",
+      "n": 117
+    }
+  ],
+  "scouts": [
+    {
+      "name": "gaps-bot",
+      "found": 88,
+      "merged": 85,
+      "dropped": 3,
+      "open": 0,
+      "tokens": 111773917
+    },
+    {
+      "name": "test-gaps",
+      "found": 50,
+      "merged": 49,
+      "dropped": 1,
+      "open": 0,
+      "tokens": 44249898
+    },
+    {
+      "name": "board-review",
+      "found": 38,
+      "merged": 36,
+      "dropped": 2,
+      "open": 0,
+      "tokens": 34620992
+    },
+    {
+      "name": "recent-changes",
+      "found": 35,
+      "merged": 35,
+      "dropped": 0,
+      "open": 0,
+      "tokens": 57778562
+    },
+    {
+      "name": "simplify",
+      "found": 33,
+      "merged": 29,
+      "dropped": 0,
+      "open": 4,
+      "tokens": 15811036
+    },
+    {
+      "name": "ideabot",
+      "found": 21,
+      "merged": 2,
+      "dropped": 2,
+      "open": 17,
+      "tokens": 2577386
+    },
+    {
+      "name": "big-files",
+      "found": 13,
+      "merged": 4,
+      "dropped": 0,
+      "open": 9,
+      "tokens": 4091705
+    },
+    {
+      "name": "docs-check",
+      "found": 11,
+      "merged": 11,
+      "dropped": 0,
+      "open": 0,
+      "tokens": 11565665
+    },
+    {
+      "name": "board-parity",
+      "found": 3,
+      "merged": 3,
+      "dropped": 0,
+      "open": 0,
+      "tokens": 8659214
+    },
+    {
+      "name": "speed",
+      "found": 3,
+      "merged": 2,
+      "dropped": 0,
+      "open": 1,
+      "tokens": 5056468
+    },
+    {
+      "name": "secrets",
+      "found": 1,
+      "merged": 1,
+      "dropped": 0,
+      "open": 0,
+      "tokens": 2166542
+    },
+    {
+      "name": "backlog-review",
+      "found": 0,
+      "merged": 0,
+      "dropped": 0,
+      "open": 0,
+      "tokens": 4634890
+    },
+    {
+      "name": "org-mem-review",
+      "found": 0,
+      "merged": 0,
+      "dropped": 0,
+      "open": 0,
+      "tokens": 3538719
+    },
+    {
+      "name": "version-reminder",
+      "found": 0,
+      "merged": 0,
+      "dropped": 0,
+      "open": 0,
+      "tokens": 841771
+    }
+  ],
+  "perDay": [
+    {
+      "day": "2026-11-10",
+      "done": 8
+    },
+    {
+      "day": "2026-11-11",
+      "done": 27
+    },
+    {
+      "day": "2026-11-12",
+      "done": 68
+    },
+    {
+      "day": "2026-11-13",
+      "done": 61
+    },
+    {
+      "day": "2026-11-15",
+      "done": 55
+    },
+    {
+      "day": "2026-11-16",
+      "done": 73
+    },
+    {
+      "day": "2026-11-17",
+      "done": 53
+    },
+    {
+      "day": "2026-11-18",
+      "done": 105
+    },
+    {
+      "day": "2026-11-19",
+      "done": 73
+    },
+    {
+      "day": "2026-11-20",
+      "done": 119
+    },
+    {
+      "day": "2026-11-21",
+      "done": 96
+    },
+    {
+      "day": "2026-11-22",
+      "done": 81
+    },
+    {
+      "day": "2026-11-23",
+      "done": 50
+    },
+    {
+      "day": "2026-11-24",
+      "done": 66
+    },
+    {
+      "day": "2026-11-25",
+      "done": 37
+    },
+    {
+      "day": "2026-11-26",
+      "done": 68
+    }
+  ]
+}

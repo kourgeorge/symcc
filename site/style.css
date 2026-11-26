@@ -252,3 +252,15 @@ main.home > section.install { max-width: 46rem; }
   .win .pane { font-size: clamp(9px, 2.6vw, 12px); padding: .7rem; }
   .win-bar .win-title { display: none; }
 }
+
+/* "Built with symcc" (T-1145): big numbers and simple bar lists, no scripts */
+.bignums { list-style: none; padding: 0; margin: 1.2rem 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr)); gap: .8rem; }
+.bignums li { border: 1px solid var(--line); border-radius: 8px; padding: .8rem; background: var(--soft); text-align: center; }
+.bignums strong { display: block; font-size: 1.8rem; line-height: 1.2; color: var(--accent); }
+.bignums span { color: var(--dim); font-size: .9rem; }
+.bars { list-style: none; padding: 0; margin: 1rem 0; }
+.bars li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .1rem .8rem; margin: .5rem 0; overflow-wrap: anywhere; }
+.bars .bv { color: var(--dim); text-align: right; }
+.bars .bb { grid-column: 1 / -1; display: block; height: .5rem; background: var(--soft); border-radius: 4px; overflow: hidden; }
+.bars .bb i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+main.home > section.built { max-width: 46rem; text-align: center; }
