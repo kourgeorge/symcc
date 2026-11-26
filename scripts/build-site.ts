@@ -337,9 +337,17 @@ export function readPosts(root: string): Post[] {
   const dir = join(root, 'docs/blog')
   if (!existsSync(dir)) return []
   const posts: Post[] = []
-  for (const n of readdirSync(dir)) {
+  const seen = new Map<string, string>()
+  for (const n of readdirSync(dir).sort()) {
     const m = /^(\d{4}-\d{2}-\d{2})-(.+)\.md$/.exec(n)
     if (!m) continue
+    const [y, mo, d] = m[1]!.split('-').map(Number) as [number, number, number]
+    const dt = new Date(Date.UTC(y, mo - 1, d))
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) throw new Error(`docs/blog/${n}: ${m[1]} is not a real calendar date`)
+    if (m[2] === 'index') throw new Error(`docs/blog/${n}: the slug "index" is taken by the blog list; rename the post`)
+    const other = seen.get(m[2]!)
+    if (other) throw new Error(`docs/blog/${n}: slug "${m[2]}" is already used by docs/blog/${other}`)
+    seen.set(m[2]!, n)
     const md = readFileSync(join(dir, n), 'utf8').replace(/\r\n?/g, '\n')
     const lines = md.split('\n')
     const t = lines.findIndex(l => /^#\s+\S/.test(l))
