@@ -70,7 +70,9 @@ Each part is there for a reason. Knowing it makes the rest of this guide easier 
   project by itself.
 - **A checker (optional), a second pair of eyes.** A fresh agent that did not write the change
   tries to break it before it reaches the tests. It is off by default because it costs time and
-  tokens.
+  tokens. It sends work back only for what is worse than main; gaps main already has are listed
+  as follow-ups. After two send-backs the task waits for you: Merge as is (tests, no checker),
+  Keep fixing (one more try) or Drop.
 - **One merge queue.** Finished tasks take turns. Only the task at the front catches up with
   your branch, runs the tests and merges, so your branch cannot move in between and the code
   that was tested is exactly the code that merges. Before the queue, several tasks could merge

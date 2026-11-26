@@ -18,6 +18,7 @@ import { stopWorker, setBoardMode, setSymcc } from './board-mode'
 import { answerOvertime } from './cleanup'
 import { haltChecker } from './checker'
 import { moveStage } from './move'
+import { isCheckerAsk, parseCheckerAnswer, CHECKER_ASK_OPTIONS } from '../board'
 import { questionTool, boardAnswered } from './questions'
 import { markMerged } from './merged'
 import { publish, enableHere } from './lead'
@@ -392,6 +393,7 @@ ${
 - In mode "review", ask the owner before every ${S.N.name} add, whatever the task comes from (the owner's words, a scout finding, a worker's report, your own idea): say in one or two lines what the task would be, and add it only after a yes. In mode "auto" you add tasks as usual. Plain answers, notes (add_details) and board actions (approve, pause, settings) need no asking.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
 - Moving a task to a stage: ${S.N.name} change T-5 with stage (work, check, tests or review) moves it, with its branch as it is, to that stage of its run. Use it when the owner wants a step skipped or repeated, e.g. "no need to check again, just test" is stage tests (the merge queue now, no checker; it merges if its tests pass); check starts a fresh checker; work is a new worker try; review waits for the owner. A running worker or checker is stopped first. It uses no automatic retry.
+- A task that failed for good: don't retry it on your own (even though a retry is possible). Ask the owner first, unless they already said to retry that task. A task the checker sent back twice waits for the owner on its own with "Merge as is / Keep fixing / Drop"; put their answer in with ${S.N.name} change answer: their words.
 - Work merged by hand: when a task's branch was merged outside the board (by the owner, or by you on the owner's word, e.g. its only failure was the merge tests timing out), don't drop it and don't let a new worker redo it: ${S.N.name} merged T-5 marks it done. ${S.N.name} checks with git that all its commits are in the branch it merges into and refuses with the reason if not; nothing is merged or tested, its folder and branch are cleaned up, and tasks waiting on it start. It works for a task that is to do, running, failed, waiting, paused, in review or dropped. Use it only after the owner's word or a rule the owner set.
 - Investigation or change (the kind parameter of ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself. Add an errand (kind: errand) when the owner wants something done that is not a change to the project (tidy a folder outside the repo, gather files, write something outside the project): the worker's report is its result and the task ends done on its own, in every mode. Investigation: the owner wants an answer to read; errand: the owner wants something done.
 - An answered investigation ("T-5 is answered") waits in review for the owner to read its answer; it has nothing to merge. Tell the owner the answer in the chat, short and plain (read it with ${S.N.name} board task T-5), and offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "or answer on the board". On the owner's word: ${S.N.name} approve T-5 is Done (it ends done; its folder is removed, and its branch too unless it has commits from earlier tries, which are kept; the reply says so), ${S.N.name} approve T-5 with keep_note: true is Keep as a note (Done, plus a new docs task that writes docs/research/<topic>.md from the answer and merges as usual), and ${S.N.name} reject T-5 with their follow-up question is Ask more (a fresh try gets the question and the earlier answer).
@@ -729,6 +731,14 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // An answer to a running worker's "give it more time?" question: only that, nothing else changes.
       const overtime = str(a.answer)?.trim() && (t as BoardTask).live?.time_ask ? await answerOvertime($, t.id, str(a.answer)!) : undefined
       if (overtime) return overtime
+      // T-996: the owner's answer to "sent back twice by the checker": Merge as is goes on to the tests (no checker), Drop drops it,
+      // Keep fixing falls through to the usual answer (one more try; test_output still holds the checker's report)
+      if (str(a.answer)?.trim() && t.status === 'waiting' && isCheckerAsk(t.ask?.text)) {
+        const pick = parseCheckerAnswer(str(a.answer)!)
+        if (!pick) throw new Error(`Nothing changed: ${t.id} waits for one of ${CHECKER_ASK_OPTIONS.join(', ')}`)
+        if (pick === 'merge') return moveStage($, t.id, 'tests')
+        if (pick === 'drop') return runTool($, 'drop', { task: t.id, reason: 'dropped by the owner after two checker send-backs' })
+      }
       // An answer to a task that no longer waits (the owner answered on the board first): change nothing at all.
       if (str(a.answer)?.trim() && t.status !== 'waiting') return alreadyAnsweredText(t, a)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
