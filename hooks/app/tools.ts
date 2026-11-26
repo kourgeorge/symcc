@@ -707,7 +707,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       priorityIn(a)
       if (t.status === 'done') throw new Error(`${t.id} is done; add a new task instead`)
       if (a.stage !== undefined) {
-        const extra = Object.keys(a).filter(k => k !== 'stage' && k !== 'task' && k !== 'id' && a[k] !== undefined && a[k] !== null)
+        const own = ['title', 'details', 'add_details', 'answer', 'files', 'after', 'priority', 'role', 'kind', 'needs_review', 'backlog', 'merge_into']
+        const extra = Object.keys(a).filter(k => own.includes(k) && a[k] !== undefined && a[k] !== null)
         if (extra.length) throw new Error(`stage moves a task on its own; nothing was saved. Send ${extra.join(', ')} in a separate change call`)
         return moveStage($, t.id, String(a.stage))
       }
