@@ -407,6 +407,16 @@ test('T-1116: a shell word without -c is read both as an option value and as the
   expect(Date.now() - t < 200).toBe(true)
 })
 
+test('T-1116: a wrapper option\'s value never starts with "-"; such a word is the next option (`sudo -i -u root git push`)', () => {
+  for (const who of ['reader', 'worker'] as const)
+    for (const c of [
+      'sudo -i -u root git push', 'sudo -E -u root git push', 'sudo -H -u root git push', 'sudo -s -u root git push',
+      'sudo -k -u root git push', 'sudo -n -u root git push', 'env -i -u X git push', 'env -i -C /tmp git push',
+      'sudo -u root -i -u bob git push', "env -S '-i git push'", "env -S'-i git push'",
+    ])
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+})
+
 test('T-1116: repeated wrappers, redirects and a long random command check fast', () => {
   const push = 'gi' + 't push'
   for (const r of ['xargs -0 ', 'env -i A=1 ', 'nice >x - ', '<x - ', '- 5 >x ', 'env -i >x - ', 'sudo -u a -s ', 'timeout -s >x KILL 5 ']) {

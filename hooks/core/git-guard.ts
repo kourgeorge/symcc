@@ -393,9 +393,16 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
       else if (name === 'env' && a.startsWith('--split-string=')) split = a.slice(15)
       // a short option (or a group of them, `-iu`) ending in a value letter, or a long one, takes the next word; a
       // word that runs a command (git, a wrapper, a shell, eval) never is a value, it is the next command (as main did)
-      const takes = split === undefined && ((/^-[a-zA-Z]+$/.test(a) && letters.includes(a[a.length - 1]!.toLowerCase())) || LONG_VALUES.has(a))
-      if (takes && i < words.length && !runsCommand(words[i]!)) {
-        if (name === 'env' && (a.endsWith('S') || a === '--split-string')) split = words[i]
+      // A value never starts with "-" (as main): such a word is the next option (`sudo -i -u root`); only env -S's
+      // text may (`env -S '-i git push'`)
+      const splitNext = name === 'env' && (a.endsWith('S') || a === '--split-string')
+      const takes =
+        split === undefined &&
+        ((/^-[a-zA-Z]+$/.test(a) && letters.includes(a[a.length - 1]!.toLowerCase())) || LONG_VALUES.has(a)) &&
+        i < words.length &&
+        (splitNext || !words[i]!.startsWith('-'))
+      if (takes && !runsCommand(words[i]!)) {
+        if (splitNext) split = words[i]
         i++
       } else if (takes && i < words.length && SHELLS.has(nameOf(words[i]!))) {
         // a shell name may be the value too (`env -u sh git push`, `timeout -s ksh 5 git push`): that reading is
