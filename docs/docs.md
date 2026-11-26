@@ -16,5 +16,5 @@ Every detail of symcc, one topic per page. New here? Start with [Get started](ge
 
 - [Working on symcc](contributing.md): where the code is, running the tests, and renaming the plugin.
 - [Engine and clients](engine-and-clients.md): what the engine is, what a client is, and the rule between them.
-- [Research notes](research/index.md): answers from investigation tasks, kept as notes.
+- [Research notes](research/): answers from investigation tasks, kept as notes.
 - [The demo](demo.md): how the demo picture is made.

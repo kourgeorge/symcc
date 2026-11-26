@@ -568,6 +568,8 @@ export function build(root: string, out: string): string[] {
   }
   for (const p of [...posts].reverse()) pages.push(p.page)
   const byPath = new Map([...pages, RESEARCH_INDEX].map(p => [p.src, p]))
+  // docs/research/index.md is made by the build, so the docs link the folder (it works on GitHub too)
+  byPath.set('docs/research', RESEARCH_INDEX)
   const images = new Set<string>()
 
   rmSync(out, { recursive: true, force: true })

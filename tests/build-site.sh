@@ -58,6 +58,7 @@ else
   grep -q '<code>y | z</code>' "$g" || bad "escaped pipe in a table cell"
   grep -q 'href="../tasks.html"' "$tmp/small/research/note.html" || bad "research note link not rewritten"
   grep -q 'href="note.html"' "$tmp/small/research/index.html" || bad "research index does not list the note"
+  grep -q 'href="research/index.html">Research notes</a>: answers' "$tmp/small/docs.html" || bad "docs index: research/ folder link not rewritten to research/index.html"
   grep -q 'href="../style.css"' "$tmp/small/research/note.html" || bad "research page style.css path"
   grep -q 'href="../get-started.html">Get started' "$tmp/small/research/note.html" || bad "research page nav not relinked"
   grep -q '<aside class="docs-side">' "$tmp/small/research/note.html" || bad "research note has no documentation list"
