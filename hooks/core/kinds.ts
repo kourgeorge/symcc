@@ -2,7 +2,7 @@
 // The built-in ones are texts in the plugin's kinds/<name>.ts (like the worker prompts); the owner's own are files
 // `.<plugin name>/kinds/<name>.md` in the project, which win over a built-in one with the same name. Front matter: description (needed; the lead reads it
 // to choose) and off: true (optional: the kind is never picked for a new task). The body is free text for now.
-// Every task type runs like a change, except investigation.
+// Every task type runs like a change, except investigation (hands back an answer to read) and errand (ends done on its own); neither is merged.
 import { DEFAULT_NAME } from '../name'
 import { BUILT_IN_KIND_TEXTS } from '../../kinds'
 import { DEFAULT_KIND, INVESTIGATION, ERRAND, KIND_NAME, kindOf } from './board-file'
