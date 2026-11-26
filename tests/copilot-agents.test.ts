@@ -150,8 +150,10 @@ test("each agent's session has the guard bound to its own id and folder; its she
   expect((await call('apply_patch', patch('*** Update File: /repo/src/a.ts')))?.permissionDecision).toBe('deny')
   expect(await call('apply_patch', patch('*** Update File: src/a.ts'))).toBe(undefined)
   expect(await call('mcp_thing', {})).toEqual({ permissionDecision: 'deny', permissionDecisionReason: unknownToolText('mcp_thing') })
-  // the hook's changed arguments: `cd / ; pwd` runs in a new shell started in the worktree
-  expect(await call('bash', { command: 'cd / ; pwd' })).toEqual({ modifiedArgs: { command: shellWrap(WT, 'bash', 'cd / ; pwd') } })
+  // the hook's changed arguments: `cd src ; pwd` runs in a new shell started in the worktree
+  expect(await call('bash', { command: 'cd src ; pwd' })).toEqual({ modifiedArgs: { command: shellWrap(WT, 'bash', 'cd src ; pwd') } })
+  // a cd above the project (`cd /`) is refused by the path rule before any wrapping
+  expect((await call('bash', { command: 'cd / ; pwd' }))?.permissionDecision).toBe('deny')
   workers.clear()
 })
 
