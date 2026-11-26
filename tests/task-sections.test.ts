@@ -48,7 +48,7 @@ test('T-580: a todo task shows Details and What to do (its details, headings and
 test('T-580: a doing task shows its History (newest first, as a timeline), its Report "reading" until read, and its Runs', () => {
   const t = task('doing', { attempts: 1, history: hist('try 1: started'), runs: [run(R1, false)] })
   const s = taskSections(t, facts())
-  expect(titles(s)).toEqual(['Details', 'What to do', 'History (1, newest first)', 'Report · try 1 · worker', 'Runs   1 try · 10m'])
+  expect(titles(s)).toEqual(['Details', 'What to do', 'History (1, newest first)', 'Runs   1 try · 10m', 'Report · try 1 · worker'])
   expect(text(sec(s, 'report'))).toEqual([`  ${R1}`, '  (reading the report…)'])
   expect(text(sec(s, 'runs'))[0]).toContain('(running)')
   expect(text(sec(s, 'runs')).at(-1)).toMatch(/^ {2}total: /)
@@ -62,7 +62,7 @@ test('T-580: a doing task shows its History (newest first, as a timeline), its R
 test('T-580: a failed task starts with Why it failed (the reason, what its report asks, what to do next)', () => {
   const t = task('failed', { attempts: 1, note: 'tests failed', history: hist('try 1: changed it → tests failed'), runs: [run(R1)] })
   const s = taskSections(t, facts({ texts: { [R1]: 'NEED FILES: docs/guide.md' } }))
-  expect(ids(s)).toEqual(['why', 'details', 'what', 'history', 'report', 'runs'])
+  expect(ids(s)).toEqual(['why', 'details', 'what', 'history', 'runs', 'report'])
   expect(sec(s, 'why')!.title).toBe('Why it failed')
   const why = text(sec(s, 'why'))
   expect(why.some(l => l.includes('docs/guide.md'))).toBe(true)
@@ -73,7 +73,7 @@ test('T-580: a task in review shows its Changes: the folder, each file (a press 
   const t = task('review', { attempts: 1, runs: [run(R1)] })
   const changes = { files: [{ file: 'hooks/a.ts', added: 3, removed: 1 }, { file: 'logo.png', added: 0, removed: 0, binary: true, edited: true }], error: '' }
   const s = taskSections(t, facts({ changes, target: 'main', dataDir: '.symcc', texts: { [R1]: 'Done.' } }))
-  expect(ids(s)).toEqual(['details', 'changes', 'what', 'report', 'runs'])
+  expect(ids(s)).toEqual(['details', 'changes', 'what', 'runs', 'report'])
   expect(sec(s, 'changes')!.title).toBe('Changes (2 files, against main) (includes your edits)')
   expect(text(sec(s, 'changes'))).toEqual([
     '  folder: .symcc/worktrees/T-1 · edit files there, then approve (the tests run again)',
@@ -90,7 +90,7 @@ test('T-580: a task in review shows its Changes: the folder, each file (a press 
 test('T-580: a done task with two tries shows the latest report (2 of 2) and its tries to pick, with number keys unless a question takes them', () => {
   const t = task('done', { attempts: 2, history: hist('try 1: x → tests failed', 'try 2: y → merged into main'), runs: [run(R1), run(R2)] })
   const s = taskSections(t, facts({ texts: { [R2]: 'Second.' } }))
-  expect(ids(s)).toEqual(['details', 'what', 'history', 'report', 'runs'])
+  expect(ids(s)).toEqual(['details', 'what', 'history', 'runs', 'report'])
   expect(sec(s, 'report')!.title).toBe('Report · try 2 · worker')
   expect(sec(s, 'report')!.tries).toEqual([{ try: 1, shown: false, key: '1' }, { try: 2, shown: true, key: '2' }])
   expect(sec(taskSections(t, facts({ shown: { try: 1, kind: 'worker' }, numberKeysTaken: true })), 'report')!.tries).toEqual([{ try: 1, shown: true }, { try: 2, shown: false }])
