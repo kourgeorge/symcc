@@ -341,6 +341,17 @@ test('T-1099: grep after a no-value short option of xargs is a command, so a quo
   for (const who of ['reader', 'worker'] as const)
     for (const c of ['sudo -u root git push', 'env -u X git push', 'xargs -I {} git push', 'timeout -s KILL 5 git push', 'xargs -0 -I {} git push', 'xargs -r git push', 'xargs -0 sh -c "git push"', 'sudo -g staff -u root git push'])
       expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+  // sudo's -R folder, -r role, -t type and -T timeout take a word too (xargs -r and -t take none)
+  for (const who of ['reader', 'worker'] as const) {
+    for (const c of ['sudo -R / git push', 'sudo -r role git push', 'sudo -t type git push', 'sudo -T 5 git push', '/usr/bin/sudo -R . git push', 'doas -r x git push', 'sudo -u root -R / git push'])
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+  }
+  expect(gitWriteIn('sudo -R . git commit -m x', 'reader')).toBe('git commit')
+  for (const c of [('sudo -R ').repeat(40) + 'x', ('sudo -r ').repeat(40) + 'x']) {
+    const start = Date.now()
+    expect([c, gitWriteIn(c, 'reader')]).toEqual([c, undefined])
+    expect([c, Date.now() - start < 100]).toEqual([c, true])
+  }
 })
 
 test("T-1062: zsh's noglob, nocorrect, coproc and `-` before git, ~- and the folder stack, and a project path glued to an option are caught", () => {
