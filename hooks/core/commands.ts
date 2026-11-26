@@ -17,7 +17,7 @@ export type Command =
   | { kind: 'open' }
   | { kind: 'tasks' }
   /** /<name>-board: opens the board panel (on Live), as /<name> does where there is a panel */
-  | { kind: 'board' }
+  | { kind: 'board'; html?: true }
   /** /<name>-status (T-902): the Live tab's picture as text in the chat; never opens the panel */
   | { kind: 'status' }
   /** /<name>-scout with no name: opens the panel on the Scouts view and reloads the scout files (a text list with no panel) */
@@ -154,7 +154,7 @@ export function parseCommand(command: string, args: string, current: SymccMode =
     case 'tasks':
       return s ? use(`/${name}-tasks`) : { kind: 'tasks' }
     case 'board':
-      return s ? use(`/${name}-board`) : { kind: 'board' }
+      return s === 'html' ? { kind: 'board', html: true } : s ? use(`/${name}-board [html]`) : { kind: 'board' }
     case 'status':
       return s ? use(`/${name}-status`) : { kind: 'status' }
     case 'task': {

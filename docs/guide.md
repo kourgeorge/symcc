@@ -992,7 +992,11 @@ are about changes; under "How tasks ended" a read investigation shows as
   `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (paused / approve merge
   / auto merge; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
   command, run as one shell line, so `cd web && npm test` works as in a shell; several commands go in a list,
-  `["npm test", "npm run lint"]`, up to 5; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
+  `["npm test", "npm run lint"]`, up to 5; `none` clears them). Every box starts with one dim sentence on what the
+  setting does (a number's range is in it), then an empty line; in a pick list each choice has a short dim note
+  after it, or under it when the line is too narrow, e.g. `paused`: "nothing starts; running work stops". VS Code
+  shows the sentence above the choices and the notes under them; OpenCode shows them in its dialog (the words are in
+  `hooks/core/setting-notes.ts`). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
 - Under **Workers**, the **Roles** row says how many worker roles there are (e.g.
@@ -2750,7 +2754,14 @@ the same mode):
 - **Short views.** The tasks list, the status, the board text and one task's page use one short
   shape there: plain lines (no columns, rules or bars), one task per line like
   `T-5 running: test, try 2, 12m: title`, "Needs you" first, the backlog only as a count, and at
-  most 3,500 characters (a "+N more" line says what was left out).
+  most 3,500 characters. A long text is split into pages: a "+N more" line says what is left, and when you say "more" (or "more tasks") the lead asks for the next page and posts it. A long question is shortened with "…", but it always keeps every numbered choice.
+- **Plain words work.** Slash commands may not reach symcc from a chat app, so the lead has the
+  same views as a tool: ask "status", "tasks", "what's running" or "show T-5" and it posts the same
+  text as `/symcc-status`, `/symcc-tasks` or `/symcc-task T-5`.
+- **The board as a picture.** Ask for the board as a picture and the lead makes one web page
+  (`.symcc/board.html`, no scripts or outside files, fine on a phone, light and dark) with the board tool's
+  `view: "html"` and sends the file with the chat's reply tool (Telegram's reply takes files). On the
+  computer, `/symcc-board html` writes the same page and opens it.
 - **Back at the terminal.** When you next type at the terminal, chat mode goes off.
 
 ---

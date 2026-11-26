@@ -131,7 +131,7 @@ test('T-695: notify takes voice, sound 1, sound 2, sound 3 or off, and nothing e
   expect(settingValue({ notify: 'sound 1' }, 'notify', '/x/web')).toBe('sound 1')
   const text = settingsText({ notify: 'sound 2' }, 'symcc', '/x/web')
   expect(text).toMatch(/notify\s+sound 2\s+\(default voice \(else sound N, N picked from the project name, else off\) · voice \/ sound 1 \/ sound 2 \/ sound 3 \/ off\)/)
-  expect(text).toContain('sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Submarine and Funk')
+  expect(text).toContain('sound 1: a short chime, sound set 1')
   expect(text).not.toContain('sound_set')
   const lead = leadSettingsText({}, { sound: true, voice: false }, '/x/web')
   expect(lead).toContain('notify: sound 2 (default voice')

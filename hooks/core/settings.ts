@@ -4,6 +4,7 @@ import { DEFAULT_NAME } from '../name'
 import { type Board, type Notify, notifyKind, soundNotify, soundSetFor, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, DEFAULT_TEST_MINUTES, testMinutesOf, NOTIFY_CHOICES, MODES, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
 import { ellipsis, num } from './text'
 import { MODE_NAME } from './review'
+import { settingWords } from './setting-notes'
 import { MAX_TEST_MINUTES } from './test-timeout'
 import { testOutputHeading } from './test-output-heading'
 
@@ -282,7 +283,7 @@ export const SETTING_NAMES = ['test_commands', 'docs_test_commands', 'test_minut
 export type SettingName = (typeof SETTING_NAMES)[number]
 /** commands: test_commands; number: a whole number within min-max; onoff: true/false; mode: paused/review/auto; notify: voice/sound 1/sound 2/sound 3/off; findings: auto/backlog; untested: off/ask/review */
 export type SettingKind = 'commands' | 'number' | 'onoff' | 'mode' | 'notify' | 'findings' | 'untested'
-export type SettingInfo = { name: SettingName; label: string; kind: SettingKind; min?: number; max?: number; default: string; range: string; meaning: string }
+export type SettingInfo = { name: SettingName; label: string; kind: SettingKind; min?: number; max?: number; default: string; range: string }
 
 /** Why test_minutes value `v` is refused ('' when it is a whole number of minutes from 1 to MAX_TEST_MINUTES). */
 export const testMinutesRefusal = (v: unknown): string =>
@@ -291,29 +292,24 @@ export const testMinutesRefusal = (v: unknown): string =>
 /** How many test commands a board keeps. */
 export const MAX_TEST_COMMANDS = 5
 
-/** Who answers in the chat, in the host's words (HostWords.assistant), for the enabled setting's meaning; set once by useName. */
-let assistantWord = 'the assistant'
-export function useAssistantWord(word: string) {
-  assistantWord = word
-}
+/** Kept so hosts can still say who answers in the chat; the settings words no longer use it (they come from setting-notes). */
+export function useAssistantWord(_word: string) {}
 
 export const SETTINGS: SettingInfo[] = [
-  { name: 'test_commands', label: 'Test commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'must all pass before work is merged' },
-  { name: 'docs_test_commands', label: 'Docs test commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines', meaning: 'run instead of test_commands when a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test' },
-  { name: 'test_minutes', label: 'Time per test', kind: 'number', min: 1, max: MAX_TEST_MINUTES, default: String(DEFAULT_TEST_MINUTES), range: `1-${MAX_TEST_MINUTES}`, meaning: 'how long each test command may run before merging' },
-  { name: 'max_parallel', label: 'Workers at once', kind: 'number', min: 1, max: 8, default: '3', range: '1-8', meaning: 'how many workers run at once' },
-  { name: 'max_minutes', label: 'Time per worker', kind: 'number', min: 5, max: 600, default: '45', range: '5-600', meaning: 'a worker running longer makes symcc ask the owner for more time' },
-  { name: 'auto_retries', label: 'Retries on failure', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10', meaning: 'new tries on their own after failing tests' },
-  { name: 'archive_days', label: 'Archive after', kind: 'number', min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: '0-3650 (0 = never)', meaning: 'done and dropped tasks older than this move to archive.json' },
-  { name: 'open_on_start', label: 'Open on start', kind: 'onoff', default: 'on', range: 'on / off', meaning: 'open the board panel when a session starts' },
-  { name: 'notify', label: 'Alert', kind: 'notify', default: 'voice (else sound N, N picked from the project name, else off)', range: 'voice / sound 1 / sound 2 / sound 3 / off', meaning: 'when a task is merged or a worker asks you something: "symcc: T-3 done" / "symcc: T-5 needs you" out loud, the project name first (voice), or a chime from sound set N, so you can tell which project chimed (on macOS sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Submarine and Funk; the second one when a question waits); picking a sound plays its chime' },
-  { name: 'scout_findings', label: 'Scout findings', kind: 'findings', default: 'auto', range: 'auto / backlog', meaning: 'the default for scouts without their own findings choice. auto: the lead decides, a scout finding it adds goes to todo and runs; backlog: every task added from a scout finding goes to the backlog and waits for you' },
-  { name: 'tests_with_changes', label: 'Code without tests', kind: 'untested', default: 'ask', range: 'off / ask / review', meaning: 'a change task that edits code but no test file: ask: it merges and the lead is told "T-3 changed code but no test"; review: it waits for your review instead; off: nothing (test files are in test/, tests/, __tests__/, spec/, e2e/ or cypress/ folders or have a test name like a.test.ts, a-test.ts, a.cy.ts, login.e2e.ts, FooTest.java; docs-only changes such as .md files, images and non-code files under docs/ are never flagged)' },
-  { name: 'checker', label: 'Checker', kind: 'onoff', default: 'off', range: 'off / on', meaning: 'on: after the prep step and before a change joins the merge queue (where its tests run), a fresh checker tries to break it; OK goes on, a list of problems sends it back to its worker (counts as a retry); investigations and docs-only changes skip it' },
-  { name: 'mode', label: 'Mode', kind: 'mode', default: 'auto merge', range: 'paused / approve merge / auto merge', meaning: 'paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own' },
-  { name: 'enabled', label: 'Symcc on', kind: 'onoff', default: 'on', range: 'on / off', get meaning() {
-    return `off: the whole plugin rests and ${assistantWord} works as normal`
-  } },
+  { name: 'test_commands', label: 'Test commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines' },
+  { name: 'docs_test_commands', label: 'Docs test commands', kind: 'commands', default: 'none', range: 'one shell line, or a list of up to 5 lines' },
+  { name: 'test_minutes', label: 'Time per test', kind: 'number', min: 1, max: MAX_TEST_MINUTES, default: String(DEFAULT_TEST_MINUTES), range: `1-${MAX_TEST_MINUTES}` },
+  { name: 'max_parallel', label: 'Workers at once', kind: 'number', min: 1, max: 8, default: '3', range: '1-8' },
+  { name: 'max_minutes', label: 'Time per worker', kind: 'number', min: 5, max: 600, default: '45', range: '5-600' },
+  { name: 'auto_retries', label: 'Retries on failure', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10' },
+  { name: 'archive_days', label: 'Archive after', kind: 'number', min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: '0-3650 (0 = never)' },
+  { name: 'open_on_start', label: 'Open on start', kind: 'onoff', default: 'on', range: 'on / off' },
+  { name: 'notify', label: 'Alert', kind: 'notify', default: 'voice (else sound N, N picked from the project name, else off)', range: 'voice / sound 1 / sound 2 / sound 3 / off' },
+  { name: 'scout_findings', label: 'Scout findings', kind: 'findings', default: 'auto', range: 'auto / backlog' },
+  { name: 'tests_with_changes', label: 'Code without tests', kind: 'untested', default: 'ask', range: 'off / ask / review' },
+  { name: 'checker', label: 'Checker', kind: 'onoff', default: 'off', range: 'off / on' },
+  { name: 'mode', label: 'Mode', kind: 'mode', default: 'auto merge', range: 'paused / approve merge / auto merge' },
+  { name: 'enabled', label: 'Symcc on', kind: 'onoff', default: 'on', range: 'on / off' },
 ]
 
 /** Rows on the Settings page that open a page of their own instead of holding a value. */
@@ -350,11 +346,11 @@ export function settingRowValue(name: string, value: string): string {
   return value
 }
 
-/** The help area under the Settings list for the focused row (T-1042): a setting's label, meaning, then "name · default X · range"; a page row's or a heading's hint. Both the Claude Code and OpenCode boards draw it. */
+/** The help area under the Settings list for the focused row (T-1042): a setting's label, what it does, then "name · default X · range"; a page row's or a heading's hint. Both the Claude Code and OpenCode boards draw it. */
 export function settingsHelpOf(f: { setting: string } | { group: string } | { page: SettingPage }): { name: string; lines: string[] } {
   if ('setting' in f) {
     const x = settingInfo(f.setting)
-    return x ? { name: x.label, lines: [x.meaning, `${x.name} · default ${x.default} · ${x.range}`] } : { name: '', lines: [] }
+    return x ? { name: x.label, lines: [settingWords(x.name), `${x.name} · default ${x.default} · ${x.range}`] } : { name: '', lines: [] }
   }
   if ('page' in f) return f.page === 'roles' ? { name: 'Roles', lines: ['The worker roles: open, edit, turn off or add one.'] } : { name: 'Task types', lines: ['The kinds of task: open, edit, turn off or add one.'] }
   const g = SETTING_GROUPS.find(x => x.title === f.group)
@@ -669,19 +665,19 @@ export function parseSettingsCommand(args: string, name: string = DEFAULT_NAME):
   const info = settingInfo(word.toLowerCase().replace(/-/g, '_'))
   if (!info) return { kind: 'bad', message: `There is no setting called ${word}; settings are: ${SETTING_NAMES.join(', ')}` }
   const rest = s.slice(word.length).trim()
-  if (!rest) return { kind: 'bad', message: `Give a value: /${name}-settings ${info.name} <${info.range}> (${info.meaning})` }
+  if (!rest) return { kind: 'bad', message: `Give a value: /${name}-settings ${info.name} <${info.range}> (${settingWords(info.name)})` }
   const r = parseSettingValue(info.name, rest)
   return r.ok ? { kind: 'set', setting: info.name, input: r.input } : { kind: 'bad', message: r.message }
 }
 
-/** The settings as text lines: name, value, default, range and meaning (when the panel can't be shown). */
+/** The settings as text lines: name, value, default, range and what it does (when the panel can't be shown). */
 export function settingsText(b: Partial<Board>, name: string = DEFAULT_NAME, root = ''): string {
   const w = Math.max(...SETTING_NAMES.map(n => n.length))
   return [
     ...SETTING_GROUPS.flatMap(g => {
       const rows = groupSettings(g)
       const pages = g.items.some(isSettingPage) ? ['  roles and task types: open them from the Settings view, or tell the lead', `  org-mem (organizational memory): its notes are in .${name}/org-mem.md; the Organizational memory section at the bottom of the board's Live tab shows the newest notes and topics and opens the page that lists and deletes them (/${name}-settings orgmem delete N)`] : []
-      return [`${g.title}:`, ...rows.map(s => `  ${s.name.padEnd(w)}  ${settingShown(s.name, settingValue(b, s.name, root))}  (default ${s.default} · ${s.range}) ${s.meaning}`), ...pages]
+      return [`${g.title}:`, ...rows.map(s => `  ${s.name.padEnd(w)}  ${settingShown(s.name, settingValue(b, s.name, root))}  (default ${s.default} · ${s.range}) ${settingWords(s.name)}`), ...pages]
     }),
     `Change one: /${name}-settings NAME VALUE, e.g. /${name}-settings max_parallel 5`,
   ].join('\n')
@@ -699,8 +695,8 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
       ...groupSettings(g).map(s => {
         const value = s.name === 'notify' ? notifyOf(b, can, root) : settingValue(b, s.name, root)
         const extra = s.name === 'notify' ? `; this machine can play: ${notifyChoices(can).join(', ')}` : s.name === 'enabled' ? '; only the owner can change it' : ''
-        const stored = s.name === 'mode' ? { default: 'auto', range: 'paused / review / auto', meaning: s.meaning + ' (the owner reads review as "approve merge" and auto as "auto merge")' } : s
-        return `${s.name}: ${value} (default ${stored.default}, can be ${stored.range}) ${stored.meaning}${extra}`
+        const stored = s.name === 'mode' ? { default: 'auto', range: 'paused / review / auto', words: settingWords(s.name, true) + ' (the owner reads review as "approve merge" and auto as "auto merge")' } : s
+        return `${s.name}: ${value} (default ${stored.default}, can be ${stored.range}) ${'words' in stored ? stored.words : settingWords(s.name, true)}${extra}`
       }),
       ...(g.items.some(isSettingPage) ? ['roles and task types: use the roles and kinds tools (the owner sees roles and task types as pages in the Settings view)', 'org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board\'s Live tab, and may delete them there)'] : []),
     ]),
