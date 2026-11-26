@@ -3093,7 +3093,7 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
     expect(lineText(d.lines[at + 1]!).trim()).toBe('')
     const labels = d.lines[at + 2]!
     const lanes = liveLanes(f.view, NOW)
-    expect(lineText(labels)).toBe(LIVE_INDENT + liveLabelLine(liveLayout(lanes, liveStations(true), liveInner(w), true)))
+    expect(lineText(labels)).toBe(LIVE_INDENT + liveLabelLine(liveLayout(lanes, liveStations(true), liveInner(w))))
     if (w === 120) expect(lineText(labels).includes('work✧') && lineText(labels).includes('check✧')).toBe(true)
     expect(lineText(labels).includes('·')).toBe(false)
     const heading = d.lines[at]![0]!.color
@@ -3203,7 +3203,7 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     const lanes = liveLanes(view, NOW)
     // T-747: each section under its "▍Name" heading, its lines indented
     const inner = liveInner(w)
-    const layout = liveLayout(lanes, liveStations(true), inner, true)
+    const layout = liveLayout(lanes, liveStations(true), inner)
     const frame = Math.floor(NOW / 1000)
     const under = (x: string) => LIVE_INDENT + x
     // T-938: no mode line above the sections: it is ▍Today's first row, "Now:"
@@ -3509,7 +3509,7 @@ test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at 
     expect(d.ids.includes('T-750') || d.ids.includes('T-740') || d.ids.slice(1).includes('T-741') || d.ids.includes('T-742')).toBe(false)
     const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}✓ T-747 `))
     expect(at > texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-760 `))).toBe(true)
-    if (w === 120) expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓ +merged 3m ago  change$/)
+    if (w === 120) expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓ +merged 3m ago$/)
     const lane = d.lines[at]!
     // T-850: "✓ " dim before the id, the id in the accent color, the title dim
     expect(lane.find(x => x.text.includes('✓ '))?.color).toBe('inactive')

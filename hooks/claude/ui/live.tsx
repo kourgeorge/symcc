@@ -103,7 +103,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   const lanes = liveTaskLanes(v, nowMs)
   const running = lanes.filter(l => !l.done)
   const inner = liveInner(width)
-  const layout = liveLayout(lanes, liveColumns(lanes, v.checker === true), inner, true)
+  const layout = liveLayout(lanes, liveColumns(lanes, v.checker === true), inner)
   const trains = liveTrains(v, nowMs, lanes)
   const draw = (xs: LiveSeg[]) => xs.map(x => <Text bold={liveBold(x.tone)} color={C(LIVE_TONE[x.tone])}>{x.text}</Text>)
   /** A line under a section heading: indented. */
