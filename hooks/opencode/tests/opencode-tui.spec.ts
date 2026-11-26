@@ -8,6 +8,7 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
+import { choiceNote, settingAbout } from '../../core/setting-notes'
 import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_IDLE, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveNowSegs, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, SETTINGS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccMode, SymccTask } from '../../../types'
@@ -4641,4 +4642,52 @@ test('T-1080: the size line under the title wraps to the panel width, never cut'
   const texts = lines.map(l => l.map(p => p.text).join(''))
   expect(texts.every(t => t.length <= 40)).toBe(true)
   expect(texts.join('\n')).toContain('+539')
+})
+
+test('T-1105: a setting\'s pick dialog says what the setting does and gives each choice its note; a number box describes it with its range', async () => {
+  const view: PaneView = { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], max_parallel: 3, max_minutes: 30, auto_retries: 1, driving: true, home_branch: 'main', branch_note: '' }
+  const f: ViewFile = { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const selects: { title: string; options: { title: string; description?: string }[] }[] = []
+  const prompts: { title: string; description?: string }[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 140, height: 200 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: {
+        prompt: async o => (prompts.push({ title: o.title, description: o.description }), undefined),
+        select: async <V,>(o: { readonly title: string; readonly options: readonly { readonly title: string; readonly description?: string; readonly value: V }[] }) => (selects.push({ title: o.title, options: o.options.map(x => ({ title: x.title, description: x.description })) }), undefined as V | undefined),
+      },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: () => () => undefined,
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  await board.press('c', 's')
+  const open = async (setting: string) => {
+    for (let i = 0; i < 40; i++) {
+      const ids = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: board.state().settingsOpen }, NOW, 138).ids
+      const at = ids.indexOf(setting)
+      if (at >= 0) {
+        while (board.state().cursor < at) await board.press('down', 's')
+        return board.press('open', 's')
+      }
+      await board.press('open', 's')
+      await board.press('down', 's')
+    }
+  }
+  await open('mode')
+  expect(selects.length).toBe(1)
+  expect(selects[0]!.title).toContain(settingAbout('mode'))
+  expect(selects[0]!.options.map(o => o.description)).toEqual(['paused', 'review', 'auto'].map(m => choiceNote('mode', m)))
+  expect(selects[0]!.options.map(o => o.title.replace(' (now)', ''))).toEqual(['paused', 'approve merge', 'auto merge'])
+  await open('max_parallel')
+  expect(prompts.at(-1)!.description).toBe(settingAbout('max_parallel'))
+  expect(prompts.at(-1)!.description).toContain('1-8')
+  board.stop()
 })

@@ -10,7 +10,8 @@ import { ROLES_KINDS_BEFORE } from './roles-kinds-snapshot'
 import { SCOUTS, SCOUTS_VIEW, seedScouts, seedRolesKinds } from './scouts-settings-fixture'
 import { ran, readText } from './fakes'
 import type { On } from 'claude-code'
-import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
+import { SETTINGS, SETTING_GROUPS, settingShown } from '../hooks/board'
+import { settingAbout, choiceNote } from '../hooks/core/setting-notes'
 import { reportStart, scoutRowEnd } from '../hooks/claude/ui/vscode-scouts'
 import { vsRowRoom } from '../hooks/claude/ui/vscode-list'
 import { scoutListRows, scoutRunsText } from '../hooks/board'
@@ -615,14 +616,13 @@ for (const bodyColumns of [40, 64, 100])
     const widths = new Set(elements(settings).filter(n => /^vs-setting-.*-label$/.test(String(n.props?.key))).map(n => n.props?.width))
     expect([...widths].length).toBe(1)
     for (const x of SETTINGS.filter(x => x.name !== 'enabled')) {
-      const first = x.meaning.split(/(?<=[.!?])\s/)[0]!
-      const help = all.find(t => t.startsWith(x.name + '  '))
-      expect(help, x.name).toBeDefined()
-      expect(help!.length, x.name).toBeLessThanOrEqual(x.name.length + 2 + 100)
-      expect(help!, x.name).toContain(first.slice(0, 30))
-      expect(help!.trimEnd(), x.name).not.toMatch(/e\.g\.$/)
+      // T-1105: the one shared sentence (core's settingAbout), above the choices
+      expect(all, x.name).toContain(settingAbout(x.name))
     }
-    expect(all.find(t => t.startsWith('docs_test_commands  ')), 'docs_test_commands').toBeDefined()
+    // T-1105: the Mode's choices have their dim note under them, the sentence above comes first
+    expect(all.indexOf(settingAbout('mode'))).toBeLessThan(all.indexOf(`paused  ${choiceNote('mode', 'paused')}`))
+    for (const m of ['paused', 'review', 'auto'])
+      expect(all).toContain(`${settingShown('mode', m)}  ${choiceNote('mode', m)}`)
     expect(all.filter(t => t.includes('· ' + SETTINGS[0]!.range) || /^default /.test(t))).toEqual([])
     // headings are plain words (no fold, no border: the borders check above)
     for (const g of SETTING_GROUPS) expect(all, g.title).toContain(g.title)

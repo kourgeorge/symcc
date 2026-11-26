@@ -6,7 +6,7 @@ import { S } from '../hooks/app/state'
 import { taskText } from '../hooks/app/tools'
 import { addTask, patchTask } from '../hooks/core/task'
 import { boardText } from '../hooks/core/banner'
-import { chatTasksText, chatStatusText, chatTaskText, CHAT_MAX } from '../hooks/core/chat-text'
+import { chatTasksText, chatStatusText, chatTaskText, askLines, CHAT_MAX } from '../hooks/core/chat-text'
 import { tasksListText } from '../hooks/core/task-list'
 import { taskListBoard } from './task-list-fixture'
 
@@ -77,4 +77,30 @@ test('T-1101: one task page in chat shape, and unchanged outside chat mode', () 
   }
   expect(taskText(t, false, b.tasks, report)).toBe(before)
   expect(tasksListText(b, now).includes('NEEDS YOU')).toBe(true)
+})
+
+test('T-1106: "more" pages list every task once; long questions keep every choice', () => {
+  let b = taskListBoard(now)
+  for (let i = 0; i < 80; i++) b = addTask(b, { origin: { why: 'a test' }, title: `Another to do task ${i} with a title`, files: ['src/'], after: [], backlog: false }, at)[0]
+  const p1 = chatTasksText(b, now, 0)
+  const p2 = chatTasksText(b, now, 0, '', 2)
+  expect(/\n\+\d+ more: say 'more tasks'$/.test(p1)).toBe(true)
+  const last1 = p1.split('\n').filter(l => /^T-\d+ /.test(l)).pop()!.split(' ')[0]
+  const first2 = p2.split('\n').find(l => /^T-\d+ /.test(l))!.split(' ')[0]
+  expect(Number(first2!.slice(2)) > Number(last1!.slice(2))).toBe(true)
+  const ids: string[] = []
+  for (let n = 1; n < 20; n++) {
+    const t = chatTasksText(b, now, 0, '', n)
+    if (t === 'Nothing more.') break
+    ids.push(...t.split('\n').filter(l => /^T-\d+ /.test(l)).map(l => l.split(' ')[0]!))
+  }
+  expect(new Set(ids).size).toBe(ids.length)
+  expect(ids.length >= 80).toBe(true)
+  expect(chatTasksText(b, now, 0, '', 50)).toBe('Nothing more.')
+
+  const q = askLines('Which one? ' + 'x'.repeat(4000), ['A', 'B'])
+  expect(q[0]!.startsWith('? Which one?') && q.length === 3 && q[1] === '1. A').toBe(true)
+  const c = askLines('Q?', ['a'.repeat(1300), 'b'.repeat(1300), 'c'.repeat(1300)])
+  expect(c.length === 4 && c[3]!.startsWith('3. c')).toBe(true)
+  expect(c.join('\n').length < CHAT_MAX).toBe(true)
 })

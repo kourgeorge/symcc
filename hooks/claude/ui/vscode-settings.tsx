@@ -9,6 +9,7 @@
 // Only real actions are Buttons (an Input's Save). No pills, borders, help sentence or key hints.
 import { SETTINGS, SETTING_GROUPS, settingInfo, isSettingPage, settingChoices, settingShown, settingValue, viewAsBoard, parseSettingValue, type SettingName, type SettingPage, type SettingsInput } from '../../board'
 import { S } from '../../app/state'
+import { choiceNote, settingAbout } from '../../core/setting-notes'
 import { type $ } from '../panel'
 import type { PaneParts } from './parts'
 import { vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
@@ -51,21 +52,21 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
     const picks = x.kind === 'onoff' ? ['on', 'off'] : settingChoices(name, v.notify_choices)
     const choices = picks.length ? picks : null
     const key = `vs-setting-${name}`
-    const first = x.meaning.split(/(?<=[.!?])\s(?=[A-Z])/)[0]!
-    const short = first.length > 100 ? first.slice(0, 100).replace(/\s+\S*$/, '').replace(/[\s;:,]+$/, '') : first
-    const about = line(`${key}-about`, null, plain('about', `${name}  ${short}`))
+    // T-1105: the setting's one sentence above the choices, a dim note per choice under them (core's setting-notes)
+    const about = line(`${key}-about`, null, plain('about', settingAbout(name)))
     if (choices) {
       // a value this machine can't play (notify) stays in the list, marked, so the Select shows what is set
       const cantPlay = !choices.includes(now)
       const options = [...choices.map(value => (settingShown(name, value) === value ? { value } : { value, label: settingShown(name, value) })), ...(cantPlay ? [{ value: now, label: `${now} (can't play here)` }] : [])]
       return (
         <Box key={key} flexDirection="column">
+          {about}
           {line(`${key}-row`, name$('name', x.label), <Select key={`setting:${name}`} options={options} value={now} onSelect={value => {
             const r = parseSettingValue(name, value)
             if (value !== now && r.ok) ctx.save(r.input)()
           }} />)}
           {cantPlay ? line(`${key}-cant`, null, plain('cant-play', "can't play here: nothing plays", 'warning')) : null}
-          {about}
+          {choices.filter(value => choiceNote(name, value)).map(value => line(`${key}-note-${value}`, null, plain(`note-${value}`, `${settingShown(name, value)}  ${choiceNote(name, value)}`)))}
         </Box>
       )
     }
@@ -82,6 +83,7 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
     }
     return (
       <Box key={key} flexDirection="column">
+        {about}
         {line(`${key}-row`, name$('name', x.label), (
           <Input
             key={`setting:${name}`}
@@ -93,7 +95,6 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
           />
         ))}
         {ed?.error ? line(`${key}-error`, null, plain(`setting-error-${name}`, ed.error, 'error')) : null}
-        {about}
       </Box>
     )
   }
