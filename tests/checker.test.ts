@@ -1656,6 +1656,16 @@ test('T-1072: stage tests on a failed task runs its tests and merges it, with no
   expect(w.calls.some(c => c.includes('npm test'))).toBe(true)
 })
 
+test('T-1084: stage ignores host fields (tool, tool_use_id) but still refuses add_details', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(true, { status: 'failed', note: 'x' }))
+  await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'tests', add_details: 'n' })).rejects.toThrow('stage moves a task on its own')
+  const said = await runTool(w.$, 'change', { task: 'T-1', stage: 'tests', tool: 'change', tool_use_id: 'x' })
+  expect(said).toContain('merged')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+})
+
 test('T-1072: stage check on a failed task starts a checker on the kept branch, with no new worker try', async () => {
   const w = world()
   inRepo(w)
