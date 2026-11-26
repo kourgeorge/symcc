@@ -4,7 +4,7 @@
 import type { HostAgentStart } from '../host'
 import { cleanTokens } from '../core/runs'
 import { SCRATCH_DIR } from '../core/path-guard'
-import { gitDeniedRules } from '../core/git-guard'
+import { gitDeniedRules, gitAliases } from '../core/git-guard'
 import type { AgentRunner, ProcessOutput, RunnerEnd } from './agents'
 import type { ProcessSystem } from './system'
 
@@ -28,12 +28,13 @@ export function editRule(file: string): string[] {
  * anywhere in its folder); a role's `web` adds WebSearch and WebFetch. A scout or checker only reads and runs commands
  * (a checker, T-551: it never runs the project's full tests itself, those run in the merge line after it).
  * `scratch` (T-456): the folder uses its throwaway SCRATCH_DIR (the project keeps no file there in git, see
- * scratchInUse); then a worker and a checker may also write there (a checker only there).
+ * scratchInUse); then a worker and a checker may also write there (a checker only there). `aliases`: the git alias
+ * names in the agent's folder (gitAliases), denied by name.
  */
-export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'tools'>, scratch = false): { allowed: string[]; denied: string[] } {
+export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'tools'>, scratch = false, aliases: readonly string[] = []): { allowed: string[]; denied: string[] } {
   const read = ['Read', 'Glob', 'Grep', 'Bash']
   const web = a.tools?.includes('web') ? ['WebSearch', 'WebFetch'] : []
-  const denied = gitDeniedRules(a.kind === 'worker')
+  const denied = gitDeniedRules(a.kind === 'worker', aliases)
   const scratchRules = scratch && a.kind !== 'scout' ? editRule(`${SCRATCH_DIR}/`) : []
   if (a.kind !== 'worker') {
     // a deny rule beats an allow rule, so a checker with scratch rules gets no blanket Edit/Write deny (dontAsk still refuses every other edit)
@@ -123,7 +124,8 @@ export function claudeRunner(sys: Pick<ProcessSystem, 'run' | 'env'>, o: ClaudeR
   return {
     name: 'claude',
     command(a) {
-      const { allowed, denied } = claudePermissions(a, a.kind !== 'scout' && scratchInUse(sys, a.cwd))
+      const aliases = gitAliases(sys.run(['git', 'config', '--get-regexp', '^alias\\.'], a.cwd).stdout)
+      const { allowed, denied } = claudePermissions(a, a.kind !== 'scout' && scratchInUse(sys, a.cwd), aliases)
       const model = a.model ?? o.model
       // --allowedTools and --disallowedTools take a list each, so the prompt goes on stdin (not as a word after them)
       const argv = [o.bin ?? sys.env('SYMCC_CLAUDE') ?? 'claude', '-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'dontAsk', ...(model ? ['--model', model] : []), '--allowedTools', ...allowed, '--disallowedTools', ...denied]

@@ -3,7 +3,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { checkEdit } from '../hooks/app/ask'
-import { gitWriteIn, gitPlaceOk, gitDeniedRules, gitWriteText, workerGitWriteText, scoutGitWriteText, bashOutsideFolder, bashOutsideText, BASH_DOTDOT, BASH_ABOVE, shellCwd } from '../hooks/board'
+import { gitWriteIn, gitPlaceOk, gitDeniedRules, gitAliases,gitWriteText, workerGitWriteText, scoutGitWriteText, bashOutsideFolder, bashOutsideText, BASH_DOTDOT, BASH_ABOVE, shellCwd } from '../hooks/board'
 import { S, scoutRuns, workers, checkerRuns } from '../hooks/app/state'
 import { fakeHost } from './fake-host'
 
@@ -103,8 +103,23 @@ test('T-1062: the git text is read whole: git inside quotes, after a wrapper, or
   ] as const)
     expect([c, gitWriteIn(c, 'worker')]).toEqual([c, what])
   // file names with git in them are no git call; a pipe or redirection ends git's words
-  for (const c of ['cat hooks/core/git-guard.ts', 'ls .git', 'cat .gitignore', 'git merge main 2>&1 | tail -20', 'git log > /tmp/log', 'cd "$(git rev-parse --show-toplevel)"', 'tee -a "$LOG"', 'echo "use git"', 'git commit -m "make git handling simpler"'])
+  for (const c of ['cat hooks/core/git-guard.ts', 'ls .git', 'cat .gitignore', 'rm -rf /tmp/git-scratch', 'git merge main 2>&1 | tail -20', 'git log > /tmp/log', 'cd "$(git rev-parse --show-toplevel)"', 'tee -a "$LOG"', 'echo "use git"', 'git commit -F .scratch/msg', 'git --version', 'git help log'])
     expect([c, gitWriteIn(c, 'worker')]).toEqual([c, undefined])
+  // plain text: a commit message whose "git" is followed by a word counts as that git command (use -F <file>)
+  expect(gitWriteIn('git commit -m "make git handling simpler"', 'worker')).toBe('git handling')
+})
+
+test('T-1062: an allow list: aliases, add-ons and unknown git names are refused for readers and workers', () => {
+  for (const c of ['git co main', 'git p', 'git sw main', 'git unknownthing', 'git lfs push origin', 'git-receive-pack .'])
+    for (const who of ['reader', 'worker'] as const) expect([c, who, typeof gitWriteIn(c, who)]).toEqual([c, who, 'string'])
+  // the Node host can't deny "every name but these", so the owner's aliases (from git config) are denied by name
+  expect(gitAliases('alias.co checkout\nalias.P push\nuser.name x\n')).toEqual(['co', 'p'])
+  for (const worker of [true, false]) {
+    const node = gitDeniedRules(worker, ['co', 'p', 'st', 'commit'])
+    for (const c of ['git co main', 'git p', 'git st']) expect([c, worker, nodeRefuses(node, c)]).toEqual([c, worker, true])
+    // an alias can't hide one of git's own names
+    expect(nodeRefuses(node, 'git commit -m x')).toBe(!worker)
+  }
 })
 
 test("T-1062: a worker's git writes run only in its own folder or /tmp", () => {
@@ -144,10 +159,10 @@ test("T-1062: the shell path rule refuses the owner's folder in the text (any na
   expect(no('cat /Users/o/.//./repo/./a')).toBe('a')
   expect(no('cat /Users/o/re\\\npo/a')).toBe('a')
   // '..' anywhere: "use full paths"
-  for (const c of ['cd .. && ls', 'cat ../x', 'cat a/../../b', 'echo x > ../../README.md', 'make --prefix=../src', `bun -e "import('../x')"`, `cd ${WT}/src && cat ../a`]) expect([c, no(c)]).toEqual([c, BASH_DOTDOT])
+  for (const c of ['cd .. && ls', 'cat ../x', 'cat a/../../b', 'echo x > ../../README.md', 'echo hi >../README.md', 'echo x 2>../log', 'cat <../a', 'x>>../../a', 'make --prefix=../src', `bun -e "import('../x')"`, `cd ${WT}/src && cat ../a`]) expect([c, no(c)]).toEqual([c, BASH_DOTDOT])
   // a cd above the project, from where a relative path reaches it
   // (also behind option words: `cd -P /Users/o`, `cd -- /Users`)
-  for (const c of ['cd / && echo x > Users/o/repo/README.md', 'cd && cat repo/README.md', 'cd ~ && ls', 'pushd /Users', 'true | cd /; rm x', 'chdir ~/', 'cd -P /Users/o && cat repo/README.md', 'cd -- /Users && cat o/repo/x', 'cd -L -P / && ls'])
+  for (const c of ['cd / && echo x > Users/o/repo/README.md', 'cd && cat repo/README.md', 'cd ~ && ls', 'pushd /Users', 'true | cd /; rm x', 'chdir ~/', 'cd -P /Users/o && cat repo/README.md', 'cd -- /Users && cat o/repo/x', 'cd -L -P / && ls', 'cd $HOME && cat repo/README.md', 'cd "${HOME}" && ls repo', 'cd $HOME/ && rm repo/x', 'pushd ${HOME}'])
     expect([c, no(c)]).toEqual([c, BASH_ABOVE])
   // the worker's own folder, other folders, ranges and plain commands
   for (const c of [`cat ${WT}/src/a.ts`, `cd ${WT} && git status`, 'cat ~/repo/.symcc/worktrees/T-1/a.ts', `ls ${ROOT}2/x /Users/o/repository`, 'echo x > /tmp/a', 'cd /tmp/x && ls', `cd ${WT}/src && ls`, 'cd src', 'git diff main..HEAD', 'git log main...HEAD', 'echo {1..3}', 'bun test', 'cd "$(git rev-parse --show-toplevel)"', 'tee -a "$LOG"'])

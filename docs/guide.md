@@ -1834,11 +1834,11 @@ is refused. Still refused, from one deny list: `push`, `fetch`, `pull` (a fetch 
 switching to, making or deleting a branch (`checkout <branch>`, `switch`, `branch -d/-D/-m`,
 `rebase main other`, `rebase --root other`, `rebase --update-refs`, `rebase --quit` (it leaves the folder off the branch), `bisect reset other`);
 `rebase -x`/`--exec` and `bisect run` (they run a program, which could be another git command);
-`worktree`; `config`; `tag`; `update-ref`; `symbolic-ref`; every other git command that is not a plain read (`send-pack`, `checkout-index`, `archive`, `format-patch`...); every `stash` and `--autostash` on merge or rebase (the stash is shared with your own folder);
+`worktree`; `config`; `tag`; `update-ref`; `symbolic-ref`; every other git command that is not a plain read (`send-pack`, `checkout-index`, `archive`, `format-patch`..., your git aliases such as `git co` and add-ons too: it is an allow list); every `stash` and `--autostash` on merge or rebase (the stash is shared with your own folder);
 any git option before the command (`-C`, `-c`, `--git-dir`, `--work-tree`...), `GIT_*` settings, `core.hooksPath`,
 a look-up of git's own folder (`--git-dir`, `--git-common-dir`), and anything that names your copy of the project or another task's folder.
 The check reads the command's plain text: a git command named anywhere in it counts, even inside
-quotes (`sh -c 'git push'`, or a commit message that says `git push`). An
+quotes (`sh -c 'git push'`, or a commit message that says `git push`; put such a message in a file and use `git commit -F`). An
 investigation's worker still only reads with git: its changes are never kept. symcc's checks cover
 the worker's own commits too: the scope check looks at every file any commit of the branch changed, a merged-in
 branch's files included (even ones deleted again later), the secret check at every commit (merge commits too), and when a scope check fails, the undo always makes the branch's work one commit again, so a
@@ -1848,7 +1848,9 @@ A worker run by `claude -p` (the Node host) has no symcc guard, only Claude Code
 made from the same deny list, which look at how a command starts, not at its folder or the rest of
 its words. There a worker may run the same commands, except that `checkout` stays refused whole
 (use `git restore <file>`) and `rebase` takes one word at most (`git rebase main`); the rest above,
-any `git -C` or `git -c`, and git after `env`, `xargs` and such stay refused.
+any `git -C` or `git -c`, and git after `env`, `xargs` and such stay refused. Claude Code's rules can't say
+"every git command but these", so the git aliases set in the agent's folder are refused by name; an add-on
+(`git foo` running a `git-foo` program) is not seen there.
 
 ### The checker
 

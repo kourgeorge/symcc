@@ -157,14 +157,15 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
   const wts = folderList(worktree)
   const tops = folderList(root).filter(t => t !== '/')
   if (typeof command !== 'string' || !wts.length || !tops.length) return undefined
-  if (/(?:^|[\s/'"=:(])\.\.(?=$|[\s/'"`;&|)])/.test(command)) return BASH_DOTDOT
+  if (/(?:^|[\s/'"=:(<>&|;,{])\.\.(?=$|[\s/'"`;&|)<>,}])/.test(command)) return BASH_DOTDOT
   // `a//b` and `a/./b` name the same place as `a/b`
   const flat = joinLines(command).replace(/["'\\]/g, '').replace(/\/(?:\.?\/)+/g, '/')
   const h = home?.startsWith('/') ? resolvePath('/', home) : undefined
   // a cd to a folder above the project (`cd /`, or home by `cd` or `cd ~`), from where a relative path reaches it;
   // option words (`cd -P /`, `cd -- /`) are skipped, so `cd -` (the last folder, unknown here) counts as home
   for (const m of flat.matchAll(/(?<![\w.-])(?:cd|chdir|pushd)(?=$|[\s;&|)])(?:[^\S\n]+-[^\s;&|()]*)*[^\S\n]*([^\s;&|()]*)/g)) {
-    const w = m[1]!
+    // `cd $HOME` and `cd ${HOME}` go where `cd ~` goes
+    const w = m[1]!.replace(/^\$(?:HOME|\{HOME\})(?=\/|$)/, '~')
     const to = w === '' || w === '~' ? h : w.startsWith('~/') && h ? resolvePath(h, w.slice(2)) : w.startsWith('/') ? resolvePath('/', w) : undefined
     if (to !== undefined && tops.some(t => t.toLowerCase() !== to.toLowerCase() && inside(t, to, false) !== undefined)) return BASH_ABOVE
   }

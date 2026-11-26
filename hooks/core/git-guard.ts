@@ -95,8 +95,9 @@ const GIT_AT = /(?<![\w.-])git(?:-([a-z][\w-]*))?(?=$|[\s'"`;&|()<>\\])/gi
  * refuses it), or undefined. Plain text: every `git` word counts, also inside quotes (`sh -c 'git push'`,
  * `rebase -x 'git push'`, a commit message that names `git push`); its words run up to the next `;`, `&`, `|`,
  * bracket, backquote, redirection or line end. Refused for everyone: a GIT_ setting, core.hooksPath, a look-up of
- * git's own folder (--git-dir, --git-common-dir...), any git option before the command but GIT_OPTION_OK. 'reader' (a scout, a checker, an investigation): every command in GIT_WRITES
- * (`git branch` only listing is fine). 'worker': GIT_WRITES but WORKER_GIT, within WORKER_LIMITS.
+ * git's own folder (--git-dir, --git-common-dir...), any git option before the command but GIT_OPTION_OK. An allow
+ * list: 'reader' (a scout, a checker, an investigation) may run only GIT_READS (and `git branch` only listing);
+ * 'worker' also WORKER_GIT, within WORKER_LIMITS. Every other name is refused: writes, aliases (`git co`), add-ons.
  */
 export function gitWriteIn(text: unknown, who: 'reader' | 'worker' = 'reader'): string | undefined {
   if (typeof text !== 'string') return undefined
@@ -112,7 +113,9 @@ export function gitWriteIn(text: unknown, who: 'reader' | 'worker' = 'reader'): 
     let i = 0
     if (!m[1]) for (; words[i]?.startsWith('-'); i++) if (!GIT_OPTION_OK.has(words[i]!)) return `git ${words[i]!.split('=')[0]}`
     const sub = (m[1] ?? words[i++])?.toLowerCase()
-    if (!sub || !GIT_WRITES.has(sub)) continue
+    // an allow list (T-1062): any name but the reads (and a worker's own writes) is refused, aliases and add-ons too;
+    // a word that is no command name (`$X`, `a.ts`) is not seen, and `git-x` counts only as one of git's own programs
+    if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub) || (m[1] && !GIT_ALL.includes(sub)) || GIT_READS.has(sub)) continue
     const args = words.slice(i)
     if (sub === 'branch' && args.every(a => BRANCH_LIST.has(a))) continue
     if (who === 'reader' || !WORKER_GIT.has(sub)) return `git ${sub}`
@@ -147,10 +150,11 @@ const GIT_WRAPPERS = ['env', 'command', 'exec', 'xargs', 'nohup', 'time']
  * The same deny list as Claude Code rules for every `claude -p` agent (the Node host has no symcc hook; a deny rule
  * beats any allow rule). A worker (`worker` true) is not denied WORKER_GIT, within WORKER_LIMITS' rules. Every git
  * call that starts with an option (`git -C`, `git -c`...), git after the usual wrappers, and GIT_ settings at the
- * start stay denied for everyone.
+ * start stay denied for everyone. Claude Code's rules can't say "every git command but these", so the owner's git
+ * aliases (`aliases`, see gitAliases) are denied by name; an add-on program (`git foo` running git-foo) is not seen.
  */
-export function gitDeniedRules(worker = false): string[] {
-  const subs = [...GIT_WRITES].filter(c => !(worker && WORKER_GIT.has(c)))
+export function gitDeniedRules(worker = false, aliases: readonly string[] = []): string[] {
+  const subs = [...GIT_WRITES, ...aliases.filter(a => /^[\w-]+$/.test(a) && !GIT_ALL.includes(a))].filter(c => !(worker && WORKER_GIT.has(c)))
   const limits = worker ? Object.values(WORKER_LIMITS).flatMap(l => l.node) : []
   return [
     ...[...subs.map(c => `${c}:*`), ...limits].map(r => `Bash(git ${r})`),
@@ -162,8 +166,12 @@ export function gitDeniedRules(worker = false): string[] {
   ]
 }
 
+/** The alias names in `git config --get-regexp ^alias\.` output `out` (lines like `alias.co checkout`). */
+export const gitAliases = (out: string): string[] =>
+  out.split('\n').map(l => /^alias\.([^\s]+)/i.exec(l.trim())?.[1]?.toLowerCase()).filter((a): a is string => !!a)
+
 /** What every git refusal adds: how the text is read. */
-const PLAIN_TEXT = 'A git command named anywhere in the command counts, even inside quotes; search for git text with the Grep tool.'
+const PLAIN_TEXT = 'Every "git <word>" anywhere in the command counts, even inside quotes, and any git command not on the allowed list (an alias too) is refused; search for git text with the Grep tool, and put a commit message that names git in a file (git commit -F .scratch/msg).'
 
 /** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */
 export const gitWriteText = (what: string) =>
