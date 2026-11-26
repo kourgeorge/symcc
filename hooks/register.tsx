@@ -122,7 +122,7 @@ export const register: Register = on => {
     useName(claudeHost($))
     const kind = e.origin?.kind
     // T-922: an "sdk" prompt is the owner's too (a Slack message through DAM), unless it is symcc's own board update or an agent's message
-    const owners = kind === 'composer' || kind === 'bridge' || (kind === 'sdk' && !isOwnUpdate(e.text) && !/^\s*(Another Claude session sent a message:\s*)?<agent-message /.test(e.text))
+    const owners = kind === 'composer' || kind === 'bridge' || kind === 'channel' || (kind === 'sdk' && !isOwnUpdate(e.text) && !/^\s*(Another Claude session sent a message:\s*)?<agent-message /.test(e.text))
     // T-837: the hidden starter's end ("OK") reaches the lead's chat as a message; dropped here so it wakes no turn
     if (!owners && !e.command && starterFrame(e.text)) return { drop: '▸ agent started' }
     // T-968: the owner's board actions waiting as "Meanwhile" lines go beside their prompt (its context, kept in the chat
@@ -140,6 +140,9 @@ export const register: Register = on => {
     if (owners && !e.command && !e.isMeta && 'text' in r && typeof r.text === 'string') {
       // T-929: in a DAM image, an owner's sdk prompt means this is a Slack session (not a DAM terminal window)
       if (kind === 'sdk') damOwnerPrompt()
+      // T-1098: a chat app's message turns chat mode on (its server's name); the next terminal prompt turns it off
+      if (e.origin?.kind === 'channel') S.chat = e.origin.server
+      else if (kind === 'composer') S.chat = ''
       ownerTyped(r.text)
     }
     return r

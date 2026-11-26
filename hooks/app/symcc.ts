@@ -34,7 +34,7 @@ import { TOOLS, leadGuide, runTool, type In } from './tools'
 import { debriefFinished } from './debrief'
 import { pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, type TurnEnd } from './workers'
 import { isStarter } from './starts'
-import { DAM_POST_LINE, notDrivingText } from '../core/dam'
+import { chatPostLine, notDrivingText } from '../core/dam'
 import { logRefusal, type Who } from './evidence'
 import { guardOnlyText } from './session-start'
 
@@ -54,7 +54,7 @@ export async function leadGuideText(host: Host): Promise<string | undefined> {
   if (!(await isOn(host))) return undefined
   // T-922: a window that doesn't drive gets no board updates and starts no work; the lead says so plainly
   const notDriving = S.driving ? '' : `\n\n${notDrivingText(S.N.name)}`
-  const dam = S.dam ? `\n\n${DAM_POST_LINE}` : ''
+  const dam = S.chat ? `\n\n${chatPostLine(S.chat)}` : ''
   return `${leadGuide(host.features)}${notDriving}${dam}`
 }
 

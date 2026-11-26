@@ -17,5 +17,5 @@ export async function isDamSession(host: Pick<Host, 'env'>): Promise<boolean> {
 
 /** T-929: an owner prompt with origin "sdk" arrived (a Slack message through DAM): in a DAM image this is a Slack session from now on. */
 export function damOwnerPrompt() {
-  if (harness) S.dam = true
+  if (harness) S.chat = 'dam'
 }

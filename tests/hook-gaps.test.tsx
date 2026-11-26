@@ -10,7 +10,7 @@ import { runBy } from './agent-fixture'
 import { statsUsage } from '../hooks/core/stats'
 import { ran } from './fakes'
 import type { ProcessRunResult } from 'claude-code'
-import { DAM_POST_LINE } from '../hooks/core/dam'
+import { DAM_POST_LINE, chatPostLine } from '../hooks/core/dam'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -611,4 +611,16 @@ test('mcp__symcc__approve for a task to do answers "error: T-1 is not ready for 
   const r = (await $.tool.call({ tool: 'mcp__symcc__approve', task: 'T-1' } as never)) as { result?: string }
   expect(r.result).toBe('error: T-1 is not ready for review (it is to do); only a task in review can be approved')
   expect(w.board().tasks[0]!.status).toBe('todo')
+})
+
+test('T-1098: a prompt from a chat channel is the owner\'s words and turns chat mode on; the next composer prompt turns it off', async ($, on) => {
+  const w = await damStart($, on, {})
+  await say($, 'add a search box', { origin: { kind: 'channel', server: 'telegram' } })
+  const lead = (await $.prompt.compose(COMPOSE)).sections.find(x => x.id === 'symcc:lead')
+  expect(lead!.text.endsWith(chatPostLine('telegram'))).toBe(true)
+  expect(lead!.text).not.toContain('AskUserQuestion')
+  void w
+  await say($, 'and a filter')
+  const after = (await $.prompt.compose(COMPOSE)).sections.find(x => x.id === 'symcc:lead')
+  expect(after!.text.includes('reply tool')).toBe(false)
 })

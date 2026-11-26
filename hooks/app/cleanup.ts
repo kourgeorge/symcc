@@ -12,7 +12,7 @@ import { load, change, now, path, aboutToWait } from './store'
 import { tellLead } from './tell'
 import { PARTS_DIR } from '../core/board-parts'
 import { sayNeedsYou } from './voice'
-import { optionsVia, popupTied } from './questions'
+import { answerTail, optionsVia, popupTied } from './questions'
 
 export const LIVE = new Set(['pending', 'running', 'waiting'])
 
@@ -172,7 +172,7 @@ export async function timedOut(host: Host, id: string, t: BoardTask | undefined,
 
 /** What the lead is told when task `id`'s worker runs over its limit of `limit` minutes and the owner is asked. */
 export const overtimeLeadText = (id: string, title: string, limit: number) =>
-  `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(' | ')}. Ask the owner in the chat now, plain and short, offering these ${optionsVia(OVERTIME_OPTIONS.length)}, plus "or answer on the board"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.${popupTied(id)}`
+  `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(' | ')}. Ask the owner in the chat now, plain and short, offering these ${optionsVia(OVERTIME_OPTIONS.length)}, plus "${answerTail()}"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.${popupTied(id)}`
 
 /** Task `id`'s worker runs over its limit: the task keeps "doing" with the question, the owner hears "needs you", the lead is told. */
 export async function askOvertime(host: Host, b: Board, id: string, limit: number) {

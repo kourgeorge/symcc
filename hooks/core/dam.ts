@@ -25,6 +25,10 @@ export const isDamChatExe = (value: string | undefined) => /(^|[/\\])harness-cla
 /** The last line of every board update in a DAM session: plain replies never reach Slack, so post it there. */
 export const DAM_POST_LINE = "Slack (DAM): plain replies never reach Slack. Post your short reply (same shape as above) to this Slack thread with DAM's reply tool; use DAM's post tool if there is no thread."
 
+/** T-1098: the last line of a board update in a chat-app session (chat = 'dam', or a channel server's name): post the reply to the chat. */
+export const chatPostLine = (chat: string) =>
+  chat === 'dam' ? DAM_POST_LINE : `Chat (${chat}): plain replies never reach the chat. Post your short reply (same shape as above) to it with the ${chat} server's reply tool.`
+
 /** The short core of the lead's guide (the reply shape and the main rules), for a DAM session, where the full guide may be missing. */
 export const damGuideCore = (name: string = DEFAULT_NAME) =>
   [

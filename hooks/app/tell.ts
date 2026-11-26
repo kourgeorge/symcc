@@ -1,5 +1,5 @@
 import { cutLine } from '../core/reports'
-import { DAM_POST_LINE, damGuideCore } from '../core/dam'
+import { chatPostLine, damGuideCore } from '../core/dam'
 import { S, leadQueue, meanwhile } from './state'
 import type { Host } from '../host'
 
@@ -102,7 +102,7 @@ export function takeBoardUpdate(): string | undefined {
  * T-922: in a DAM session (run from Slack) a board update that wants a reply also carries the guide's core (prompt.compose
  * may be skipped there) and ends with the line telling the lead to post its reply to Slack; '' in any other session.
  */
-const damEnding = () => (S.dam ? `\n\n${damGuideCore(S.N.name)}\n\n${DAM_POST_LINE}` : '')
+const damEnding = () => (S.chat ? `${S.chat === 'dam' ? `\n\n${damGuideCore(S.N.name)}` : ''}\n\n${chatPostLine(S.chat)}` : '')
 
 /** An answer cut to one short line, for a "Meanwhile" line. */
 export const brief = (text: string) => cutLine(text, 200)
