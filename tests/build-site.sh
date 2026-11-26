@@ -70,6 +70,44 @@ else
   grep -q 'href="llms.txt"' "$tmp/small/index.html" || bad "footer of the landing page has no llms.txt link"
 fi
 
+# (T-1087) the blog: no posts = no Blog link and no blog pages; with posts: list (newest first), one page per
+# post with date and prev/next links, a valid RSS feed, the Blog link on every page
+[ -e "$tmp/small/blog" ] && bad "blog pages built with no docs/blog posts"
+grep -q 'blog/index.html' "$tmp/small/index.html" "$tmp/small/guide.html" && bad "Blog link with no posts"
+mkdir -p "$tmp/src/docs/blog"
+printf '# Old one\n\nThe first summary & more.\n\nBody.\n' > "$tmp/src/docs/blog/2026-01-05-old-one.md"
+printf '# Middle\n\nBody only <b>x</b>.\n' > "$tmp/src/docs/blog/2026-03-09-middle.md"
+printf '# New one\n\nThe newest summary.\n' > "$tmp/src/docs/blog/2026-11-26-new-one.md"
+if ! bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/blog" >"$tmp/log" 2>&1; then
+  bad "blog build failed: $(cat "$tmp/log")"
+else
+  b="$tmp/blog/blog"
+  for f in index.html rss.xml old-one.html middle.html new-one.html old-one.md; do [ -f "$b/$f" ] || bad "blog: missing $f"; done
+  for p in index.html guide.html research/index.html blog/new-one.html; do
+    grep -q 'href="[./]*blog/index.html">Blog</a>' "$tmp/blog/$p" || bad "blog: no Blog link in $p"
+  done
+  grep -q 'href="blog/index.html">Blog</a>' "$tmp/blog/index.html" || bad "blog: no Blog link on the home page"
+  order="$(grep -o '"\(new-one\|middle\|old-one\)\.html"' "$b/index.html" | tr -d '\n')"
+  [ "$order" = '"new-one.html""middle.html""old-one.html"' ] || bad "blog index not newest first: $order"
+  grep -q '26 Nov 2026' "$b/index.html" || bad "blog index: no date"
+  grep -q 'The first summary &amp; more.' "$b/index.html" || bad "blog index: no summary"
+  grep -q 'rel="alternate" type="application/rss+xml"' "$b/index.html" "$b/new-one.html" || bad "blog: no RSS link in head"
+  grep -q '5 Jan 2026' "$b/old-one.html" || bad "post page: no date"
+  grep -q 'Next: Middle' "$b/old-one.html" || bad "oldest post: no next link"
+  grep -q 'Previous' "$b/old-one.html" && bad "oldest post has a previous link"
+  grep -q 'Previous: Old one' "$b/middle.html" && grep -q 'Next: New one' "$b/middle.html" || bad "middle post: prev/next links wrong"
+  grep -q 'Previous: Middle' "$b/new-one.html" || bad "newest post: no previous link"
+  grep -q 'Next' "$b/new-one.html" && bad "newest post has a next link"
+  bun -e '
+    const x = require("fs").readFileSync(process.argv[1], "utf8")
+    const items = x.match(/<item>[\s\S]*?<\/item>/g) ?? []
+    const ok = x.startsWith("<?xml") && x.includes("<rss version=\"2.0\">") && x.trim().endsWith("</rss>") && items.length === 3 &&
+      items.every(i => /<title>.+<\/title>/.test(i) && /<link>https:\/\/kourgeorge\.github\.io\/symcc\/blog\/[a-z-]+\.html<\/link>/.test(i) && /<pubDate>.+GMT<\/pubDate>/.test(i) && i.includes("<description>")) &&
+      x.indexOf("New one") < x.indexOf("Middle") && x.includes("summary &amp; more")
+    process.exit(ok ? 0 : 1)' "$b/rss.xml" || bad "blog: rss.xml is not a valid feed with all posts"
+  grep -q 'blog/new-one.md' "$tmp/blog/llms.txt" || bad "llms.txt does not list the blog posts"
+fi
+
 # 4. (T-594) a dangerous --out is refused and nothing is deleted; an earlier build is rebuilt fine
 for o in . site docs scripts ..; do
   if (cd "$tmp/src" && bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$o") >"$tmp/log" 2>&1; then

@@ -2738,6 +2738,14 @@ To rename it:
 
 Old task branches keep their old names (`symcc/T-1`); they still work.
 
+### Adding a blog post to the site
+
+Put one Markdown file in `docs/blog/`, named `YYYY-MM-DD-<slug>.md` (the date comes from the file
+name). Start it with a `# Title` line; the paragraph right after it is the summary shown in the
+blog list and the RSS feed. The site build (`scripts/build-site.ts`) makes `blog/<slug>.html`,
+the list `blog/index.html` (newest first) and `blog/rss.xml`, and adds a Blog link to the header.
+With no files in `docs/blog/`, there is no Blog link and no blog pages.
+
 ---
 
 ## For developers: where the code is

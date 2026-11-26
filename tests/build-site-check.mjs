@@ -45,7 +45,7 @@ if (checked < 50) bad(`only ${checked} internal links checked; expected many mor
 const SITE = 'https://kourgeorge.github.io/symcc/'
 const GITHUB = /^https:\/\/github\.com\/kourgeorge\/symcc\/(blob|tree)\/main\/([^#?]+)/
 const llmsFile = join(out, 'llms.txt')
-const pages = html.map(f => relative(out, f)).filter(p => p !== 'index.html' && p !== 'research/index.html')
+const pages = html.map(f => relative(out, f)).filter(p => p !== 'index.html' && p !== 'research/index.html' && p !== 'blog/index.html')
 if (!existsSync(llmsFile)) bad('missing llms.txt')
 else {
   const llms = readFileSync(llmsFile, 'utf8')

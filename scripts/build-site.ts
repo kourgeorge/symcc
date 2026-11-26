@@ -303,8 +303,9 @@ export function llmsTxt(pages: Page[], root: string): string {
     const sum = MAIN_SUMMARY[p.src] ?? summary(md)
     return `- [${title}](${SITE}/${mdOut(p)})${sum ? `: ${sum}` : ''}`
   }
-  const main = pages.filter(p => !p.src.startsWith('docs/research/'))
+  const main = pages.filter(p => !p.src.startsWith('docs/research/') && !p.src.startsWith('docs/blog/'))
   const notes = pages.filter(p => p.src.startsWith('docs/research/'))
+  const posts = pages.filter(p => p.src.startsWith('docs/blog/'))
   return `# symcc
 
 > symcc is an agent organization for coding agents, as a plugin for Claude Code and OpenCode. You talk to one lead, which plans the work and keeps a shared task board. Workers build the tasks in parallel, each in its own git worktree and branch, and may change only the files their task allows. Scouts look for bugs, missing tests and outdated parts on their own timers. One merge queue tests each finished task and merges it into main, and the lead asks the owner only for real decisions.
@@ -318,8 +319,64 @@ ${main.map(line).join('\n')}
 ## Research notes
 
 ${notes.map(line).join('\n')}
+${posts.length ? `\n## Blog\n\n${posts.map(line).join('\n')}\n` : ''}`
+}
+
+// ---------- blog (T-1087) ----------
+
+export type Post = { page: Page; slug: string; date: string; title: string; summary: string }
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+export function longDate(d: string): string {
+  const [y, m, day] = d.split('-')
+  return `${Number(day)} ${MONTHS[Number(m) - 1]} ${y}`
+}
+
+// Posts in docs/blog/YYYY-MM-DD-<slug>.md, newest first.
+export function readPosts(root: string): Post[] {
+  const dir = join(root, 'docs/blog')
+  if (!existsSync(dir)) return []
+  const posts: Post[] = []
+  for (const n of readdirSync(dir)) {
+    const m = /^(\d{4}-\d{2}-\d{2})-(.+)\.md$/.exec(n)
+    if (!m) continue
+    const md = readFileSync(join(dir, n), 'utf8').replace(/\r\n?/g, '\n')
+    const lines = md.split('\n')
+    const t = lines.findIndex(l => /^#\s+\S/.test(l))
+    const title = t >= 0 ? lines[t]!.replace(/^#\s+/, '').replace(/[`*_]/g, '').trim() : m[2]!
+    let k = t + 1
+    while (k < lines.length && blank(lines[k])) k++
+    const para: string[] = []
+    while (k < lines.length && !blank(lines[k]) && !startsBlock(lines[k]!) && !/^\s*[<|!]/.test(lines[k]!)) para.push(lines[k++]!.trim())
+    posts.push({ page: { src: `docs/blog/${n}`, out: `blog/${m[2]}.html`, title }, slug: m[2]!, date: m[1]!, title, summary: plain(para.join(' ')) })
+  }
+  return posts.sort((a, b) => (a.date === b.date ? b.slug.localeCompare(a.slug) : b.date.localeCompare(a.date)))
+}
+
+export const rssXml = (posts: Post[]): string => {
+  const items = posts.map(p => `  <item>
+    <title>${escapeHtml(p.title)}</title>
+    <link>${SITE}/${p.page.out}</link>
+    <guid>${SITE}/${p.page.out}</guid>
+    <pubDate>${new Date(`${p.date}T12:00:00Z`).toUTCString()}</pubDate>
+    <description>${escapeHtml(p.summary)}</description>
+  </item>`).join('\n')
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+  <title>symcc blog</title>
+  <link>${SITE}/blog/index.html</link>
+  <description>News from symcc, the agent organization for coding agents.</description>
+${items}
+</channel>
+</rss>
 `
 }
+
+const RSS_LINK = '<link rel="alternate" type="application/rss+xml" title="symcc blog" href="rss.xml">'
+
+// Puts a Blog link into the site header (after the Research notes link).
+const withBlog = (html: string) => html.replace(/(<a href="research\/index\.html">[^<]*<\/a>)/, '$1\n    <a href="blog/index.html">Blog</a>')
 
 // ---------- pages ----------
 
@@ -337,7 +394,7 @@ function relink(html: string, depth: number): string {
   return html.replace(/\b(href|src)="(?![a-z][a-z0-9+.-]*:|#|\/)([^"]*)"/gi, (_, a: string, v: string) => `${a}="${up}${v}"`)
 }
 
-function render(page: Page, body: string, f: { header: string; footer: string }): string {
+function render(page: Page, body: string, f: { header: string; footer: string }, head = ''): string {
   const depth = page.out.split('/').length - 1
   const up = '../'.repeat(depth)
   return `<!doctype html>
@@ -347,7 +404,7 @@ function render(page: Page, body: string, f: { header: string; footer: string })
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(page.title)} · symcc</title>
 <link rel="stylesheet" href="${up}style.css">
-</head>
+${head}</head>
 <body>
 ${relink(f.header, depth)}
 <main class="doc">
@@ -416,7 +473,9 @@ export function stillFrame(indexHtml: string, demoJs: string): string {
 export function build(root: string, out: string): string[] {
   const why = unsafeOut(root, out)
   if (why) throw new Error(`build-site: refusing --out ${out}: ${why}. Nothing was deleted.`)
-  const indexHtml = readFileSync(join(root, 'site/index.html'), 'utf8')
+  const posts = readPosts(root)
+  const rawIndex = readFileSync(join(root, 'site/index.html'), 'utf8')
+  const indexHtml = posts.length ? withBlog(rawIndex) : rawIndex
   const f = frame(indexHtml)
   const pages: Page[] = [
     { src: 'README.md', out: 'overview.html', title: 'Overview', dropHtml: true },
@@ -430,6 +489,7 @@ export function build(root: string, out: string): string[] {
     const md = readFileSync(join(researchDir, n), 'utf8')
     pages.push({ src: `docs/research/${n}`, out: `research/${n.replace(/\.md$/, '.html')}`, title: firstHeading(md) ?? n.replace(/\.md$/, '') })
   }
+  for (const p of [...posts].reverse()) pages.push(p.page)
   const byPath = new Map(pages.map(p => [p.src, p]))
   const images = new Set<string>()
 
@@ -440,6 +500,7 @@ export function build(root: string, out: string): string[] {
   writeFileSync(join(out, MARKER), 'Made by scripts/build-site.ts; this folder is deleted and rebuilt on each build.\n')
   const demoFile = join(root, 'site/demo.js')
   if (existsSync(demoFile)) writeFileSync(join(out, 'index.html'), stillFrame(indexHtml, readFileSync(demoFile, 'utf8')))
+  else writeFileSync(join(out, 'index.html'), indexHtml)
 
   const written = ['index.html']
   for (const page of pages) {
@@ -447,7 +508,19 @@ export function build(root: string, out: string): string[] {
     const md = readFileSync(join(root, page.src), 'utf8').replace(/\r\n?/g, '\n')
     const file = join(out, page.out)
     mkdirSync(dirname(file), { recursive: true })
-    writeFileSync(file, render(page, blocks(md.split('\n'), ctx), f))
+    const post = posts.findIndex(p => p.page === page)
+    let body = blocks(md.split('\n'), ctx)
+    let head = ''
+    if (post >= 0) {
+      const p = posts[post]!
+      const newer = posts[post - 1]
+      const older = posts[post + 1]
+      const link = (q: Post, label: string) => `<a href="${escapeHtml(q.slug)}.html">${label}: ${escapeHtml(q.title)}</a>`
+      body = body.replace(/<\/h1>/, `</h1>\n<p class="post-date">${longDate(p.date)}</p>`)
+      body += `\n<p class="post-nav">${[older && link(older, 'Previous'), newer && link(newer, 'Next')].filter(Boolean).join(' · ')}</p>`
+      head = `${RSS_LINK}\n`
+    }
+    writeFileSync(file, render(page, body, f, head))
     written.push(page.out)
     writeFileSync(join(out, mdOut(page)), mdCopy(md, { ...ctx, md: true }))
   }
@@ -460,6 +533,15 @@ export function build(root: string, out: string): string[] {
   mkdirSync(join(out, 'research'), { recursive: true })
   writeFileSync(join(out, indexPage.out), render(indexPage, `${intro}\n<ul class="notes">\n${list}\n</ul>`, f))
   written.push(indexPage.out)
+
+  if (posts.length) {
+    const blogIndex: Page = { src: 'docs/blog/index.md', out: 'blog/index.html', title: 'Blog' }
+    const items = posts.map(p => `<li><p><a href="${escapeHtml(p.slug)}.html">${escapeHtml(p.title)}</a> <span class="post-date">${longDate(p.date)}</span></p>${p.summary ? `<p>${escapeHtml(p.summary)}</p>` : ''}</li>`).join('\n')
+    const head = '<h1 id="blog">Blog</h1>\n<p><a href="rss.xml">RSS feed</a></p>'
+    writeFileSync(join(out, blogIndex.out), render(blogIndex, `${head}\n<ul class="notes">\n${items}\n</ul>`, f, `${RSS_LINK}\n`))
+    writeFileSync(join(out, 'blog/rss.xml'), rssXml(posts))
+    written.push(blogIndex.out, 'blog/rss.xml')
+  }
 
   // images used by the landing page (relative src not in site/) and by the pages
   for (const m of indexHtml.matchAll(/\bsrc="(?![a-z][a-z0-9+.-]*:|\/)([^"#?]+)"/gi)) {
