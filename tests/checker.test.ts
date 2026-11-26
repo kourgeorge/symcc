@@ -577,10 +577,13 @@ test("failing tests sent back to the worker come under a heading that says what 
 test('when its retries are used up, a checker report fails the task with the report', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true, {}, { auto_retries: 0 }))
-  const t = await finish(w, async id => checkerFinished(id, 'src/a.ts:1 the old behavior is gone'))
+  const t = await finish(w, async id => checkerFinished(id, 'I looked around.\nProblems:\n- src/a.ts:1 the old behavior is gone\n- src/b.ts:2 it crashes'))
   expect(t.status).toBe('failed')
-  expect(t.note).toBe('the checker found problems: src/a.ts:1 the old behavior is gone')
-  expect(leadQueue.join('\n')).toContain("The checker's report:\nsrc/a.ts:1 the old behavior is gone")
+  const said = leadQueue.join('\n')
+  expect(said).toContain("not merged. Its checker (symcc-T-1-checker) — an agent that tries to break each change before it merges — found 2 problems. No automatic tries left (0 of 0 automatic tries used).")
+  expect(said).toContain("Checker symcc-T-1-checker's report (try 1):\nProblems:\n- src/a.ts:1 the old behavior is gone\n- src/b.ts:2 it crashes")
+  expect(said).not.toContain('…')
+  expect(said).not.toContain('I looked around')
   expect(w.git.main).toBe(M1)
 })
 
