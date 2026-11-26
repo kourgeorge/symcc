@@ -1582,7 +1582,7 @@ export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { histo
 
 /** The page of the task or question `id`: its title, its question and its choices, each a clickable line (T-583),
  *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,
- *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), with the latest report's text
+ *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Runs, Report), with the latest report's text
  *  (`report`, read by the TUI) and the changed files from the view file; null when it is gone. */
 function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = '', more?: SearchMore, pick?: ReportPick, pageCursor = 0): Body | null {
   const v = f.view
