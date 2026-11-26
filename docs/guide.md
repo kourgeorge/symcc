@@ -1933,9 +1933,10 @@ The built-in task types (in the plugin, one file each: `kinds/<name>.ts`):
 
 **Errands.** An `errand` runs like an investigation (no file list, no checks, no tests, its folder is removed after), with one difference: when the worker hands back, the task ends done on its own, in every mode, with the report kept. Use an investigation when you want an answer to read, an errand when you want something done. A failing errand fails like any task.
 
-**Two ways a task runs.** `investigation` is one of them: its worker hands back an answer,
+**Three ways a task runs.** `investigation` is one of them: its worker hands back an answer,
 nothing is committed, tested or merged, and it waits for you to read it (see
-[Investigation tasks](#investigation-tasks)). Every other task type, `change` included, runs the
+[Investigation tasks](#investigation-tasks)). `errand` is another: its worker hands back, the
+task ends done on its own, and nothing is merged. Every other task type, `change` included, runs the
 same way: the worker changes files, which are committed, tested and merged (see
 [What happens when a worker finishes](#what-happens-when-a-worker-finishes)).
 
@@ -1957,7 +1958,7 @@ is told it. The name uses letters, digits, `-` and `_`. A file with the name of 
 replaces it. The text under the front matter is extra advice for the worker. A file that can't be
 used is skipped, with a note.
 
-A task type is only a label with a description. It does not change how a task runs.
+A task type is only a label with a description. It does not change how a task runs, except `investigation` and `errand`: neither is merged.
 
 **Add, edit, reset, turn off.** The easy way is to ask the lead: "show me the task types", "add a
 `chore` task type for dependency bumps", "turn off the feature task type", "reset the bug task type". The lead

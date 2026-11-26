@@ -59,6 +59,15 @@ test('the lead help says secret-looking files are left out of a worker\'s commit
   expect(text).toContain('left-out/<task>/')
 })
 
+test('the kind option text names errand and investigation as not merged', () => {
+  const add = TOOLS().find(t => t.name === 'add')!
+  const props = (add.inputSchema as unknown as { properties: Record<string, { description?: string }> }).properties
+  const text = props.kind!.description!
+  expect(text).toContain('Every task type but investigation and errand runs like change')
+  expect(text).toContain('errand:')
+  expect(text).toContain('nothing is merged')
+})
+
 test('the checker texts say it runs before the merge queue, not after the tests pass; a test time-out is a normal failed try', () => {
   const view = SETTINGS.find(s => s.name === 'checker')!.meaning
   const tool = TOOLS().find(t => t.name === 'settings')!
