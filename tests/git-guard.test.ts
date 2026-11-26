@@ -458,6 +458,17 @@ test('T-1116: a command substitution glued to the command word counts as empty (
   expect(gitWriteIn('{ true;}; git push', 'reader')).toBe('git push')
 })
 
+test('T-1128: a { or } right after a redirect is its file name, not a command break (`git >} push` runs git push)', () => {
+  for (const who of ['reader', 'worker'] as const) {
+    for (const c of ['git >} push', 'git > } push', 'git 2> { push', 'git -P >} push', 'git <{ push', 'git >{ push'])
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+    expect([who, gitWriteIn('git >} commit', who)]).toEqual([who, who === 'reader' ? 'git commit' : undefined])
+    // braces that start or end a group still break commands
+    expect([who, gitWriteIn('{ git push; }', who)]).toEqual([who, 'git push'])
+    expect([who, gitWriteIn('{ echo >x; } ; git push', who)]).toEqual([who, 'git push'])
+  }
+})
+
 test("T-1062: zsh's noglob, nocorrect, coproc and `-` before git, ~- and the folder stack, and a project path glued to an option are caught", () => {
   for (const who of ['reader', 'worker'] as const) {
     for (const c of ['noglob git push', 'nocorrect git push', '- git push', 'coproc git push', 'builtin git push', 'repeat 2 git push', 'x; noglob nocorrect git push'])

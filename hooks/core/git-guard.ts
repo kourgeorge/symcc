@@ -290,7 +290,8 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
         end()
         depth += c === '(' ? 1 : depth > 0 ? -1 : 0
         p++
-      } else if (c === ';' || c === '|' || ((c === '{' || c === '}') && ' \t\r\n;&|()<>'.includes(s[p + 1] ?? ' ')) || (c === '&' && s[p + 1] !== '>')) {
+      } else if (c === ';' || c === '|' || (!target && (c === '{' || c === '}') && ' \t\r\n;&|()<>'.includes(s[p + 1] ?? ' ')) || (c === '&' && s[p + 1] !== '>')) {
+        // a `{` or `}` right after a redirect is its file name (`git >} push` writes a file named }), not a break
         end()
         p++
       } else if (c === '<' || c === '>' || c === '&') {
