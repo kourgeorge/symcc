@@ -357,7 +357,8 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
     while (i < words.length && SETTING.test(words[i]!)) i++
     if (i >= words.length) return undefined
     const name = nameOf(words[i]!)
-    if (name === 'eval') return checkText(words.slice(i + 1).join(' '), who, budget)
+    // bash and zsh take a `--` right after eval as the end of its options (`eval -- git push` runs git push)
+    if (name === 'eval') return checkText(words.slice(words[i + 1] === '--' ? i + 2 : i + 1).join(' '), who, budget)
     if (SHELLS.has(name)) {
       for (const a of words.slice(i + 1)) {
         const bad = /^[-+]/.test(a) ? undefined : checkText(a, who, budget)
@@ -401,7 +402,9 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
         ((/^-[a-zA-Z]+$/.test(a) && letters.includes(a[a.length - 1]!.toLowerCase())) || LONG_VALUES.has(a)) &&
         i < words.length &&
         (splitNext || !words[i]!.startsWith('-'))
-      if (takes && !runsCommand(words[i]!)) {
+      // watch joins its words into one script, so a quoted value's first word counts (`watch -c 'git push'`)
+      const value = name === 'watch' && i < words.length ? words[i]!.trim().split(/\s+/)[0]! : words[i] ?? ''
+      if (takes && !runsCommand(value)) {
         if (splitNext) split = words[i]
         i++
       } else if (takes && i < words.length && SHELLS.has(nameOf(words[i]!))) {
