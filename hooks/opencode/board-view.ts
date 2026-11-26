@@ -297,7 +297,7 @@ export function bandDraw(f: ViewFile | null, nowMs: number, width: number, rows 
     const end = rowEndText(t, taskPhase(t, nowMs), bandNote(t, nowMs, since(t.id), v.driving ?? false))
     const tail = end ? ` — ${end}` : ''
     hits.push({ open: t.id })
-    out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[shownStatus(t, nowMs)] ?? 'text' }, { text: ` ${t.title}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])
+    out.push([{ text: leads.get(t.id)!, color: BAND_COLOR[shownStatus(t, nowMs)] ?? 'text' }, { text: ` ${rowTitle(t)}`, color: 'text' }, ...(tail ? [{ text: tail, color: 'inactive' }] : [])])
   }
   if (live.length + questions.length > rows) hits.push({ board: true }), out.push([{ text: `+${live.length + questions.length - rows} more · /${f.name}`, color: 'inactive' }])
   return { lines: out, hits }

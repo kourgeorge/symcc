@@ -78,6 +78,13 @@ test('T-1137: a task row and its page show the project tag; a task with no proje
   expect(panelLines(g, { opened: 'T-4', cursor: 0 }, NOW, 120).lines.map(lineText).join('\n')).toContain('[client] a later one')
 })
 
+test('T-1146: the Live tab shows the project tag on a running task', () => {
+  const f = viewFile()
+  const g: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-1' ? ({ ...t, project: 'client' } as SymccTask) : t)) } }
+  const live = panelLines(g, { tab: 'live', opened: '', cursor: 0 }, NOW, 140).lines.map(lineText).join('\n')
+  expect(live).toContain('[client] a change in src')
+})
+
 test('T-630: the panel and the band show no all-time total of the tries ("total: … tokens in all over N tries"); a task page keeps its own', () => {
   const f = viewFile()
   const runs = [{ started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:12:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:12:00.000Z', tokens: { input: 40_000 } }] }]
