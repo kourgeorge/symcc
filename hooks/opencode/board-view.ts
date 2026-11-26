@@ -577,11 +577,12 @@ export const NEW_SCOUT_BUTTON: PanelButton = { label: '+ New scout', hit: { key:
 
 /** The banner's git row (T-706, as Claude Code's): with no git repo or no commit yet, what is wrong and the
  *  "[ Set up git (g) ]" button, which asks for a yes before /<name>-settings git setup; no row otherwise. */
-export function gitRowLines(v: Pick<PaneView, 'git_state'> & Partial<Pick<PaneView, 'git_install'>>, w: number, name: string = DEFAULT_NAME): Line[] {
+export function gitRowLines(v: Pick<PaneView, 'git_state'> & Partial<Pick<PaneView, 'git_install' | 'git_workspace'>>, w: number, name: string = DEFAULT_NAME): Line[] {
   const missing = v.git_state === 'no-git'
   if (!missing && v.git_state !== 'no-repo' && v.git_state !== 'no-commits') return []
   // the panel clips long lines, so the notice wraps; the button goes at the end of the last line when it fits, else on its own line
-  const lines: Line[] = wrapSegs([{ text: gitNotice(v.git_state!, v.git_install ?? '', name), color: 'warning' }], w)
+  const lines: Line[] = wrapSegs([{ text: v.git_workspace || gitNotice(v.git_state!, v.git_install ?? '', name), color: 'warning' }], w)
+  if (v.git_workspace) return lines // T-1136: several repos here: no Set up git button
   const b = missing ? CHECK_GIT_BUTTON : SETUP_GIT_BUTTON
   const button = buttonText(b)
   const last = lines[lines.length - 1]

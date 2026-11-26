@@ -122,8 +122,10 @@ export async function gitReady($: Host, b?: Board): Promise<boolean> {
   const s = await probeGit($)
   if (s === 'no-git' && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => '')
   if (s !== 'no-git') S.gitInstall = ''
-  if (s !== S.gitState) {
+  const ws = (s === 'no-repo' || s === 'no-commits') && (await holdsRepos($)) ? workspaceText() : ''
+  if (s !== S.gitState || ws !== S.gitWorkspace) {
     S.gitState = s
+    S.gitWorkspace = ws
     await publish($, b ?? (await load($)))
   }
   if (s === 'ok') {
@@ -134,7 +136,7 @@ export async function gitReady($: Host, b?: Board): Promise<boolean> {
     S.toldGit = 'ok'
   } else if (S.driving && S.toldGit !== s) {
     S.toldGit = s
-    tellLead($, s === 'no-git' ? noGitText(S.N.name, S.gitInstall) : s === 'no-repo' && (await holdsRepos($)) ? workspaceText() : setupAskText(s, S.N.name))
+    tellLead($, s === 'no-git' ? noGitText(S.N.name, S.gitInstall) : ws ? ws : setupAskText(s, S.N.name))
   }
   return s === 'ok'
 }
@@ -163,7 +165,7 @@ export async function setupGit($: Host, who: string): Promise<string> {
   const s = await probeGit($)
   if (s === 'ok') return 'git is set up already: this folder is a git repo with commits'
   if (s === 'no-git') return noGitText(S.N.name, S.gitInstall)
-  if (s === 'no-repo' && (await holdsRepos($))) return workspaceText()
+  if ((s === 'no-repo' || s === 'no-commits') && (await holdsRepos($))) return workspaceText()
   S.settingUp = true
   try {
     const init = s === 'no-repo'

@@ -16,13 +16,13 @@ import { fakeHost, memoryFs, done } from './fake-host'
 
 const ROOT = '/repo'
 
-function world(id: string, root = ROOT, repoRoot = root, machine: { uname?: string; noGit?: boolean; macStub?: boolean; noBrew?: boolean; repo?: { on: boolean } } = {}) {
+function world(id: string, root = ROOT, repoRoot = root, machine: { uname?: string; noGit?: boolean; macStub?: boolean; noBrew?: boolean; repo?: { on: boolean }; nested?: string[]; noCommit?: boolean } = {}) {
   const files = new Map<string, string>()
   const opened: string[] = []
   const ran: { args: string; cwd?: string }[] = []
   const gits = { n: 0 } // every git run, a missing git's too (T-887)
   const w = fakeHost({
-    fs: memoryFs(files),
+    fs: { ...memoryFs(files), list: async (p: string) => (p === root ? (machine.nested ?? []).map(name => ({ name, kind: 'dir' as const })) : []) } as never,
     session: { id: async () => id, repo: async () => ({ root: repoRoot }), root: async () => root },
     run: async (argv, init) => {
       const [cmd, ...rest] = argv
@@ -31,6 +31,7 @@ function world(id: string, root = ROOT, repoRoot = root, machine: { uname?: stri
       if (cmd === 'sh' && machine.uname) return done({ exitCode: (machine.noBrew ? ['apt-get'] : ['brew', 'apt-get']).includes(rest[rest.length - 1]!) ? 0 : 1 })
       if (cmd === 'git' && machine.noGit) return done({ exitCode: 127, stderr: 'git: command not found' })
       if (cmd === 'git' && machine.macStub) return done({ exitCode: 1, stderr: 'xcrun: error: invalid active developer path (/Library/Developer/CommandLineTools), missing xcrun at: /Library/Developer/CommandLineTools/usr/bin/xcrun\n' })
+      if (cmd === 'git' && machine.noCommit && rest[0] === 'rev-parse' && rest.includes('--verify')) return done({ exitCode: 1 })
       if (cmd === 'git' && machine.repo?.on && rest[0] === 'rev-parse') return done({ stdout: rest.includes('--show-toplevel') ? `${root}\n` : rest.includes('--show-cdup') ? '\n' : rest.includes('HEAD') ? 'abc\n' : 'true\n' })
       if (cmd === 'git' && rest[0] === 'init') machine.repo = { on: true }
       if (cmd === 'git') ran.push({ args: argv.slice(1).join(' '), cwd: init?.cwd })
@@ -572,4 +573,28 @@ test('T-968: Meanwhile lines not yet given with a prompt still go at the top of 
   expect(takeBoardUpdate() ?? '').toContain('- The owner paused T-3.')
   expect(meanwhileForPrompt().text).toBe('')
   await sessionEnd(w.host)
+})
+
+test('T-1136: a folder whose subfolders are their own repos: the view carries the workspace text (no Set up git), setup_git refuses and commits nothing, with no repo or with a top repo with no commit; an empty folder keeps the button', async () => {
+  for (const noCommit of [false, true]) {
+    const w = world('a', '/home/me/proj', '/home/me', { uname: 'Darwin', nested: ['a', 'b'], noCommit, ...(noCommit ? { repo: { on: true } } : {}) })
+    w.files.set('/home/me/.git', '')
+    w.files.set('/home/me/proj/a/.git', '')
+    w.files.set('/home/me/proj/b/.git', '')
+    await sessionStart(w.host)
+    await runCommand(w.host, 'symcc-init', '')
+    expect(await gitReady(w.host)).toBe(false)
+    const v = w.panel.view() as unknown as { git_state: string; git_workspace?: string }
+    expect(v.git_state).toBe(noCommit ? 'no-commits' : 'no-repo')
+    expect(v.git_workspace).toContain('workspace of several repos')
+    const out = await setupGit(w.host, 'you')
+    expect(out).toContain('workspace of several repos')
+    expect(w.ran.some(x => x.args.includes('commit') || x.args.startsWith('add'))).toBe(false)
+  }
+  // an empty folder: no flag, so the banners keep the button
+  const e = world('a', '/home/me/proj', '/home/me', { uname: 'Darwin' })
+  e.files.set('/home/me/.git', '')
+  await sessionStart(e.host)
+  await runCommand(e.host, 'symcc-init', '')
+  expect((e.panel.view() as unknown as { git_workspace?: string }).git_workspace).toBe(undefined)
 })
