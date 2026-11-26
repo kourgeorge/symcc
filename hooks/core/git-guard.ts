@@ -173,6 +173,9 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
     docs.length = 0
   }
 
+  /** Whether the word being read had a command substitution: its output is unknown, so it counts as empty. */
+  let subst = false
+
   const doubleQuoted = () => {
     let v = ''
     p++
@@ -183,11 +186,11 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
         p += 2
       } else if (c === '`') {
         backquote()
-        v += '$()'
+        subst = true
       } else if (c === '$' && s[p + 1] === '(') {
         p += 2
         list(true)
-        v += '$()'
+        subst = true
       } else {
         v += c
         p++
@@ -199,6 +202,7 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
 
   /** One word from p, and whether it had no quote or escape (so `2` in `2>x` is a file number). */
   const word = () => {
+    subst = false
     let v = ''
     let plain = true
     let braces = 0
@@ -220,12 +224,12 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
         plain = false
       } else if (c === '`') {
         backquote()
-        v += '$()'
+        subst = true
         plain = false
       } else if (c === '$' && s[p + 1] === '(') {
         p += 2
         list(true)
-        v += '$()'
+        subst = true
         plain = false
       } else if (c === '$' && s[p + 1] === "'") {
         // $'...': backslash escapes, ends at an unescaped quote
@@ -247,7 +251,7 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
         p++
       }
     }
-    return { v, plain }
+    return { v, plain, subst }
   }
 
   /** Commands from p to the text's end, or (`nested`) to the `)` that closes a $( or <(. */
@@ -281,30 +285,32 @@ function splitCommands(s: string, out: string[][], budget: Budget): void {
         end()
         depth += c === '(' ? 1 : depth > 0 ? -1 : 0
         p++
-      } else if (c === ';' || c === '|' || c === '{' || c === '}' || (c === '&' && s[p + 1] !== '>')) {
+      } else if (c === ';' || c === '|' || ((c === '{' || c === '}') && ' \t\r\n;&|()<>'.includes(s[p + 1] ?? ' ')) || (c === '&' && s[p + 1] !== '>')) {
         end()
         p++
       } else if (c === '<' || c === '>' || c === '&') {
         const op = REDIRECTS.find(o => s.startsWith(o, p))!
         p += op.length
         if (op === '<(' || op === '>(') {
+          // like $(...), its text counts as empty, so `<(true)git push` is read as `git push`
           list(true)
           if (target) target = false
-          else cmd.push('$()')
         } else {
           target = true
           if (op === '<<' || op === '<<-') docEnd = op === '<<-'
         }
       } else {
-        const { v, plain } = word()
+        const { v, plain, subst: had } = word()
         // a file number right before a redirect (`2>x`) belongs to it
         if (plain && /^\d+$/.test(v) && (s[p] === '<' || s[p] === '>')) continue
         if (docEnd !== undefined) {
           docs.push({ end: v, tabs: docEnd })
           docEnd = undefined
         }
+        // a substitution's output is unknown: it counts as nothing, so `$(true)git push` is git push, and so is
+        // `$(true) git push`, where the empty word goes away
         if (target) target = false
-        else cmd.push(v)
+        else if (!(had && v === '')) cmd.push(v)
       }
     }
     end()

@@ -397,6 +397,18 @@ test('T-1116: repeated wrappers, redirects and a long random command check fast'
   expect(gitWriteIn('$('.repeat(20_000), 'reader')).toBe('a command too complex to read')
 })
 
+test('T-1116: a command substitution glued to the command word counts as empty (`$(true)git push` runs git push)', () => {
+  const glued = ['$(true)git push', '`true`git push', '``git push', '$()git push', '"$(true)"git push', '""$(:)git push', 'sudo $(true)git push',
+    'x=1 $(true)git push', '/usr/bin/$(true)git push', '<(true)git push', '$(true) git push', '`true` git push', 'nice $(true) git push']
+  for (const who of ['reader', 'worker'] as const)
+    for (const c of glued) expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+  // a `}` inside a word ends no command; `{ ...; }` still does
+  expect(gitWriteIn('echo }git push', 'reader')).toBe(undefined)
+  expect(gitWriteIn('{ git push; }', 'reader')).toBe('git push')
+  expect(gitWriteIn('x;}git push', 'reader')).toBe(undefined)
+  expect(gitWriteIn('{ true;}; git push', 'reader')).toBe('git push')
+})
+
 test("T-1062: zsh's noglob, nocorrect, coproc and `-` before git, ~- and the folder stack, and a project path glued to an option are caught", () => {
   for (const who of ['reader', 'worker'] as const) {
     for (const c of ['noglob git push', 'nocorrect git push', '- git push', 'coproc git push', 'builtin git push', 'repeat 2 git push', 'x; noglob nocorrect git push'])
