@@ -60,9 +60,9 @@ function statusTextHasLiveSections(now: number) {
   const labels = tasks[0]!
   const lane = tasks.find(l => l.includes('T-2'))!
   expect(lane.startsWith(' ▶ T-2  Add s')).toBe(true)
-  expect(/2m  change ↺2$/.test(lane)).toBe(true)
+  expect(/○ ↺2$/.test(lane)).toBe(true)
   expect(lane.indexOf('◉')).toBe(labels.indexOf('tests'))
-  expect(tasks[tasks.indexOf(lane) + 1]).toMatch(/^   └─◇ T-4 Write the export  waits  \w+$/)
+  expect(tasks[tasks.indexOf(lane) + 1]).toMatch(/^   └─◇ T-4 Write the export  waits$/)
   expect(tasks.some(l => l.startsWith(' ▶ T-3') && l.indexOf('◉') === labels.indexOf('you'))).toBe(true)
   // TODAY: exactly the Live tab's lines (2 merged today)
   expect(statusSection(text, 'TODAY')).toEqual(statusTodayLines(b, now))
