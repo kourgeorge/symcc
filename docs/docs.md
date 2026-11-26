@@ -18,3 +18,4 @@ Every detail of symcc, one topic per page. New here? Start with [Get started](ge
 - [Engine and clients](engine-and-clients.md): what the engine is, what a client is, and the rule between them.
 - [Research notes](research/): answers from investigation tasks, kept as notes.
 - [The demo](demo.md): how the demo picture is made.
+- [Built with symcc](built-with-symcc.md): symcc's own numbers: tasks, tries, tokens and what scouts found. Made by `bun scripts/site-stats.ts`.

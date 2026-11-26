@@ -19,6 +19,13 @@ if ! bun "$here/scripts/build-site.ts" --root "$here" --out "$tmp/real" >"$tmp/l
   bad "build failed: $(cat "$tmp/log")"
 fi
 bun "$here/tests/build-site-check.mjs" "$tmp/real" "$here/.github/workflows/pages.yml" "$here" || bad "checks on the real build failed (see above)"
+# (T-1145) the numbers of docs/data/symcc-stats.json are on the home page and on the Built with symcc page (and its .md copy)
+done_n="$(bun -e 'const s = JSON.parse(await Bun.file(process.argv[1]).text()); console.log(String(s.tasks.done).replace(/\B(?=(\d{3})+(?!\d))/g, ","))' "$here/docs/data/symcc-stats.json")"
+grep -q "<strong>$done_n</strong><span>tasks merged" "$tmp/real/index.html" || bad "home page does not show $done_n tasks merged from the stats JSON"
+grep -q "{{stat" "$tmp/real/index.html" && bad "home page still has a {{stat marker"
+grep -q "<strong>$done_n</strong>" "$tmp/real/built-with-symcc.html" || bad "built-with-symcc.html does not show $done_n tasks merged"
+grep -q "{{stats" "$tmp/real/built-with-symcc.html" "$tmp/real/built-with-symcc.md" && bad "built-with-symcc has a {{stats marker left"
+grep -q 'href="built-with-symcc.html">Built with symcc' "$tmp/real/index.html" || bad "home page footer does not link Built with symcc"
 # (T-749) the home page: the playing hero demo with its 4 tabs and still frame, the sections, install commands, nav links
 bun "$here/tests/home-page-check.mjs" "$tmp/real" "$here" || bad "checks on the home page failed (see above)"
 
@@ -27,6 +34,7 @@ mkdir -p "$tmp/src/docs/research"
 cp -R "$here/site" "$tmp/src/site"
 cp "$here/README.md" "$tmp/src/README.md"
 cp "$here/docs/"*.md "$tmp/src/docs/"
+mkdir -p "$tmp/src/docs/data" && cp "$here/docs/data/"*.json "$tmp/src/docs/data/"
 cp "$here/docs/"*.svg "$here/docs/"*.jpg "$tmp/src/docs/" 2>/dev/null
 cat > "$tmp/src/docs/tasks.md" <<'EOF'
 # Tasks

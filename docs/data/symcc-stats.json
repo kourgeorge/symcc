@@ -1,0 +1,111 @@
+{
+  "from": "2026-11-09",
+  "to": "2026-11-26",
+  "days": 18,
+  "tasks": {
+    "done": 0,
+    "dropped": 0,
+    "answered": 0,
+    "errands": 0,
+    "total": 0
+  },
+  "tries": {
+    "total": 0,
+    "firstTry": 0,
+    "changeTasksWithData": 0,
+    "firstTryRate": null
+  },
+  "endedHow": [
+    {
+      "key": "merged-on-its-own",
+      "label": "merged on its own",
+      "n": 0
+    },
+    {
+      "key": "approved-by-you",
+      "label": "approved by you",
+      "n": 0
+    }
+  ],
+  "failedTries": [],
+  "workMs": 0,
+  "tokens": {
+    "workers": {
+      "all": 0,
+      "billed": 0
+    },
+    "lead": null,
+    "scouts": {
+      "all": 0,
+      "billed": 0
+    },
+    "total": {
+      "all": 0,
+      "billed": 0
+    }
+  },
+  "perDone": {
+    "medianMs": null,
+    "avgMs": null,
+    "medianTokens": null,
+    "avgTokens": null,
+    "medianBilled": null,
+    "avgBilled": null
+  },
+  "stages": [
+    {
+      "stage": "free",
+      "label": "waiting to start",
+      "avgMs": 0
+    },
+    {
+      "stage": "blocked",
+      "label": "waiting on tasks",
+      "avgMs": 0
+    },
+    {
+      "stage": "backlog",
+      "label": "in the backlog",
+      "avgMs": 0
+    },
+    {
+      "stage": "work",
+      "label": "work",
+      "avgMs": 0
+    },
+    {
+      "stage": "prep",
+      "label": "prep",
+      "avgMs": 0
+    },
+    {
+      "stage": "check",
+      "label": "check",
+      "avgMs": 0
+    },
+    {
+      "stage": "queue",
+      "label": "merge queue",
+      "avgMs": 0
+    },
+    {
+      "stage": "tests",
+      "label": "tests",
+      "avgMs": 0
+    },
+    {
+      "stage": "merge",
+      "label": "merge",
+      "avgMs": 0
+    },
+    {
+      "stage": "owner",
+      "label": "waiting for you",
+      "avgMs": 0
+    }
+  ],
+  "roles": [],
+  "origins": [],
+  "scouts": [],
+  "perDay": []
+}

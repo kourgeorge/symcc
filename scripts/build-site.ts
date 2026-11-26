@@ -10,6 +10,9 @@
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path'
 
+import type { SiteStats } from '../hooks/core/site-stats'
+import { fillStats, homeNumber } from './site-stats-html'
+
 const GITHUB = 'https://github.com/kourgeorge/symcc'
 
 type Page = { src: string; out: string; title: string }
@@ -424,6 +427,7 @@ export const DOC_GROUPS: { name: string; pages: Page[] }[] = [
     { src: 'docs/engine-and-clients.md', out: 'engine-and-clients.html', title: 'Engine and clients' },
     RESEARCH_INDEX,
     { src: 'docs/demo.md', out: 'demo.html', title: 'The demo' },
+    { src: 'docs/built-with-symcc.md', out: 'built-with-symcc.html', title: 'Built with symcc' },
   ] },
 ]
 const DOC_PAGES = [DOCS_INDEX, ...DOC_GROUPS.flatMap(g => g.pages)]
@@ -578,8 +582,13 @@ export function build(root: string, out: string): string[] {
   writeFileSync(join(out, '.nojekyll'), '')
   writeFileSync(join(out, MARKER), 'Made by scripts/build-site.ts; this folder is deleted and rebuilt on each build.\n')
   const demoFile = join(root, 'site/demo.js')
-  if (existsSync(demoFile)) writeFileSync(join(out, 'index.html'), stillFrame(indexHtml, readFileSync(demoFile, 'utf8')))
-  else writeFileSync(join(out, 'index.html'), indexHtml)
+  // T-1145: the numbers of docs/data/symcc-stats.json (scripts/site-stats.ts) fill {{stat:NAME}} on the home page
+  // and {{stats:NAME}} on docs/built-with-symcc.md
+  const statsFile = join(root, 'docs/data/symcc-stats.json')
+  const stats: SiteStats | undefined = existsSync(statsFile) ? JSON.parse(readFileSync(statsFile, 'utf8')) : undefined
+  const needStats = (what: string) => { if (!stats) throw new Error(`build-site: ${what} needs docs/data/symcc-stats.json (run bun scripts/site-stats.ts)`); return stats }
+  const home = existsSync(demoFile) ? stillFrame(indexHtml, readFileSync(demoFile, 'utf8')) : indexHtml
+  writeFileSync(join(out, 'index.html'), home.replace(/\{\{stat:(\w+)\}\}/g, (_, n: string) => homeNumber(needStats('site/index.html'), n)))
 
   const written = ['index.html']
   for (const page of pages) {
@@ -589,6 +598,7 @@ export function build(root: string, out: string): string[] {
     mkdirSync(dirname(file), { recursive: true })
     const post = posts.findIndex(p => p.page === page)
     let body = blocks(md.split('\n'), ctx)
+    if (md.includes('{{stats:')) body = fillStats(body, needStats(page.src), 'html', true)
     let head = ''
     if (post >= 0) {
       const p = posts[post]!
@@ -601,7 +611,7 @@ export function build(root: string, out: string): string[] {
     }
     writeFileSync(file, render(page, body, f, head))
     written.push(page.out)
-    writeFileSync(join(out, mdOut(page)), mdCopy(md, { ...ctx, md: true }))
+    writeFileSync(join(out, mdOut(page)), mdCopy(md.includes('{{stats:') ? fillStats(md, needStats(page.src), 'md') : md, { ...ctx, md: true }))
   }
   writeFileSync(join(out, 'llms.txt'), llmsTxt(pages, root))
 
