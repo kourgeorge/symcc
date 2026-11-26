@@ -65,7 +65,7 @@ test('T-846: a task that needs review has a "you" station, and its lane stays at
   expect(liveLabelLine(layout)).toContain('you')
   expect(segText(laneLines(lane('T-805'), layout, { nowMs: T0, frame: 0 })[0]!)).toMatch(/●━+●━+●━+●━+◉─+○/)
   // an investigation's line runs straight through the columns it has no station at, to done
-  expect(segText(laneLines(lane('T-801'), layout, { nowMs: T0, frame: 0 })[0]!)).toMatch(/◉─+─ *─+.*○ /)
+  expect(segText(laneLines(lane('T-801'), layout, { nowMs: T0, frame: 0 })[0]!)).toMatch(/◉─+─ *─+.*○$/)
 })
 
 const liveView = (tasks: unknown[]) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: ['npm test'], driving: true, checker: true, max_parallel: 3 } })

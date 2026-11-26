@@ -214,6 +214,7 @@ export function statsHtml(d: StatsData, project: string): string {
     ['tokens', v.tokKnown ? `${fmtTokens(tokenCount(v.tokens))} in all · avg ${tokOr(v.avgTok)}` : '-'],
     ['tries', v.withData ? `${v.tries} in all · avg ${(v.avgTries ?? 0).toFixed(1)}` : '-'],
   ]) : '<p class="muted">None.</p>')
+  const errands = d.errandsDone ? section('Errands', kv([['errand done', String(d.errandsDone)]])) : ''
 
   const topTok = section('Most tokens', topTable(d.topTokens, fmtTokens, 'var(--purple)'))
   const topTime = section('Most time', topTable(d.topTime, fmtDuration, 'var(--teal)'))
@@ -235,7 +236,7 @@ export function statsHtml(d: StatsData, project: string): string {
       ]), true)
   }
 
-  return `${head}${cards}<div class="grid">${states}${ended}${failedTests}${failedTries}${team}${days}${stages}${perDone}${perTry}${inv}${roles}${origins}${topTok}${topTime}</div>${end}`
+  return `${head}${cards}<div class="grid">${states}${ended}${failedTests}${failedTries}${team}${days}${stages}${perDone}${perTry}${inv}${errands}${roles}${origins}${topTok}${topTime}</div>${end}`
 }
 
 /** The command that opens `file` in the browser on `platform` (process.platform's words), or every one to try when not known. */
