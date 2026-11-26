@@ -369,6 +369,23 @@ test('T-1116: the command is split into words first: a redirect or setting among
     expect([c, gitWriteIn(c, 'reader')]).toEqual([c, undefined])
 })
 
+test('T-1116: a word that runs a command is never a wrapper option\'s value; env -S text is read as env\'s own words', () => {
+  for (const who of ['reader', 'worker'] as const)
+    for (const c of [
+      "env -i sh -c 'git push'", 'env -i bash -c "git push"', "sudo -i sh -c 'git push'", "sudo -i bash -c 'git push'", 'sudo -E bash -c "git push"',
+      "xargs -i sh -c 'git push'", "nice -n sh -c 'git push'", "env -i eval 'git push'", "env -i watch 'git push'", "sudo -E watch 'git push'",
+      "env -i fish -c 'git push'", 'sudo -u nice git push', "env -S'-i git push'", "env -S '-i git push'", "env --split-string='-i git push'",
+      "env -iS '-u X git push'", "env -S 'A=1 sudo -u root git push'", "env -S 'true; git push'",
+    ])
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+  for (const c of ["env -S '-i grep git'", "env -i -S 'A=1' grep 'git push'"]) expect([c, gitWriteIn(c, 'reader')]).toEqual([c, undefined])
+  // many env -S words can't make a check slow
+  const c = "env -S '-i' ".repeat(3000) + 'gi' + 't push'
+  const t = Date.now()
+  expect(typeof gitWriteIn(c, 'reader')).toBe('string')
+  expect(Date.now() - t < 200).toBe(true)
+})
+
 test('T-1116: repeated wrappers, redirects and a long random command check fast', () => {
   const push = 'gi' + 't push'
   for (const r of ['xargs -0 ', 'env -i A=1 ', 'nice >x - ', '<x - ', '- 5 >x ', 'env -i >x - ', 'sudo -u a -s ', 'timeout -s >x KILL 5 ']) {

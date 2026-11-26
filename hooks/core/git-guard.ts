@@ -108,7 +108,7 @@ const SUDO_WORDS = new Set(['sudo', 'doas'])
 const WRAPPERS = new Set([...SUDO_WORDS, ...`env command exec time timeout gtimeout nice ionice nohup setsid xargs parallel caffeinate watch stdbuf
 unbuffer chronic if then do else elif while until noglob nocorrect coproc builtin repeat ! -`.split(/\s+/)])
 /** Shells whose words are a script (`sh -c 'git push'`, `bash -lc ...`): each word after the options is read as commands. */
-const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh'])
+const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish'])
 /** Letters of wrapper short options that take the next word (sudo -u, env -u, timeout -s, xargs -I...; either case). Sudo and doas also -r role, -t type, -R folder, -T timeout. */
 const VALUE_LETTERS = 'ugcdhpskieaofwjnl'
 /** Long wrapper options that take the next word (`sudo --user root`, `timeout --signal KILL`). */
@@ -131,6 +131,11 @@ const nameOf = (w: string) => w.slice(w.lastIndexOf('/') + 1).toLowerCase()
 const isGit = (w: string) => {
   const n = nameOf(w)
   return n === 'git' || n.startsWith('git-')
+}
+/** Whether word `w` runs the words after it as a command: git, a wrapper, a shell or eval (so it is no option's value). */
+const runsCommand = (w: string) => {
+  const n = nameOf(w)
+  return isGit(w) || WRAPPERS.has(n) || SHELLS.has(n) || n === 'eval'
 }
 
 /**
@@ -369,18 +374,30 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
       }
       if (a.length < 2 || a[0] !== '-') break
       i++
-      if (name === 'env' && /^-S./.test(a)) {
-        const bad = checkText(a.slice(2), who, budget)
-        if (bad) return bad
+      // env -S splits its text into words that stand in its place (`env -S '-i git push'` runs `env -i git push`)
+      let split: string | undefined
+      if (name === 'env' && /^-[a-zA-Z]*S./.test(a)) split = a.slice(a.indexOf('S') + 1)
+      else if (name === 'env' && a.startsWith('--split-string=')) split = a.slice(15)
+      // a short option (or a group of them, `-iu`) ending in a value letter, or a long one, takes the next word; a
+      // word that runs a command (git, a wrapper, a shell, eval) never is a value, it is the next command (as main did)
+      const takes = split === undefined && ((/^-[a-zA-Z]+$/.test(a) && letters.includes(a[a.length - 1]!.toLowerCase())) || LONG_VALUES.has(a))
+      if (takes && i < words.length && !runsCommand(words[i]!)) {
+        if (name === 'env' && (a.endsWith('S') || a === '--split-string')) split = words[i]
+        i++
       }
-      // a short option (or a group of them, `-iu`) ending in a value letter, or a long one, takes the next word; git never is a value
-      const takes = (/^-[a-zA-Z]+$/.test(a) && letters.includes(a[a.length - 1]!.toLowerCase())) || LONG_VALUES.has(a)
-      if (takes && i < words.length && !isGit(words[i]!)) {
-        if (name === 'env' && (a.endsWith('S') || a === '--split-string')) {
-          const bad = checkText(words[i]!, who, budget)
+      if (split !== undefined) {
+        const parts: string[][] = []
+        splitCommands(split, parts, budget)
+        // env reads no `;` or `|`: any later command in the text is checked too, the first one's words go in place
+        for (const more of parts.slice(1)) {
+          const bad = checkCommand(more, who, budget, true)
           if (bad) return bad
         }
-        i++
+        const rest = words.slice(i)
+        budget.left -= rest.length + 1
+        if (budget.left < 0) throw new Error(TOO_COMPLEX)
+        words = [...(parts[0] ?? []), ...rest]
+        i = 0
       }
     }
     if (name === 'watch') return checkText(words.slice(i).join(' '), who, budget)
