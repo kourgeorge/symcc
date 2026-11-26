@@ -135,13 +135,17 @@ export function chatTasksText(view: TaskView, nowMs: number, offsetMin: number =
   const g = groupLines(view, nowMs, offsetMin)
   const lines = g.lines.length ? g.lines : ['No open tasks.']
   const tail = ['', ...(mode ? [`Mode: ${plain(mode)}`] : []), `Backlog: ${g.backlog} ideas`, `Done today: ${g.doneToday}`, "Say: status, show T-5, more tasks"]
-  return fitChat([...lines, ...tail], "say 'more tasks'", page).replace(/\n{3,}/g, '\n\n')
+  const out = fitChat([...lines, ...tail], "say 'more tasks'", page)
+  // "more tasks" is offered only while a later page exists
+  return (/\n\+\d+ more: say 'more tasks'$/.test(out) ? out : out.replace(', more tasks', '')).replace(/\n{3,}/g, '\n\n')
 }
 
 /** Tasks picked by a filter as chat lines (one per task), with how many matched. */
 export function chatRowsText(tasks: readonly SymccTask[], all: readonly SymccTask[], nowMs: number, count: string, page = 1): string {
   const lines = tasks.flatMap(t => taskLines(t as BoardTask, all, nowMs, t.status === 'doing'))
-  return fitChat([...(lines.length ? lines : ['No tasks match.']), '', plain(count)], "say 'more tasks'", page)
+  const out = fitChat([...(lines.length ? lines : ['No tasks match.']), '', plain(count)], 'narrow the search', page)
+  // "more tasks" pages the full list, not this filtered one
+  return out.replace(/\n\+(\d+) more: narrow the search$/, '\n+$1 more match: narrow the search')
 }
 
 /** The Live status as chat text: Needs you, each running task, one Today line and one Org-mem line. */
