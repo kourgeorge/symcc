@@ -561,11 +561,11 @@ export function stillFrame(indexHtml: string, demoJs: string): string {
  *  "Keep as a note" writes only the note) is added at the top of its list, with the note's own summary. */
 export function withMissingNotes(md: string, pages: Page[], root: string): string {
   const missing = pages.filter(p => p !== RESEARCH_INDEX && p.src.startsWith('docs/research/'))
-    .filter(p => !md.includes(`](${posix.basename(p.src)})`))
+    .filter(p => !md.includes(`](${posix.basename(p.src)})`) && !md.includes(`](${posix.basename(p.src)}#`))
   if (!missing.length) return md
   const add = missing.map(p => {
-    const sum = summary(readFileSync(join(root, p.src), 'utf8').replace(/\r\n?/g, '\n'))
-    return `- [${p.title.replace(/[[\]]/g, '\\$&')}](${posix.basename(p.src)})${sum ? `: ${sum}` : ''}`
+    const sum = summary(readFileSync(join(root, p.src), 'utf8').replace(/\r\n?/g, '\n')) || p.title
+    return `- [${p.title.replace(/[[\]]/g, '\\$&')}](${posix.basename(p.src)}): ${sum}`
   }).join('\n')
   const lines = md.split('\n')
   const first = lines.findIndex(l => /^- \[/.test(l))

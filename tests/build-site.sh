@@ -54,6 +54,10 @@ printf '# A note\n\nBack to the [tasks](../tasks.md) for the whole story.\n' > "
 printf '# Research notes\n\nNewest first.\n\n- [A note](note.md): the whole story.\n' > "$tmp/src/docs/research/index.md"
 # (T-1144) a new note not yet in the hand-written index: the build adds it at the top, with its first paragraph
 printf '# A newer note\n\nWhy the sky looks blue at noon.\n' > "$tmp/src/docs/research/newer.md"
+# (T-1148) a note with only a heading and a table gets its title as summary; a note linked with #anchor is not added twice
+printf '# Table note\n\n| a | b |\n|---|---|\n| 1 | 2 |\n' > "$tmp/src/docs/research/tabled.md"
+printf '# Anchored note\n\nSome words that make a long enough paragraph.\n' > "$tmp/src/docs/research/anchored.md"
+printf -- '- [Anchored note](anchored.md#top): already listed.\n' >> "$tmp/src/docs/research/index.md"
 if ! bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/small" >"$tmp/log" 2>&1; then
   bad "small build failed: $(cat "$tmp/log")"
 else
@@ -70,6 +74,8 @@ else
   grep -q 'href="../tasks.html"' "$tmp/small/research/note.html" || bad "research note link not rewritten"
   grep -q 'href="note.html"' "$tmp/small/research/index.html" || bad "research index does not list the note"
   grep -q '<li><a href="newer.html">A newer note</a>: Why the sky looks blue at noon.</li>' "$tmp/small/research/index.html" || bad "research index: a note missing from index.md was not added with its summary"
+  grep -q '<li><a href="tabled.html">Table note</a>: Table note</li>' "$tmp/small/research/index.html" || bad "research index: a note with no paragraph has no title summary"
+  [ "$(grep -o 'href="anchored.html' "$tmp/small/research/index.html" | wc -l)" -eq 1 ] || bad "research index: a note linked with #anchor was added again"
   tr '\n' ' ' < "$tmp/small/research/index.html" | grep -q 'href="newer.html".*href="note.html"' || bad "research index: the added note is not at the top"
   grep -q 'href="research/index.html">Research notes</a>: answers' "$tmp/small/docs.html" || bad "docs index: research/index.md link not rewritten to research/index.html"
   grep -q 'href="../style.css"' "$tmp/small/research/note.html" || bad "research page style.css path"
