@@ -5,7 +5,7 @@
 // Every task type runs like a change, except investigation.
 import { DEFAULT_NAME } from '../name'
 import { BUILT_IN_KIND_TEXTS } from '../../kinds'
-import { DEFAULT_KIND, INVESTIGATION, KIND_NAME, kindOf } from './board-file'
+import { DEFAULT_KIND, INVESTIGATION, ERRAND, KIND_NAME, kindOf } from './board-file'
 import { frontMatterLine, splitFrontMatter } from './text'
 import { type DefSource, type BrokenDef, brokenNamed, defSource, defNameError, leadBrokenDefLine, sourceLabel } from './def-files'
 
@@ -13,7 +13,7 @@ import { type DefSource, type BrokenDef, brokenNamed, defSource, defNameError, l
 export type KindDef = { name: string; description: string; body: string; off?: boolean }
 
 /** The kinds that come with the plugin (one text each in its kinds/ folder), in the order they are listed. */
-export const BUILT_IN_KINDS: readonly string[] = [DEFAULT_KIND, 'bug', 'feature', 'refactor', 'docs', INVESTIGATION]
+export const BUILT_IN_KINDS: readonly string[] = [DEFAULT_KIND, 'bug', 'feature', 'refactor', 'docs', INVESTIGATION, ERRAND]
 
 /** A kind file as a KindDef, or the reason it can't be used ("no front matter", "no description", "bad name ..."). */
 export function readKind(name: string, text: string): KindDef | string {
@@ -106,7 +106,7 @@ export function kindsLeadText(kinds: readonly KindDef[], name: string = DEFAULT_
     const k = findKind(kinds, n)
     return k ? `${n} (${k.description})` : n
   })
-  return `- Task types (the kind parameter of ${name} add / change): ${list.join('; ')}. Pick the task type that fits each task; ${DEFAULT_KIND} when unsure. Every task type is worked, tested and merged like a change, except ${INVESTIGATION} (see below).`
+  return `- Task types (the kind parameter of ${name} add / change): ${list.join('; ')}. Pick the task type that fits each task; ${DEFAULT_KIND} when unsure. Every task type is worked, tested and merged like a change, except ${INVESTIGATION} and ${ERRAND} (see below).`
 }
 
 // ---------------- managing kinds (the lead's kinds tool and the panel's Kinds page; like the roles) ----------------

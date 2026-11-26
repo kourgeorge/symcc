@@ -362,7 +362,7 @@ test('a role page lists the placeholders its checklist can use, and shows the bu
   expect(await ui.find({ type: 'Text', text: /role tester's checklist goes here/ })).toBeDefined()
   expect(await ui.find({ key: 'role-edit' })).toBeUndefined()
   await ui.press({ key: 'role-prompt-investigation' })
-  expect(await ui.find({ type: 'Text', text: /This task is an investigation/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Do exactly this one \{\{kind_name\}\}/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /role tester's checklist goes here/ })).toBeDefined()
   await ui.press({ key: 'role-prompt-back' })
   expect(await ui.find({ key: 'role-edit' })).toBeDefined()

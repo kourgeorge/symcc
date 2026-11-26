@@ -4726,11 +4726,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Workers                 "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task types"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -4917,11 +4917,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers                 "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task types"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -5116,11 +5116,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers                 "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task types"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -5425,12 +5425,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -5761,12 +5761,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6105,12 +6105,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6475,12 +6475,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6837,12 +6837,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -7207,12 +7207,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -7551,12 +7551,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -7925,12 +7925,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -8307,12 +8307,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -8702,12 +8702,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9051,12 +9051,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9408,12 +9408,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9776,12 +9776,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -10136,12 +10136,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -10504,12 +10504,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
           {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},

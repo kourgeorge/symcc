@@ -168,3 +168,15 @@ test('T-942: a worker with no symcc tools is told to write the question in its r
   expect(none).toContain('write the question for the owner in your report, with options such as "drop it"')
   expect(none.includes('ask_owner')).toBe(false)
 })
+
+test('T-1063: an errand worker is told to do the work and hand back a short report, not to investigate', () => {
+  setup()
+  const b = boardAt(NOW - 60 * 60 * 1000)
+  const errand = { ...find(b, 'T-1')!, kind: 'errand' }
+  const p = WORKER_PROMPT(errand, b, WT)
+  expect(p).toContain('This task is an errand')
+  expect(p).toContain('hand back a short report of what you did and where (paths, results)')
+  expect(p).not.toContain('find the answer')
+  expect(p).not.toContain('read-only')
+  expect(WORKER_PROMPT({ ...errand, kind: 'investigation' }, b, WT)).toContain('find the answer')
+})
