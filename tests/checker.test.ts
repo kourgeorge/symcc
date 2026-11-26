@@ -4,7 +4,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
-import { notProse, checkerProblems } from '../hooks/core/checker'
+import { notProse, checkerProblems, problemsBlockLines } from '../hooks/core/checker'
 import { makeAsk } from '../hooks/board'
 import { historyEvent, historyLineWords, workerStartedEntry, withHistory, noteAddedLine } from '../hooks/core/history'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped, adoptedCheckers } from '../hooks/app/state'
@@ -592,6 +592,19 @@ test('checkerProblems counts every item after a blank line, a "## Problems" head
   expect(checkerProblems('Problems:\n\n- a\n- b', Infinity)).toEqual(['a', 'b'])
   expect(checkerProblems('## Problems\n- a\n- b', Infinity)).toEqual(['a', 'b'])
   expect(checkerProblems('Problems:\n- a\n  more\n- b', Infinity)).toEqual(['a more', 'b'])
+  expect(checkerProblems('Intro.\nProblems:\n- a\n\n- b', Infinity)).toEqual(['a', 'b'])
+  expect(checkerProblems('Problems:\n- a\n\nDone text', Infinity)).toEqual(['a'])
+})
+
+test('a Problems block with "* " bullets is quoted as it is, never the first prose line', async () => {
+  expect(problemsBlockLines('I checked it.\nProblems:\n* src/a.ts:1 x\n* src/b.ts:2 y')).toEqual(['src/a.ts:1 x', 'src/b.ts:2 y'])
+  const w = world()
+  await saveBoard(w.$, boardWith(true, {}, { auto_retries: 0 }))
+  await finish(w, async id => checkerFinished(id, 'I checked T-1 with probes and found two things.\nProblems:\n* src/a.ts:1 x\n* src/b.ts:2 y'))
+  const said = leadQueue.join('\n')
+  expect(said).toContain('found 2 problems')
+  expect(said).toContain("report (try 1):\nProblems:\n- src/a.ts:1 x\n- src/b.ts:2 y")
+  expect(said).not.toContain('I checked T-1')
 })
 
 test('the checker update counts every problem and never starts with an ellipsis', async () => {
