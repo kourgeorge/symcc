@@ -1,9 +1,11 @@
 // The lead chat on the Cursor SDK (the standalone note's "lead (a)": symcc runs the lead itself): one local agent in
 // the project folder with symcc's lead tools served from this process. A message to an idle lead starts its turn at
 // once (wakeLead 'now'); messages for a busy lead wait and go together as its next turn, except an urgent one, which
-// is put into the running turn (steer). The lead guide comes in front of the chat's first message while symcc is on.
-// The owner picks the model and mode of the lead's turns from the chat (configure), and can stop or summarize it.
-import type { Sdk, SdkAgent, SdkImage, SdkModel, SdkRun, SdkSettingSource, SdkStep, SdkTool, SdkToolGuard } from './sdk'
+// is put into the running turn (steer): the owner's messages are, unless they ask to queue. The lead guide comes in
+// front of the chat's first message while symcc is on. The owner picks the model and mode of the lead's turns from the
+// chat (configure), and can stop or summarize it. A turn the agent service cut off is sent on (./retry.ts).
+import type { Sdk, SdkAgent, SdkImage, SdkModel, SdkRun, SdkRunResult, SdkSendOptions, SdkSettingSource, SdkStep, SdkTool, SdkToolGuard } from './sdk'
+import { RETRY_DELAYS_MS, pause, resumeText, serviceError, serviceErrorText } from './retry'
 
 /** Who a lead message is from: the owner typed it, or symcc sent it (a board update). */
 export type LeadFrom = 'owner' | 'symcc'
@@ -15,6 +17,10 @@ export type LeadEvent =
   | { type: 'busy'; busy: boolean }
   | { type: 'stopped' }
   | { type: 'summarized'; text: string }
+  | { type: 'retry'; text: string }
+
+/** Where a message to the lead went: it started a turn, went into the running one, or waits for the next. */
+export type LeadSent = 'started' | 'steered' | 'queued'
 
 /** The model and mode of the lead's turns from now on (`model` undefined: the chat's own). */
 export type LeadChoice = { model?: SdkModel; mode: 'agent' | 'plan' }
@@ -37,11 +43,13 @@ export type LeadChatOptions = {
   settings?: readonly SdkSettingSource[]
   /** symcc's guard for the lead's tool calls, when the SDK can check a call before it runs (Sdk.guard) */
   guard?: SdkToolGuard
+  /** how long to wait before each new try of a turn the agent service cut off */
+  retryDelaysMs?: readonly number[]
 }
 
 export type LeadChat = {
   /** gives the lead a message; resolves once it is started, queued or put into the running turn */
-  send: (text: string, from: LeadFrom, how?: { urgent?: boolean; images?: readonly SdkImage[] }) => Promise<void>
+  send: (text: string, from: LeadFrom, how?: { urgent?: boolean; images?: readonly SdkImage[] }) => Promise<LeadSent>
   /** whether a turn runs now */
   busy: () => boolean
   /** the model and mode of the turns that start from now on */
@@ -63,6 +71,8 @@ export function leadChat(o: LeadChatOptions): LeadChat {
   let running = false
   let guided = false
   let closed = false
+  let stopped = false
+  let wake: (() => void) | undefined
   const waiting: { text: string; from: LeadFrom; images?: readonly SdkImage[] }[] = []
   let idleWaiters: (() => void)[] = []
   let choice: LeadChoice = { mode: 'agent' }
@@ -81,19 +91,50 @@ export function leadChat(o: LeadChatOptions): LeadChat {
     o.onEvent({ type: 'busy', busy: true })
     o.onEvent({ type: 'message', from, text })
     const meanwhile = from === 'owner' ? o.meanwhile?.() : undefined
+    stopped = false
+    let started = false
     try {
       const guide = guided ? undefined : await o.guide()
       if (guide) guided = true
       const body = meanwhile?.text ? `${meanwhile.text}\n\n${text}` : text
       const message = guide ? `${guide}\n\n---\n\n${body}` : body
-      const how = { ...(o.onStep ? { onStep: o.onStep } : {}), ...(choice.model ? { model: choice.model } : {}), ...(choice.mode === 'plan' ? { mode: 'plan' as const } : {}), ...(images?.length ? { images } : {}) }
-      run = await (await getAgent()).send(message, Object.keys(how).length ? how : undefined)
-      const r = await run.wait()
-      if (r.status === 'finished') o.onEvent({ type: 'answer', text: r.result ?? '' })
-      else if (r.status === 'cancelled') o.onEvent({ type: 'stopped' })
-      else o.onEvent({ type: 'error', text: `the lead's turn ended with status ${r.status}${r.error ? `: ${JSON.stringify(r.error).slice(0, 300)}` : ''}` })
+      const how: SdkSendOptions = { ...(o.onStep ? { onStep: o.onStep } : {}), ...(choice.model ? { model: choice.model } : {}), ...(choice.mode === 'plan' ? { mode: 'plan' as const } : {}) }
+      const delays = o.retryDelaysMs ?? RETRY_DELAYS_MS
+      for (let n = 0, say = message; ; n++) {
+        let r: SdkRunResult | undefined
+        let failed = ''
+        try {
+          const sent = n ? { ...how, force: true } : images?.length ? { ...how, images } : how
+          run = await (await getAgent()).send(say, Object.keys(sent).length ? sent : undefined)
+          started = true
+          r = await run.wait()
+        } catch (err) {
+          failed = (err as Error).message
+        }
+        run = undefined
+        const why = stopped || closed ? undefined : r ? serviceError(r) : serviceErrorText(failed)
+        if (why && n < delays.length) {
+          o.onEvent({ type: 'retry', text: `The agent service cut the lead's turn off (${why}). symcc sends it on in ${Math.round(delays[n]! / 1000)}s (${n + 1} of ${delays.length}).` })
+          const p = pause(delays[n]!)
+          wake = p.wake
+          await p.done
+          wake = undefined
+          if (!stopped && !closed) {
+            say = resumeText(why, true)
+            continue
+          }
+          r = { status: 'cancelled' }
+        }
+        if (!r) {
+          if (!started) meanwhile?.back()
+          o.onEvent({ type: 'error', text: `the lead could not run: ${failed}` })
+        } else if (r.status === 'finished') o.onEvent({ type: 'answer', text: r.result ?? '' })
+        else if (r.status === 'cancelled') o.onEvent({ type: 'stopped' })
+        else o.onEvent({ type: 'error', text: `the lead's turn ended with status ${r.status}${r.error ? `: ${JSON.stringify(r.error).slice(0, 300)}` : ''}` })
+        break
+      }
     } catch (err) {
-      if (!run) meanwhile?.back()
+      if (!started) meanwhile?.back()
       o.onEvent({ type: 'error', text: `the lead could not run: ${(err as Error).message}` })
     }
     run = undefined
@@ -116,19 +157,30 @@ export function leadChat(o: LeadChatOptions): LeadChat {
   return {
     async send(text, from, how) {
       if (closed) throw new Error('the lead chat is closed')
-      if (!running) return void start(text, from, how?.images)
+      if (!running) {
+        void start(text, from, how?.images)
+        return 'started'
+      }
       // a steered message carries no pictures: one with pictures waits for the next turn
       if (how?.urgent && run?.steer && !how.images?.length) {
         const outcome = await run.steer(text).catch(() => 'failed')
-        if (outcome === 'complete_delivered') return void o.onEvent({ type: 'message', from, text })
+        if (outcome === 'complete_delivered') {
+          o.onEvent({ type: 'message', from, text })
+          return 'steered'
+        }
       }
       waiting.push({ text, from, ...(how?.images?.length ? { images: how.images } : {}) })
       if (!running) next()
+      return 'queued'
     },
     busy: () => running,
     configure: c => (choice = { ...choice, ...c }),
     choice: () => choice,
-    stop: async () => void (await run?.cancel().catch(() => undefined)),
+    async stop() {
+      stopped = true
+      wake?.()
+      await run?.cancel().catch(() => undefined)
+    },
     async summarize() {
       if (running) return 'the lead is working: summarize once its turn is done'
       if (!agent) return 'there is nothing to summarize yet'
@@ -155,6 +207,7 @@ export function leadChat(o: LeadChatOptions): LeadChat {
     async close() {
       closed = true
       waiting.length = 0
+      wake?.()
       await run?.cancel().catch(() => undefined)
       if (agent) await (await agent.catch(() => undefined))?.close().catch(() => undefined)
       settled()

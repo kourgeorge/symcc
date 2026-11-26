@@ -46,10 +46,10 @@ export type SdkImage = { data: string; mimeType: string }
 
 /**
  * `plan`: a read-only turn; `model`: this turn's model, instead of the agent's; `images`: pictures with the message;
- * `onStep`: each step of the turn as it happens. Only one turn runs at a time: send waits for none, so the caller keeps
- * them apart.
+ * `onStep`: each step of the turn as it happens; `force`: first end a run the service left open (a new try after it cut
+ * one off). Only one turn runs at a time: send waits for none, so the caller keeps them apart.
  */
-export type SdkSendOptions = { mode?: 'agent' | 'plan'; model?: SdkModel; images?: readonly SdkImage[]; onStep?: (s: SdkStep) => void }
+export type SdkSendOptions = { mode?: 'agent' | 'plan'; model?: SdkModel; images?: readonly SdkImage[]; onStep?: (s: SdkStep) => void; force?: boolean }
 
 /** `summarize` condenses the conversation to free context (a run, like a turn), where the SDK can. */
 export type SdkAgent = { id: string; send: (text: string, o?: SdkSendOptions) => Promise<SdkRun>; summarize?: () => Promise<SdkRun>; close: () => Promise<void> }
@@ -190,7 +190,7 @@ export function cursorSdk(env: Record<string, string | undefined> = process.env)
         id: agent.agentId,
         async send(text, so) {
           const message = so?.images?.length ? { text, images: so.images.map(i => ({ data: i.data, mimeType: i.mimeType })) } : text
-          const options = { ...(so?.mode ? { mode: so.mode } : {}), ...(so?.model ? { model: so.model } : {}) }
+          const options = { ...(so?.mode ? { mode: so.mode } : {}), ...(so?.model ? { model: so.model } : {}), ...(so?.force ? { local: { force: true } } : {}) }
           return hostRun(await agent.send(message, Object.keys(options).length ? options : undefined), so?.onStep)
         },
         summarize: async () => hostRun(await agent.summarize()),

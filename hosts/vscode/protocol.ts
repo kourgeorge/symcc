@@ -201,6 +201,8 @@ export type ChatItem = {
   model?: string
   images?: string[]
   pictures?: number
+  /** an owner's message sent while the lead worked: it went into the running turn, or waits for the next */
+  sent?: 'steered' | 'queued'
 }
 
 /** The model and mode the lead's turns run on (`model` none: the chat's own, `modelLabel` its name). */
@@ -274,7 +276,7 @@ export type ToWebview =
 /** From the webview: to serve, and the few the extension handles; `id` comes back on the reply, to the webview that asked. */
 export type FromWebview =
   | WebviewToExtension
-  | { type: 'send'; id: number; text: string; images?: ChatImage[] }
+  | { type: 'send'; id: number; text: string; images?: ChatImage[]; queue?: boolean }
   | { type: 'lead-set'; settings: LeadSettings }
   | { type: 'lead-stop' }
   | { type: 'summarize'; id: number }

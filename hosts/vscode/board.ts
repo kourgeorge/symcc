@@ -132,7 +132,14 @@ export function openBoard(o: BoardOptions): Board {
 
   const addChat = (who: ChatItem['who'], text: string, more: Partial<ChatItem> = {}) => {
     const atMs = Date.now()
-    chat = [...chat, { key: `${atMs}-${chat.length}`, who, text, atMs, ...more }].slice(-CHAT_KEPT)
+    const key = `${atMs}-${chat.length}`
+    chat = [...chat, { key, who, text, atMs, ...more }].slice(-CHAT_KEPT)
+    keep('chat.json', savedChat(chat))
+    post({ type: 'chat', items: chat, busy })
+    return key
+  }
+  const markChat = (key: string, more: Partial<ChatItem>) => {
+    chat = chat.map(x => (x.key === key ? { ...x, ...more } : x))
     keep('chat.json', savedChat(chat))
     post({ type: 'chat', items: chat, busy })
   }
@@ -154,10 +161,14 @@ export function openBoard(o: BoardOptions): Board {
       o.log?.(`couldn't set the lead's model: ${(err as Error).message}`)
     }
   }
-  /** Sends the owner's message to the lead; a /command that answered the owner itself adds its answer. */
-  const sendLead = async (text: string, images: readonly ChatImage[] = []) => {
-    addChat('owner', text, images.length ? { images: images.map(i => `data:${i.mimeType};base64,${i.data}`) } : {})
-    const a = await s().message(text, images)
+  /**
+   * Sends the owner's message to the lead (into its running turn, or for its next with `queue`); a /command that
+   * answered the owner itself adds its answer.
+   */
+  const sendLead = async (text: string, images: readonly ChatImage[] = [], queue = false) => {
+    const key = addChat('owner', text, images.length ? { images: images.map(i => `data:${i.mimeType};base64,${i.data}`) } : {})
+    const a = await s().message(text, images, queue)
+    if (a.sent === 'steered' || a.sent === 'queued') markChat(key, { sent: a.sent })
     if (typeof a.said === 'string') addChat('note', a.said)
     return a.said ?? ''
   }
@@ -261,7 +272,7 @@ export function openBoard(o: BoardOptions): Board {
       o.editor({ do: 'setting', key: 'proxy', value: p })
       return p ? 'symcc restarts with the new proxy.' : 'symcc restarts without a proxy.'
     }
-    if (m.type === 'send') return sendLead(m.text, m.images)
+    if (m.type === 'send') return sendLead(m.text, m.images, m.queue)
     if (m.type === 'summarize') {
       const said = (await s().lead.summarize()) ?? 'summarizing'
       if (said !== 'summarizing') addChat('note', `${said.charAt(0).toUpperCase()}${said.slice(1)}${/[.!?]$/.test(said) ? '' : '.'}`)
@@ -356,7 +367,8 @@ export function openBoard(o: BoardOptions): Board {
       // the owner's messages are in the chat from when they were sent; symcc's updates aren't shown
       if (e.type === 'message') return
       if (e.type === 'stopped') return addChat('note', 'You stopped the lead.', leadTurn())
-      if (e.type === 'summarized') return addChat('note', 'The lead summarized the chat so far to free its memory. The summary is in its session.')
+      if (e.type === 'summarized') return void addChat('note', 'The lead summarized the chat so far to free its memory. The summary is in its session.')
+      if (e.type === 'retry') return void addChat('note', e.text)
       if (e.type === 'error' && NETWORK_ERROR.test(e.text)) setNetwork({ text: e.text, proxy: o.proxy, service })
       if (e.type === 'answer' && network) setNetwork(null)
       if (e.type === 'answer') return addChat('lead', e.text, leadTurn())

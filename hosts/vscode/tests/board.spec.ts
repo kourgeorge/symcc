@@ -51,7 +51,7 @@ function fakeSession(view: () => PanelView, trees: PanelWorktree[] = []): { sess
   const calls: Calls = { said: [], configured: [], acts: [], removed: [], forgot: [] }
   const session = {
     lead: { configure: (c: Partial<LeadChoice>) => void calls.configured.push(c), stop: async () => undefined, summarize: async () => 'summarizing' },
-    message: async (text: string) => (calls.said.push(text), text.startsWith('/') ? { said: `${text}: done.` } : {}),
+    message: async (text: string, _images?: unknown, queue?: boolean) => (calls.said.push(queue ? `queued: ${text}` : text), text.startsWith('/') ? { said: `${text}: done.` } : { sent: queue ? 'queued' : 'steered' }),
     slash: async () => [{ name: 'symcc-status', description: 'The board in a few lines', kind: 'symcc' }],
     models: async () => [MODEL],
     view,
@@ -120,6 +120,21 @@ test("the chat and the lead's model are kept per project, the model per agents",
   const copilot = board({ stateDir, agents: 'copilot' })
   await copilot.b.start()
   expect(copilot.calls.configured[0]).toEqual({ model: undefined, mode: 'agent' })
+})
+
+test('a message to the working lead goes into its turn, or waits with queue, and the chat marks which; a turn the service cut off is a note', async () => {
+  const t = board()
+  await t.b.start()
+  await t.b.fromWebview({ type: 'send', id: 1, text: 'Use the CSV module' }, 'panel')
+  await t.b.fromWebview({ type: 'send', id: 2, text: 'Then add docs', queue: true }, 'panel')
+  t.b.onLead({ type: 'retry', text: "The agent service cut the lead's turn off (HTTP 504). symcc sends it on in 15s (1 of 3)." })
+  const chat = t.sent.filter(x => x.m.type === 'chat').at(-1)!.m as Extract<ToWebview, { type: 'chat' }>
+  expect(chat.items.map(c => [c.who, c.sent ?? '', c.text.slice(0, 18)])).toEqual([
+    ['owner', 'steered', 'Use the CSV module'],
+    ['owner', 'queued', 'Then add docs'],
+    ['note', '', 'The agent service '],
+  ])
+  expect(t.calls.said).toEqual(['Use the CSV module', 'queued: Then add docs'])
 })
 
 test("a lead model the account doesn't have any more goes back to the default", async () => {
