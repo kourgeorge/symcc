@@ -10,7 +10,6 @@ import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { S, useName, loadVersion } from '../hooks/app/state'
 import { COMMANDS } from '../hooks/app/symcc'
 import { manual } from '../hooks/app/tools'
-import { settingInfo } from '../hooks/board'
 
 const offCommand = () => COMMANDS().find(c => c.name === `${S.N.name}-disable`)!.description
 
@@ -21,15 +20,13 @@ test("Claude Code's words keep its texts as they were", () => {
   expect(S.W.backToBoard).toBe('ctrl+x tab')
   expect(offCommand()).toBe(`Disable ${S.N.name} for this project: Claude works as normal, nothing runs; the board is kept; "here" turns it off in this window only`)
   expect(manual('')).toContain(`disable ${S.N.name} for this project: Claude works as normal (no lead`)
-  expect(settingInfo('enabled')!.meaning).toBe('off: the whole plugin rests and Claude works as normal')
 })
 
 test('a host with no such words gets symcc\'s own, which name no host', () => {
   useName(fakeHost({ words: { tool: (_n, t) => t, fileTools: 'read, edit and write', planMode: 'Plan', askPopup: '' } }).host)
   expect(S.W).toMatchObject({ assistant: 'the assistant', app: 'the app', backToBoard: '' })
   expect(offCommand()).toContain('the assistant works as normal')
-  expect(settingInfo('enabled')!.meaning).toBe('off: the whole plugin rests and the assistant works as normal')
-  for (const text of [offCommand(), manual(''), settingInfo('enabled')!.meaning]) {
+  for (const text of [offCommand(), manual('')]) {
     expect(text).not.toContain('Claude')
     expect(text).not.toContain('ctrl+x')
   }

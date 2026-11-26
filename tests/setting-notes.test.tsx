@@ -6,8 +6,8 @@ import type { On } from 'claude-code'
 import { test } from './reset'
 import { PANE, drawnData } from './board-fixture'
 import { SCENES } from './scouts-settings-scenes'
-import { SETTINGS, settingChoices, settingShown } from '../hooks/board'
-import { choiceNote, pickBoxParts, settingAbout, wrapWords } from '../hooks/core/setting-notes'
+import { SETTINGS, settingChoices, settingShown, leadSettingsText, settingsHelpOf } from '../hooks/board'
+import { choiceNote, pickBoxParts, settingAbout, settingWords, wrapWords } from '../hooks/core/setting-notes'
 import { textWidth } from '../hooks/core/width'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -91,4 +91,17 @@ test('the pick box fits 80 columns: the note shares the line when it fits, else 
   const mode = pickBoxParts('mode', ['paused', 'review', 'auto'], 76)
   expect(mode.rows.every(r => r.inline)).toBe(true)
   expect(pickBoxParts('mode', ['paused', 'review', 'auto'], 30).rows.every(r => !r.inline)).toBe(true)
+})
+
+test('T-1107: the lead\'s settings text and the help line use the same sentence and choice notes as the boxes', () => {
+  const text = leadSettingsText({}, { sound: true, voice: true })
+  for (const x of SETTINGS) {
+    expect(text, x.name).toContain(settingAbout(x.name))
+    expect(settingsHelpOf({ setting: x.name }).lines[0], x.name).toBe(settingWords(x.name))
+    for (const value of ['on', 'off', 'paused', 'review', 'auto', 'voice', 'sound 1', 'sound 2', 'sound 3', 'backlog', 'ask']) {
+      const note = choiceNote(x.name, value)
+      if (note) expect(text, `${x.name} ${value}`).toContain(note)
+    }
+  }
+  expect(text).toContain('paused: nothing starts; running work stops')
 })

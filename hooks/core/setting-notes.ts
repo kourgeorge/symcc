@@ -43,6 +43,12 @@ const NOTES: Partial<Record<SettingName, Record<string, string>>> = {
 /** The short note after choice `value` of setting `name`; '' when it has none. */
 export const choiceNote = (name: string, value: string): string => NOTES[name as SettingName]?.[value] ?? ''
 
+/** Setting `name` in one line for the lead and the text board: its sentence, then each choice with its note ("review: finished work waits for you"). */
+export function settingWords(name: string): string {
+  const notes = Object.entries(NOTES[name as SettingName] ?? {}).map(([value, note]) => `${value}: ${note}`)
+  return [settingAbout(name), ...notes].join(' · ')
+}
+
 /** `text` cut at spaces into lines of at most `width` columns (a longer word stays whole). */
 export function wrapWords(text: string, width: number): string[] {
   const out: string[] = []
