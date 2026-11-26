@@ -740,6 +740,38 @@ test('T-525: on the Node host the lead (no agent id) gets its tools, and an agen
   }
 }, 60_000)
 
+test('T-1133: a worktree of a repo below a workspace board (ws/.symcc/worktrees/T-1, a copy of ws/client) only guards, with ws as its root', async () => {
+  const ws = await mkdtemp('/tmp/symcc-node-ws-')
+  try {
+    // a workspace folder (not a git repo) with two repos and a board
+    for (const repo of ['client', 'server']) {
+      await mkdir(`${ws}/${repo}`, { recursive: true })
+      await runCommand(['git', 'init', '-q', '-b', 'main'], { cwd: `${ws}/${repo}` })
+      await writeFile(`${ws}/${repo}/a.txt`, 'a\n')
+      await runCommand(['git', 'add', '-A'], { cwd: `${ws}/${repo}` })
+      await runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@localhost', 'commit', '-q', '-m', 'm'], { cwd: `${ws}/${repo}` })
+    }
+    await mkdir(`${ws}/.symcc/worktrees`, { recursive: true })
+    await writeFile(`${ws}/.symcc/board.json`, JSON.stringify(emptyBoard()))
+    const wt = `${ws}/.symcc/worktrees/T-1`
+    const add = await runCommand(['git', 'worktree', 'add', '-q', '-b', 'symcc/T-1', wt], { cwd: `${ws}/client` })
+    expect(add.exitCode).toBe(0)
+    const runner: AgentRunner = { name: 'none', command: () => ({ argv: ['true'] }), result: () => ({ answer: '' }) as never }
+    const s = await openSession({ root: wt, runner, say: () => undefined, sessionId: 'node-t1133' })
+    try {
+      expect(S.guardOnly).toBe(true)
+      expect(S.root).toBe(ws)
+      // it never made a board of its own in the copy or in the repo git points at
+      expect(await readFile(`${wt}/.symcc/board.json`, 'utf8').catch(() => 'none')).toBe('none')
+      expect(await readFile(`${ws}/client/.symcc/board.json`, 'utf8').catch(() => 'none')).toBe('none')
+    } finally {
+      await closeSession(s)
+    }
+  } finally {
+    await rm(ws, { recursive: true, force: true })
+  }
+}, 60_000)
+
 test('an option with no value is refused: a bare --files never adds a task that may edit anywhere', async () => {
   const dir = await mkdtemp('/tmp/symcc-node-args-')
   try {

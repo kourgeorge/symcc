@@ -7,7 +7,7 @@ import { evidenceWritten } from '../hooks/app/evidence'
 import { addTask, emptyBoard, patchTask, blockedEditText } from '../hooks/board'
 import { runBy } from './agent-fixture'
 import { S, workers } from '../hooks/app/state'
-import { findRoot, mainRoot, projectRoot, isAbsolute, normalPath } from '../hooks/app/store'
+import { boardAbove, findRoot, isWorkerFolder, mainRoot, projectRoot, isAbsolute, normalPath } from '../hooks/app/store'
 import { guardStart, sessionStart, sessionCleared, sessionEnd, toolCheck, toolCall, runCommand } from '../hooks/app/symcc'
 import { test } from './reset'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -190,4 +190,38 @@ test('/clear in a guard-only copy follows the new id but writes nothing and clai
   await sessionCleared(w.host)
   expect(S.me).toBe(id)
   nothingDone(w)
+})
+
+test('T-1133: a worktree of a repo below a workspace board (git says /repo/client) only guards, with the board folder as its root', async () => {
+  // the workspace /repo has the board; the worker's copy of /repo/client sits in /repo/.symcc/worktrees/T-1
+  const w = inWorktree(true, WT, `${ROOT}/client/.git`)
+  expect(await mainRoot(w.host, WT)).toBe(ROOT)
+  expect(await mainRoot(w.host, `${WT}/src/deep`)).toBe(ROOT)
+  expect(await projectRoot(w.host, WT)).toBe(ROOT)
+  expect(await isWorkerFolder(w.host, WT, ROOT)).toBe(true)
+  S.guardOnly = false
+  await sessionStart(w.host)
+  expect(S.root).toBe(ROOT)
+  expect(S.guardOnly).toBe(true)
+  nothingDone(w)
+  S.root = ''
+  expect(await findRoot(w.host)).toBe(true)
+  expect(S.root).toBe(ROOT)
+})
+
+test('T-1133: boardAbove needs a worker folder name and a board, and works out ".." first', async () => {
+  const w = inWorktree(true, WT, `${ROOT}/client/.git`)
+  expect(await boardAbove(w.host, WT)).toBe(ROOT)
+  expect(await boardAbove(w.host, `${WT}/a/b`)).toBe(ROOT)
+  // no <id> after the worktrees folder, or ".." back out of it: not a worker's folder
+  expect(await boardAbove(w.host, `${ROOT}/.symcc/worktrees/`)).toBe('')
+  expect(await boardAbove(w.host, `${ROOT}/.symcc/worktrees/..`)).toBe('')
+  expect(await boardAbove(w.host, `${ROOT}/.symcc/worktrees/T-1/../..`)).toBe('')
+  // no board at X: git's answer decides as before
+  expect(await boardAbove(w.host, '/other/.symcc/worktrees/T-1')).toBe('')
+  expect(await mainRoot(w.host, '/other/.symcc/worktrees/T-1')).toBe('/other/.symcc/worktrees/T-1')
+  // the outermost board wins over one inside a worker's copy
+  w.files.set(`${WT}/.symcc/board.json`, JSON.stringify(emptyBoard()))
+  expect(await boardAbove(w.host, `${WT}/.symcc/worktrees/T-2`)).toBe(ROOT)
+  expect(await boardAbove(w.host, '')).toBe('')
 })
