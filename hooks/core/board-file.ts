@@ -579,6 +579,26 @@ export function cleanFiles(files: unknown, dir: string = DATA_DIR, outside = fal
   // T-713: no limit on how many files a task lists. A silent cut here made allowFiles say "allowed"
   // for files it dropped, and the worker was refused the same file again, round after round.
 }
+/**
+ * T-1129: the absolute folders an errand's worker may write in. A leading "~/" is the home folder; an
+ * absolute path that is the project folder or inside it (its board, `.git`), is "/" or is the home folder
+ * itself is dropped. Relative paths are not returned (they never leave the project).
+ */
+export function errandFolders(files: readonly string[] | undefined, root: string, home: string): string[] {
+  const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, '') : p)
+  const r = trim(root.replace(/\\/g, '/'))
+  const h = trim(home.replace(/\\/g, '/'))
+  const out: string[] = []
+  for (const f0 of files ?? []) {
+    const f = f0.startsWith('~/') && h ? `${h}/${f0.slice(2)}` : f0
+    if (!f.startsWith('/')) continue
+    const p = trim(f)
+    if (p === '/' || (h && p === h) || (r && (p === r || p.startsWith(`${r}/`)))) continue
+    out.push(f)
+  }
+  return out
+}
+
 /** The three board modes, in the order they are shown. */
 export const MODES: SymccMode[] = ['paused', 'review', 'auto']
 

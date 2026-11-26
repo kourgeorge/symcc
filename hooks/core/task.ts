@@ -105,6 +105,8 @@ export function patchTask(b: Board, id: string, patch: TaskPatch, now: string, d
     const kind = kindOf(patch)
     if (kind !== DEFAULT_KIND) next.kind = kind
     else delete next.kind
+    // T-1129: only an errand's files may be absolute folders outside the project
+    if (!isErrand({ kind }) && next.files?.some(f => f.startsWith('/'))) next.files = next.files.filter(f => !f.startsWith('/'))
   }
   if (patch.needs_review !== undefined) {
     if (patch.needs_review === true) next.needs_review = true
