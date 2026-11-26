@@ -159,7 +159,7 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway. The other windows name the driver: "this window follows (driver started Nov 23 09:26, active 3 min ago); /symcc-drive to drive from here" (lead.json keeps `since` and `active` for it) |
 | `/symcc-help [topic]` | The built-in manual |
 
-Task types: `investigation` hands back an answer for you to read; `errand` is general work that isn't a change to the project (tidy a folder outside the repo, gather files) and ends done on its own with the worker's report, in every mode. Neither is merged. Every other task type runs like a change: committed, tested and merged.
+Task types: `investigation` hands back an answer for you to read; `errand` is work outside the project or with nothing to merge (make or tidy files elsewhere such as ~/Desktop, gather, write, run something; its worker may write outside the project where the task says) and ends done on its own with the worker's report, in every mode. Neither is merged. Every other task type runs like a change: committed, tested and merged.
 
 ## Settings
 

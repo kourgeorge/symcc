@@ -1970,15 +1970,15 @@ The built-in task types (in the plugin, one file each: `kinds/<name>.ts`):
 
 | Task type | What it is for |
 |---|---|
-| `change` | A general change when no other task type fits (the default). |
+| `change` | A general coding task (code, tests, config) when no other task type fits (the default). |
 | `bug` | Something that works wrongly. The worker finds why and fixes it, with a test that fails before the fix and passes after. |
 | `feature` | New behavior for you, with tests that show it works. |
 | `refactor` | Cleaning up code without changing what it does; tests that passed still pass. |
 | `docs` | Documentation only (README, docs/, comments), not code. |
 | `investigation` | Find an answer and hand it back; nothing is merged. |
-| `errand` | General work that isn't a change to the project (tidy a folder outside the repo, gather files); ends done with a report, nothing merged. |
+| `errand` | Work outside the project or with nothing to merge (make or tidy files elsewhere such as ~/Desktop, gather, write, run something); ends done with a report. |
 
-**Errands.** An `errand` runs like an investigation (no file list, no checks, no tests, its folder is removed after), with one difference: when the worker hands back, the task ends done on its own, in every mode, with the report kept. Use an investigation when you want an answer to read, an errand when you want something done. A failing errand fails like any task.
+**Errands.** An `errand` runs like an investigation (no file list, no checks, no tests, its folder is removed after), with one difference: when the worker hands back, the task ends done on its own, in every mode, with the report kept. Use an investigation when you want an answer to read, an errand when you want something done. A failing errand fails like any task. An errand's worker may write outside the project, for example in a folder on your Desktop that the task names; only edits inside the project but outside its own copy are refused.
 
 **Three ways a task runs.** `investigation` is one of them: its worker hands back an answer,
 nothing is committed, tested or merged, and it waits for you to read it (see
