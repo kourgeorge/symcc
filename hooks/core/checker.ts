@@ -179,14 +179,14 @@ export const CHECKER_PROBLEMS_MAX = 5
  * "Problems:" and then one "- " line per problem (the checker prompt asks for it). Reads only the last such block: the
  * "- " lines right under the last "Problems:" line, up to CHECKER_PROBLEMS_MAX, with the "- " removed. [] when there is no block.
  */
-export function checkerProblems(report: string): string[] {
+export function checkerProblems(report: string, max = CHECKER_PROBLEMS_MAX): string[] {
   const lines = String(report ?? '').split('\n').map(l => l.trimEnd())
   const h = lines.findLastIndex(l => /^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?$/.test(l))
   if (h < 0) return []
   const out: string[] = []
   for (const l of lines.slice(h + 1)) {
     if (!/^- ?$/.test(l) && !l.startsWith('- ')) break
-    if (out.length >= CHECKER_PROBLEMS_MAX) break
+    if (out.length >= max) break
     const t = l.slice(2).trim()
     if (t) out.push(oneLine(t, 300))
   }

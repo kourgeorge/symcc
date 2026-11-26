@@ -587,6 +587,21 @@ test('when its retries are used up, a checker report fails the task with the rep
   expect(w.git.main).toBe(M1)
 })
 
+test('the checker update counts every problem and never starts with an ellipsis', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true, {}, { auto_retries: 0 }))
+  await finish(w, async id => checkerFinished(id, 'Problems:\n' + [1, 2, 3, 4, 5, 6, 7].map(i => `- p${i}`).join('\n')))
+  const said = leadQueue.join('\n')
+  expect(said).toContain('found 7 problems')
+  expect(said).toContain('- p5\n- … and 2 more')
+  expect(said).not.toContain('- p6')
+  leadQueue.length = 0
+  const w2 = world()
+  await saveBoard(w2.$, boardWith(true, {}, { auto_retries: 0 }))
+  await finish(w2, async id => checkerFinished(id, 'x'.repeat(5000) + '\nsrc/a.ts broke'))
+  expect(leadQueue.join('\n')).not.toContain('- …')
+})
+
 test('in review mode an OK from the checker sends the task to review, not merged', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
