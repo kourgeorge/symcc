@@ -48,7 +48,7 @@ test('T-580: a todo task shows Details and What to do (its details, headings and
 test('T-580: a doing task shows its History (newest first, as a timeline), its Report "reading" until read, and its Runs', () => {
   const t = task('doing', { attempts: 1, history: hist('try 1: started'), runs: [run(R1, false)] })
   const s = taskSections(t, facts())
-  expect(titles(s)).toEqual(['Details', 'What to do', 'History (1, newest first)', 'Report (try 1)', 'Runs   1 try · 10m'])
+  expect(titles(s)).toEqual(['Details', 'What to do', 'History (1, newest first)', 'Report · try 1 · worker', 'Runs   1 try · 10m'])
   expect(text(sec(s, 'report'))).toEqual([`  ${R1}`, '  (reading the report…)'])
   expect(text(sec(s, 'runs'))[0]).toContain('(running)')
   expect(text(sec(s, 'runs')).at(-1)).toMatch(/^ {2}total: /)
@@ -91,9 +91,9 @@ test('T-580: a done task with two tries shows the latest report (2 of 2) and its
   const t = task('done', { attempts: 2, history: hist('try 1: x → tests failed', 'try 2: y → merged into main'), runs: [run(R1), run(R2)] })
   const s = taskSections(t, facts({ texts: { [R2]: 'Second.' } }))
   expect(ids(s)).toEqual(['details', 'what', 'history', 'report', 'runs'])
-  expect(sec(s, 'report')!.title).toBe('Report (try 2, 2 of 2)')
+  expect(sec(s, 'report')!.title).toBe('Report · try 2 · worker')
   expect(sec(s, 'report')!.tries).toEqual([{ try: 1, shown: false, key: '1' }, { try: 2, shown: true, key: '2' }])
-  expect(sec(taskSections(t, facts({ shownTry: 1, numberKeysTaken: true })), 'report')!.tries).toEqual([{ try: 1, shown: true }, { try: 2, shown: false }])
+  expect(sec(taskSections(t, facts({ shown: { try: 1, kind: 'worker' }, numberKeysTaken: true })), 'report')!.tries).toEqual([{ try: 1, shown: true }, { try: 2, shown: false }])
   // the history newest first, a connector between events
   const h = text(sec(s, 'history'))
   expect(h[0]).toContain('merged into main')
@@ -111,26 +111,80 @@ test('T-580: an answered investigation shows its Answer (the latest report\'s fu
   expect(text(sec(taskSections(t, facts()), 'answer'))).toEqual([`  ${R1}`, '  Short answer.'])
 })
 
-// ---------------- T-1079: the checker's own section ----------------
+// ---------------- T-1104: one Report section, picked from the Runs lines ----------------
 
-const CK = '.symcc/reports/T-1-try-2-checker.md'
-const CK_REPORT = 'I probed it from /tmp.\n\nProblems:\n- the empty input still throws'
+const ck = (n: number) => `.symcc/reports/T-1-try-${n}-checker.md`
+const rp = (n: number) => `.symcc/reports/T-1-try-${n}.md`
+const AGENTS = [['aa0b1c2d3e4f5a6b7c8d815', 'a6f0b1c2d3e4f5a6b7c853d'], ['bb0b1c2d3e4f5a6b7c8d816', 'b6f0b1c2d3e4f5a6b7c853e'], ['cc0b1c2d3e4f5a6b7c8d817', 'c6f0b1c2d3e4f5a6b7c853f']]
+const threeTries = (extra: Partial<SymccTask> = {}) => {
+  const runs = [1, 2, 3].map(n => ({ started: iso(NOW - 900_000), ended: iso(NOW - 300_000), report: rp(n), agents: [{ id: AGENTS[n - 1]![0]!, kind: 'worker' as const, started: iso(NOW - 900_000), ended: iso(NOW - 600_000) }, { id: AGENTS[n - 1]![1]!, kind: 'checker' as const, started: iso(NOW - 600_000), ended: iso(NOW - 300_000) }] }))
+  const history = [1, 2, 3].map(n => ({ at: iso(NOW), kind: 'checker-problems', text: `try ${n}: checker found problems`, try: n, agent: 'symcc-T-1-checker', report: ck(n) }))
+  return task('todo', { attempts: 3, history: history as SymccTask['history'], runs, ...extra })
+}
+const texts3 = { [rp(1)]: 'W1', [rp(2)]: 'W2', [rp(3)]: 'W3', [ck(1)]: 'C1 said this', [ck(2)]: 'C2', [ck(3)]: 'C3' }
 
-test('T-1079: a try with a checker report shows ▍Checker (try n) · its agent name under the Report, with its full text; a try with no checker shows none', () => {
-  const history = hist('try 1: worker started')
-  const withChecker = [...history, { at: iso(NOW), kind: 'checker-problems', text: 'try 2: checker found problems: the empty input still throws', try: 2, agent: 'symcc-T-1-checker', report: CK }]
-  const t = task('todo', { attempts: 2, history: withChecker as SymccTask['history'], runs: [run(R1), run(R2)] })
-  const s = taskSections(t, facts({ texts: { [R2]: 'Fixed.', [CK]: CK_REPORT } }))
-  expect(titles(s).slice(-3)).toEqual(['Report (try 2, 2 of 2)', 'Checker (try 2) · symcc-T-1-checker', expect.stringMatching(/^Runs/)])
-  expect(text(sec(s, 'checker'))).toEqual([`  ${CK}`, '  I probed it from /tmp.', '', '  Problems:', '  - the empty input still throws'])
-  // not read yet / can't be read
-  expect(text(sec(taskSections(t, facts()), 'checker'))).toEqual([`  ${CK}`, '  (reading the report…)'])
-  expect(text(sec(taskSections(t, facts({ texts: { [CK]: null } })), 'checker'))).toEqual([`  ${CK}`, '  Could not read the checker report file.'])
-  // the owner picked try 1: that try had no checker, so there is no section
-  expect(ids(taskSections(t, facts({ shownTry: 1, texts: { [R1]: 'x' } })))).not.toContain('checker')
-  // a task with no checker at all
-  expect(ids(taskSections(task('todo', { attempts: 2, history, runs: [run(R1), run(R2)] }), facts()))).not.toContain('checker')
-  // an old entry with no saved agent name: the heading has no id
-  const old = [{ at: iso(NOW), kind: 'checker-ok', text: 'try 2: checker: OK', try: 2, report: CK }]
-  expect(titles(taskSections(task('review', { attempts: 2, history: old as SymccTask['history'], runs: [run(R1), run(R2)] }), facts())).filter(x => x.startsWith('Checker'))).toEqual(['Checker (try 2)'])
+test('T-1104: three tries with a worker and a checker report each: one ▍Report, no ▍Checker, six pressable agent lines, the latest worker report shown', () => {
+  const s = taskSections(threeTries(), facts({ texts: texts3 }))
+  expect(ids(s)).not.toContain('checker')
+  expect(ids(s).filter(x => x === 'report')).toEqual(['report'])
+  expect(sec(s, 'report')!.title).toBe('Report · try 3 · worker cc0…815'.replace('cc0…815', 'cc0…817'))
+  expect(text(sec(s, 'report'))).toEqual([`  ${rp(3)}`, '  W3'])
+  const runs = sec(s, 'runs')!.lines
+  const picks = runs.filter(l => l.pick)
+  expect(picks.length).toBe(6)
+  expect(picks.map(l => `${l.pick!.try} ${l.pick!.kind}`)).toEqual(['1 worker', '1 checker', '2 worker', '2 checker', '3 worker', '3 checker'])
+  // the shown one has the ● and nobody else
+  expect(runs.filter(l => l.shown).map(l => l.pick!.id)).toEqual([AGENTS[2]![0]])
+  expect(runs.filter(l => l.shown).map(l => l.segs[0]!.text.startsWith('  ● ▸ worker'))).toEqual([true])
+})
+
+test('T-1104: picking try 1\'s checker shows its heading, its file\'s text and marks that line; key 2 (a worker pick of try 2) shows try 2\'s worker report', () => {
+  const t = threeTries()
+  const s = taskSections(t, facts({ texts: texts3, shown: { try: 1, kind: 'checker', id: AGENTS[0]![1] } }))
+  expect(sec(s, 'report')!.title).toBe('Report · try 1 · checker a6f…53d')
+  expect(text(sec(s, 'report'))).toEqual([`  ${ck(1)}`, '  C1 said this'])
+  const marked = sec(s, 'runs')!.lines.filter(l => l.shown)
+  expect(marked.map(l => [l.pick!.try, l.pick!.kind])).toEqual([[1, 'checker']])
+  expect(marked[0]!.segs[0]!.text).toMatch(/^ {2}● ⌕ checker/)
+  // key 2: try 2's worker report (no agent id picked: its last worker)
+  const two = taskSections(t, facts({ texts: texts3, shown: { try: 2, kind: 'worker' } }))
+  expect(sec(two, 'report')!.title).toBe('Report · try 2 · worker bb0…816')
+  expect(text(sec(two, 'report'))).toEqual([`  ${rp(2)}`, '  W2'])
+  expect(sec(two, 'runs')!.lines.filter(l => l.shown).map(l => l.pick!.id)).toEqual([AGENTS[1]![0]])
+  // the keys 1-3 stay on the Report's tries
+  expect(sec(two, 'report')!.tries!.map(x => x.key)).toEqual(['1', '2', '3'])
+})
+
+test('T-1104: an agent with no report file is plain text; a worker restarted on the same try has two lines that open the same file; an old try with no agent lines is one "try N" button', () => {
+  const base = threeTries()
+  // try 3 had no checker report: its checker line is plain
+  const noChecker = task('todo', { ...base, history: base.history.filter(h => (h as { try?: number }).try !== 3) })
+  const lines = sec(taskSections(noChecker, facts()), 'runs')!.lines
+  const checker3 = lines.find(l => l.key === 'run-2-agent-1')!
+  expect(checker3.segs[0]!.text).toContain('checker')
+  expect(checker3.pick).toBeUndefined()
+  expect(lines.filter(l => l.pick).length).toBe(5)
+  // a restarted worker: two worker lines on try 1, one report file
+  const runs = [...base.runs!]
+  runs[0] = { ...runs[0]!, agents: [{ id: 'w1restart000000001', kind: 'worker' as const, started: iso(NOW - 900_000), ended: iso(NOW - 800_000), ended_by: 'restarted' as const }, ...runs[0]!.agents!] }
+  const re = sec(taskSections(task('todo', { ...base, runs }), facts({ texts: texts3 })), 'runs')!.lines.filter(l => l.pick?.try === 1 && l.pick.kind === 'worker')
+  expect(re.length).toBe(2)
+  expect(re.map(l => l.pick!.id)).toEqual(['w1restart000000001', AGENTS[0]![0]])
+  const shown = taskSections(task('todo', { ...base, runs }), facts({ texts: texts3, shown: { try: 1, kind: 'worker', id: 'w1restart000000001' } }))
+  expect(sec(shown, 'report')!.title).toBe('Report · try 1 · worker w1r…001'.replace('w1r…001', 'w1r…001'))
+  expect(text(sec(shown, 'report'))).toEqual([`  ${rp(1)}`, '  W1'])
+  // an old try that keeps no agent lines: one plain "try N" line, a button while its worker report exists
+  const old = task('done', { attempts: 2, runs: [run(R1), run(R2)] })
+  const oldLines = sec(taskSections(old, facts()), 'runs')!.lines
+  expect(oldLines.filter(l => l.pick).map(l => [l.pick!.try, l.pick!.id])).toEqual([[1, undefined], [2, undefined]])
+  expect(oldLines[1]!.segs[0]!.text).toMatch(/^ {2}● try 2/)
+  // no id known: the heading names only the kind
+  expect(sec(taskSections(old, facts({ shown: { try: 1, kind: 'worker' } })), 'report')!.title).toBe('Report · try 1 · worker')
+})
+
+test('T-1104: an answered one-try investigation still shows its checker report when that is picked', () => {
+  const t = task('review', { kind: 'investigation', answer: 'Short answer.', attempts: 1, runs: [{ started: iso(NOW - 900_000), ended: iso(NOW - 300_000), report: rp(1), agents: [{ id: AGENTS[0]![0]!, kind: 'worker' as const, started: iso(NOW - 900_000) }, { id: AGENTS[0]![1]!, kind: 'checker' as const, started: iso(NOW - 600_000) }] }], history: [{ at: iso(NOW), kind: 'checker-problems', text: 'x', try: 1, agent: 'symcc-T-1-checker', report: ck(1) }] as unknown as SymccTask['history'] })
+  expect(ids(taskSections(t, facts({ texts: texts3 })))).not.toContain('report')
+  const s = taskSections(t, facts({ texts: texts3, shown: { try: 1, kind: 'checker', id: AGENTS[0]![1] } }))
+  expect(text(sec(s, 'report'))).toContain('  C1 said this')
 })

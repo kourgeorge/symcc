@@ -13,8 +13,8 @@
 // (a fold and a task id are links: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, agentLines, findRole, fmtRun, fmtTotal, sumRuns, taskActions, type TaskAction, type TaskActionId, type BoardTask } from '../../board'
-import { checkerReportOf, type TaskSection } from '../../core/task-sections'
+import { type DetailRow, type DiffFile, type Seg, findRole, fmtTotal, sumRuns, taskActions, type TaskAction, type TaskActionId, type BoardTask } from '../../board'
+import { runLines, type ReportPick, type TaskSection } from '../../core/task-sections'
 import { RUN_NOW_NO, RUN_NOW_YES } from '../../core/run-now'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
@@ -64,11 +64,8 @@ export type VsTaskCtx = {
   rows: DetailRow[]
   changes: { files: DiffFile[]; error: string } | null
   reports: { try: number; file: string }[]
-  at: number
-  shown: { try: number; file: string } | undefined
+  shown: { try: number; kind: 'worker' | 'checker'; id?: string; file: string } | null
   reportBody: string | null
-  /** T-1079: the latest checker's saved report of the try shown (null when it can't be read); the section shows only when the page has one */
-  checkerBody: string | null
   answerShown: boolean
   answerFrom: { try: number; file: string } | undefined
   answer: string
@@ -123,7 +120,7 @@ export type VsTaskCtx = {
     cancelRolePick: () => void
     choicePress: (i: number) => () => void
     sendAnswer: (text: string) => () => void
-    pickReport: (n: number) => () => void
+    pickReport: (p: ReportPick) => () => void
   }
 }
 
@@ -437,7 +434,18 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   // the tries, one line each with a dim line per agent under it (T-774), and their total (the dates are on the Added
   // row); the folded row sums them on one line ("3 tries · 21m · 10.1M tokens (3.6× the usual task) · checkers 2.4M")
   const time = fold('time', 'Time and cost', sec('runs')?.summary || (t.runs?.length ?? 0), [
-    ...(t.runs ?? []).flatMap((r, i) => [plain(`vs-run-${i}`, fmtRun(r, i, nowMs), r.ended ? 'inactive' : 'success'), ...agentLines(r, nowMs).map((l, k) => plain(`vs-run-${i}-agent-${k}`, `  ${l}`, 'inactive'))]),
+    // T-1104: an agent line with a report file is a link-style button that shows that report; the one shown has a ●
+    ...(t.runs ?? []).flatMap((r, i) => runLines(t, r, i, nowMs, x.shown).map((l, k) => {
+      const text = l.segs[0]!.text.slice(2)
+      const color = l.segs[0]!.color
+      return l.pick ? (
+        <Button key={`vs-${l.key}`} plain label={text} onPress={on.pickReport(l.pick)}>
+          <Text color={C(color)}>{text}</Text>
+        </Button>
+      ) : (
+        plain(`vs-${l.key ?? `run-${i}-${k}`}`, text, color)
+      )
+    })),
     t.runs?.length ? plain('vs-total', `total: ${fmtTotal(total)}`, 'text', { bold: true }) : plain('vs-no-runs', 'no tries yet', 'inactive'),
   ])
 
@@ -452,29 +460,17 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       ? section('report', reportSec.title, [
           !x.shown ? plain('vs-report-none', 'no saved report', 'inactive') : null,
           x.shown ? plain('vs-report-file', x.shown.file, 'inactive') : null,
-          x.shown && x.reportBody === null ? plain('vs-report-error', 'Could not read the report file.', 'error') : null,
+          x.shown && x.reportBody === null ? plain('vs-report-error', `Could not read the ${x.shown.kind === 'checker' ? 'checker ' : ''}report file.`, 'error') : null,
           part && part.text.trim() ? <Markdown key="vs-report-md" text={part.text} /> : null,
-          longReport || x.reports.length > 1 ? (
+          longReport ? (
             <Box key="vs-report-buttons" flexDirection="row" flexWrap="wrap" gap={1}>
               {longReport ? (
                 <Button key="report-all" label={all ? 'Show less' : `Show all (${reportPart(x.reportBody!).more} more lines)`} variant="secondary" onPress={() => ((S.reportAll = all ? null : t.id), x.redraw())} />
               ) : null}
-              {x.reports.length > 1 ? x.reports.map((r, i) => <Button key={`report-try-${r.try}`} label={`${i === x.at ? '● ' : ''}Try ${r.try}`} variant="secondary" onPress={on.pickReport(r.try)} />) : null}
             </Box>
           ) : null,
         ])
       : null
-
-  // T-1079: the checker's full report of that try, under the worker's report (who said what), its agent name in the heading
-  const checkerSec = sec('checker')
-  const checkerSaved = checkerSec ? checkerReportOf(t, x.shown?.try ?? t.attempts) : null
-  const checker = checkerSec
-    ? section('checker', checkerSec.title, [
-        plain('vs-checker-file', checkerSaved?.file ?? '', 'inactive'),
-        x.checkerBody === null ? plain('vs-checker-error', 'Could not read the checker report file.', 'error') : null,
-        x.checkerBody?.trim() ? <Markdown key="vs-checker-md" text={x.checkerBody.trimEnd()} /> : null,
-      ])
-    : null
 
   return (
     <Box flexDirection="column" gap={1}>
@@ -494,7 +490,6 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {changes}
       {history}
       {report}
-      {checker}
       {time}
     </Box>
   )

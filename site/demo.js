@@ -261,7 +261,7 @@
   // ---------- the task page (T-740) ----------
   function taskPage(s) {
     const L = []
-    L.push(sp('‹ [Tasks]', 'dim') + '  ' + s.t740runs.map((_, k) => (k === s.t740runs.length - 1 ? '[● Try ' : '[Try ') + (k + 1) + ']').join(' '))
+    L.push(sp('‹ [Tasks]', 'dim'))
     L.push('')
     L.push(sp('T-740', 'id') + ' ' + `<b>${esc(TITLES['T-740'])}</b>`)
     L.push('')

@@ -83,7 +83,7 @@ for (const id of RICH_IDS) {
     const tree = await ui.drawn()
     const all = texts(tree)
     // nothing is cut with "…"; the title is drawn whole in a Text that wraps
-    expect(all.filter(s => s.includes('…')), id).toEqual([])
+    expect(all.filter(s => s.includes('…') && !s.startsWith('Report · ')), id).toEqual([])
     const title = await ui.find({ type: 'Text', text: t.title })
     expect(title, id).toBeDefined()
     expect(title!.props.wrap).toBe('wrap')
@@ -96,8 +96,9 @@ for (const id of RICH_IDS) {
     // T-774: the folded Time and cost row sums the task's own tries on one line (no tries: its count, 0)
     const want = ['Details', 'What to do', 'runs' in t && t.runs.length ? `▸ Time and cost ${t.runs.length} tries · ${t.id === 'T-504' ? '25m · 4.6k tokens (0.4×' : '40m · 11.6k tokens (1×'} the usual task)` : '▸ Time and cost 0']
     if (t.history.length) want.push('History (2, newest first)')
-    if (t.attempts) want.push(t.status === 'doing' ? 'Report (try 1)' : 'Report (try 2, 2 of 2)') // the running try has no report yet
     for (const h of want) expect(all, `${id} ${h}`).toContain(h)
+    // T-1104: one Report section naming whose report it shows (the running try has no report yet: try 1)
+    if (t.attempts) expect(all.some(x => x.startsWith(t.status === 'doing' ? 'Report · try 1 · worker' : 'Report · try 2 · worker')), `${id} Report`).toBe(true)
     // T-1006: what needs you is a heading with a mark (no box)
     if (t.status === 'failed') expect((await ui.find({ key: 'vs-sec-why-failed' }))?.text, id).toMatch(/^✗ Why it failed/)
     if (t.status === 'waiting') expect((await ui.find({ key: 'vs-sec-question' }))?.text, id).toMatch(/^\? (Question for you|Time is up)/)
@@ -174,8 +175,10 @@ test('in VS Code a long report shows its first part, and "Show all" shows the re
   await ui.press({ key: 'report-all' })
   expect(await report()).toMatch(/claude plugin test \. passed/)
   expect((await ui.find({ key: 'report-all' }))?.props.label).toBe('Show less')
-  // the other try's report, by its button
-  await ui.press({ key: 'report-try-1' })
+  // the other try's report, by its line in Runs (a link-style button, T-1104)
+  await ui.press({ key: 'fold-time', link: { href: vsHref('fold', 'fold-time') } })
+  expect((await ui.find({ key: 'vs-run-0' }))?.props.plain).toBe(true)
+  await ui.press({ key: 'vs-run-0' })
   expect(await report()).toBe('First try: the tests failed.')
   await ui.unmount()
 })

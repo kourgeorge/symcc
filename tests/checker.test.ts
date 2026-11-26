@@ -2004,6 +2004,22 @@ test('T-1095: an answer naming two choices, or none, names no choice; a clear on
   for (const [a, pick] of right) expect(parseCheckerAnswer(a)).toBe(pick)
 })
 
+test('T-1109: a negated answer names no choice', () => {
+  for (const a of ["don't merge", 'do not merge', 'never merge this', "don't drop it", 'no drop']) expect(parseCheckerAnswer(a)).toBeUndefined()
+  expect(parseCheckerAnswer('merge it')).toBe('merge')
+  expect(parseCheckerAnswer('drop.')).toBe('drop')
+})
+
+test('T-1109: the change tool refuses "don\'t drop it"; the task keeps waiting', async () => {
+  const w = world()
+  const ask = 'T-1 was sent back twice by the checker: src/a.ts:12 new hole. Merge as is / Keep fixing / Drop'
+  await saveBoard(w.$, boardWith(true, { status: 'waiting', ask: makeAsk('symcc', ask, ISO, { options: ['Merge as is', 'Keep fixing', 'Drop'] }) }))
+  let err = ''
+  try { await runTool(w.$, 'change', { task: 'T-1', answer: "don't drop it" }) } catch (e) { err = String((e as Error).message) }
+  expect(err).toContain('Nothing changed: T-1 waits for one of Merge as is, Keep fixing, Drop')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('waiting')
+})
+
 test('T-1095: the change tool refuses an answer naming two choices; the task keeps waiting, not dropped, no new try', async () => {
   const w = world()
   const ask = 'T-1 was sent back twice by the checker: src/a.ts:12 new hole. Merge as is / Keep fixing / Drop'

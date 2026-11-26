@@ -36,7 +36,8 @@ import {
 import { notSetUpAnswer } from '../core/settings'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
-import { taskSections, type TaskSection } from '../core/task-sections'
+import { taskSections, runLines, type ReportPick, type TaskSection } from '../core/task-sections'
+import { taskReports } from '../core/reports'
 import type { TaskBranchFacts } from '../core/task-branch'
 import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleStateGroups } from '../core/role-changes'
 import { type DefRow, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICK_LABEL, roleTableRow, kindTableRow, defsCountText, defLayout, defCells, defCellTone, newDefText, roleWritesLine, codePickOf } from '../core/def-table'
@@ -221,7 +222,7 @@ export type PanelGroup = 'backlog' | 'done' | 'dropped'
  *  and (T-680) press a task page's button that has no key (Drop in review): `action`, its id in core's taskActions;
  *  and (T-706) on a role's or kind's edit page, change one of its boxes (`editField`) or press Save (`save`);
  *  and (T-946) open or fold an older day's row in the open Done group (`day`, "2026-11-22"). */
-export type PanelHit = { open: string } | { group: PanelGroup } | { more: 'backlog' } | { day: string } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId } | { editField: DefEditField } | { save: true }
+export type PanelHit = { open: string } | { group: PanelGroup } | { more: 'backlog' } | { day: string } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId } | { editField: DefEditField } | { save: true } | { report: ReportPick }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -325,8 +326,10 @@ export type PanelChoice = {
   sent?: { id: string; answer: string }
   /** the open task's latest report (T-580), read from its file: its text undefined while it is read, null when it can't be */
   taskReport?: { file: string; text: string | null | undefined }
-  /** T-1079: the checker's saved report of that try (its own section), read from its file the same way */
-  taskChecker?: { file: string; text: string | null | undefined }
+  /** T-1104: the agent picked in the Runs section whose report the Report section shows (left out: the latest worker report) */
+  taskPick?: ReportPick
+  /** T-1104: the cursor over the task page's pressable Runs lines (Enter shows that line's report) */
+  pageCursor?: number
   /** the task whose approve this panel just sent, and when (ms): its page shows the approve's first step at once (see
    *  approveSent), as Claude Code's task page does */
   approving?: ApproveSent
@@ -626,6 +629,9 @@ export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 't
 /** The keys of the Live tab (core's liveKeys), but w (watch worker: OpenCode's panel can't show a worker's session). */
 export const panelLiveKeys = (): KeyHint[] => liveKeys().filter(k => k.key !== 'w')
 
+/** T-1104: whether task `t`'s Runs section has a line to press (an agent or try with a report file). */
+export const taskHasRunLines = (t: BoardTask): boolean => !!t.runs?.some((r, i) => runLines(t, r, i, 0, null).some(l => l.pick))
+
 function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string, heading: boolean, merging: boolean): KeyHint[] {
   if (tab === 'live') return orgMemPageTopic(opened) !== null ? orgMemKeys(false, orgMemOfTopic(orgMemIn(f), orgMemPageTopic(opened)).length > 0) : panelLiveKeys()
   const move = { key: '↑↓', word: 'move' }
@@ -657,7 +663,14 @@ function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string,
   const q = f?.view.questions?.find(x => x.id === opened)
   if (q) return [{ key: 'a', word: 'answer' }, back]
   if (!t) return [back]
-  return [...(taskAsks(t, f?.view.max_minutes) ? [{ key: 'a', word: 'answer' }] : []), ...panelTaskActions(t, merging).map(a => ({ key: a.key!, word: a.word })), back]
+  const asks = !!taskAsks(t, f?.view.max_minutes)
+  // T-1104: 1-9 a try's worker report (when no question takes the number keys), and Enter on a pressable Runs line its report
+  const tries = taskReports(t).map(r => r.try).filter(n => n >= 1 && n <= 9)
+  const reportKeys = [
+    ...(!asks && taskReports(t).length > 1 && tries.length ? [{ key: tries.length > 1 ? `${tries[0]}-${tries.at(-1)}` : `${tries[0]}`, word: "a try's report" }] : []),
+    ...(taskHasRunLines(t) ? [move, { key: 'Enter', word: 'on a Runs line: its report' }] : []),
+  ]
+  return [...(asks ? [{ key: 'a', word: 'answer' }] : []), ...panelTaskActions(t, merging).map(a => ({ key: a.key!, word: a.word })), ...reportKeys, back]
 }
 
 /** Whether task `t`'s approve is in progress at `nowMs`: this panel just sent it (approveSent, `approving`), or the board
@@ -707,7 +720,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     const t = choice.opened ? f.view.tasks.find(x => x.id === choice.opened) : undefined
     // the approve in progress takes the same buttons and keys away (approveInProgress)
     const busy = !!t && approveInProgress(f, t, choice.approving, nowMs)
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore, choice.taskChecker) : null
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore, choice.taskPick, choice.pageCursor ?? 0) : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '', choice.searchMore, choice.backlogAll ?? false, choice.openDays ?? [])
     keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!page && busy)
     if (!page) modeRow = modeLines(f, !!choice.search?.trim(), w)
@@ -1553,15 +1566,24 @@ function questionRow(q: OwnerQuestion, front: string, idWidth: number, w: number
   ]
 }
 
+/** T-1104: the id of a pressable Runs line (its cursor id): "report:2:checker:a6f1" (no agent id: "report:2:worker:"). */
+export const reportPickId = (p: ReportPick) => `report:${p.try}:${p.kind}:${p.id ?? ''}`
+
+/** T-1104: the pick of a pressable Runs line's cursor id; undefined for any other id. */
+export function reportPickOf(id: string): ReportPick | undefined {
+  const m = /^report:(\d+):(worker|checker):(.*)$/.exec(id)
+  return m ? { try: Number(m[1]), kind: m[2] as 'worker' | 'checker', ...(m[3] ? { id: m[3] } : {}) } : undefined
+}
+
 /** How many lines of a long History or Report section the task page shows; the rest is cut with "… (n more lines)"
  *  (the whole report stays in its file, named in the section). */
-export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { history: 30, report: 40, checker: 40 }
+export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { history: 30, report: 40 }
 
 /** The page of the task or question `id`: its title, its question and its choices, each a clickable line (T-583),
  *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,
  *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), with the latest report's text
  *  (`report`, read by the TUI) and the changed files from the view file; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = '', more?: SearchMore, checker?: PanelChoice['taskChecker']): Body | null {
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = '', more?: SearchMore, pick?: ReportPick, pageCursor = 0): Body | null {
   const v = f.view
   const b = bodyMaker()
   const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
@@ -1611,7 +1633,8 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
     width: w,
     nowMs,
     detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, merging, driving: v.driving ?? false, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
-    ...(report || checker ? { texts: { ...(report ? { [report.file]: report.text } : {}), ...(checker ? { [checker.file]: checker.text } : {}) } } : {}),
+    ...(report ? { texts: { [report.file]: report.text } } : {}),
+    ...(pick ? { shown: pick } : {}),
     changes: v.changes?.[t.id] ?? null,
     // T-761: the Branch section, from the facts the server side read with git (app/branches.ts)
     ...(v.task_branches?.[t.id] ? { branch: v.task_branches[t.id] } : {}),
@@ -1620,14 +1643,24 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
     // here a click on a file, like d, shows all the task's changes (there is no one-file diff)
     changesHint: '  d (or a click on a file) shows the changes',
   })
+  // T-1104: the agent lines of Runs with a report file are lines to press (a click, or Enter with the cursor on them)
+  const pressable = sections.flatMap(sec => (sec.id === 'runs' ? sec.lines.filter(l => l.pick).map(l => l.pick!) : []))
+  const ids = pressable.map(reportPickId)
+  const selected = ids.length ? ids[Math.min(Math.max(0, pageCursor), ids.length - 1)]! : ''
   for (const sec of sections) {
     b.add([{ text: ' ', color: 'text' }])
     b.add([{ text: `▍${sec.title}`, color: 'suggestion', bold: true }])
     const most = SECTION_LINES[sec.id] ?? Infinity
-    sec.lines.slice(0, most).forEach(l => b.add(l.segs.length ? l.segs : [{ text: ' ', color: 'text' }], l.action ? { key: 'd' } : null))
+    sec.lines.slice(0, most).forEach(l => {
+      if (!l.pick) return b.add(l.segs.length ? l.segs : [{ text: ' ', color: 'text' }], l.action ? { key: 'd' } : null)
+      const hit: PanelHit = { report: l.pick }
+      const mark = reportPickId(l.pick) === selected
+      const first = l.segs[0]!
+      b.add([{ ...first, text: mark ? `›${first.text.slice(1)}` : first.text, hit }], hit)
+    })
     if (sec.lines.length > most) b.add([{ text: `  … (${sec.lines.length - most} more lines)`, color: 'inactive' }])
   }
-  return { ...b, ids: [], selected: id, head }
+  return { ...b, ids, selected: selected || id, head }
 }
 
 /** A numbered choice of a question as Claude Code's question pop-up shows it ("  1. Allow", "  3. Answer…"; T-651):
