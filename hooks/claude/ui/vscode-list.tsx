@@ -120,7 +120,7 @@ export async function listPageVs($: $, pane: PaneParts) {
     const tagged = body.split(' · ').some(p => p === `[${kind}]` || p === `[${kind}`)
     // the "waits for" list comes from the task's own `after` field (its unfinished ones, as rowExtra shows them), never
     // from text that only starts with the word: a question or note "after you look at …" is a normal text
-    const ids = x.status === 'todo' || x.status === 'paused' ? openAfter({ tasks: v.tasks }, x) : []
+    const ids = x.status === 'todo' || x.status === 'paused' ? openAfter({ tasks: v.tasks, archived_done: x.after }, x) : []
     const after = ids.length && body === `${WAITS_FOR} ${ids.join(', ')}` ? body : ''
     const role = !after && body && body === kindTag(x) ? body : ''
     // the row's end, in order: "→ branch", "waits for …", the kind (when not tagged yet), the kind tag, else the

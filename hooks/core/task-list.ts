@@ -35,7 +35,7 @@ function stateOf(t: BoardTask, all: readonly BoardTask[], nowMs: number, group: 
     return [cell, tries].filter(Boolean).join(' ')
   }
   if (t.status === 'todo' || t.status === 'paused') {
-    const open = openAfter({ tasks: all }, t)
+    const open = openAfter({ tasks: all, archived_done: t.after }, t)
     if (open.length) return `${t.status === 'paused' ? 'paused, ' : ''}after ${open.join(', ')}`
     return t.status === 'paused' ? 'paused' : 'to do'
   }

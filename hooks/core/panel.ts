@@ -315,7 +315,7 @@ function rowExtraOf(t: BoardTask, tasks: Pick<SymccTask, 'id' | 'status'>[], max
       return roleTag(t)
     case 'todo':
     case 'paused': {
-      const open = openAfter({ tasks }, t)
+      const open = openAfter({ tasks, archived_done: t.after }, t)
       return open.length ? `${WAITS_FOR} ${open.join(', ')}` : roleTag(t)
     }
     case 'review':

@@ -77,7 +77,7 @@ export function stateWord(t: BoardTask, all: readonly SymccTask[]): string {
   if (asksMoreTime(t)) return 'needs more time?'
   if (t.status === 'review') return 'review'
   if (t.status === 'todo' || t.status === 'paused') {
-    const open = openAfter({ tasks: all }, t)
+    const open = openAfter({ tasks: all, archived_done: t.after }, t)
     if (open.length) return `${t.status === 'paused' ? 'paused, ' : ''}waiting for ${open.join(', ')}`
     return t.status === 'paused' ? 'paused' : 'to do'
   }

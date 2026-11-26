@@ -39,6 +39,14 @@ test('T-1115: a todo task behind a dropped one still waits for it', () => {
   expect(tasksListText(b, now)).toContain('after T-1')
 })
 
+test('T-1115: a task behind an archived done one is not waiting', () => {
+  let b = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'Second task', files: ['src/'], after: [], backlog: false }, at)[0]
+  b = { ...b, archived_done: ['T-9'] }
+  b = patchTask(b, 'T-1', { after: ['T-9'] }, at)
+  expect(chatTasksText(b, now)).not.toContain('waiting for')
+  expect(tasksListText(b, now)).not.toContain('after T-9')
+})
+
 test('T-1101: the tasks list, board and status in chat shape', () => {
   const b = bigBoard()
   check(chatTasksText(b, now))
