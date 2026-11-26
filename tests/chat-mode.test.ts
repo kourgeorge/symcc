@@ -1,0 +1,59 @@
+// T-1098: chat mode. While the owner writes from a chat app (S.chat), board updates that want a reply end with a
+// post line, and every owner question is numbered plain text (no pop-up).
+import { expect } from 'claude-code/testing'
+import { emptyBoard } from '../hooks/board'
+import { S } from '../hooks/app/state'
+import { leadGuideText, sessionStart } from '../hooks/app/symcc'
+import { saveBoard } from '../hooks/app/store'
+import { tellLead, takeBoardUpdate } from '../hooks/app/tell'
+import { workerQuestionText } from '../hooks/app/workers'
+import { chatPostLine } from '../hooks/core/dam'
+import { test } from './reset'
+import { fakeHost, memoryFs, done } from './fake-host'
+
+const ROOT = '/repo'
+
+async function start() {
+  S.root = ROOT
+  const files = new Map<string, string>()
+  const w = fakeHost({
+    fs: memoryFs(files),
+    env: async () => undefined,
+    session: { id: async () => 'a', repo: async () => ({ root: ROOT }), root: async () => ROOT },
+    run: async argv => {
+      const [cmd, ...rest] = argv
+      const args = rest.filter(a => !a.startsWith('-'))
+      if (cmd === 'mv' || cmd === 'ln') {
+        const [from, to] = args as [string, string]
+        if (!files.has(from)) return done({ exitCode: 1, stderr: 'No such file' })
+        files.set(to, files.get(from)!)
+        if (cmd === 'mv') files.delete(from)
+      }
+      return done()
+    },
+  })
+  await saveBoard(w.host, emptyBoard())
+  await sessionStart(w.host)
+  S.W = { ...S.W, askPopup: 'AskUserQuestion' }
+  return w
+}
+
+test('T-1098: in chat mode a board update ends with the post line naming the server, and questions are numbered text', async () => {
+  const w = await start()
+  tellLead(w.host, 'T-5 "Fix login" merged.')
+  expect((w.toLead.shift() ?? takeBoardUpdate() ?? '').includes('reply tool')).toBe(false)
+  expect(workerQuestionText('T-6', 'Which color?', ['red', 'blue'])).toContain('with AskUserQuestion')
+  S.chat = 'telegram'
+  tellLead(w.host, 'T-7 "Fix logout" merged.', { urgent: true })
+  const update = w.toLead.shift() ?? takeBoardUpdate() ?? ''
+  expect(update.endsWith(chatPostLine('telegram'))).toBe(true)
+  expect(update).toContain("telegram server's reply tool")
+  const q = workerQuestionText('T-6', 'Which color?', ['red', 'blue'])
+  expect(q).toContain('as numbered plain chat text')
+  expect(q).toContain('reply with the number or your own words')
+  expect(q).not.toContain('AskUserQuestion')
+  const guide = (await leadGuideText(w.host)) ?? ''
+  expect(guide.endsWith(chatPostLine('telegram'))).toBe(true)
+  expect(guide).toContain('reply with the number or your own words')
+  expect(guide).not.toContain('AskUserQuestion')
+})

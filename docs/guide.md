@@ -2725,6 +2725,21 @@ What works:
 What doesn't work yet: while DAM's session sleeps between messages, nothing runs on its
 own there: no scouts and no two-minute check. Work moves on when the next message wakes it.
 
+### From a chat app
+
+When you talk to the lead from a chat app (a Claude Code channel such as Telegram, Discord or
+Slack), symcc notices it from your message and switches to chat mode (DAM's Slack sessions use
+the same mode):
+
+- **Your messages count as yours**, like a message typed at the terminal.
+- **Board news reaches the chat.** A chat only sees what the lead sends with that chat's reply
+  tool, so every board update that wants a reply (and the lead's guide) ends with a line telling
+  the lead to post its short reply with the reply tool of that server (for example telegram).
+- **Questions are numbered text.** The lead never opens a pop-up there (you can't see it): it asks
+  in one sentence, numbers the choices and says "reply with the number or your own words".
+  The question is still on the board too.
+- **Back at the terminal.** When you next type at the terminal, chat mode goes off.
+
 ---
 
 ## Renaming the plugin

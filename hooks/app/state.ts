@@ -127,8 +127,9 @@ export const startS = () => ({
   /** this session's id, and whether it drives the board (only the driver starts work; see .<name>/lead.json) */
   me: '',
   driving: false,
-  /** T-922: this session runs under DAM (from Slack): board updates carry the guide's core and a post-to-Slack line (see app/dam.ts) */
-  dam: false,
+  /** T-1098: the owner writes from a chat app: '' = no; 'dam' = DAM's Slack (board updates carry the guide's core and a post line, see app/dam.ts);
+   *  else the channel server's name (e.g. "telegram"). Questions go as numbered text and replies are posted to the chat. */
+  chat: '',
   /** set by guardStart: this copy runs in a worker's folder and only guards tool calls (no lead, no timers, no board writes) */
   guardOnly: false,
   /** board.json's mtime (ms) of the state this session last drew (publish) or saved; null = not known yet. A session that
