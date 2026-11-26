@@ -67,3 +67,24 @@ test('T-1111: in chat mode board task / page equals /symcc-task and "more"; outs
   }
   expect(await runTool(host, 'board', { task: 'T-1' })).toBe(plain)
 })
+
+test('T-1125: in chat mode board task for an archived task equals /symcc-task and starts with the archived line', async () => {
+  const files = new Map<string, string>()
+  const f = fakeHost({ features: ALL_FEATURES, session: { repo: async () => ({ root: ROOT }), root: async () => ROOT }, fs: memoryFs(files) })
+  const host = f.host
+  S.root = ROOT
+  const board = taskListBoard(Date.now())
+  files.set(`${ROOT}/${S.N.boardFile}`, JSON.stringify(board, null, 2) + '\n')
+  files.set(`${ROOT}/${S.N.archiveFile}`, JSON.stringify({ version: 1, tasks: [{ ...board.tasks[0], id: 'T-900', status: 'done' }] }, null, 2) + '\n')
+  const plain = await runTool(host, 'board', { task: 'T-900' })
+  expect(plain.startsWith('T-900 is archived (in ')).toBe(true)
+  S.chat = 'telegram'
+  try {
+    const slash = (await runCommand(host, `${S.N.name}-task`, 'T-900'))?.text
+    expect(await runTool(host, 'board', { task: 'T-900' })).toBe(slash)
+    expect(slash!.startsWith('T-900 is archived (read-only).\n')).toBe(true)
+  } finally {
+    S.chat = ''
+  }
+  expect(await runTool(host, 'board', { task: 'T-900' })).toBe(plain)
+})

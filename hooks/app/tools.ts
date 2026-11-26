@@ -57,6 +57,11 @@ export async function latestReport($: Host, t: SymccTask): Promise<ReportRead | 
 export type ReportRead = { file: string; try: number; text: string | null; checker?: { file: string; agent: string; text: string | null } }
 
 /** Task `t` as text for /<name>-task; `report` is its latest saved report (latestReport), shown last. */
+/** Chat shape of an archived task: the read-only line, then the page. Shared by /symcc-task and the board tool. */
+export function chatArchivedTaskText(t: SymccTask, page?: number): string {
+  return `${t.id} is archived (read-only).\n${chatTaskText(t, undefined, Date.now(), page)}`
+}
+
 export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: ReportRead | null, archivedDone: string[] = []): string {
   const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
@@ -693,7 +698,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const t = find(b, id) ?? (await findArchived($, id))
       if (!t) throw new Error(`${id} is not on the board or in the archive`)
       const archived = !find(b, id)
-      if (S.chat) return chatTaskText(t, archived ? undefined : await latestReport($, t), Date.now(), page)
+      if (S.chat) return archived ? chatArchivedTaskText(t, page) : chatTaskText(t, await latestReport($, t), Date.now(), page)
       return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport($, t), b.archived_done)}`
     }
     case 'add': {
