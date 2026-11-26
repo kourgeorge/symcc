@@ -94,7 +94,7 @@ export function checkerVerdict(answer: string): CheckerVerdict | null {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
   if (OK_LINE.test(lines.at(-1) ?? '')) return { ok: true }
   // T-996: a Problems block whose only items say "worse than main: none" is no problem (gaps main already has are follow-ups)
-  const items = checkerProblems(text)
+  const items = checkerProblems(text, Infinity)
   if (items.length && items.every(i => /^[-*_`\s]*worse than main:\s*none[.*_`\s]*$/i.test(i.trim()))) return { ok: true }
   return { ok: false, report: text }
 }
@@ -183,14 +183,14 @@ export const CHECKER_PROBLEMS_MAX = 5
  * "Problems:" and then one "- " line per problem (the checker prompt asks for it). Reads only the last such block: the
  * "- " lines right under the last "Problems:" line, up to CHECKER_PROBLEMS_MAX, with the "- " removed. [] when there is no block.
  */
-export function checkerProblems(report: string): string[] {
+export function checkerProblems(report: string, max = CHECKER_PROBLEMS_MAX): string[] {
   const lines = String(report ?? '').split('\n').map(l => l.trimEnd())
   const h = lines.findLastIndex(l => /^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?$/.test(l))
   if (h < 0) return []
   const out: string[] = []
   for (const l of lines.slice(h + 1)) {
     if (!/^- ?$/.test(l) && !l.startsWith('- ')) break
-    if (out.length >= CHECKER_PROBLEMS_MAX) break
+    if (out.length >= max) break
     const t = l.slice(2).trim()
     if (t) out.push(oneLine(t, 300))
   }

@@ -1938,6 +1938,8 @@ test('T-996: a report whose only findings say "worse than main: none" is OK, and
   const mixed = 'Problems:\n- worse than main: none, but src/a.ts:3 opens a new hole'
   expect(checkerVerdict(mixed)).toEqual({ ok: false, report: mixed })
   expect(checkerVerdict('Follow-ups (not blocking):\n- src/a.ts:3 main already lacks a check\n\nOK')).toEqual({ ok: true })
+  const six = 'Problems:\n' + Array(5).fill('- worse than main: none').join('\n') + '\n- src/a.ts:3 new hole'
+  expect(checkerVerdict(six)).toEqual({ ok: false, report: six })
   expect(checkerVerdict('Problems:\n- worse than main: none\n- src/a.ts:3 new hole: run x')).toEqual({ ok: false, report: 'Problems:\n- worse than main: none\n- src/a.ts:3 new hole: run x' })
 })
 
