@@ -181,16 +181,21 @@ export const CHECKER_PROBLEMS_MAX = 5
  */
 export function checkerProblems(report: string, max = CHECKER_PROBLEMS_MAX): string[] {
   const lines = String(report ?? '').split('\n').map(l => l.trimEnd())
-  const h = lines.findLastIndex(l => /^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?$/.test(l))
+  const h = lines.findLastIndex(l => /^(#{1,6}\s*)?(\*\*|__|\*|_)?Problems:?(\*\*|__|\*|_)?:?$/.test(l))
   if (h < 0) return []
   const out: string[] = []
+  let cur: string | null = null
+  const flush = () => { if (cur !== null && cur.trim()) out.push(oneLine(cur, 300)); cur = null }
   for (const l of lines.slice(h + 1)) {
-    if (!/^- ?$/.test(l) && !l.startsWith('- ')) break
-    if (out.length >= max) break
-    const t = l.slice(2).trim()
-    if (t) out.push(oneLine(t, 300))
+    if (/^- ?$/.test(l) || l.startsWith('- ')) {
+      flush()
+      cur = l.slice(2)
+    } else if (cur === null && !l.trim()) continue // blank lines right under the heading
+    else if (cur !== null && /^\s+\S/.test(l)) cur += ` ${l.trim()}` // an item running onto an indented line
+    else break
   }
-  return out
+  flush()
+  return out.slice(0, max)
 }
 
 /** checkerLine as a history entry to add: "checker-ok", "checker-problems" (with its `problems` fact), or "checker" with no verdict. */

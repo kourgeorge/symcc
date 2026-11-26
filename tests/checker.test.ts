@@ -4,7 +4,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
-import { notProse } from '../hooks/core/checker'
+import { notProse, checkerProblems } from '../hooks/core/checker'
 import { historyEvent, historyLineWords, workerStartedEntry, withHistory, noteAddedLine } from '../hooks/core/history'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped, adoptedCheckers } from '../hooks/app/state'
 import { pump, workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
@@ -585,6 +585,12 @@ test('when its retries are used up, a checker report fails the task with the rep
   expect(said).not.toContain('…')
   expect(said).not.toContain('I looked around')
   expect(w.git.main).toBe(M1)
+})
+
+test('checkerProblems counts every item after a blank line, a "## Problems" heading and indented follow-on lines', () => {
+  expect(checkerProblems('Problems:\n\n- a\n- b', Infinity)).toEqual(['a', 'b'])
+  expect(checkerProblems('## Problems\n- a\n- b', Infinity)).toEqual(['a', 'b'])
+  expect(checkerProblems('Problems:\n- a\n  more\n- b', Infinity)).toEqual(['a more', 'b'])
 })
 
 test('the checker update counts every problem and never starts with an ellipsis', async () => {
