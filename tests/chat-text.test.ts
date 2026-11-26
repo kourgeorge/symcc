@@ -106,6 +106,8 @@ test('T-1106: "more" pages list every task once; long questions keep every choic
   // "more tasks" only while a later page exists
   expect(chatTasksText(taskListBoard(now), now, 0)).not.toContain('more tasks')
   expect(chatTasksText(b, now, 0, '', 2)).not.toContain('more tasks')
+  const tt = chatTasksText(patchTask(taskListBoard(now), 'T-5', { title: 'Write it, more tasks later' }, at), now, 0)
+  expect(tt).toContain('Write it, more tasks later')
   const rows = b.tasks.filter(t => t.status === 'todo')
   const f = chatRowsText(rows, b.tasks, now, `${rows.length} of ${b.tasks.length} tasks`)
   expect(f).toContain('more match')

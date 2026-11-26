@@ -137,7 +137,7 @@ export function chatTasksText(view: TaskView, nowMs: number, offsetMin: number =
   const tail = ['', ...(mode ? [`Mode: ${plain(mode)}`] : []), `Backlog: ${g.backlog} ideas`, `Done today: ${g.doneToday}`, "Say: status, show T-5, more tasks"]
   const out = fitChat([...lines, ...tail], "say 'more tasks'", page)
   // "more tasks" is offered only while a later page exists
-  return (/\n\+\d+ more: say 'more tasks'$/.test(out) ? out : out.replace(', more tasks', '')).replace(/\n{3,}/g, '\n\n')
+  return (/\n\+\d+ more: say 'more tasks'$/.test(out) ? out : out.replace(/(\nSay: [^\n]*), more tasks$/, '$1')).replace(/\n{3,}/g, '\n\n')
 }
 
 /** Tasks picked by a filter as chat lines (one per task), with how many matched. */
