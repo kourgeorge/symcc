@@ -1792,6 +1792,20 @@ test('T-1072: in board mode review a move to tests runs the tests and ends in re
   expect(w.git.moves.length).toBe(0)
 })
 
+test('T-1081: a move to tests that stops at review writes a finished try: history line, untested flag, secrets text', async () => {
+  const w = world(['src/a.ts', 'src/.env'])
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }, { mode: 'review' }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.history.map(h => h.text).join('\n')).toMatch(/checks passed/)
+  expect(t.note).toContain('ready for review')
+  const told = leadQueue.join('\n')
+  expect(told).toContain('changed code but no test')
+  expect(told).toContain('.env')
+})
+
 test('T-1072: in mode auto a failed task with needs_review moved to tests ends in review, nothing merged', async () => {
   const w = world()
   inRepo(w)
