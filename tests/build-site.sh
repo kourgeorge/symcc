@@ -125,6 +125,21 @@ bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/small" >"$tmp/lo
 bun "$here/scripts/build-site.ts" --root "$tmp/src" >"$tmp/log" 2>&1 || bad "default build (--out _site) failed: $(cat "$tmp/log")"
 [ -f "$tmp/src/_site/guide.html" ] || bad "default build did not write _site/guide.html"
 
+# (T-1093) bad blog posts fail the build and name the file
+mkdir -p "$tmp/src/docs/blog"
+printf '# Ok\n\nHello.\n' > "$tmp/src/docs/blog/2026-01-02-ok.md"
+bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/blogok" >"$tmp/log" 2>&1 || bad "a good blog post failed the build: $(cat "$tmp/log")"
+for bp in 2026-13-40-x.md 2026-02-30-x.md 2026-03-04-index.md 2026-03-05-ok.md; do
+  printf '# Bad\n\nText.\n' > "$tmp/src/docs/blog/$bp"
+  if bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/blogbad" >"$tmp/log" 2>&1; then
+    bad "blog post $bp was not refused"
+  else
+    grep -q "$bp" "$tmp/log" || bad "blog post $bp: the message does not name it: $(cat "$tmp/log")"
+    [ "$bp" != 2026-03-05-ok.md ] || grep -q '2026-01-02-ok.md' "$tmp/log" || bad "duplicate slug message does not name both files"
+  fi
+  rm -f "$tmp/src/docs/blog/$bp"
+done
+
 # 5. (T-934) the dropped commands are named nowhere: /symcc-scouts (/symcc-scout with no name does it) and
 #    /symcc-enable here (the same as /symcc-enable). Tests may name them, to check they are gone.
 for old in 'symcc-scouts' 'symcc-enable here' 'name}-scouts' 'enable here'; do
