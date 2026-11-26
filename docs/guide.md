@@ -1932,6 +1932,8 @@ recorded time). A process that took over a reused number is never stopped.
 - **OK:** the task joins the merge queue: catch up, tests, then review or merge, once.
 - **Problems found:** the checker's report goes to a new worker, like a failed test run. It counts
   as one of the `auto_retries`. The task never joins the merge queue, so no tests run for that try.
+  After 2 send-backs there is no new try on its own: the task waits for you with Merge as is (on
+  to the tests, no checker), Keep fixing (one more try with the checker's report) or Drop.
 - **No answer** (the checker was stopped, ran longer than `max_minutes`, or could not start): the
   task joins the merge queue for its tests, and then waits for your review instead of merging.
 - After a reload while a checker ran, the task gets a new checker on the same work (no retry
