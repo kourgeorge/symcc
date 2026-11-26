@@ -123,7 +123,7 @@ test("an off kind is not offered to the lead and refused; on brings it back; cha
   expect(out).toContain('copied the built-in task type')
   expect(parseKind('bug', mine['bug.md']!)).toMatchObject({ description: 'something that works wrongly', off: true, body: BUG_BODY })
   expect(await call($, {})).toContain('- bug (replaced, off): something that works wrongly')
-  expect(kindNames(S.kinds)).toEqual(['change', 'feature', 'refactor', 'docs', 'investigation'])
+  expect(kindNames(S.kinds)).toEqual(['change', 'feature', 'refactor', 'docs', 'investigation', 'errand'])
   expect(kindsLeadText(S.kinds)).not.toContain('bug')
   expect(() => checkKind(S.kinds, 'bug')).toThrow('task type "bug" is turned off')
   expect(await call($, { action: 'off', name: 'bug' })).toContain('already off')

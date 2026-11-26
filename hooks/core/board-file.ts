@@ -151,6 +151,8 @@ export type TaskKind = string
 export const DEFAULT_KIND = 'change'
 /** The kind whose task hands back an answer and merges nothing. */
 export const INVESTIGATION = 'investigation'
+/** The kind whose task is general work: it runs like an investigation, but ends done on its own with its report kept. */
+export const ERRAND = 'errand'
 /** A kind's name: letters, digits, - and _ only (it is a file name), stored in lowercase. */
 export const KIND_NAME = /^[a-z0-9_-]{1,64}$/
 /** Whether `k` could be a kind's name (whether such a kind file exists is checked where the kinds are loaded). */
@@ -160,9 +162,11 @@ export const kindOf = (t: { kind?: unknown } | undefined): TaskKind => {
   const k = t?.kind
   return isKind(k) ? k.trim().toLowerCase() : DEFAULT_KIND
 }
-/** Whether task `t` (or kind name `t`) is an investigation: it hands back an answer and nothing is merged. Every other kind runs as a change. */
-export const isInvestigation = (t: { kind?: unknown } | string | undefined): boolean =>
-  (typeof t === 'string' ? t.trim().toLowerCase() : kindOf(t)) === INVESTIGATION
+const kindName = (t: { kind?: unknown } | string | undefined): string => (typeof t === 'string' ? t.trim().toLowerCase() : kindOf(t))
+/** Whether task `t` (or kind name `t`) is an errand: it runs like an investigation, but ends done on its own with its report kept. */
+export const isErrand = (t: { kind?: unknown } | string | undefined): boolean => kindName(t) === ERRAND
+/** Whether task `t` (or kind name `t`) hands back a report and nothing is merged: an investigation or an errand. Every other kind runs as a change. */
+export const isInvestigation = (t: { kind?: unknown } | string | undefined): boolean => kindName(t) === INVESTIGATION || isErrand(t)
 /** The most of an investigation's answer kept on the task (the full text stays in its report file). */
 export const ANSWER_MAX_CHARS = 4000
 

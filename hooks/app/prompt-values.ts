@@ -1,7 +1,7 @@
 // The values a worker's prompt is filled in with, for each task (see fillPrompt in hooks/core/prompts.ts). A role's
 // checklist is filled in from the same values (see roleSection), for a worker and for a checker alike.
 import type { SymccTask } from '../../types'
-import { type Board, type BoardTask, kindOf, kindSection, ASK_TOOL, ASK_LINE, askedMore, roleOf } from '../board'
+import { type Board, type BoardTask, kindOf, isErrand, kindSection, ASK_TOOL, ASK_LINE, askedMore, roleOf } from '../board'
 import { filesBody } from '../core/prompt-sections'
 import { taskBranch } from './git'
 import { S, toolName } from './state'
@@ -31,6 +31,17 @@ export const sharedValues = (t: SymccTask, dir: string): Record<string, string> 
 /** The placeholders of an investigation's prompt: find the answer and hand it back in full; nothing it changes is kept. */
 export const investigationValues = (t: BoardTask, dir: string): Record<string, string> => ({
   ...sharedValues(t, dir),
+  ...(isErrand(t)
+    ? {
+      job: 'This task is an errand: do the work the task asks for, then hand back a short report. Nothing is committed, tested or merged; the task ends done on its own with your report kept.',
+      may_run: 'Do the work the task asks for, including outside the project (for example in other folders), but',
+      hand_back: 'hand back a short report of what you did and where (paths, results). Write it for the owner, in plain words.',
+    }
+    : {
+      job: 'This task is an investigation: your job is to find the answer and hand it back in full. Your hand-back is the result; the owner reads it. Nothing is committed, tested or merged.',
+      may_run: 'You may run read-only commands and experiments, outside the project or in that folder, but',
+      hand_back: 'hand back the full answer: what you found, how you know (the files, commands or sources you checked), and anything still unsure. Write it for the owner, in plain words.',
+    }),
   ask_more: askedMore(t) ? ' The owner asked more on an earlier answer (above): hand back your complete answer, the whole updated text with the earlier answer and your new findings put together, not only what changed. It must read on its own, without the earlier answer.' : '',
 })
 

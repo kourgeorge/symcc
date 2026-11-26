@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, byRunOrder, isPriority, type Board, type BoardTask, cleanFiles, cleanLive, type Live, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, isFinished, normId, STATUS_WORD, waitsForFiles } from './board-file'
+import { BACKLOG_FROM, byRunOrder, isPriority, type Board, type BoardTask, cleanFiles, cleanLive, type Live, DEFAULT_KIND, INVESTIGATION, isInvestigation, isErrand, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, isFinished, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { historyEntry, withHistory } from './history'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
@@ -333,8 +333,9 @@ function answeredTask(b: Board, id: string, what: string): BoardTask {
  */
 export function investigationDone(b: Board, id: string, now: string, kept?: string): Board {
   const t = answeredTask(b, id, 'marked done')
-  const line = `try ${t.attempts}: the owner read the answer → done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}`
-  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: undefined, test_output: undefined, history: withHistory(t.history, now, ['done', line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}` }]) }, now)
+  const errand = isErrand(t)
+  const line = `try ${t.attempts}: ${errand ? 'the errand is finished' : 'the owner read the answer'} → done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}`
+  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : errand ? 'done' : 'answered', merge_main: undefined, test_output: undefined, history: withHistory(t.history, now, ['done', line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}` }]) }, now)
 }
 
 /** `s` in lower case with every run of other characters turned into one "-", and no "-" at either end. */
