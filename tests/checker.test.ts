@@ -1656,6 +1656,7 @@ test('T-1072: stage tests on a failed task runs its tests and merges it, with no
 
 test('T-1072: stage check on a failed task starts a checker on the kept branch, with no new worker try', async () => {
   const w = world()
+  inRepo(w)
   await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
   await runTool(w.$, 'change', { task: 'T-1', stage: 'check' })
   await until(() => checkerRuns.size > 0)
@@ -1669,6 +1670,7 @@ test('T-1072: stage check on a failed task starts a checker on the kept branch, 
 test('T-1072: stage work from a running checker queues a new worker try; stage review waits for the owner', async () => {
   for (const [stage, status] of [['work', 'todo'], ['review', 'review']] as const) {
     const w = world()
+    inRepo(w)
     await saveBoard(w.$, boardWith(true))
     await finish(w, async () => {
       await runTool(w.$, 'change', { task: 'T-1', stage })
@@ -1686,6 +1688,15 @@ test('T-1072: a move refuses a done task and a bad stage', async () => {
   await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'soon' })).rejects.toThrow('stage must be one of')
 })
 
+test('T-1072: stage with other fields is refused, and stage tests without git leaves the task alone', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
+  await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'work', add_details: 'FIX' })).rejects.toThrow('separate change call')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('failed')
+  await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })).rejects.toThrow("can't be moved")
+  expect(find(await load(w.$), 'T-1')!.status).toBe('failed')
+})
+
 test('T-1072: stage review then approve runs the tests; stage check tells the lead nothing about a reload', async () => {
   const w = world()
   inRepo(w)
@@ -1696,6 +1707,7 @@ test('T-1072: stage review then approve runs the tests; stage check tells the le
   expect(said).toContain('merged')
   expect(w.calls.some(c => c.includes('npm test'))).toBe(true)
   const w2 = world()
+  inRepo(w2)
   await saveBoard(w2.$, boardWith(false, { status: 'failed', note: 'x' }))
   await runTool(w2.$, 'change', { task: 'T-1', stage: 'check' })
   await until(() => checkerRuns.size > 0)

@@ -706,7 +706,11 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const t = await taskOrThrow($, id)
       priorityIn(a)
       if (t.status === 'done') throw new Error(`${t.id} is done; add a new task instead`)
-      if (a.stage !== undefined) return moveStage($, t.id, String(a.stage))
+      if (a.stage !== undefined) {
+        const extra = Object.keys(a).filter(k => k !== 'stage' && k !== 'task' && k !== 'id' && a[k] !== undefined && a[k] !== null)
+        if (extra.length) throw new Error(`stage moves a task on its own; nothing was saved. Send ${extra.join(', ')} in a separate change call`)
+        return moveStage($, t.id, String(a.stage))
+      }
       if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       // Refused, not saved for later: the lead sees the result of the check first, then changes it.
       if (checkingNow(t.id)) throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`)

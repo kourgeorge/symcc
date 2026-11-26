@@ -1,11 +1,11 @@
 import type { Host } from '../host'
-import { find, patchTask, withHistory, endedBy, isInvestigation, intoOf, failedOnClash, type BoardTask } from '../board'
+import { find, patchTask, withHistory, endedBy, isInvestigation, intoOf, failedOnClash, gitNote, type BoardTask } from '../board'
 import { S, finishing } from './state'
 import { load, change, now } from './store'
-import { branchExists, prepareWorktree, taskBranch, worktreeDir } from './git'
+import { gitReady, branchExists, prepareWorktree, taskBranch, worktreeDir } from './git'
 import { haltChecker } from './checker'
 import { stopWorker } from './board-mode'
-import { checkingNow, mergingNow, MERGING_TEXT, stopAsked, mergeFinished, checkAgain, pump } from './workers'
+import { checkingNow, mergingNow, MERGING_TEXT, CHECKING_TEXT, stopAsked, mergeFinished, checkAgain, pump } from './workers'
 
 /** The stages the lead can move a task to (the `stage` of symcc change). */
 export const STAGES = ['work', 'check', 'tests', 'review'] as const
@@ -29,6 +29,7 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
   if (stage !== 'work') {
     if (isInvestigation(t)) throw new Error(`${t.id} is an investigation: it has no work to check, test or review`)
     if (!(await branchExists($, taskBranch(t)))) throw new Error(`${t.id} has no branch yet (no worker has made work for it); move it to work instead`)
+    if (!(await gitReady($))) throw new Error(`${t.id} can't be moved to ${stage} now: ${gitNote(S.gitState)}`)
   }
   const why = `moved to ${stage} by the lead`
   // The task is written in a status the old step can't write over; then what ran is stopped and let go of.
@@ -38,6 +39,8 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
       return patchTask(x, t.id, { status, note, test_tries: 0, ...extra, history: withHistory(cur.history, now(), ['other', why]), ...endedBy(cur, now(), 'stopped', why) }, now(), S.N.dir)
     })
   if (checkingNow(t.id)) {
+    // Only a checker can be stopped; prep, tests and the merge are let to end first.
+    if (t.live?.checking && t.live.checking.step !== 'checker') throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`)
     stopAsked.set(t.id, why)
     await write(stage === 'work' ? 'todo' : 'review', why)
     await haltChecker($, t.id, why)
