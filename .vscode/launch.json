@@ -1,0 +1,22 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "symcc: Cursor extension",
+      "type": "extensionHost",
+      "request": "launch",
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/hosts/cursor/extension", "${input:project}"],
+      "outFiles": ["${workspaceFolder}/hosts/cursor/extension/dist/**/*.js"],
+      "sourceMaps": true,
+      "preLaunchTask": "symcc: build Cursor extension"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "project",
+      "type": "promptString",
+      "description": "Project folder to open with the symcc board",
+      "default": "/tmp/symcc-try"
+    }
+  ]
+}
