@@ -249,6 +249,8 @@ export const isCheckerAsk = (q: string | null | undefined): boolean => /^T-\d+ w
 export function parseCheckerAnswer(answer: string): 'merge' | 'fix' | 'drop' | undefined {
   const a = String(answer ?? '').trim().toLowerCase()
   const words = a.match(/[a-z]+/g) ?? []
+  // a "no" word (or "don't") with a choice is unclear: refuse it rather than do the opposite
+  if (/\b(not|no|never|dont|don['’]t|didnt|wont|won['’]t|cannot|can['’]t|cant)\b/.test(a)) return undefined
   const picks = new Set<'merge' | 'fix' | 'drop'>()
   for (const w of words) {
     if (w === 'merge' || w === 'merged') picks.add('merge')
