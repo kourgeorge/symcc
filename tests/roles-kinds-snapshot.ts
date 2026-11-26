@@ -5187,7 +5187,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             ]
           },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["Task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["7 task types · 2 changed by you · 1 off"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["8 task types · 2 changed by you · 1 off"]},
           {
             "type": "Box",
             "props": {"key":"hdr-keys","display":"none"},
@@ -5265,6 +5265,17 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"claude"},"children":["investigation                  "]},
           {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
           {"type":"Text","props":{"color":"text"},"children":["fi…"]}
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {"key":"kindRow:errand","label":"errand: built-in","plain":true},
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"ide"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["errand                         "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["ge…"]}
         ]
       },
       {
@@ -5451,7 +5462,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             ]
           },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["7 task types · 2 changed by you · 1 off"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["8 task types · 2 changed by you · 1 off"]},
           {
             "type": "Box",
             "props": {"key":"hdr-keys","display":"none"},
@@ -5529,6 +5540,17 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["investigation                  "]},
           {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
           {"type":"Text","props":{"color":"text"},"children":["fi…"]}
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {"key":"kindRow:errand","label":"errand: built-in","plain":true},
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["errand                         "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["ge…"]}
         ]
       },
       {
@@ -5727,7 +5749,7 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
             ]
           },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["7 task types · 2 changed by you · 1 off"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["8 task types · 2 changed by you · 1 off"]},
           {
             "type": "Box",
             "props": {"key":"hdr-keys","display":"none"},
@@ -5805,6 +5827,17 @@ export const ROLES_KINDS_BEFORE: Record<string, unknown> = {
           {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["investigation                  "]},
           {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
           {"type":"Text","props":{"color":"text"},"children":["fi…"]}
+        ]
+      },
+      {
+        "type": "Button",
+        "props": {"key":"kindRow:errand","label":"errand: built-in","plain":true},
+        "press": {"plugin":"symcc"},
+        "children": [
+          {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["  "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["errand                         "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["built-in      "]},
+          {"type":"Text","props":{"color":"text"},"children":["ge…"]}
         ]
       },
       {

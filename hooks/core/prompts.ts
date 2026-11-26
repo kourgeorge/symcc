@@ -83,6 +83,9 @@ export const PROMPT_PLACEHOLDERS: Record<PromptKind, Record<string, string>> = l
   : {
     ...SHARED_PLACEHOLDERS,
     ...sectionPlaceholders('investigation'),
+    job: 'what the task is: an investigation (find the answer) or an errand (do the work)',
+    may_run: 'what the worker may run',
+    hand_back: 'what the hand-back must hold',
     ask_more: 'only after the owner pressed Ask more: hand back the whole updated answer',
     ask: 'how to ask the owner and what a refused edit means',
     [TASK_PLACEHOLDER]: TASK_PLACEHOLDER_ABOUT,
