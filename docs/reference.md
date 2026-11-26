@@ -143,7 +143,6 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-mode [paused\|review\|auto]` | Set the board mode; no word switches `review` and `auto` (from `paused`: `review`) |
 | `/symcc-settings [name value]` | Open the Settings view, or set one setting: `/symcc-settings max_parallel 5`, `/symcc-settings notify sound 2`, `/symcc-settings test_commands "npm test"` |
 | `/symcc-settings role <name> on\|off\|reset` | Turn a role on or off, or reset it back to the built-in one |
-| Task type `errand` | General work that isn't a change to the project (tidy a folder outside the repo, gather files). Like an investigation, but the task ends done on its own with the worker's report, in every mode; use an investigation when you want an answer to read |
 | `/symcc-settings type <name> on\|off\|reset` | Turn a task type on or off, or reset it back to the built-in one |
 | `/symcc-stats [full\|html] [7d [inside]\|T-100..T-130]` | Time and token stats from the board (archived tasks too), easy to read with plain bar charts: a one-line summary, totals, the whole team, averages and medians per task and per try with their totals next to them, time per stage (waiting to start, waiting on tasks, work, prep, check, merge queue, tests, merge, waiting for you; active vs waiting), the biggest tasks, how tasks ended (merged, approved or answered), investigations counted on their own, by role, origin (with each scout's tasks not linked to a run) and day. `7d` limits it to the tasks changed in the last 7 days (whole tries), `7d inside` counts only the work inside those days (tries and stages cut to them), `T-100..T-130` to an id range; `full` adds the long explanations; `html` writes the same figures as a self-contained web page with charts (`.symcc/stats.html`) and opens it |
 | `/symcc-settings role <name> add` / `edit <field> <value>` / `save {...}` / `remove` | Make a role, change one part of it (`description`, `model`, `skills`, `tools`, `checklist`), change several parts at once with JSON, or delete one you added. `type` works the same (its parts are `description` and `body`) |
@@ -158,6 +157,8 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-disable here` | Turn symcc off in this window only (plain Claude here). It is kept in this session, not in `board.json`; other windows are not changed. If this window drives the board, it hands driving over |
 | `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway. The other windows name the driver: "this window follows (driver started Nov 23 09:26, active 3 min ago); /symcc-drive to drive from here" (lead.json keeps `since` and `active` for it) |
 | `/symcc-help [topic]` | The built-in manual |
+
+Task types: `investigation` hands back an answer for you to read; `errand` is general work that isn't a change to the project (tidy a folder outside the repo, gather files) and ends done on its own with the worker's report, in every mode. Neither is merged. Every other task type runs like a change: committed, tested and merged.
 
 ## Settings
 

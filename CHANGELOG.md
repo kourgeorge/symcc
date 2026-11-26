@@ -2,6 +2,20 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.44 (2026-11-26)
+
+### Added
+- Cursor and VS Code: run symcc inside Cursor, on Cursor's or GitHub Copilot's agents (hosts/cursor, PR #1 by pierrekour).
+- New task type "errand": general work, even outside the project, that ends done when its worker hands back; nothing is merged.
+- The lead can move a task to another stage (work, check, tests or review) with its branch as it is. While a worker runs, only "work" is allowed; your review still applies.
+
+### Changed
+- Live tab: the task type is back at the end of the second line (only when it fits); running rows drop the minutes at the end, and the title gets that room.
+- Stats count finished errands on their own, not as investigations you read.
+
+### Fixed
+- A task that only deletes a secret-looking file (like `.env`) no longer gets its branch squashed into one commit.
+
 ## 0.5.43 (2026-11-26)
 
 ### Added
