@@ -91,6 +91,28 @@ test('T-1086: a retry\'s catch-up merge inside the line: main before is its seco
   expect(got?.before).toBe(sha('9'))
 })
 
+test('T-1096: a worker\'s own commit and its own merge of main (no Task line) inside the line count as the task\'s', async () => {
+  const merged = sha('7')
+  const w = gitWorld({
+    commits: {
+      [merged]: { parents: [sha('e')], message: 'T-7: last' },
+      [sha('e')]: { parents: [sha('f')], message: 'T-7: work' },
+      [sha('f')]: { parents: [sha('1'), sha('9')], message: 'T-7: merge main' },
+      [sha('1')]: { parents: [sha('2')], message: 'T-7: first\n\nSymcc-Task: T-7' },
+      [sha('2')]: { parents: [], message: 'T-6: other' },
+    },
+    numstat: NUMSTAT,
+  })
+  const runs = [{ started: 'x', commits: [sha('f'), sha('e'), merged] }] as BoardTask['runs']
+  const got = await mergedChanges(w.$, task({ merged, runs }))
+  expect(got?.before).toBe(sha('9'))
+  expect(got?.files.length).toBe(2)
+  // a worker merge on top (the merged commit itself)
+  const top = gitWorld({ commits: { [sha('a')]: { parents: [sha('b'), sha('c')], message: 'T-7: merge main' } }, numstat: NUMSTAT })
+  const got2 = await mergedChanges(top.$, task({ merged: sha('a'), runs: [{ started: 'x', commits: [sha('a')] }] as BoardTask['runs'] }))
+  expect(got2?.before).toBe(sha('c'))
+})
+
 test('T-1086: a hand merge on main (parents: main, task tip): main before is the first parent', async () => {
   const merged = sha('8')
   const w = gitWorld({ commits: { [merged]: { parents: [sha('a'), sha('b')], message: "Merge branch 'task'" } }, numstat: NUMSTAT })
