@@ -1,7 +1,7 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, type TaskActionId, type TaskAction, type KeyHint, failNext, failAsks, answeredLeadLine, sessionNote } from '../../board'
-import { folderDiff, changedFiles } from '../../app/review'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, type TaskActionId, type TaskAction, type KeyHint, failNext, failAsks, answeredLeadLine, sessionNote, hasMergedChanges } from '../../board'
+import { folderDiff, changedFiles, mergedChanges, mergedDiff } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
 import { type PaneView, S, workers } from '../../app/state'
@@ -150,10 +150,12 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
         <Text color={C('inactive')}>{boxHint('Enter sends to todo', 'cancels')}</Text>
       </Box>
     ) : null
-  if (inReview && !answered && S.diffOpen?.task === t.id) {
+  // T-1086: a done change task keeps its changes: the diff comes from git (what its merge brought into main)
+  const doneDiff = hasMergedChanges(t)
+  if (((inReview && !answered) || doneDiff) && S.diffOpen?.task === t.id) {
     // The changes themselves: the folder as it is now (the owner's edits too) against the merge base, colored line by line.
     const d = S.diffOpen
-    const got = await folderDiff(claudeHost($), target, t, [], d.file).then(
+    const got = await (doneDiff ? mergedDiff(claudeHost($), t, d.file).then(text => ({ text, edits: [] as string[] })) : folderDiff(claudeHost($), target, t, [], d.file)).then(
       x => ({ lines: cutDiff(x.text, t.id, DIFF_LINES, d.file, S.N.name), error: '', mine: x.edits.length > 0 }),
       (err: Error) => ({ lines: [] as string[], error: err.message, mine: false }),
     )
@@ -163,8 +165,8 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
         <Box flexDirection="column">
           <Text>
             <Text bold color={C('claude')}>{t.id}</Text>{' '}
-            <Text bold color={C(color.review!)}>
-              {mark.review} {word.review}
+            <Text bold color={C(color[doneDiff ? t.status : 'review']!)}>
+              {mark[doneDiff ? t.status : 'review']} {word[doneDiff ? t.status : 'review']}
             </Text>
             <Text color={C('inactive')}> · changes in {d.file || 'all files'}</Text>
             {got.mine ? <Text color={C('warning')}> {YOUR_EDITS}</Text> : null}
@@ -243,7 +245,9 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
         files => ({ files, error: '' }),
         (err: Error) => ({ files: [] as DiffFile[], error: err.message }),
       )
-    : null
+    : doneDiff
+      ? await mergedChanges(claudeHost($), t).catch(() => null)
+      : null
   // One line of colored pieces (from detailRowLines / wrapSegs).
   const segLine = (segs: Seg[], key: string) => (
     <Text key={key}>

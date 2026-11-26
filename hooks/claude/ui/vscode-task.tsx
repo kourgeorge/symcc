@@ -371,11 +371,11 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   const details = section('what', 'What to do', [t.details.trim() ? <Markdown key="vs-details-md" text={t.details.trimEnd()} /> : plain('vs-details-none', '(no details)', 'inactive')])
 
-  // a task in review: the files it changed, each opening its diff
+  // a task in review (or a done one, T-1086): the files it changed, each opening its diff
   const changesSec = sec('changes')
   const changes = x.changes && changesSec
     ? section('changes', changesSec.title, [
-        plain('vs-changes-folder', `folder: ${S.N.dir}/worktrees/${t.id}; edit files there, then approve (the tests run again)`, 'inactive'),
+        x.inReview ? plain('vs-changes-folder', `folder: ${S.N.dir}/worktrees/${t.id}; edit files there, then approve (the tests run again)`, 'inactive') : null,
         x.changes.error ? plain('vs-changes-error', `Could not read the changes: ${x.changes.error}`, 'error') : null,
         !x.changes.error && !x.changes.files.length ? plain('vs-changes-none', 'no changes', 'inactive') : null,
         ...x.changes.files.map(f => (
