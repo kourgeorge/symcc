@@ -10,6 +10,10 @@ import { S, toolName, type Worker, workers, scoutRuns, checkerRuns, stopped, isO
 import { drivenElsewhere } from './lead'
 import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
+import { timedSync } from './slow-log'
+
+/** The git guard check, timed (T-1048). */
+const gitWrite = ($: Host, command: unknown, who?: 'reader' | 'worker') => timedSync($, 'gitWriteIn', () => gitWriteIn(command, who))
 import { workerOf, agentOnBoard } from './workers'
 import { scratchOn } from './git'
 import { logRefusal, logAsked, type Refusal, type Who } from './evidence'
@@ -252,7 +256,7 @@ export const stoppedText = () => `${S.N.name} stopped this agent. Do nothing mor
  * is; it has no file list. Undefined: allowed.
  */
 async function checkerCheck($: Host, touch: FileTouch, worktree: string): Promise<Refusal | undefined> {
-  const git = 'command' in touch ? gitWriteIn(touch.command) : undefined
+  const git = 'command' in touch ? gitWrite($, touch.command) : undefined
   if (git) return { text: gitWriteText(git), guard: 'git', what: git }
   return outsideOwnFolder($, touch, worktree)
 }
@@ -265,11 +269,11 @@ async function checkerCheck($: Host, touch: FileTouch, worktree: string): Promis
  * try at merge time. Undefined: allowed.
  */
 async function workerGitWrite($: Host, w: Worker, command: string, cwd?: string): Promise<Refusal | undefined> {
-  if (!gitWriteIn(command)) return undefined
+  if (!gitWrite($, command)) return undefined
   // an unreadable board throws on, so the hook's .catch refuses the command (see guardFailed)
   const t = find(await load($), w.task)
   const reader = !t || isInvestigation(t) || !w.worktree.startsWith('/')
-  const git = gitWriteIn(command, reader ? 'reader' : 'worker') ?? (gitPlaceOk(command, cwd, [...(await bothNames(diskLook($), w.worktree)), '/tmp']) ? undefined : 'git in another folder')
+  const git = gitWrite($, command, reader ? 'reader' : 'worker') ?? (gitPlaceOk(command, cwd, [...(await bothNames(diskLook($), w.worktree)), '/tmp']) ? undefined : 'git in another folder')
   return git ? { text: workerGitWriteText(git), guard: 'git', what: git } : undefined
 }
 
@@ -280,7 +284,7 @@ async function workerGitWrite($: Host, w: Worker, command: string, cwd?: string)
  */
 async function scoutCheck($: Host, touch: FileTouch): Promise<Refusal | undefined> {
   if ('command' in touch) {
-    const git = gitWriteIn(touch.command)
+    const git = gitWrite($, touch.command)
     return git ? { text: scoutGitWriteText(git), guard: 'git', what: git } : undefined
   }
   const real = await realEdit($, touch.path, S.root, S.root)

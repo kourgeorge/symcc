@@ -5,6 +5,7 @@ import { publish } from './lead'
 import { tellLead } from './tell'
 import { migrateIfOld } from './migrate-data'
 import { S, onHere, sizeNotes } from './state'
+import { timed } from './slow-log'
 import { boardEvents, withStageHistory } from '../core/events'
 import { emitTaskEvents, logTaskEvents, type TaskEvent } from './events'
 import type { Host } from '../host'
@@ -644,7 +645,11 @@ async function migratedBoard(host: Host) {
  * Every change goes through here, one at a time, so two workers finishing together
  * never lose an update; the lock file does the same between sessions.
  */
-export async function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
+export function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
+  return timed(host, 'change', () => changeBoard(host, fn))
+}
+
+async function changeBoard<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
   await migratedBoard(host)
   return locked(host, async () => {
     const before = await load(host)

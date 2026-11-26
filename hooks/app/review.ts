@@ -5,6 +5,7 @@ import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn }
 import { S, changesCache } from './state'
 import type { Host } from '../host'
 import { change, load, now, path, safeWrite } from './store'
+import { timed } from './slow-log'
 import { inMergeLine, type TurnLimit } from './merge-line'
 import { tellLead } from './tell'
 import { logQueue } from './evidence'
@@ -512,7 +513,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   // the catch-up with the target shows as "test" (owner's choice, Q-30), so the Stage line only moves on: queue → test → merge
   await markStep($, t, 'testing', stopped)
   if ((await git($, ['merge-base', '--is-ancestor', main, tip])).exitCode !== 0) {
-    const m = await git($, [...asSymcc(), 'merge', '--no-edit', '--no-verify', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}`, ...((t as BoardTask).done ? { done: (t as BoardTask).done } : {}) }), main], dir)
+    const m = await timed($, `${t.id} catch up`, () => git($, [...asSymcc(), 'merge', '--no-edit', '--no-verify', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}`, ...((t as BoardTask).done ? { done: (t as BoardTask).done } : {}) }), main], dir))
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
       // Only a real conflict is one: any other failure (e.g. signing the merge commit) is git's error, and retrying on conflicts can't help it.
@@ -543,7 +544,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
       for (const cmd of cmds) {
         await refresh()
         let thrown: string | undefined
-        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: testTimeoutMs(b) }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
+        const r = await timed($, `${t.id} test run`, () => $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: testTimeoutMs(b) })).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
         // T-547: stopped by its time limit: it fails like a failing test, its output goes to a new try (see settle)
         if (r.exitCode !== 0 && ranOutOfTime(r, thrown)) {
           const min = limitMinutes(testTimeoutMs(b))
@@ -580,7 +581,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   if (!(await branchExists($, target))) return goneResult(target)
   await markStep($, t, 'merging', stopped)
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
-  const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
+  const moved = await timed($, `${t.id} merge`, () => moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' }))
   if (!moved.ok && !(await branchExists($, target))) return goneResult(target)
   if (!moved.ok) return { ok: false, detail: moved.detail, ...(moved.reason ? { reason: moved.reason } : {}), ...(moved.blocked ? { blocked: moved.blocked } : {}), ...(moved.detail === movedText(target) ? { moved: true } : {}) }
   const tests = !cmds.length && !proseSkip ? '; no test command set' : skipped || testsRun || proseSkip ? passed : ''

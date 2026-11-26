@@ -11,6 +11,7 @@ import { loadRoles } from './roles'
 import { loadKinds } from './kinds'
 import { scoutOriginsFixed, scheduleScouts, seedExampleScouts } from './scouts'
 import { S, onHere, loadVersion, timers } from './state'
+import { startLagTimer } from './slow-log'
 import { path, load, saveMigrated, startWait, projectRoot, sessionFolder, isWorkerFolder } from './store'
 import { openPane } from './open'
 import { check, pump } from './workers'
@@ -155,6 +156,7 @@ function startTimers(host: Host) {
   S.watchdog = host.clock.every(2 * 60_000, () => watchdogTick(host))
   S.beat?.cancel()
   S.beat = host.clock.every(LEAD_BEAT_MS, () => leadBeat(host))
+  startLagTimer(host)
 }
 
 /**

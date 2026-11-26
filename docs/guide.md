@@ -532,6 +532,15 @@ stays in review with a note, and you approve it again. If a given-up step still 
 work did reach the branch after all, the task is marked done with that commit (when nothing else
 happened to it meanwhile), or the lead is told it landed.
 
+#### The slow-step log
+
+When symcc seems stuck, or Claude Code says "the hooks worker is wedged" or reloads symcc, look at
+`.symcc/slow.log` in your project. It has one line per slow step: when it ended, the step and how many
+milliseconds it took. Steps over 200 ms are written: a board change, drawing the view, a worker's hand-back,
+the finishing mark, taking the lead, the git guard check, and in a merge the catch-up, each test run and the
+move of the branch. A `lag` line means the worker's own 250 ms timer fired over a second late, so the worker
+was busy; the slow steps just above it are the likely cause. The file keeps the last 500 lines.
+
 ### Time limits
 
 | Limit | Value |
