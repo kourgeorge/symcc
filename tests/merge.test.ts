@@ -3204,8 +3204,11 @@ test('sound plays a chime (a different one when a question waits), voice says th
   const linux = machine('Linux', ['spd-say', 'espeak', 'paplay', 'canberra-gtk-play'], [`${FD}/complete.oga`, `${FD}/bell.oga`])
   expect((await playsFor(linux.$, 'voice', ['T-3'])).map(p => p.argv)).toEqual([['spd-say', '-w', 'repo: T-3 done'], ['espeak', 'repo: T-3 done']])
   expect((await playsFor(linux.$, 'sound 1', ['?T-5'])).map(p => p.argv)).toEqual([['paplay', `${FD}/bell.oga`], ['canberra-gtk-play', '-i', 'bell']])
-  // none saved: the best this machine has (voice)
-  expect((await playsFor(linux.$, null, ['T-3']))[0]!.argv[0]).toBe('spd-say')
+  // none saved: sound 2 where sounds play
+  expect((await playsFor(linux.$, null, ['T-3']))[0]!.argv[0]).toBe('paplay')
+  // none saved, speech only: voice
+  const speechOnly = machine('Linux', ['spd-say'])
+  expect((await playsFor(speechOnly.$, null, ['T-3']))[0]!.argv[0]).toBe('spd-say')
 
   // Windows: the text goes in an environment value the script reads, never into the script
   const win = machine('', ['powershell'])
@@ -3279,7 +3282,7 @@ test('T-695: the owner and the lead pick notify "sound N"; the owner hears the p
   expect((await load(m.$)).notify).toBe('sound 2')
   // the settings list shows the set in use in notify, and no sound_set
   const list = String(await runTool(m.$, 'settings', {}))
-  expect(list).toContain('notify: sound 2 (default voice')
+  expect(list).toContain('notify: sound 2 (default sound 2')
   expect(list).not.toContain('sound_set')
 })
 

@@ -1848,11 +1848,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open o…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify sound 2 · open…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Board and alerts        "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · open o…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["notify sound 2 · open…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -2546,11 +2546,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open o…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify sound 2 · open…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts        "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · open o…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["notify sound 2 · open…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -3864,11 +3864,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open o…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify sound 2 · open…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts        "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · open o…"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["notify sound 2 · open…"]}
         ]
       },
       {"type":"Text","children":[" "]},

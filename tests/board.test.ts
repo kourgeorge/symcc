@@ -385,10 +385,12 @@ test('a merged task is said out loud, several are joined into one line, and noti
   const b = emptyBoard()
   // a new board saves no choice: the best this machine can play
   expect(b.notify).toBeUndefined()
-  expect(notifyOf(b, { voice: true, sound: true })).toBe('voice')
-  expect(notifyOf(b, { voice: false, sound: true }, '/x/web')).toBe('sound 2')
+  expect(notifyOf(b, { voice: true, sound: true })).toBe('sound 2')
+  expect(notifyOf(b, { voice: false, sound: true })).toBe('sound 2')
+  expect(notifyOf(b, { voice: true, sound: false })).toBe('voice')
   expect(notifyOf(b, { voice: false, sound: false })).toBe('off')
   expect(bestNotify({ voice: true, sound: false })).toBe('voice')
+  expect(bestNotify({ voice: true, sound: true })).toBe('sound 2')
   // a saved choice is kept, even where it can't play
   expect(notifyOf({ notify: 'sound 1' }, { voice: true, sound: true })).toBe('sound 1')
   expect(notifyOf({ notify: 'voice' }, { voice: false, sound: false })).toBe('voice')

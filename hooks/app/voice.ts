@@ -193,15 +193,14 @@ function queueSay(host: Host, b: Board, item: string): boolean {
 
 /**
  * The commands to try for one queued line, in order; [] when nothing plays (off, or it can't play here: told once).
- * A "sound N" choice chimes sound set N; with no choice saved the default is used (see notifyOf: voice, else the
- * project's own set).
+ * A "sound N" choice chimes sound set N; with no choice saved the default is used (see notifyOf: sound 2, else voice).
  */
 export async function playsFor(host: Host, wanted: Notify | null, items: string[]): Promise<Play[]> {
   const text = spokenLine(items)
   if (!text) return []
   const p = await players(host)
   const can = await playable(host)
-  const n = notifyOf({ notify: wanted ?? undefined }, can, S.root)
+  const n = notifyOf({ notify: wanted ?? undefined }, can)
   if (n === 'off') return []
   if (!canPlay(n, can)) {
     if (!S.toldUnplayable) {

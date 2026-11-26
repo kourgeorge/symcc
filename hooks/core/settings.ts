@@ -1,7 +1,7 @@
 // Failing tests, turning things on and off, and the settings.
 import type { SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
-import { type Board, type Notify, notifyKind, soundNotify, soundSetFor, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, DEFAULT_TEST_MINUTES, testMinutesOf, NOTIFY_CHOICES, MODES, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
+import { type Board, type Notify, notifyKind, DEFAULT_ARCHIVE_DAYS, DEFAULT_AUTO_RETRIES, DEFAULT_TEST_MINUTES, testMinutesOf, NOTIFY_CHOICES, MODES, SCOUT_FINDINGS_CHOICES, TESTS_WITH_CHANGES_CHOICES, emptyBoard, isMode, isNotify, isScoutFindings, isTestsWithChanges, modeOf, scoutFindingsOf, testsWithChangesOf } from './board-file'
 import { ellipsis, num } from './text'
 import { MODE_NAME } from './review'
 import { settingWords } from './setting-notes'
@@ -151,16 +151,15 @@ export type NotifySystem = 'mac' | 'linux' | 'windows' | 'other'
 export type Playable = { system: NotifySystem; sound: boolean; voice: boolean }
 
 /**
- * The default notify for a machine: voice where it can speak, else the chime of the project's own sound set
- * ("sound 2", picked from the folder name in `root`, see soundSetFor) where it can chime, else off.
+ * The default notify for a machine: "sound 2" where it can play sounds, else voice where it can only speak, else off.
  */
-export const bestNotify = (can: Pick<Playable, 'sound' | 'voice'>, root = ''): Notify => (can.voice ? 'voice' : can.sound ? soundNotify(soundSetFor(root)) : 'off')
+export const bestNotify = (can: Pick<Playable, 'sound' | 'voice'>): Notify => (can.sound ? 'sound 2' : can.voice ? 'voice' : 'off')
 
 /**
  * The notify setting in use: the board's own choice, or (none saved) the best this machine can
- * play. Without `can` (the machine not known yet) an unsaved choice reads as 'voice'.
+ * play. Without `can` (the machine not known yet) an unsaved choice reads as 'sound 2'.
  */
-export const notifyOf = (b: Partial<Pick<Board, 'notify'>>, can?: Pick<Playable, 'sound' | 'voice'>, root = ''): Notify => (isNotify(b.notify) ? b.notify : can ? bestNotify(can, root) : 'voice')
+export const notifyOf = (b: Partial<Pick<Board, 'notify'>>, can?: Pick<Playable, 'sound' | 'voice'>): Notify => (isNotify(b.notify) ? b.notify : can ? bestNotify(can) : 'sound 2')
 
 /**
  * A typed or picked notify choice as a Notify, or null: "Sound 2", "sound  2" and "sound2" all read as "sound 2".
@@ -301,7 +300,7 @@ export const SETTINGS: SettingInfo[] = [
   { name: 'auto_retries', label: 'Retries on failure', kind: 'number', min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: '0-10' },
   { name: 'archive_days', label: 'Archive after', kind: 'number', min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: '0-3650 (0 = never)' },
   { name: 'open_on_start', label: 'Open on start', kind: 'onoff', default: 'on', range: 'on / off' },
-  { name: 'notify', label: 'Alert', kind: 'notify', default: 'voice (else sound N, N picked from the project name, else off)', range: 'voice / sound 1 / sound 2 / sound 3 / off' },
+  { name: 'notify', label: 'Alert', kind: 'notify', default: 'sound 2 (else voice if this computer can only speak, else off)', range: 'voice / sound 1 / sound 2 / sound 3 / off' },
   { name: 'scout_findings', label: 'Scout findings', kind: 'findings', default: 'auto', range: 'auto / backlog' },
   { name: 'tests_with_changes', label: 'Code without tests', kind: 'untested', default: 'ask', range: 'off / ask / review' },
   { name: 'checker', label: 'Checker', kind: 'onoff', default: 'off', range: 'off / on' },
@@ -503,7 +502,7 @@ export function settingValue(b: Partial<Board>, name: SettingName, root = ''): s
     case 'open_on_start':
       return openOnStart(b) ? 'on' : 'off'
     case 'notify':
-      return notifyOf(b, undefined, root)
+      return notifyOf(b)
     case 'enabled':
       return symccOn(b) ? 'on' : 'off'
     case 'mode':
@@ -707,7 +706,7 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
     ...SETTING_GROUPS.flatMap(g => [
       `## ${g.title}`,
       ...groupSettings(g).map(s => {
-        const value = s.name === 'notify' ? notifyOf(b, can, root) : settingValue(b, s.name, root)
+        const value = s.name === 'notify' ? notifyOf(b, can) : settingValue(b, s.name, root)
         const extra = s.name === 'notify' ? `; this machine can play: ${notifyChoices(can).join(', ')}` : s.name === 'enabled' ? '; only the owner can change it' : ''
         const stored = s.name === 'mode' ? { default: 'auto', range: 'paused / review / auto', words: settingWords(s.name, true) + ' (the owner reads review as "approve merge" and auto as "auto merge")' } : s
         return `${s.name}: ${value} (default ${stored.default}, can be ${stored.range}) ${'words' in stored ? stored.words : settingWords(s.name, true)}${extra}`
