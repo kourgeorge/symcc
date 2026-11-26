@@ -1,11 +1,11 @@
 # symcc reference
 
-Look things up here: exact names of modes, commands, settings and statuses, and the install details. This page lists *what* exists. The [guide](guide.md) explains *how it works and why*, and the [README](../README.md) is the short start.
+Look things up here: exact names of modes, commands, settings and statuses, and the install details. This page lists *what* exists. The [documentation](docs.md) explains *how it works and why*, and the [README](../README.md) is the short start.
 
 - [How it works, step by step](#how-it-works-step-by-step)
 - [Install: other ways and fixes](#install-other-ways-and-fixes)
 - [Modes](#modes)
-- [Live status: seeing the board](#live-status-seeing-the-board)
+- [The board panel and its keys](#the-board-panel-and-its-keys)
 - [Commands](#commands)
 - [Settings](#settings)
 - [Scouts and task statuses](#scouts-and-task-statuses)
@@ -95,19 +95,19 @@ The mode decides whether finished work merges by itself. Change the mode with `/
 Claude Code's own **plan mode** (Shift+Tab) also counts: while the main chat is in it, new tasks go
 to the backlog and no new worker or scout starts (running workers keep going); the band shows
 `plan mode: nothing starts`. When it ends, the lead lists those backlog tasks and asks you which to
-move to todo. See [Plan mode](guide.md#plan-mode) in the guide.
+move to todo. See [Plan mode](tasks.md#plan-mode).
 
 In `auto`, say "T-5 needs review" and just that task waits. Workers may change git only in their
 own folder and on their own branch (commit, merge, reset...; never push, fetch, pull, other branches, worktree,
-config or tags; see [a worker's git](guide.md#a-workers-git)), only symcc merges into main, and
-scouts can't edit files. See [approval before merge](guide.md#approval-before-merge).
+config or tags; see [a worker's git](tasks.md#a-workers-git)), only symcc merges into main, and
+scouts can't edit files. See [approval before merge](tasks.md#approval-before-merge).
 
-## Live status: seeing the board
+## The board panel and its keys
 
 The board panel shows every task, scout and setting in one place. `/symcc` opens it. Keys: `a` approve, `x` reject or drop, `d` show changes,
 `p` pause, `u` resume, `r` retry, `e` run now, `m` switch approve merge / auto merge, `t` / `s` / `c` the Tasks,
 Scouts and Settings tabs. **Ctrl+T** shows running workers. More in the
-[guide](guide.md#live-status-seeing-the-board).
+[board](board.md#live-status-seeing-the-board) page.
 
 ## Commands
 
@@ -123,7 +123,7 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | (lead tool) `board` with `view` | Not a command: the lead's `board` tool takes `view: "tasks"` or `view: "status"` and returns exactly the text of `/symcc-tasks` or `/symcc-status` (the short chat shape in chat mode), so "status" typed in plain words from a chat app works. In chat mode `task` returns the same text as `/symcc-task T-3` (page 1), and `page: 2` (or 3, ...), with `view` or with `task`, returns the next part of a text that ended with "+N more"; that is how "more" works. Without `view` the tool is as before (the long board text in full, a filtered list with `status` / `search`), also in chat mode |
 | `/symcc-task T-3` | Open one task. In chat mode: short plain text, cut into parts of at most 3,500 characters; `/symcc-task T-3 more` (or `T-3 page 3`) gives the next part, the same as the `board` tool with `task` and `page` |
 | `/symcc-task T-3 pause` / `resume` / `retry` | Pause a task (its worker stops), resume a paused one, or put a failed or dropped one back to `todo` (on a task whose finished work waited for your files: merge it now) |
-| `/symcc-task T-3 run` / `run anyway` | Run a task now: a worker starts on it at once, even when every agent slot is busy (it runs one over, and nothing else starts until the count is back under) or the board is paused (only this task starts). Only for a task that is to do (retry it or move it to `todo` first). When it waits on tasks that aren't done, `run` only asks ("T-5 waits on T-3 (running). Start anyway?"); `run anyway` starts it without waiting. The `e` key and the Run now button on the task's page do the same. See [Run a task now](guide.md#run-a-task-now) |
+| `/symcc-task T-3 run` / `run anyway` | Run a task now: a worker starts on it at once, even when every agent slot is busy (it runs one over, and nothing else starts until the count is back under) or the board is paused (only this task starts). Only for a task that is to do (retry it or move it to `todo` first). When it waits on tasks that aren't done, `run` only asks ("T-5 waits on T-3 (running). Start anyway?"); `run anyway` starts it without waiting. The `e` key and the Run now button on the task's page do the same. See [Run a task now](tasks.md#run-a-task-now) |
 | `/symcc-task T-3 drop [reason]` | Drop a task, with an optional reason |
 | `/symcc-task T-3 merged` | Mark a task done whose work you already merged by hand (symcc looks it up in the history; nothing is merged or tested) |
 | `/symcc-task T-3 review on\|off` | Turn `needs_review` on or off for the task |
@@ -181,7 +181,7 @@ setting, opens a pick list for `mode`, `notify`, `scout_findings` and `tests_wit
 | `notify` | `sound 2` where this computer can play sounds, else `voice` where it can only speak, else `off` | `voice` / `sound 1` / `sound 2` / `sound 3` / `off` | What plays when a task is merged or a worker asks you something. `voice` says "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project folder's name first); `sound N` plays a short chime from sound set N, so you can tell which project chimed (on macOS `sound 1`: `Glass` and `Ping`, `sound 2`: `Hero` and `Pop`, `sound 3`: `Submarine` and `Funk`; the second sound is for a waiting question). Picking a sound plays its chime. Only choices this computer can play can be picked (see below) |
 | `scout_findings` | `auto` | `auto` / `backlog` | Where the tasks made from a scout finding go, for scouts without their own choice. `auto`: the lead decides, and a finding it adds goes to `todo` and runs. `backlog`: every task added from a scout finding goes to the backlog, whatever the lead asks, and starts only when you move it to `todo` (the lead still tells you what was found). This is only the default: a scout with its own `findings:` choice (`/symcc-scout <name> findings auto\|backlog`) follows that choice instead; `default` sends it back to this setting |
 | `tests_with_changes` | `ask` | `off` / `ask` / `review` | What happens to a change task that edits code but no test file. A test file is in a `test/`, `tests/`, `__tests__/`, `spec/`, `e2e/` or `cypress/` folder or a folder ending in `.Test` / `.Tests`, or has `test` or `spec` as a name part split by `.`, `_` or `-` (`a.test.ts`, `a_test.py`, `test_a.py`, `a-test.ts`), a `.cy.` or `e2e` name part (`a.cy.ts`, `login.e2e.ts`), or a CamelCase name ending in `Test` or `Tests` (`FooTest.java`, `FooTests.cs`, `LoginUITests.swift`); a name that only contains those letters (`latest.ts`, `run-tests.sh`, all-capital `LATEST.ts`) is not a test. `ask`: it still merges and the lead is told "T-3 changed code but no test". `review`: it waits for your review instead of merging. `off`: not checked. A change to docs only is never flagged (docs are `.md`/`.mdx` files, README / CHANGELOG / LICENSE-style names (no extension or a text one), images, video, audio, fonts and subtitles anywhere, and non-code files under `docs/`; code under `docs/` (`docs/build.ts`) or with a docs-style name (`Notice.tsx`) is code) |
-| `checker` | `off` | `off` / `on` | Whether a fresh checker tries to break each change (not docs-only). It runs after the prep step (commit, scope and secret check) and before the change joins the merge queue; the tests run once in the queue, after it. Problems go back to the worker as a retry (one of the `auto_retries`), with no test run for that try. After 2 send-backs the task waits for you instead: Merge as is, Keep fixing or Drop. See [the checker](guide.md#the-checker) |
+| `checker` | `off` | `off` / `on` | Whether a fresh checker tries to break each change (not docs-only). It runs after the prep step (commit, scope and secret check) and before the change joins the merge queue; the tests run once in the queue, after it. Problems go back to the worker as a retry (one of the `auto_retries`), with no test run for that try. After 2 send-backs the task waits for you instead: Merge as is, Keep fixing or Drop. See [the checker](tasks.md#the-checker) |
 | `mode` | `auto` | `paused` / `review` / `auto` | Whether work runs, and whether finished work merges on its own or waits for you. See Modes above |
 | `enabled` | on | on / off | Whether symcc works at all in this project; the same as `/symcc-enable` and `/symcc-disable` |
 
@@ -216,14 +216,14 @@ told once and nothing plays; the setting is kept. Only the session driving the b
 
 A scout is one Markdown file in `.symcc/scouts/`: how often it runs at the top, its
 instructions below. `every_minutes: 0` (or a value that is not a whole number) means it
-runs only on demand. See [scouts](guide.md#scouts). A task is `todo`, `doing`,
+runs only on demand. See [scouts](scouts.md#scouts). A task is `todo`, `doing`,
 `waiting` (for your answer: you hear "symcc: T-5 needs you"), `review`, `paused`, `failed`,
 `done` (merged, final), `dropped` (never runs on its own; Retry brings it back) or
 `backlog` (parked until you move it to todo). See
-[a task's life](guide.md#a-tasks-life).
+[a task's life](how-it-works.md#a-tasks-life).
 
 Each task merges into the branch you were on when you asked for it (tell the lead "merge T-3
-into `develop`" to move one task). More tips: [good to know](guide.md#good-to-know).
+into `develop`" to move one task). More tips: [good to know](troubleshooting.md#good-to-know).
 
 ## For developers
 
@@ -232,5 +232,5 @@ to test), [`hooks/app/`](../hooks/app/) (what symcc does, with no Claude Code in
 [`hooks/claude/`](../hooks/claude/) and [`hooks/claude/ui/`](../hooks/claude/ui/) (everything
 that talks to Claude Code, and the panel), and [`hooks/register.tsx`](../hooks/register.tsx) (only
 the wiring), with tests in [`tests/`](../tests/). See the
-[guide](guide.md#for-developers-where-the-code-is) for more, and for
-[renaming the plugin](guide.md#renaming-the-plugin).
+[code map](contributing.md#for-developers-where-the-code-is) for more, and for
+[renaming the plugin](contributing.md#renaming-the-plugin).

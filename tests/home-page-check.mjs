@@ -147,8 +147,10 @@ has('claude plugin install symcc --marketplace kourgeorge/symcc', 'Claude Code i
 has('git clone https://github.com/kourgeorge/symcc &amp;&amp; sh symcc/scripts/install-opencode.sh', 'OpenCode install command (clone)')
 has('opencode plugin add github:kourgeorge/symcc', 'OpenCode install command (no clone)')
 const nav = /<header class="site"[\s\S]*?<\/header>/.exec(page)?.[0] ?? ''
-for (const href of ['overview.html', 'guide.html', 'reference.html', 'engine-and-clients.html', 'research/index.html', 'https://github.com/kourgeorge/symcc'])
-  if (!nav.includes(`href="${href}"`)) bad(`home page nav: no link to ${href}`)
+// (T-1143) exactly Overview · Get started · How it works · Blog · GitHub
+const navLinks = [...nav.matchAll(/<nav>[\s\S]*?<\/nav>/g)].join('').match(/href="[^"]+"/g) ?? []
+const wantNav = ['index.html', 'get-started.html', 'how-it-works.html', 'blog/index.html', 'https://github.com/kourgeorge/symcc'].map(h => `href="${h}"`)
+if (navLinks.join(' ') !== wantNav.join(' ')) bad(`home page nav: links are ${navLinks.join(' ')}, expected ${wantNav.join(' ')}`)
 has('agent organization', 'the words "agent organization"')
 if (/swarm/i.test(page)) bad('home page calls symcc a swarm')
 

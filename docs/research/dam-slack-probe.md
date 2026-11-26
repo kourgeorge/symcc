@@ -38,7 +38,7 @@ background work keeps an agent awake.
 
 **4. Does a board update start a turn, and can it post to Slack?**
 During step 3, watch for a "[symcc] Board update" turn (sent when a worker finishes; see "What
-reaches the lead" in [guide.md](../guide.md)), and whether anything shows up in the thread.
+reaches the lead" in [Tasks](../tasks.md#what-reaches-the-lead)), and whether anything shows up in the thread.
 Means: a turn and a Slack post: the owner hears about merges in Slack. A turn but no post: the lead
 does not use DAM's post/reply tools by itself (DAM says it has tools to post and reply, but gives
 no names: [Slack page](https://dam-agents.github.io/docs/integrations/slack/)). No turn: updates

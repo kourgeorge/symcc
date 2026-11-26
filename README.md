@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="#install">Install</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="#all-features">Features</a> · <a href="docs/guide.md">Guide</a> · <a href="docs/reference.md">Reference</a> · <a href="docs/demo.svg">Demo</a>
+  <a href="#install">Install</a> · <a href="#quick-start">Quick start</a> · <a href="#how-it-works">How it works</a> · <a href="#all-features">Features</a> · <a href="docs/get-started.md">Get started</a> · <a href="docs/docs.md">Documentation</a> · <a href="docs/reference.md">Reference</a> · <a href="docs/demo.svg">Demo</a>
 </p>
 
 <p align="center">
@@ -49,16 +49,16 @@ symcc is an agent organization that runs inside your coding agent. Your chat bec
 - **Lead.** It is your normal chat. You talk to one place, and the lead turns ideas into tasks and decides their order, so you do not have to split and track the work yourself. Change your mind any time: "do T-6 first".
 - **Board.** One list for work you asked for and work scouts found: todo, doing, review, done. It is a plain file, so the work is still there after the chat ends.
 - **Workers.** Parallel agents, each with its own git folder and branch, so they cannot overwrite each other and your branch stays untouched until a merge. Each task also lists the files it may change. That list makes a check possible: an edit outside it is refused and becomes a question to you, instead of a surprise in the diff.
-- **Scouts.** Helpers on a timer that only look. They find bugs, missing tests and outdated parts while you are away. A scout cannot change your project: symcc refuses its file edits and git writes, and its findings become tasks only if the lead adds them. See [scouts](docs/guide.md#scouts).
+- **Scouts.** Helpers on a timer that only look. They find bugs, missing tests and outdated parts while you are away. A scout cannot change your project: symcc refuses its file edits and git writes, and its findings become tasks only if the lead adds them. See [scouts](docs/scouts.md#scouts).
 - **Checker (optional).** A fresh agent that did not write the change tries to break it before the tests run. It is off by default because it costs time and tokens.
 - **Tests before merge.** Your test commands must pass. If they fail, a new worker gets the output and tries again.
-- **Review.** You can see the diff, then approve, or reject with a reason. See [approval before merge](docs/guide.md#approval-before-merge).
+- **Review.** You can see the diff, then approve, or reject with a reason. See [approval before merge](docs/tasks.md#approval-before-merge).
 
-The file checks above (the guards) catch honest mistakes. They are not a security boundary and do not stop an agent that works around them on purpose. The guide explains this and the other design choices in [Why it is built this way](docs/guide.md#why-it-is-built-this-way): why one merge queue, why shared agent notes (org-mem) go through the lead, and why investigations wait for you.
+The file checks above (the guards) catch honest mistakes. They are not a security boundary and do not stop an agent that works around them on purpose. How it works explains this and the other design choices in [Why it is built this way](docs/how-it-works.md#why-it-is-built-this-way): why one merge queue, why shared agent notes (org-mem) go through the lead, and why investigations wait for you.
 
 ### How a change gets merged
 
-Finished tasks do not all merge at once into a moving branch. They take turns in one queue for the whole project. This way the code a task was tested with is exactly the code that merges. At its turn a task catches up with your branch, runs your tests, and then merges (or waits for your review). Any failure counts as one normal failed try. Details: [the way to the merge](docs/guide.md#the-way-to-the-merge).
+Finished tasks do not all merge at once into a moving branch. They take turns in one queue for the whole project. This way the code a task was tested with is exactly the code that merges. At its turn a task catches up with your branch, runs your tests, and then merges (or waits for your review). Any failure counts as one normal failed try. Details: [the way to the merge](docs/tasks.md#the-way-to-the-merge).
 
     hand-back → prep → checker (if on) → queue → catch up → tests → review or merge
 
@@ -90,7 +90,7 @@ The lead keeps it moving; you come back to merged work and a few questions.
 - scouts, retries and a health check keep the work going without you pushing it
 - scouts keep finding work and the lead keeps it moving while you are away
 
-**Where it runs.** symcc is a plugin for Claude Code and for OpenCode. Work runs while your session is open: it stops when you close it and picks up next time. A small command-line version that runs the same engine without a chat window exists as a test of the idea (see the [guide](docs/guide.md#running-symcc-without-claude-code)).
+**Where it runs.** symcc is a plugin for Claude Code and for OpenCode. Work runs while your session is open: it stops when you close it and picks up next time. A small command-line version that runs the same engine without a chat window exists as a test of the idea (see [Running symcc without Claude Code](docs/contributing.md#running-symcc-without-claude-code)).
 
 
 ## How it works
@@ -103,7 +103,7 @@ The lead keeps it moving; you come back to merged work and a few questions.
   <a href="docs/video/symcc.mp4"><b>▶ Watch the full video</b></a> (78 seconds, no sound)
 </p>
 
-In short: you ask, or a scout finds something. The lead makes tasks and sets their order and files. Workers build in parallel. symcc checks the files and runs your tests, you review, and it merges. The [steps in full](docs/reference.md#how-it-works-step-by-step) and the [guide](docs/guide.md#a-tasks-life) have the rest.
+In short: you ask, or a scout finds something. The lead makes tasks and sets their order and files. Workers build in parallel. symcc checks the files and runs your tests, you review, and it merges. The [steps in full](docs/reference.md#how-it-works-step-by-step) and [A task's life](docs/how-it-works.md#a-tasks-life) have the rest.
 
 ## Install
 
@@ -120,7 +120,7 @@ Other ways (try it from a clone, two steps, update, uninstall) and fixes for com
 1. **Install** symcc (see above), then start Claude Code in your project. In a new project symcc stays off (the line under the prompt says so) until you type `/symcc-init` in the folder you want it in; that creates the board there and opens the panel (run `/symcc` to open it again). With no git in the folder the board says so and has a Set up git button; if git is not installed it shows the install step.
 2. **Keep the board local:** `echo ".symcc/" >> .gitignore`
 3. **Set your tests:** tell the lead "set the test command to `npm test`". Without one, changes merge without tests.
-4. **Optional, a scout:** a new project starts with example scouts, all paused. Try one with `/symcc-scout <name>`. See [scouts](docs/guide.md#scouts).
+4. **Optional, a scout:** a new project starts with example scouts, all paused. Try one with `/symcc-scout <name>`. See [scouts](docs/scouts.md#scouts).
 5. **Ask for something.** "Add a dark mode toggle." Then watch the board.
 
 ## Using symcc in OpenCode
@@ -143,7 +143,7 @@ What you need: OpenCode 2.3 or newer, and nothing else (no `npm install` in symc
 - **What differs:** the cost shows 0 on subscription models (tokens are still counted); the all-time stats count the lead's full total, while ranged stats (`7d`, task ranges) count its answers since the last compaction, and older tokens show as "not dated" and are left out; the board panel opens by itself when a session is first shown, as in Claude Code (turn the `open_on_start` setting off to stop that); and some things have no OpenCode hook yet (no plan mode, and the panel has no `w` key to watch a worker; its Live, Tasks, Scouts and Settings tabs work as in Claude Code, including the Roles and Task types pages, editing roles, task types and scouts, and the Organizational memory button on Live).
 - **The Claude login:** whether Anthropic allows using your Claude login through OpenCode's Claude Agent provider is not settled. Other models avoid that question.
 
-The details are in the [guide](docs/guide.md#using-symcc-in-opencode).
+The details are in [Clients](docs/clients.md#using-symcc-in-opencode).
 
 ## Using symcc in Copilot CLI
 
@@ -154,25 +154,25 @@ copilot plugin marketplace add kourgeorge/symcc
 copilot plugin install symcc@symcc
 ```
 
-The lead's tools, workers, scouts and checkers work. There is no board panel yet (`/symcc` prints the board as text), and slash commands work only in the interactive CLI. In `copilot -p`, Copilot loads symcc only with `--allow-all` (or `--allow-all-tools`); without it none of symcc's tools are there. The details, including your own model provider (BYOK), are in the [guide](docs/guide.md#using-symcc-in-copilot-cli).
+The lead's tools, workers, scouts and checkers work. There is no board panel yet (`/symcc` prints the board as text), and slash commands work only in the interactive CLI. In `copilot -p`, Copilot loads symcc only with `--allow-all` (or `--allow-all-tools`); without it none of symcc's tools are there. The details, including your own model provider (BYOK), are in [Clients](docs/clients.md#using-symcc-in-copilot-cli).
 
 ## All features
 
 | Feature | What it does |
 |---|---|
-| **Scouts** | Read-only background agents on a timer. They check for bugs, missing tests, outdated dependencies or security notices, and report; the lead turns the findings into tasks. This is how work is found while you are away. See [scouts](docs/guide.md#scouts). |
+| **Scouts** | Read-only background agents on a timer. They check for bugs, missing tests, outdated dependencies or security notices, and report; the lead turns the findings into tasks. This is how work is found while you are away. See [scouts](docs/scouts.md#scouts). |
 | **Lead** | Your normal Claude Code chat. It takes ideas at any time, splits them into tasks, supervises and reports. Change your mind any time: "do T-6 first", "drop T-2". |
 | **Task board** | One board for work you asked for and work scouts found: todo / doing / review / done, plus a backlog for ideas that never start until you move them to todo. |
 | **Workers** | Parallel agents (3 by default), each in its own git worktree and branch (`symcc/T-1`). Your branch is untouched until merge. |
 | **Worker roles** | The lead picks a role per task: general, docs, refactor, researcher, security, tester, writer (prose only, never code), or your own in `.symcc/roles/`. Each brings its own checklist, skills and model, and may add web tools (`tools: web`; in Claude Code that is WebSearch and WebFetch): only `researcher` and `writer` have web access built in. A role fills the `{{role}}` slot of the fixed, built-in worker prompt, and its checklist may use `{{files}}`, `{{test_command}}` and other placeholders. |
 | **Dependencies** | A task with `after: T-1` waits until T-1 is merged. Tasks that change the same files are put one after another. |
 | **Scope check** | Each task lists the files it may change. A worker's edit outside that scope is refused and asks you for the file; other changes outside it are not merged. |
-| **Test gate and retries** | Finished tasks take turns in one merge queue. At its turn a task catches up with the branch, runs your test commands (skipped if this exact code already passed), then merges. If anything fails (tests, time-out, a clash), a new worker gets the output and tries again (2 times by default). See [the way to the merge](docs/guide.md#the-way-to-the-merge). |
+| **Test gate and retries** | Finished tasks take turns in one merge queue. At its turn a task catches up with the branch, runs your test commands (skipped if this exact code already passed), then merges. If anything fails (tests, time-out, a clash), a new worker gets the output and tries again (2 times by default). See [the way to the merge](docs/tasks.md#the-way-to-the-merge). |
 | **Approval before merge** | In approve merge mode, see the diff, then approve, or reject with a reason. The lead also asks you before it adds any task. |
 | **Workers ask you** | A worker that needs a decision asks with its `ask_owner` tool (with choices, if any) and its task waits for your answer. symcc never reads questions or file requests out of a worker's text. |
-| **Investigations** | Of the task types, a *change* (the default) edits files, which are tested and merged. An *investigation* answers a question ("is it possible…", "should we…", "how does X work?"): nothing is committed or merged, and it always waits for you to read the answer, then **Done**, **Keep as a note** (a docs task saves it as `docs/research/<topic>.md`) or **Ask more** (a follow-up question for a fresh try). Researcher tasks are investigations by default. See [investigation tasks](docs/guide.md#investigation-tasks). |
-| **Task types** | Every task has a task type, a label with a description that says what it is for: `change` (the default), `bug`, `feature`, `refactor`, `docs` or `investigation`. The lead picks one ("make T-5 a bug" changes it); add your own in `.symcc/kinds/`. See [task types](docs/guide.md#task-types). |
-| **Checker** | Off by default. With `checker` on, a fresh checker tries to break each change (not docs-only ones) after the prep step and before it joins the merge queue, where the tests run; problems go back to the worker. See [the checker](docs/guide.md#the-checker). |
+| **Investigations** | Of the task types, a *change* (the default) edits files, which are tested and merged. An *investigation* answers a question ("is it possible…", "should we…", "how does X work?"): nothing is committed or merged, and it always waits for you to read the answer, then **Done**, **Keep as a note** (a docs task saves it as `docs/research/<topic>.md`) or **Ask more** (a follow-up question for a fresh try). Researcher tasks are investigations by default. See [investigation tasks](docs/tasks.md#investigation-tasks). |
+| **Task types** | Every task has a task type, a label with a description that says what it is for: `change` (the default), `bug`, `feature`, `refactor`, `docs` or `investigation`. The lead picks one ("make T-5 a bug" changes it); add your own in `.symcc/kinds/`. See [task types](docs/tasks.md#task-types). |
+| **Checker** | Off by default. With `checker` on, a fresh checker tries to break each change (not docs-only ones) after the prep step and before it joins the merge queue, where the tests run; problems go back to the worker. See [the checker](docs/tasks.md#the-checker). |
 | **Traceability** | Each task keeps who made it, why, your own words, and the history of its tries (time, tokens, failed test output). Each merge commit starts with the task ID (`T-58: ...`). |
 
 symcc works while your Claude Code session is open; work stops when you close it and
@@ -197,8 +197,9 @@ A few things are slash commands: `/symcc` opens the board, `/symcc-init` creates
 
 ## More
 
-- [Website](https://kourgeorge.github.io/symcc/): the landing page, the guide and the reference as web pages
-- [Guide](docs/guide.md): a task's life, review, the panel, scouts, branches, where files live, safety
+- [Website](https://kourgeorge.github.io/symcc/): the landing page and the documentation as web pages
+- [Get started](docs/get-started.md): install, the first board, the first task
+- [Documentation](docs/docs.md): every page: the board, tasks, scouts, running on its own, clients, troubleshooting
 - [Reference](docs/reference.md): install details, modes, commands, settings, statuses
 - [Architecture picture](docs/architecture.md) and [demo](docs/demo.md): how the pictures are made
-- [For developers](docs/guide.md#for-developers-where-the-code-is) and [renaming the plugin](docs/guide.md#renaming-the-plugin)
+- [For developers](docs/contributing.md#for-developers-where-the-code-is) and [renaming the plugin](docs/contributing.md#renaming-the-plugin)

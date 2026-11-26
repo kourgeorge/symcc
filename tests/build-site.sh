@@ -1,9 +1,10 @@
 #!/bin/sh
 # Checks scripts/build-site.ts and .github/workflows/pages.yml (T-593). Not a `claude plugin test` file:
 # that runtime can't run processes. Run: sh tests/build-site.sh
-# 1. Building the real repo gives index.html, guide.html, reference.html ..., every internal link points to a
-#    file that exists (and to an anchor on that page), no internal link still ends in .md.
-# 2. A copy with HTML and a .md link added to the guide: the HTML comes out escaped, the link as guide.html.
+# 1. Building the real repo gives index.html, get-started.html, tasks.html, reference.html ..., every internal link points to a
+#    file that exists (and to an anchor on that page), no internal link still ends in .md; (T-1143) the top bar is
+#    Overview · Get started · How it works · Blog · GitHub, and the doc pages have the documentation list.
+# 2. A copy with HTML and a .md link put in docs/tasks.md: the HTML comes out escaped, the link as tasks.html.
 # 3. The workflow file is valid YAML with the Pages permissions.
 # (T-601) llms.txt lists every page with a working .md link, and each .md copy links only to files on the
 #    site or in the repo (on GitHub); the small copy checks how links in the .md copies are rewritten.
@@ -21,18 +22,18 @@ bun "$here/tests/build-site-check.mjs" "$tmp/real" "$here/.github/workflows/page
 # (T-749) the home page: the playing hero demo with its 4 tabs and still frame, the sections, install commands, nav links
 bun "$here/tests/home-page-check.mjs" "$tmp/real" "$here" || bad "checks on the home page failed (see above)"
 
-# a small copy with tricky text in the guide
+# a small copy with tricky text in docs/tasks.md
 mkdir -p "$tmp/src/docs/research"
 cp -R "$here/site" "$tmp/src/site"
 cp "$here/README.md" "$tmp/src/README.md"
-cp "$here/docs/reference.md" "$here/docs/engine-and-clients.md" "$tmp/src/docs/"
+cp "$here/docs/"*.md "$tmp/src/docs/"
 cp "$here/docs/"*.svg "$here/docs/"*.jpg "$tmp/src/docs/" 2>/dev/null
-cat > "$tmp/src/docs/guide.md" <<'EOF'
-# Guide
+cat > "$tmp/src/docs/tasks.md" <<'EOF'
+# Tasks
 
 Text with <script>alert(1)</script> and a & b, and `<b>code</b>`.
 
-See [the reference](reference.md#modes) and [this guide](guide.md) and [the readme](../README.md#install).
+See [the reference](reference.md#modes) and [this page](tasks.md) and [the readme](../README.md#install).
 
 | a | b |
 |---|---|
@@ -41,11 +42,11 @@ See [the reference](reference.md#modes) and [this guide](guide.md) and [the read
 - one <img src=x onerror=alert(2)>
 - two
 EOF
-printf '# A note\n\nBack to the [guide](../guide.md) for the whole story.\n' > "$tmp/src/docs/research/note.md"
+printf '# A note\n\nBack to the [tasks](../tasks.md) for the whole story.\n' > "$tmp/src/docs/research/note.md"
 if ! bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/small" >"$tmp/log" 2>&1; then
   bad "small build failed: $(cat "$tmp/log")"
 else
-  g="$tmp/small/guide.html"
+  g="$tmp/small/tasks.html"
   grep -q '&lt;script&gt;alert(1)&lt;/script&gt;' "$g" || bad "HTML in text not escaped"
   grep -q '<script>alert' "$g" && bad "raw <script> in output"
   grep -q '<img src=x' "$g" && bad "raw <img> from the text in output"
@@ -53,27 +54,28 @@ else
   grep -q '<code>&lt;b&gt;code&lt;/b&gt;</code>' "$g" || bad "inline code not escaped"
   grep -q 'a &amp; b' "$g" || bad "& not escaped"
   grep -q 'href="reference.html#modes"' "$g" || bad "reference.md#modes not rewritten"
-  grep -q 'href="overview.html#install"' "$g" || bad "../README.md#install not rewritten to overview.html"
+  grep -q 'href="https://github.com/kourgeorge/symcc/blob/main/README.md#install"' "$g" || bad "../README.md#install not rewritten to GitHub"
   grep -q '<code>y | z</code>' "$g" || bad "escaped pipe in a table cell"
-  grep -q 'href="../guide.html"' "$tmp/small/research/note.html" || bad "research note link not rewritten"
+  grep -q 'href="../tasks.html"' "$tmp/small/research/note.html" || bad "research note link not rewritten"
   grep -q 'href="note.html"' "$tmp/small/research/index.html" || bad "research index does not list the note"
   grep -q 'href="../style.css"' "$tmp/small/research/note.html" || bad "research page style.css path"
-  grep -q 'href="../guide.html">Guide' "$tmp/small/research/note.html" || bad "research page nav not relinked"
+  grep -q 'href="../get-started.html">Get started' "$tmp/small/research/note.html" || bad "research page nav not relinked"
+  grep -q '<aside class="docs-side">' "$tmp/small/research/note.html" || bad "research note has no documentation list"
   # (T-601) the .md copies, llms.txt and the footer link
-  m="$tmp/small/guide.md"
-  grep -q '\[the reference\](reference.md#modes)' "$m" || bad "guide.md copy: reference.md#modes link wrong"
-  grep -q '\[the readme\](overview.md#install)' "$m" || bad "guide.md copy: ../README.md#install not rewritten to overview.md"
-  grep -q '<script>alert(1)</script>' "$m" || bad "guide.md copy is not the source Markdown"
-  grep -q '\[guide\](../guide.md)' "$tmp/small/research/note.md" || bad "research note .md copy: link not ../guide.md"
-  grep -q '^- \[A note\](https://kourgeorge.github.io/symcc/research/note.md): Back to the guide for the whole story.$' "$tmp/small/llms.txt" || bad "llms.txt: no line for the research note: $(cat "$tmp/small/llms.txt")"
+  m="$tmp/small/tasks.md"
+  grep -q '\[the reference\](reference.md#modes)' "$m" || bad "tasks.md copy: reference.md#modes link wrong"
+  grep -q '\[the readme\](https://github.com/kourgeorge/symcc/blob/main/README.md#install)' "$m" || bad "tasks.md copy: ../README.md#install not rewritten to GitHub"
+  grep -q '<script>alert(1)</script>' "$m" || bad "tasks.md copy is not the source Markdown"
+  grep -q '\[tasks\](../tasks.md)' "$tmp/small/research/note.md" || bad "research note .md copy: link not ../tasks.md"
+  grep -q '^- \[A note\](https://kourgeorge.github.io/symcc/research/note.md): Back to the tasks for the whole story.$' "$tmp/small/llms.txt" || bad "llms.txt: no line for the research note: $(cat "$tmp/small/llms.txt")"
   grep -q 'href="../llms.txt"' "$tmp/small/research/note.html" || bad "footer of a research page has no llms.txt link"
   grep -q 'href="llms.txt"' "$tmp/small/index.html" || bad "footer of the landing page has no llms.txt link"
 fi
 
-# (T-1087) the blog: no posts = no Blog link and no blog pages; with posts: list (newest first), one page per
-# post with date and prev/next links, a valid RSS feed, the Blog link on every page
-[ -e "$tmp/small/blog" ] && bad "blog pages built with no docs/blog posts"
-grep -q 'blog/index.html' "$tmp/small/index.html" "$tmp/small/guide.html" && bad "Blog link with no posts"
+# (T-1087) the blog: with posts: list (newest first), one page per post with date and prev/next links, a valid
+# RSS feed, the Blog link on every page; (T-1143) no posts: the Blog link stays and the blog list says so
+grep -q 'No posts yet.' "$tmp/small/blog/index.html" || bad "no posts: the blog list does not say 'No posts yet.'"
+grep -q 'href="blog/index.html">Blog</a>' "$tmp/small/index.html" "$tmp/small/tasks.html" || bad "no posts: no Blog link in the top bar"
 mkdir -p "$tmp/src/docs/blog"
 printf '# Old one\n\nThe first summary & more.\n\nBody.\n' > "$tmp/src/docs/blog/2026-01-05-old-one.md"
 printf '# Middle\n\nBody only <b>x</b>.\n' > "$tmp/src/docs/blog/2026-03-09-middle.md"
@@ -83,7 +85,7 @@ if ! bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/blog" >"$tm
 else
   b="$tmp/blog/blog"
   for f in index.html rss.xml old-one.html middle.html new-one.html old-one.md; do [ -f "$b/$f" ] || bad "blog: missing $f"; done
-  for p in index.html guide.html research/index.html blog/new-one.html; do
+  for p in index.html tasks.html research/index.html blog/new-one.html; do
     grep -q 'href="[./]*blog/index.html"[^>]*>Blog</a>' "$tmp/blog/$p" || bad "blog: no Blog link in $p"
   done
   grep -q 'href="blog/index.html">Blog</a>' "$tmp/blog/index.html" || bad "blog: no Blog link on the home page"
@@ -116,14 +118,14 @@ for o in . site docs scripts ..; do
     grep -q 'Nothing was deleted' "$tmp/log" || bad "--out $o: no clear refusal message: $(cat "$tmp/log")"
   fi
 done
-[ -f "$tmp/src/README.md" ] && [ -f "$tmp/src/site/index.html" ] && [ -f "$tmp/src/docs/guide.md" ] || bad "a refused --out still deleted files"
+[ -f "$tmp/src/README.md" ] && [ -f "$tmp/src/site/index.html" ] && [ -f "$tmp/src/docs/tasks.md" ] || bad "a refused --out still deleted files"
 mkdir -p "$tmp/other" && echo keep > "$tmp/other/keep.txt"
 bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/other" >"$tmp/log" 2>&1 && bad "a non-empty folder without the marker was not refused"
 [ -f "$tmp/other/keep.txt" ] || bad "a refused non-empty folder lost its file"
 [ -f "$tmp/small/.symcc-site" ] || bad "the build does not write its .symcc-site marker"
 bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/small" >"$tmp/log" 2>&1 || bad "rebuilding into an earlier build failed: $(cat "$tmp/log")"
 bun "$here/scripts/build-site.ts" --root "$tmp/src" >"$tmp/log" 2>&1 || bad "default build (--out _site) failed: $(cat "$tmp/log")"
-[ -f "$tmp/src/_site/guide.html" ] || bad "default build did not write _site/guide.html"
+[ -f "$tmp/src/_site/tasks.html" ] || bad "default build did not write _site/tasks.html"
 
 # (T-1093) bad blog posts fail the build and name the file
 mkdir -p "$tmp/src/docs/blog"

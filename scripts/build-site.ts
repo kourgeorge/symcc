@@ -1,17 +1,18 @@
 // Builds the symcc GitHub Pages site (T-593). Plain HTML, no npm packages: run it with bun.
 //   bun scripts/build-site.ts [--root <repo folder>] [--out <build folder>]
 // --root defaults to the repo this script is in, --out to <root>/_site.
-// It copies site/ (index.html, style.css, demo.js: the home page's hero demo, T-749) into the build folder and turns README.md, docs/guide.md,
-// docs/reference.md, docs/engine-and-clients.md and docs/research/*.md into HTML pages with the same header and footer as
-// site/index.html. Links to these pages are rewritten from .md to .html; links to other files in the
-// repo point to GitHub; images that pages use are copied next to them. HTML in the markdown text is
-// escaped (README's centered <p> banner blocks at the top are left out: the landing page covers them).
+// It copies site/ (index.html, style.css, demo.js: the home page's hero demo, T-749) into the build folder and turns
+// docs/get-started.md, docs/how-it-works.md, the documentation pages (DOC_GROUPS: docs/docs.md is their index),
+// docs/research/*.md and docs/blog/*.md into HTML pages with the same header and footer as site/index.html
+// (T-1143: the header is Overview · Get started · How it works · Blog · GitHub; the documentation pages get a
+// left list of every doc page). Links to these pages are rewritten from .md to .html; links to other files in the
+// repo (README.md too) point to GitHub; images that pages use are copied next to them. HTML in the markdown text is escaped.
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path'
 
 const GITHUB = 'https://github.com/kourgeorge/symcc'
 
-type Page = { src: string; out: string; title: string; dropHtml?: boolean }
+type Page = { src: string; out: string; title: string }
 // md: links to pages point to their .md copies (for the plain Markdown copy of a page, T-601)
 type Ctx = { page: Page; slugs: Map<string, number>; images: Set<string>; pages: Map<string, Page>; root: string; md?: boolean }
 
@@ -202,7 +203,6 @@ export function blocks(lines: string[], ctx: Ctx, tight = false): string {
     // a paragraph: lines up to a blank line or the start of another block
     const para: string[] = []
     while (i < lines.length && !blank(lines[i]) && (para.length === 0 || !startsBlock(lines[i]!))) { para.push(lines[i]!.trim()); i++ }
-    if (ctx.page.dropHtml && /^<\/?(p|img|div|br|a)\b/i.test(para[0]!)) continue
     const html = inline(para.join('\n'), ctx)
     out.push(tight ? html : `<p>${html}</p>`)
   }
@@ -290,8 +290,9 @@ export function summary(md: string): string {
 }
 
 const MAIN_SUMMARY: Record<string, string> = {
-  'README.md': 'What symcc is, how to install it, a quick start, how it works, and the full feature list.',
-  'docs/guide.md': 'How to use symcc day to day: talking to the lead, the board, tasks, workers, scouts and merges.',
+  'docs/get-started.md': 'Install symcc, make the first board, ask for the first task, and talk to the lead.',
+  'docs/how-it-works.md': "The parts of symcc and their names, why it is built this way, and a task's life.",
+  'docs/docs.md': 'The list of every documentation page.',
   'docs/reference.md': 'Every command, setting, file and board key of symcc, in one place.',
   'docs/engine-and-clients.md': 'For people who change symcc: what the engine is, what a client is, the rule between them and the checks that watch it.',
 }
@@ -299,7 +300,7 @@ const MAIN_SUMMARY: Record<string, string> = {
 export function llmsTxt(pages: Page[], root: string): string {
   const line = (p: Page) => {
     const md = readFileSync(join(root, p.src), 'utf8').replace(/\r\n?/g, '\n')
-    const title = p.src === 'README.md' ? 'Overview' : firstHeading(md) ?? p.title
+    const title = firstHeading(md) ?? p.title
     const sum = MAIN_SUMMARY[p.src] ?? summary(md)
     return `- [${title}](${SITE}/${mdOut(p)})${sum ? `: ${sum}` : ''}`
   }
@@ -383,8 +384,6 @@ ${items}
 
 const RSS_LINK = '<link rel="alternate" type="application/rss+xml" title="symcc blog" href="rss.xml">'
 
-// Puts a Blog link into the site header (after the Research notes link).
-const withBlog = (html: string) => html.replace(/(<a href="research\/index\.html">[^<]*<\/a>)/, '$1\n    <a href="blog/index.html">Blog</a>')
 
 // ---------- pages ----------
 
@@ -402,14 +401,48 @@ function relink(html: string, depth: number): string {
   return html.replace(/\b(href|src)="(?![a-z][a-z0-9+.-]*:|#|\/)([^"]*)"/gi, (_, a: string, v: string) => `${a}="${up}${v}"`)
 }
 
-// T-1088: the pages in the header's order; each gets Previous / Next boxes at the bottom.
-const NAV: { out: string; title: string }[] = [
-  { out: 'overview.html', title: 'Overview' },
-  { out: 'guide.html', title: 'Guide' },
-  { out: 'reference.html', title: 'Reference' },
-  { out: 'engine-and-clients.html', title: 'Engine and clients' },
-  { out: 'research/index.html', title: 'Research notes' },
+// T-1143: the pages of the header's top bar (the home page is Overview), and the documentation pages in the
+// order of the documentation list (left on wide screens, folded on phones). docs/docs.md is the list's index page.
+const TOP: Page[] = [
+  { src: 'docs/get-started.md', out: 'get-started.html', title: 'Get started' },
+  { src: 'docs/how-it-works.md', out: 'how-it-works.html', title: 'How it works' },
 ]
+export const DOCS_INDEX: Page = { src: 'docs/docs.md', out: 'docs.html', title: 'Documentation' }
+const RESEARCH_INDEX: Page = { src: 'docs/research/index.md', out: 'research/index.html', title: 'Research notes' }
+export const DOC_GROUPS: { name: string; pages: Page[] }[] = [
+  { name: 'Using symcc', pages: [
+    { src: 'docs/board.md', out: 'board.html', title: 'The board' },
+    { src: 'docs/tasks.md', out: 'tasks.html', title: 'Tasks' },
+    { src: 'docs/scouts.md', out: 'scouts.html', title: 'Scouts' },
+    { src: 'docs/running-on-its-own.md', out: 'running-on-its-own.html', title: 'Running on its own' },
+    { src: 'docs/clients.md', out: 'clients.html', title: 'Clients' },
+    { src: 'docs/troubleshooting.md', out: 'troubleshooting.html', title: 'Troubleshooting' },
+    { src: 'docs/reference.md', out: 'reference.html', title: 'Reference' },
+  ] },
+  { name: 'For contributors', pages: [
+    { src: 'docs/contributing.md', out: 'contributing.html', title: 'Working on symcc' },
+    { src: 'docs/engine-and-clients.md', out: 'engine-and-clients.html', title: 'Engine and clients' },
+    RESEARCH_INDEX,
+    { src: 'docs/demo.md', out: 'demo.html', title: 'The demo' },
+  ] },
+]
+const DOC_PAGES = [DOCS_INDEX, ...DOC_GROUPS.flatMap(g => g.pages)]
+// T-1088: each of these pages gets Previous / Next boxes at the bottom, in this order.
+const NAV: Page[] = [...TOP, ...DOC_PAGES]
+// a documentation page or a research note: it gets the documentation list
+const isDoc = (out: string) => DOC_PAGES.some(p => p.out === out) || out.startsWith('research/')
+
+// The documentation list for `page`, its own entry marked: a side column on wide screens, folded on phones.
+function docsNav(page: Page): { fold: string; side: string } {
+  const href = (p: Page) => escapeHtml(posix.relative(posix.dirname(page.out), p.out))
+  const here = page.out.startsWith('research/') ? RESEARCH_INDEX.out : page.out
+  const item = (p: Page) => `<li><a href="${href(p)}"${p.out === here ? ' aria-current="page"' : ''}>${escapeHtml(p.title)}</a></li>`
+  const list = `<p class="docs-top"><a href="${href(DOCS_INDEX)}"${here === DOCS_INDEX.out ? ' aria-current="page"' : ''}>Documentation</a></p>\n${DOC_GROUPS.map(g => `<p class="docs-group">${escapeHtml(g.name)}</p>\n<ul>${g.pages.map(item).join('\n')}</ul>`).join('\n')}`
+  return {
+    fold: `<details class="docs-fold"><summary>Documentation pages</summary>\n${list}\n</details>\n`,
+    side: `<aside class="docs-side"><nav aria-label="Documentation">\n${list}\n</nav></aside>\n`,
+  }
+}
 
 // The h2 and h3 headings of a page body, for the "On this page" list. Fewer than 3 h2 headings: no list.
 export function tocItems(body: string): { level: number; id: string; text: string }[] {
@@ -439,13 +472,15 @@ function render(page: Page, body: string, f: { header: string; footer: string },
   const depth = page.out.split('/').length - 1
   const up = '../'.repeat(depth)
   // the page's own header link is marked
-  const here = NAV.some(n => n.out === page.out) ? page.out : page.out.startsWith('research/') ? 'research/index.html' : page.out.startsWith('blog/') ? 'blog/index.html' : ''
-  const header = relink(f.header, depth).replace(`<a href="${up}${here}">`, `<a href="${up}${here}" aria-current="page">`)
+  const here = TOP.some(n => n.out === page.out) ? page.out : page.out.startsWith('blog/') ? 'blog/index.html' : ''
+  const header = here ? relink(f.header, depth).replace(`<a href="${up}${here}">`, `<a href="${up}${here}" aria-current="page">`) : relink(f.header, depth)
   const toc = tocHtml(tocItems(body))
+  const docs = isDoc(page.out) ? docsNav(page) : { fold: '', side: '' }
   const pn = prevNext(page)
   const main = `<main class="doc">
-${toc.fold}${body}${pn ? `\n${pn}` : ''}
+${docs.fold}${toc.fold}${body}${pn ? `\n${pn}` : ''}
 </main>`
+  const cls = ['doc-wrap', docs.side && 'with-docs', toc.side && 'with-toc'].filter(Boolean).join(' ')
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -456,7 +491,7 @@ ${toc.fold}${body}${pn ? `\n${pn}` : ''}
 ${head}</head>
 <body>
 ${header}
-${toc.side ? `<div class="doc-wrap">\n${main}\n${toc.side}</div>` : main}
+${docs.side || toc.side ? `<div class="${cls}">\n${docs.side}${main}\n${toc.side}</div>` : main}
 ${relink(f.footer, depth)}
 </body>
 </html>
@@ -521,15 +556,10 @@ export function build(root: string, out: string): string[] {
   const why = unsafeOut(root, out)
   if (why) throw new Error(`build-site: refusing --out ${out}: ${why}. Nothing was deleted.`)
   const posts = readPosts(root)
-  const rawIndex = readFileSync(join(root, 'site/index.html'), 'utf8')
-  const indexHtml = posts.length ? withBlog(rawIndex) : rawIndex
+  const indexHtml = readFileSync(join(root, 'site/index.html'), 'utf8')
   const f = frame(indexHtml)
-  const pages: Page[] = [
-    { src: 'README.md', out: 'overview.html', title: 'Overview', dropHtml: true },
-    { src: 'docs/guide.md', out: 'guide.html', title: 'Guide' },
-    { src: 'docs/reference.md', out: 'reference.html', title: 'Reference' },
-    { src: 'docs/engine-and-clients.md', out: 'engine-and-clients.html', title: 'Engine and clients' },
-  ]
+  // the research notes' index is made below, from the notes
+  const pages: Page[] = NAV.filter(p => p !== RESEARCH_INDEX)
   const researchDir = join(root, 'docs/research')
   const research = existsSync(researchDir) ? readdirSync(researchDir).filter(n => n.endsWith('.md')).sort() : []
   for (const n of research) {
@@ -537,7 +567,7 @@ export function build(root: string, out: string): string[] {
     pages.push({ src: `docs/research/${n}`, out: `research/${n.replace(/\.md$/, '.html')}`, title: firstHeading(md) ?? n.replace(/\.md$/, '') })
   }
   for (const p of [...posts].reverse()) pages.push(p.page)
-  const byPath = new Map(pages.map(p => [p.src, p]))
+  const byPath = new Map([...pages, RESEARCH_INDEX].map(p => [p.src, p]))
   const images = new Set<string>()
 
   rmSync(out, { recursive: true, force: true })
@@ -573,19 +603,23 @@ export function build(root: string, out: string): string[] {
   }
   writeFileSync(join(out, 'llms.txt'), llmsTxt(pages, root))
 
-  const indexPage: Page = { src: 'docs/research/index.md', out: 'research/index.html', title: 'Research notes' }
-  const list = pages.filter(p => p.src.startsWith('docs/research/'))
-    .map(p => `<li><a href="${escapeHtml(posix.basename(p.out))}">${escapeHtml(p.title)}</a></li>`).join('\n')
-  const intro = '<h1 id="research-notes">Research notes</h1>\n<p>Answers from symcc investigation tasks, kept as notes. Some are about ideas that were never built, or were built differently.</p>'
+  const notes = pages.filter(p => p.src.startsWith('docs/research/'))
+  const list = notes.map(p => `<li><a href="${escapeHtml(posix.basename(p.out))}">${escapeHtml(p.title)}</a></li>`).join('\n')
+  const about = 'Answers from symcc investigation tasks, kept as notes. Some are about ideas that were never built, or were built differently.'
+  const intro = `<h1 id="research-notes">Research notes</h1>\n<p>${about}</p>`
   mkdirSync(join(out, 'research'), { recursive: true })
-  writeFileSync(join(out, indexPage.out), render(indexPage, `${intro}\n<ul class="notes">\n${list}\n</ul>`, f))
-  written.push(indexPage.out)
+  writeFileSync(join(out, RESEARCH_INDEX.out), render(RESEARCH_INDEX, `${intro}\n<ul class="notes">\n${list}\n</ul>`, f))
+  // its plain Markdown copy, for the links in the other pages' .md copies
+  writeFileSync(join(out, mdOut(RESEARCH_INDEX)), `# Research notes\n\n${about}\n\n${notes.map(p => `- [${p.title}](${posix.basename(mdOut(p))})`).join('\n')}\n`)
+  written.push(RESEARCH_INDEX.out)
 
-  if (posts.length) {
+  // T-1143: the Blog link is always in the top bar, so the blog list is always made (it may be empty)
+  {
+    mkdirSync(join(out, 'blog'), { recursive: true })
     const blogIndex: Page = { src: 'docs/blog/index.md', out: 'blog/index.html', title: 'Blog' }
     const items = posts.map(p => `<li><p><a href="${escapeHtml(p.slug)}.html">${escapeHtml(p.title)}</a> <span class="post-date">${longDate(p.date)}</span></p>${p.summary ? `<p>${escapeHtml(p.summary)}</p>` : ''}</li>`).join('\n')
     const head = '<h1 id="blog">Blog</h1>\n<p><a href="rss.xml">RSS feed</a></p>'
-    writeFileSync(join(out, blogIndex.out), render(blogIndex, `${head}\n<ul class="notes">\n${items}\n</ul>`, f, `${RSS_LINK}\n`))
+    writeFileSync(join(out, blogIndex.out), render(blogIndex, `${head}\n${posts.length ? `<ul class="notes">\n${items}\n</ul>` : '<p>No posts yet.</p>'}`, f, `${RSS_LINK}\n`))
     writeFileSync(join(out, 'blog/rss.xml'), rssXml(posts))
     written.push(blogIndex.out, 'blog/rss.xml')
   }
