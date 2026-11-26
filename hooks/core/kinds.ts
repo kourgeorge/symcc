@@ -106,7 +106,7 @@ export function kindsLeadText(kinds: readonly KindDef[], name: string = DEFAULT_
     const k = findKind(kinds, n)
     return k ? `${n} (${k.description})` : n
   })
-  return `- Task types (the kind parameter of ${name} add / change): ${list.join('; ')}. Pick the task type that fits each task; ${DEFAULT_KIND} when unsure. Every task type is worked, tested and merged like a change, except ${INVESTIGATION} (see below).`
+  return `- Task types (the kind parameter of ${name} add / change): ${list.join('; ')}. Pick the task type that fits each task; ${DEFAULT_KIND} when unsure. Every task type is worked, tested and merged like a change, except ${INVESTIGATION} and ${ERRAND} (see below).`
 }
 
 // ---------------- managing kinds (the lead's kinds tool and the panel's Kinds page; like the roles) ----------------
