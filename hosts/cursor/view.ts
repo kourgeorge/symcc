@@ -3,14 +3,15 @@
 // the scouts, in the board's own words. The webview only draws it; every rule about what a task needs lives in core/.
 import type { SymccTask } from '../../types'
 import type { PaneView } from '../../hooks/app/state'
-import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isFinished, needsYou, newestFirst, taskAsks, taskActions, whyFailed, liveLanes, liveFinishedLanes, onDemand, everyText, shownStatus, roleOf, HISTORY_KINDS, isHistoryKind, MODE_NAME, MODE_MEANING, driveNoticeParts, showsDriveButton, DRIVE_HERE_LABEL } from '../../hooks/board'
+import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isFinished, needsYou, newestFirst, taskAsks, taskActions, whyFailed, liveLanes, liveFinishedLanes, onDemand, everyText, shownStatus, roleOf, HISTORY_KINDS, isHistoryKind, MODE_NAME, MODE_MEANING, driveNoticeParts, showsDriveButton, DRIVE_HERE_LABEL, sizeText, type ChangeSize, type Seg } from '../../hooks/board'
 import { DEFAULT_NAME } from '../../hooks/name'
+import { sizeSegs } from '../../hooks/core/page-header'
 import { isOpenQuestion } from '../../hooks/core/questions'
 import { viewMarks } from '../../hooks/core/board-parts'
 import { byRunOrder } from '../../hooks/core/board-file'
 import { liveIdle, liveIdleFacts } from '../../hooks/core/live'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, ORG_MEM_SUBTITLE, ORG_MEM_TITLE, orgMemAbout, orgMemDeleteAsk, orgMemNoteHead, orgMemNoteKey, orgMemTopicCounts, type OrgMemNote } from '../../hooks/core/org-mem'
-import type { PanelAction, PanelActionId, PanelFollows, PanelIdle, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelScout, PanelSession, PanelTask, PanelView } from './protocol'
+import type { PanelAction, PanelActionId, PanelFollows, PanelIdle, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelScout, PanelSession, PanelSize, PanelTask, PanelView } from './protocol'
 
 const ms = (iso: unknown): number | undefined => {
   const n = typeof iso === 'string' ? Date.parse(iso) : NaN
@@ -86,7 +87,17 @@ export function taskSessions(t: BoardTask): PanelSession[] {
   return out.reverse()
 }
 
+/** The board's pieces of a size as the panel's: its added lines and its removed lines marked. */
+const sizePieces = (segs: readonly Seg[]): PanelSize => segs.map(s => ({ text: s.text, ...(s.color === 'success' ? { tone: 'added' as const } : s.color === 'error' ? { tone: 'removed' as const } : {}) }))
+
+/** A merged lane's size as the Live row ends with it: the lines added and removed, no files part. */
+function laneSize(z: ChangeSize): PanelSize {
+  const [added = '', removed = ''] = sizeText(z, false).split(' ')
+  return sizePieces([{ text: added, color: 'success' }, { text: ' ', color: 'text' }, { text: removed, color: 'error' }])
+}
+
 function panelTask(t: BoardTask, nowMs: number): PanelTask {
+  const size = sizeSegs(t)
   return {
     id: t.id,
     title: t.title,
@@ -98,6 +109,8 @@ function panelTask(t: BoardTask, nowMs: number): PanelTask {
     ...(ms(t.updated_at) !== undefined ? { updatedMs: ms(t.updated_at)! } : {}),
     ...(t.note?.trim() ? { note: t.note.trim() } : {}),
     ...(t.details?.trim() ? { details: t.details.trim() } : {}),
+    ...(t.done?.trim() ? { done: t.done.trim() } : {}),
+    ...(size ? { size: sizePieces(size) } : {}),
     needsYou: needsYou(t, nowMs),
     actions: actionsOf(t),
     sessions: taskSessions(t),
@@ -144,6 +157,7 @@ function panelLane(l: ReturnType<typeof liveLanes>[number], t: BoardTask | undef
     agent: l.agent,
     ...(now ? { agentId: now.agent } : {}),
     ...(l.done ? { doneMs: l.done.atMs } : {}),
+    ...(l.done && l.size ? { size: laneSize(l.size) } : {}),
   }
 }
 

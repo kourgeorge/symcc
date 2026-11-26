@@ -42,7 +42,7 @@ const lanes: PanelLane[] = [
   lane('T-42', 'CSV export for invoices', 0, 4.2, { agentId: 'cursor-1-a' }),
   lane('T-43', 'Fix the flaky date test', 3, 0.6, { agent: false, tokens: 48_200 }),
   lane('T-45', 'Webhook retry backoff', 0, 1.1, { tokens: 31_900, agentId: 'cursor-2-b', tryNo: 2 }),
-  { ...lane('T-38', 'Dark mode toggle', 4, 0), doneMs: m(3), agent: false, tokens: 72_400 },
+  { ...lane('T-38', 'Dark mode toggle', 4, 0), doneMs: m(3), agent: false, tokens: 72_400, size: [{ text: '+212', tone: 'added' }, { text: ' ' }, { text: '−38', tone: 'removed' }] },
 ]
 
 const next = [task('T-46', 'Paginate the customer list', 'todo', 'up next'), task('T-47', 'Docs for the export API', 'todo', 'up next', { kind: 'docs' }), task('T-48', 'Remove the old v1 routes', 'todo', 'up next'), task('T-49', 'Cache tax rates per region', 'todo', 'up next')]
@@ -236,7 +236,10 @@ function busyView(): PanelView {
       task('T-43', 'Fix the flaky date test', 'doing', 'running', { kind: 'bug', details: 'The date test fails around midnight UTC because it builds “today” from the local clock.' }),
       task('T-45', 'Webhook retry backoff', 'doing', 'running', { attempts: 2, sessions: SESSIONS['T-45']!, actions: [{ id: 'pause', label: 'Pause', primary: true }, { id: 'drop', label: 'Drop', ask: 'Why (optional)' }] }),
       ...next,
-      task('T-38', 'Dark mode toggle', 'done', 'done'),
+      task('T-38', 'Dark mode toggle', 'done', 'done', {
+        done: 'Added a dark mode toggle to the settings page. The choice is kept per user and follows the system theme until set.',
+        size: [{ text: 'merged 7c1e2f9a' }, { text: ' · ' }, { text: '6 files' }, { text: ' · ' }, { text: '+212', tone: 'added' }, { text: ' ' }, { text: '−38', tone: 'removed' }],
+      }),
       task('T-50', 'Try a faster CSV writer', 'backlog', 'backlog', { kind: 'investigation' }),
       task('T-52', 'Export invoices as PDF too', 'backlog', 'backlog'),
       task('T-53', 'Remember the last CSV filter per user', 'backlog', 'backlog'),

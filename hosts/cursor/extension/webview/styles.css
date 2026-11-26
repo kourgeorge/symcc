@@ -1929,6 +1929,20 @@ input:focus {
 .task-note {
   color: var(--wait);
 }
+.task-part {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 80ch;
+}
+.task-part h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.size {
+  font-variant-numeric: tabular-nums;
+}
 .task-details {
   max-width: 80ch;
   max-height: 320px;

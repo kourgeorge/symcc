@@ -10,7 +10,7 @@ import type { AgentRunEnd } from '../../../hooks/app/symcc'
 import { agentToolDefs, disallowedFor, runEnd, sdkAgents, withCursorPrompt } from '../agents'
 import { leadChat, type LeadEvent } from '../lead'
 import { actionCommand, openCursorSession } from '../session'
-import type { PanelStep, PanelView } from '../protocol'
+import type { PanelSize, PanelStep, PanelView } from '../protocol'
 import { PROTOCOL } from '../contract'
 import { addStep, readSteps, sessionMarkdown } from '../steps'
 import { panelView, taskSessions } from '../view'
@@ -500,6 +500,26 @@ test("another window drives: the panel says so in the board's words, and its Dri
   expect(`⚠ ${f.parts.map(p => p.text).join('')}`).toBe(driveWarning(false, [], nowMs, 'symcc', Infinity, driver))
   expect(f.parts.filter(p => p.command).map(p => p.text)).toEqual(['/symcc-drive'])
   expect(of({ driving: false }, 'team')).toEqual({ parts: [{ text: 'this window follows; ' }, { text: '/team-drive', command: true }, { text: ' to drive from here' }], button: 'Drive here', command: 'team-drive' })
+})
+
+test("a task's change size and Done line reach the panel in the board's words, and a merged lane ends with its lines added and removed", () => {
+  const nowMs = Date.parse('2026-11-26T10:00:00Z')
+  const at = (min: number) => new Date(nowMs - min * 60_000).toISOString()
+  const tasks = [
+    { id: 'T-7', title: 'CSV export', status: 'done', details: '', attempts: 1, created_at: at(90), updated_at: at(1), merged: '1a2b3c4d5e6f', size: { files: 25, added: 539, removed: 3722 }, done: 'Added the CSV export and its tests.', history: [{ kind: 'merged', at: at(1), text: 'merged' }] },
+    { id: 'T-8', title: 'Retry backoff', status: 'review', details: '', attempts: 2, created_at: at(60), updated_at: at(5), branch: 'symcc/T-8', size: { files: 1, added: 12, removed: 0 }, history: [] },
+    { id: 'T-9', title: 'An old task', status: 'doing', details: '', attempts: 1, created_at: at(30), updated_at: at(2), history: [] },
+  ]
+  const p = panelView({ tasks, on_here: true, driving: true } as unknown as PaneView, { project: 'p', dir: '.symcc', nowMs })
+  const words = (s?: PanelSize) => s?.map(x => x.text).join('')
+  const task = (id: string) => p.tasks.find(t => t.id === id)!
+  expect(words(task('T-7').size)).toBe('merged 1a2b3c4d · 25 files · +539 −3,722')
+  expect(task('T-7').size!.filter(x => x.tone).map(x => [x.text, x.tone])).toEqual([['+539', 'added'], ['−3,722', 'removed']])
+  expect(task('T-7').done).toBe('Added the CSV export and its tests.')
+  expect(words(task('T-8').size)).toBe('branch symcc/T-8 · 1 file · +12 −0')
+  expect([task('T-9').size, task('T-9').done]).toEqual([undefined, undefined])
+  const lane = p.lanes.find(l => l.id === 'T-7')!
+  expect([lane.doneMs, words(lane.size)]).toEqual([nowMs - 60_000, '+539 −3,722'])
 })
 
 test('panel actions are sent as the owner’s own commands', () => {

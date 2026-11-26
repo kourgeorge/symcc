@@ -2,7 +2,7 @@
 // what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
 // with the message box under it, and the running work beside it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { AgentChoice, BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelFollows, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
+import type { AgentChoice, BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelFollows, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelSize, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
 import { LEAD_AGENT, addStep } from '../../steps'
 import { ask, onMessage, tell } from './bridge'
 import { Icon, IdleNote, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
@@ -653,6 +653,7 @@ export function LaneCard({ lane, step, onTask }: { lane: PanelLane; step?: Panel
           </span>
         )}
         {!!lane.tokens && <span>{tokensWord(lane.tokens)} tokens</span>}
+        {done && lane.size && <Size size={lane.size} />}
       </span>
       {step && !done && (
         <span className="lane-step" title={stepWords(step)}>
@@ -661,6 +662,19 @@ export function LaneCard({ lane, step, onTask }: { lane: PanelLane; step?: Panel
         </span>
       )}
     </button>
+  )
+}
+
+/** A change's size in the board's words, its added lines green and its removed lines red. */
+export function Size({ size }: { size: PanelSize }) {
+  return (
+    <span className="size">
+      {size.map((p, i) => (
+        <span key={i} className={p.tone === 'added' ? 'add' : p.tone === 'removed' ? 'del' : undefined}>
+          {p.text}
+        </span>
+      ))}
+    </span>
   )
 }
 
@@ -747,7 +761,14 @@ function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; ste
           <p className="task-facts">
             <span>role {task.role}</span>
             {task.attempts > 0 && <span>{task.attempts === 1 ? '1 try' : `${task.attempts} tries`}</span>}
+            {task.size && <Size size={task.size} />}
           </p>
+          {task.done && (
+            <div className="task-part">
+              <h4>Done</h4>
+              <Markdown text={task.done} onTask={onTask} />
+            </div>
+          )}
           {task.note && <p className="task-note">{task.note}</p>}
           {task.details && (
             <div className="task-details">

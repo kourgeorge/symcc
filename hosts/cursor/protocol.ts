@@ -22,6 +22,10 @@ export type PanelAction = { id: PanelActionId; label: string; primary?: boolean;
 
 export type PanelFile = { file: string; added: number; removed: number }
 
+/** A change's size in the board's words, in pieces ("merged 1a2b3c4 · 25 files · +539 −3,722", hooks/core/page-header.ts
+ *  sizeSegs); `tone` marks the lines added and removed. */
+export type PanelSize = { text: string; tone?: 'added' | 'removed' }[]
+
 /** One thing that needs the owner: a board question (Q-3), or a task that asks, waits for review or failed. */
 export type PanelNeed = {
   id: string
@@ -57,6 +61,8 @@ export type PanelLane = {
   agentId?: string
   /** set on a lane whose task merged a moment ago */
   doneMs?: number
+  /** a merged lane's change size: the lines added and removed ("+539 −3,722") */
+  size?: PanelSize
 }
 
 export type PanelTask = {
@@ -71,6 +77,10 @@ export type PanelTask = {
   updatedMs?: number
   note?: string
   details?: string
+  /** what the whole task has done so far, from its worker's latest "Done:" line */
+  done?: string
+  /** its change's size: where the change is, its files, the lines added and removed */
+  size?: PanelSize
   needsYou: boolean
   actions: PanelAction[]
   /** the agents that worked on it, newest first ("Try 5", "Try 4 checker"), for their sessions */

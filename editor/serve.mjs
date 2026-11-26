@@ -67825,7 +67825,13 @@ function taskSessions(t) {
   });
   return out.reverse();
 }
+var sizePieces = (segs2) => segs2.map((s) => ({ text: s.text, ...s.color === "success" ? { tone: "added" } : s.color === "error" ? { tone: "removed" } : {} }));
+function laneSize(z) {
+  const [added = "", removed = ""] = sizeText(z, false).split(" ");
+  return sizePieces([{ text: added, color: "success" }, { text: " ", color: "text" }, { text: removed, color: "error" }]);
+}
 function panelTask(t, nowMs) {
+  const size = sizeSegs(t);
   return {
     id: t.id,
     title: t.title,
@@ -67837,6 +67843,8 @@ function panelTask(t, nowMs) {
     ...ms2(t.updated_at) !== void 0 ? { updatedMs: ms2(t.updated_at) } : {},
     ...t.note?.trim() ? { note: t.note.trim() } : {},
     ...t.details?.trim() ? { details: t.details.trim() } : {},
+    ...t.done?.trim() ? { done: t.done.trim() } : {},
+    ...size ? { size: sizePieces(size) } : {},
     needsYou: needsYou(t, nowMs),
     actions: actionsOf(t),
     sessions: taskSessions(t)
@@ -67875,7 +67883,8 @@ function panelLane(l, t) {
     ...l.tokens ? { tokens: l.tokens } : {},
     agent: l.agent,
     ...now3 ? { agentId: now3.agent } : {},
-    ...l.done ? { doneMs: l.done.atMs } : {}
+    ...l.done ? { doneMs: l.done.atMs } : {},
+    ...l.done && l.size ? { size: laneSize(l.size) } : {}
   };
 }
 function panelOrgMem(notes, file) {
