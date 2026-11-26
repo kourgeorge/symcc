@@ -17,7 +17,7 @@ const task = (extra: Partial<BoardTask> = {}): BoardTask =>
   ({ id: 'T-7', title: 'Do it', details: '', files: [], status: 'done', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: '2026-11-26T10:00:00.000Z', updated_at: '2026-11-26T11:00:00.000Z', ...extra }) as BoardTask
 
 /** A host whose git knows `commits` (sha -> parents, message) and answers the diff of `before..merged` with `numstat` and `diff`. */
-function gitWorld(o: { commits: Record<string, { parents: string[]; message: string }>; numstat?: string; diff?: string }) {
+function gitWorld(o: { commits: Record<string, { parents: string[]; message: string }>; numstat?: string; numstatFail?: boolean; diff?: string }) {
   const calls: string[] = []
   const host = fakeHost({
     run: async argv => {
@@ -36,7 +36,7 @@ function gitWorld(o: { commits: Record<string, { parents: string[]; message: str
         for (let s: string | undefined = a[a.length - 1]; s && o.commits[s]; s = o.commits[s]!.parents[0]) out.push(`${s}\x1f${o.commits[s]!.parents.join(' ')}\x1f${o.commits[s]!.message}\x1e`)
         return { exitCode: 0, stdout: out.join('\n'), stderr: '' }
       }
-      if (a[0] === 'diff' && a.includes('--numstat')) return { exitCode: 0, stdout: o.numstat ?? '', stderr: '' }
+      if (a[0] === 'diff' && a.includes('--numstat')) return { exitCode: o.numstatFail ? 128 : 0, stdout: o.numstat ?? '', stderr: '' }
       if (a[0] === 'diff') return { exitCode: o.diff === undefined ? 128 : 0, stdout: o.diff ?? '', stderr: '' }
       return { exitCode: 1, stdout: '', stderr: '' }
     },
@@ -189,4 +189,17 @@ test('T-1086: a done change task offers Show changes (d); an investigation does 
   expect(ids(task({ merged: sha('c') }))).toContain('show-changes')
   expect(ids(task())).not.toContain('show-changes')
   expect(ids(task({ merged: sha('c'), kind: 'investigation' }))).not.toContain('show-changes')
+})
+
+test('T-1094: a failed git read is not kept (tried again next open); an empty diff is a final answer and is kept', async () => {
+  const merged = sha('a')
+  const commits = { [merged]: { parents: [sha('b'), sha('c')], message: 'T-7: Do it\n\nSymcc-Task: T-7' } }
+  const bad = gitWorld({ commits, numstatFail: true })
+  expect(await mergedChanges(bad.$, task({ merged }))).toBe(null)
+  const again = gitWorld({ commits, numstat: NUMSTAT })
+  expect((await mergedChanges(again.$, task({ merged })))?.files.length).toBe(2)
+  const empty = gitWorld({ commits: { [sha('e')]: commits[merged]! }, numstat: '' })
+  expect(await mergedChanges(empty.$, task({ id: 'T-8', merged: sha('e') }))).toBe(null)
+  await mergedChanges(empty.$, task({ id: 'T-8', merged: sha('e') }))
+  expect(empty.calls.filter(c => c.includes('--numstat')).length).toBe(1)
 })

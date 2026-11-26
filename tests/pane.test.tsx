@@ -1279,7 +1279,7 @@ test('"c" and the Settings tab show one row per setting: label, dot leaders, val
   expect(await ui.find({ type: 'Text', text: /· default / })).toBeUndefined()
   // the help area is for the focused row only: its meaning, then the name, default and range
   expect(await ui.find({ type: 'Text', text: /^Work$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /how many workers run at once/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Text', text: /how many workers run at once/i })).toBeUndefined()
   const [meaning, facts] = settingsHelpOf({ setting: 'max_parallel' }).lines
   const help = { meaning: meaning!, facts: facts! }
   expect(help.meaning).toBe(settingWords('max_parallel'))

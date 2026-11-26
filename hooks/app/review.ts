@@ -657,7 +657,8 @@ export async function mergedChanges($: Host, t: SymccTask): Promise<MergedChange
   const r = before ? await git($, ['diff', '--numstat', '--no-renames', before, merged]).catch(() => null) : null
   const files = r && r.exitCode === 0 ? parseNumstat(String(r.stdout ?? '')) : []
   const got = files.length ? { files, error: '', merged, before } : null
-  mergedMemo.set(key, got)
+  // a missing commit or an empty diff is a final answer (kept); a failed git diff is tried again next time
+  if (!before || r?.exitCode === 0) mergedMemo.set(key, got)
   return got
 }
 
