@@ -15,7 +15,7 @@ import { load, findRoot, startingText } from './store'
 import { noteForLead, tellLead, brief } from './tell'
 import { playable } from './voice'
 import { chatTaskText } from '../core/chat-text'
-import { runTool, viewText, boardHtmlText, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
+import { runTool, viewText, boardHtmlText, type In, manual, ownerSettings, taskText, chatArchivedTaskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
 import { setSymcc, setBoardMode } from './board-mode'
 import { doctor } from './doctor'
@@ -251,7 +251,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
         // not on the board: it may have been moved to archive.json (read-only, shown as text)
         const old = await findArchived(host, cmd.id)
         if (!old) return say(`${cmd.id} is not on the board.`)
-        if (S.chat) return say(`${old.id} is archived (read-only).\n${chatTaskText(old, undefined, Date.now(), cmd.page)}`)
+        if (S.chat) return say(chatArchivedTaskText(old, cmd.page))
         return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).\n${taskText(old, false, b.tasks, undefined, b.archived_done)}`)
       }
       await openPane(host, { tab: 'tasks', task: t.id })

@@ -110,7 +110,7 @@ export function branchFacts(host: Host, b: Pick<Board, 'tasks'>, into: string, n
 export const TASK_BRANCH_MERGED = 5
 
 /** The last facts read per task (`key`: what they were read for), and the reads running now with who waits for them. */
-const taskCache = new Map<string, { facts: TaskBranchFacts | null; key: string; readAt: number }>()
+const taskCache = new Map<string, { facts: TaskBranchFacts | null; key: string; readAt: number; failed?: boolean }>()
 const taskRunning = new Map<string, (() => void)[]>()
 /** T-1117: main's tip per branch it is merged into (one `git rev-parse` per refresh, shared by all finished tasks). */
 const mainTips = new Map<string, string>()
@@ -179,9 +179,10 @@ const shaTimes = (stdout: string): BranchCommit[] =>
  * for a merged task, into's commits between the fork and the merge (`git log <fork>..<merged>`) and the first few after.
  * Null when the branch can't be read (none yet, deleted) or git fails.
  */
-export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs: number): Promise<TaskBranchFacts | null> {
+export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs: number, status?: { failed: boolean }): Promise<TaskBranchFacts | null> {
   if (!safe(into)) return null
-  const run = (args: string[]) => git(host, args, S.root, GIT_MS).then(r => (r.exitCode === 0 ? String(r.stdout ?? '') : null), () => null)
+  // T-1126: `status.failed` tells a git failure (or timeout) apart from "nothing to show" (both return null)
+  const run = (args: string[]) => git(host, args, S.root, GIT_MS).then(r => (r.exitCode === 0 ? String(r.stdout ?? '') : (status && (status.failed = true), null)), () => (status && (status.failed = true), null))
   const branch = typeof t.branch === 'string' ? t.branch : ''
   const merged = t.status === 'done' && isSha(t.merged) ? t.merged : ''
   let commits: LogLine[] = []
@@ -274,13 +275,14 @@ export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' |
     if (onRead) waiting.push(onRead)
     return { facts }
   }
-  if (got?.key === key && (finished || nowMs - got.readAt < BRANCH_CACHE_MS)) return { facts }
+  if (got?.key === key && (finished && !got.failed || nowMs - got.readAt < BRANCH_CACHE_MS)) return { facts }
   const waiters: (() => void)[] = onRead ? [onRead] : []
   taskRunning.set(t.id, waiters)
-  const done = readTaskBranch(host, t, into, nowMs)
-    .catch(() => null)
+  const status = { failed: false }
+  const done = readTaskBranch(host, t, into, nowMs, status)
+    .catch(() => ((status.failed = true), null))
     .then(read => {
-      taskCache.set(t.id, { facts: read, key, readAt: nowMs })
+      taskCache.set(t.id, { facts: read, key, readAt: nowMs, ...(read === null && status.failed ? { failed: true } : {}) })
       taskRunning.delete(t.id)
       for (const w of waiters) {
         try {

@@ -203,3 +203,50 @@ test('T-1094: a failed git read is not kept (tried again next open); an empty di
   await mergedChanges(empty.$, task({ id: 'T-8', merged: sha('e') }))
   expect(empty.calls.filter(c => c.includes('--numstat')).length).toBe(1)
 })
+
+test('T-1127: a rev-list that fails once is retried on the next call; a missing commit is still kept as nothing', async () => {
+  const merged = sha('a')
+  const commits = { [merged]: { parents: [sha('b'), sha('c')], message: 'T-7: Do it\n\nSymcc-Task: T-7' } }
+  const w = gitWorld({ commits, numstat: NUMSTAT })
+  let failed = false
+  const host = fakeHost({
+    run: async argv => {
+      const a = argv.slice(1)
+      if (a[0] === 'rev-list' && !failed) {
+        failed = true
+        return { exitCode: 124, stdout: '', stderr: 'timeout' }
+      }
+      if (a[0] === 'cat-file') return { exitCode: 0, stdout: '', stderr: '' }
+      return (await w.$.run(argv)) as { exitCode: number; stdout: string; stderr: string }
+    },
+  })
+  expect(await mergedChanges(host.host, task({ merged }))).toBe(null)
+  const got = await mergedChanges(host.host, task({ merged }))
+  expect(got?.before).toBe(sha('c'))
+  expect(got?.files.length).toBe(2)
+  // a commit git does not have: final, asked once
+  const gone = gitWorld({ commits: {} })
+  const t2 = task({ id: 'T-8', merged: sha('d') })
+  expect(await mergedChanges(gone.$, t2)).toBe(null)
+  await mergedChanges(gone.$, t2)
+  expect(gone.calls.filter(c => c.startsWith('rev-list')).length).toBe(1)
+})
+
+test('T-1127: a failed message read on a merge commit is not kept', async () => {
+  const merged = sha('e')
+  const w = gitWorld({ commits: { [merged]: { parents: [sha('b'), sha('c')], message: 'T-9: x\n\nSymcc-Task: T-9' } }, numstat: NUMSTAT })
+  let failed = false
+  const host = fakeHost({
+    run: async argv => {
+      const a = argv.slice(1)
+      if (a[0] === 'log' && a.includes('--format=%B') && !failed) {
+        failed = true
+        return { exitCode: 128, stdout: '', stderr: 'bad' }
+      }
+      return (await w.$.run(argv)) as { exitCode: number; stdout: string; stderr: string }
+    },
+  })
+  const t = task({ id: 'T-9', merged })
+  expect(await mergedChanges(host.host, t)).toBe(null)
+  expect((await mergedChanges(host.host, t))?.before).toBe(sha('c'))
+})

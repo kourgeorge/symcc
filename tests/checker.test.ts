@@ -15,7 +15,7 @@ import { checkerFinished } from '../hooks/app/checker'
 import { agentTypeFor } from '../hooks/claude/host'
 import { checkEdit, stoppedText } from '../hooks/app/ask'
 import { load, saveBoard } from '../hooks/app/store'
-import { runTool, leadGuide } from '../hooks/app/tools'
+import { runTool, leadGuide, TOOLS } from '../hooks/app/tools'
 import { test, resetPlugin } from './reset'
 import { agentFinished, toolCall } from '../hooks/app/symcc'
 import { moveOldOrgMem } from '../hooks/app/org-mem'
@@ -2034,4 +2034,12 @@ test('T-1095: the change tool refuses an answer naming two choices; the task kee
   expect(t.ask!.text).toBe(ask)
   expect(t.attempts).toBe(before.attempts)
   expect(w.spawns.length).toBe(0)
+})
+
+test('T-1120: the tool texts say a task waits for the owner after 2 checker send-backs, and task gives the chat text in chat mode', () => {
+  const settings = TOOLS().find(t => t.name === 'settings')?.description ?? ''
+  expect(settings.includes('after 2 send-backs the task waits for the owner with Merge as is / Keep fixing / Drop')).toBe(true)
+  expect(settings.includes('fails it once those are used up')).toBe(false)
+  const board = TOOLS().find(t => t.name === 'board') as { inputSchema: { properties: { task: { description: string } } } } | undefined
+  expect(board?.inputSchema.properties.task.description.includes('In chat mode')).toBe(true)
 })

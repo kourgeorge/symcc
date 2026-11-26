@@ -1932,6 +1932,8 @@ recorded time). A process that took over a reused number is never stopped.
 - **OK:** the task joins the merge queue: catch up, tests, then review or merge, once.
 - **Problems found:** the checker's report goes to a new worker, like a failed test run. It counts
   as one of the `auto_retries`. The task never joins the merge queue, so no tests run for that try.
+  After 2 send-backs there is no new try on its own: the task waits for you with Merge as is (on
+  to the tests, no checker), Keep fixing (one more try with the checker's report) or Drop.
 - **No answer** (the checker was stopped, ran longer than `max_minutes`, or could not start): the
   task joins the merge queue for its tests, and then waits for your review instead of merging.
 - After a reload while a checker ran, the task gets a new checker on the same work (no retry
@@ -2764,7 +2766,7 @@ the same mode):
 - **Short views.** The tasks list, the status, the board text and one task's page use one short
   shape there: plain lines (no columns, rules or bars), one task per line like
   `T-5 running: test, try 2, 12m: title`, "Needs you" first, the backlog only as a count, and at
-  most 3,500 characters. A long text is split into pages: a "+N more" line says what is left, and when you say "more" (or "more tasks") the lead asks for the next page and posts it. A long question is shortened with "…", but it always keeps every numbered choice.
+  most 3,500 characters. A long text is split into pages: a "+N more" line says what is left, and when you say "more" (or "more tasks") the lead asks for the next page and posts it. For one task, `/symcc-task T-5 more` (or `page 2`) gives the next page. A long question is shortened with "…", but it always keeps every numbered choice.
 - **Plain words work.** Slash commands may not reach symcc from a chat app, so the lead has the
   same views as a tool: ask "status", "tasks", "what's running" or "show T-5" and it posts the same
   text as `/symcc-status`, `/symcc-tasks` or `/symcc-task T-5`.
