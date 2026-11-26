@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "symcc: build Cursor extension",
+      "type": "shell",
+      "command": "npm run build && cd extension && node build.mjs",
+      "options": { "cwd": "${workspaceFolder}/hosts/cursor" },
+      "problemMatcher": []
+    }
+  ]
+}
