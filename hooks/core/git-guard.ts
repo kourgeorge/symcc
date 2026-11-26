@@ -110,13 +110,17 @@ const GIT_OPTION_OK = new Set(['--no-pager', '-P', '-p', '--paginate', '--no-opt
  * gitWriteIn takes out quotes and backslashes first (`"git" push`, `\git push` run git), so
  * `grep "git push" docs/` and `git commit -m "make git simpler"` hold no git call (git is not where a command starts).
  */
+const WRAPPERS = String.raw`(?:(?:/[\w.-]+)*/)?(?:env|sudo|doas|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|noglob|nocorrect|coproc|builtin|repeat|!|-)`
 const GIT_AT = new RegExp(
   String.raw`(?:^|&&|\|\||[;|&(){\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n]|(?<!\S)-(?:exec|execdir|ok|okdir)[^\S\n])` +
-    String.raw`(?:[^\S\n]*(?:(?:(?:/[\w.-]+)*/)?(?:env|sudo|doas|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|noglob|nocorrect|coproc|builtin|repeat|!|-)` +
-    // each word fits one pattern only (a short option, a longer option, a number; a value is none of them), so the
-    // regex never tries many splits of the same words (`env -i -i -i ... git push` checks fast); a short option is a
-    // dash and any one character, so a lone `--` (`env -- git push`) and `-0` (`xargs -0 git push`) count too
-    String.raw`(?:[^\S\n]+(?:-[^\s;&|](?![^\s;&|])(?:[^\S\n]+(?!-)(?!\d[\w.]*(?![^\s;&|]))(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]{2,}|\d[\w.]*(?![^\s;&|])))*|\w+=[^\s;&|]*` +
+    String.raw`(?:[^\S\n]*(?:${WRAPPERS}` +
+    // each word fits one pattern only (a short option, a longer option, a number; a value is none of them, and no
+    // wrapper either), so the regex never tries many splits of the same words (`env -i -i -i ... git push` and
+    // `xargs -n xargs -n ... x` check fast); a short option is a dash and any one character, so a lone `--`
+    // (`env -- git push`) and `-0` (`xargs -0 git push`) count too. Only the letters of wrapper options that take a
+    // word (sudo -u, env -u, timeout -s, xargs -I...) take one, so in `xargs -0 grep "git push"` and
+    // `xargs -r grep -l "git push"` grep is the next command, not a value, and git is not where a command starts (T-1099)
+    String.raw`(?:[^\S\n]+(?:-[ugcdhpskieaofwjnl](?![^\s;&|])(?:[^\S\n]+(?!-)(?!\d[\w.]*(?![^\s;&|]))(?!(?:\S*/)?git(?![\w.]))(?!${WRAPPERS}(?![^\s;&|]))[^\s;&|]+)?|-(?![ugcdhpskieaofwjnl])[^\s;&|](?![^\s;&|])|-[^\s;&|]{2,}|\d[\w.]*(?![^\s;&|])))*|\w+=[^\s;&|]*` +
     String.raw`|\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()]+)(?=\s))*` +
     String.raw`[^\S\n]*(?:(?:/[\w.-]+)*/)?git(?:-([a-z][\w-]*))?(?=$|[\s'"` + '`' + String.raw`;&|()<>\\])`,
   'gi',

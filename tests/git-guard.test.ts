@@ -320,6 +320,29 @@ test('T-1092: many `--` and `-0` words after a wrapper still find the git call, 
   }
 })
 
+test('T-1099: a wrapper word after a short option is never its value: repeated wrappers check fast', () => {
+  for (const c of [('xargs -0 ').repeat(40) + 'x', ('xargs -n ').repeat(40) + 'x', ('sudo -u ').repeat(40) + 'x', ('env -- ').repeat(40) + 'x']) {
+    const start = Date.now()
+    expect([c, gitWriteIn(c, 'worker'), gitWriteIn(c, 'reader')]).toEqual([c, undefined, undefined])
+    expect([c, Date.now() - start < 100]).toEqual([c, true])
+  }
+  const push = 'gi' + 't push'
+  for (const c of [('xargs -n ').repeat(40) + push, ('xargs -0 ').repeat(40) + push, `xargs -n xargs -0 ${push}`, `sudo -u xargs ${push}`]) {
+    const start = Date.now()
+    expect([c, gitWriteIn(c, 'reader')]).toEqual([c, 'git push'])
+    expect([c, Date.now() - start < 100]).toEqual([c, true])
+  }
+})
+
+test('T-1099: grep after a no-value short option of xargs is a command, so a quoted git in its pattern is no git call', () => {
+  for (const c of ['find . -print0 | xargs -0 grep "git push"', 'xargs -0 grep -c "git commit" docs/', 'xargs -r grep -l "git push"', 'xargs -t grep "git push" a', 'find . | xargs -0 -r grep -l "git stash"'])
+    expect([c, gitWriteIn(c, 'reader')]).toEqual([c, undefined])
+  // options that take a word still take it, so git after it is still found
+  for (const who of ['reader', 'worker'] as const)
+    for (const c of ['sudo -u root git push', 'env -u X git push', 'xargs -I {} git push', 'timeout -s KILL 5 git push', 'xargs -0 -I {} git push', 'xargs -r git push', 'xargs -0 sh -c "git push"', 'sudo -g staff -u root git push'])
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+})
+
 test("T-1062: zsh's noglob, nocorrect, coproc and `-` before git, ~- and the folder stack, and a project path glued to an option are caught", () => {
   for (const who of ['reader', 'worker'] as const) {
     for (const c of ['noglob git push', 'nocorrect git push', '- git push', 'coproc git push', 'builtin git push', 'repeat 2 git push', 'x; noglob nocorrect git push'])
