@@ -633,7 +633,7 @@ tests passed") and doesn't repeat it. A scout that answers `NOTHING` sends nothi
 
 What you do yourself on the board (approve, reject, drop, move to todo, stash, mode and
 settings changes, answering a task) and merges you approved don't wake the lead. They are
-kept as short lines ("The owner approved T-5: …") and put under "Meanwhile the owner:" at the
+kept as short lines ("The owner approved T-5: …"), like quiet retries, reload restarts and plain merges, and put under "Meanwhile" at the
 top of the next board update (at most 10, then "+N more"). They are still in each task's history.
 
 ### How the lead talks to you
@@ -649,9 +649,10 @@ always says what happened ("T-743 merged", not "Good news: …").
 
   The marks: ✓ merged, ✗ failed, ↺ sent back / retrying, ▶ started, ⌕ checker, ◐ needs your
   review. Then, only if something needs you, one line saying what.
-- **Routine news** (a worker, checker or scout started, a retry on its own, nothing to do): one
-  short line at most, e.g. "▶ T-751 retrying (2/4)." Each board update symcc sends the lead
-  reminds it of this. An update that holds only "Starting ..." lines (sent just to let symcc start
+- **Quiet lines** (a retry on its own, a restart after a reload, a plain merge): symcc adds them
+  as "Meanwhile" lines to the next update instead of waking the lead; they need no message to
+  you. A merge with a flag (for example "changed code but no test") still wakes it. Each board update symcc
+  sends the lead reminds it of this. An update that holds only "Starting ..." lines (sent just to let symcc start
   an agent) says "No reply needed; end the turn without a message." instead.
 - **How agents get started (Claude Code):** Claude Code only keeps symcc's guards for an agent
   started inside a turn hook. So when work waits and the lead is idle, symcc starts a tiny hidden

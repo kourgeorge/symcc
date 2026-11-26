@@ -124,7 +124,7 @@ test('answering on the board closes the question and wakes the lead at once with
   tellLead(w.host, 'T-3 was merged.')
   await pause(0)
   expect(w.toLead.length).toBe(2)
-  expect(w.toLead[1]).toContain('Meanwhile the owner (nothing to answer):\n- The owner approved T-1\n\nT-3 was merged.')
+  expect(w.toLead[1]).toContain('Meanwhile (nothing to answer):\n- The owner approved T-1\n\nT-3 was merged.')
   // the lead closing it again from the chat changes nothing and says the board answer was used
   expect(await call(w.host, { action: 'answer', id: 'Q-1', answer: 'No' })).toBe('Q-1 was already closed (answered on the board: "Yes"); nothing changed. Use that answer and tell the owner it was taken.')
   expect(w.board().questions![0]!.answer).toBe('Yes')

@@ -71,3 +71,22 @@ test('T-1048: the lag timer writes a line when it fires over a second late', asy
     slowClock.now = () => Date.now()
   }
 })
+
+test('T-1119: with no board (fresh or guard only) a slow step writes nothing', async () => {
+  const w = world()
+  try {
+    S.fresh = true
+    await timed(w.host, 'slow step', async () => w.tick(300))
+    await slowLogSettled()
+    expect(w.files.has(FILE)).toBe(false)
+    S.fresh = false
+    S.guardOnly = true
+    await timed(w.host, 'slow step', async () => w.tick(300))
+    await slowLogSettled()
+    expect(w.files.has(FILE)).toBe(false)
+  } finally {
+    S.fresh = false
+    S.guardOnly = false
+    slowClock.now = () => Date.now()
+  }
+})

@@ -30,8 +30,8 @@ for (const [name, words, features] of hosts) {
     expect(part).toContain('✓ merged, ✗ failed, ↺ sent back / retrying, ▶ started, ⌕ checker, ◐ needs your review')
     expect(part).toContain('✓ T-743  merged (b089022)    a reopen keeps the same try')
     // the routine-update rule
-    expect(part).toContain('Routine update with no news')
-    expect(part).toContain('one short line at most, e.g. "▶ T-751 retrying (2/4)."')
+    expect(part).toContain('Quiet lines')
+    expect(part).not.toContain('T-751 retrying')
     // the new-task shape
     expect(part).toContain('New task: "Added T-n  <title in ≤ 10 words>"')
     // the question shape
