@@ -112,11 +112,35 @@ export const TASK_BRANCH_MERGED = 5
 /** The last facts read per task (`key`: what they were read for), and the reads running now with who waits for them. */
 const taskCache = new Map<string, { facts: TaskBranchFacts | null; key: string; readAt: number }>()
 const taskRunning = new Map<string, (() => void)[]>()
+/** T-1117: main's tip per branch it is merged into (one `git rev-parse` per refresh, shared by all finished tasks). */
+const mainTips = new Map<string, string>()
+const tips = { at: -Infinity, running: undefined as Promise<void> | undefined }
 
 /** Forgets every task's branch facts (a reload, a test). */
 export function resetTaskBranches() {
   taskCache.clear()
   taskRunning.clear()
+  mainTips.clear()
+  tips.at = -Infinity
+  tips.running = undefined
+}
+
+/** Reads the tip of each of `intos` (one git process each), when the last read is older than BRANCH_CACHE_MS. */
+function readTips(host: Host, intos: string[], nowMs: number): Promise<void> | undefined {
+  if (tips.running) return tips.running
+  if (!intos.length || nowMs - tips.at < BRANCH_CACHE_MS) return undefined
+  tips.at = nowMs
+  tips.running = Promise.all(
+    intos.map(async into => {
+      const r = safe(into) ? await git(host, ['rev-parse', `refs/heads/${into}`], S.root, GIT_MS).catch(() => null) : null
+      mainTips.set(into, r && r.exitCode === 0 ? String(r.stdout ?? '').trim() : '')
+    }),
+  )
+    .then(() => undefined)
+    .finally(() => {
+      tips.running = undefined
+    })
+  return tips.running
 }
 
 /** One line of the branch's log (see logFormat): sha, parents, time, the Symcc-Task and Symcc-Try lines. */
@@ -240,7 +264,9 @@ export const hasTaskBranch = (t: Pick<SymccTask, 'status' | 'branch' | 'merged'>
  */
 export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history' | 'attempts'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs = Date.now(), onRead?: () => void): { facts: TaskBranchFacts | undefined; done?: Promise<void> } {
   if (S.gitState !== 'ok' || !S.root || !hasTaskBranch(t)) return { facts: undefined }
-  const key = [into, t.status, t.branch ?? '', t.merged ?? '', t.attempts].join(' ')
+  // T-1117: a finished task's answer only changes when main moves, so its key holds main's tip and it has no timer
+  const finished = isFinished(t)
+  const key = [into, t.status, t.branch ?? '', t.merged ?? '', t.attempts, finished ? (mainTips.get(into) ?? '') : ''].join(' ')
   const got = taskCache.get(t.id)
   const facts = got?.key === key ? (got.facts ?? undefined) : undefined
   const waiting = taskRunning.get(t.id)
@@ -248,7 +274,7 @@ export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' |
     if (onRead) waiting.push(onRead)
     return { facts }
   }
-  if (got?.key === key && nowMs - got.readAt < BRANCH_CACHE_MS) return { facts }
+  if (got?.key === key && (finished || nowMs - got.readAt < BRANCH_CACHE_MS)) return { facts }
   const waiters: (() => void)[] = onRead ? [onRead] : []
   taskRunning.set(t.id, waiters)
   const done = readTaskBranch(host, t, into, nowMs)
@@ -283,22 +309,42 @@ export function viewBranchTasks<T extends Pick<SymccTask, 'id' | 'status' | 'bra
  *  ends puts its facts in the view. */
 export function taskBranchesView(host: Host, b: Pick<Board, 'tasks'>, nowMs = Date.now()): { facts: Record<string, TaskBranchFacts>; done: Promise<void>[] } {
   const facts: Record<string, TaskBranchFacts> = {}
-  const done: Promise<void>[] = []
-  for (const t of viewBranchTasks(b.tasks)) {
-    const into = intoOf(t)
-    const put = () => {
-      if (S.gitState !== 'ok') return
-      const f = taskCache.get(t.id)?.facts
-      void updateView(host, v => {
-        const all = { ...((v as PaneView).task_branches ?? {}) }
+  const list = viewBranchTasks(b.tasks)
+  // T-1117: the reads of one refresh are collected; the view is updated once, when all of them have ended
+  const pending: Promise<void>[] = []
+  const read = (t: (typeof list)[number]) => {
+    let end = () => {}
+    const ended = new Promise<void>(r => (end = r))
+    const got = taskBranchFacts(host, t, intoOf(t), nowMs, end)
+    if (taskRunning.has(t.id)) pending.push(ended)
+    return got
+  }
+  const finished = list.filter(t => isFinished(t))
+  for (const t of list) {
+    if (isFinished(t)) {
+      const f = S.gitState === 'ok' ? taskCache.get(t.id)?.facts : undefined
+      if (f) facts[t.id] = f
+    } else {
+      const got = read(t)
+      if (got.facts) facts[t.id] = got.facts
+    }
+  }
+  const tipsRead = S.gitState === 'ok' && S.root ? readTips(host, [...new Set(finished.map(t => intoOf(t)))], nowMs) : undefined
+  const done = (async () => {
+    if (tipsRead) await tipsRead
+    for (const t of finished) read(t)
+    if (!pending.length) return
+    await Promise.all(pending)
+    if (S.gitState !== 'ok') return
+    await updateView(host, v => {
+      const all = { ...((v as PaneView).task_branches ?? {}) }
+      for (const t of list) {
+        const f = taskCache.get(t.id)?.facts
         if (f) all[t.id] = f
         else delete all[t.id]
-        return { ...v, task_branches: all } as typeof v
-      }).catch(() => undefined)
-    }
-    const got = taskBranchFacts(host, t, into, nowMs, put)
-    if (got.facts) facts[t.id] = got.facts
-    if (got.done) done.push(got.done)
-  }
-  return { facts, done }
+      }
+      return { ...v, task_branches: all } as typeof v
+    }).catch(() => undefined)
+  })().catch(() => undefined)
+  return { facts, done: [done] }
 }
