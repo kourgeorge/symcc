@@ -1828,11 +1828,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Workers                 "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task types"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -2526,11 +2526,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers                 "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task types"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -3844,11 +3844,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers                 "]},
-          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 6 task types"]}
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
