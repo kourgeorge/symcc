@@ -35,6 +35,10 @@ export const path = (rel: string) => {
 export async function mainRoot(host: Host, dir: string): Promise<string> {
   if (!dir) return ''
   const clean = dir.replace(/\/+$/, '') || '/'
+  // T-1133: a folder under <X>/.<name>/worktrees/<id>/ with a board at X is X's worker, whatever git says (a worktree of
+  // a repo below a workspace board points git at that repo, which has no board and no worktrees folder of its own)
+  const board = await boardAbove(host, clean)
+  if (board) return board
   const r = await host.run(['git', 'rev-parse', '--git-common-dir'], { cwd: clean, timeoutMs: 15_000 }).catch(() => null)
   const common = r && r.exitCode === 0 ? r.stdout.trim().replace(/\/+$/, '') : ''
   if (common && /(^|[\\/])\.git$/.test(common)) {
@@ -78,6 +82,31 @@ export async function isWorkerFolder(host: Host, dir: string, main: string): Pro
   if (!dir || !main) return false
   const [d, w] = await Promise.all([realOf(host, dir), realOf(host, `${main}/${S.N.worktrees}`)])
   return d !== w && within(d, w)
+}
+
+/**
+ * T-1133: the folder X when `dir` is <X>/.<name>/worktrees/<id> (or a folder inside it) and X has a board
+ * (<X>/.<name>/board.json), else ''. The outermost such X wins. Read from the path only, so git's answer can't
+ * move it; ".." parts are worked out first, so "<X>/.<name>/worktrees/.." is not a worker's folder.
+ */
+export async function boardAbove(host: Host, dir: string): Promise<string> {
+  if (!dir) return ''
+  const clean = normalPath(dir)
+  const slashed = clean.replace(/\\/g, '/')
+  const mark = `/${S.N.worktrees}/`
+  let at = slashed.indexOf(mark)
+  while (at > 0) {
+    // the worker's own folder name (<id>) must follow the mark
+    const id = slashed.slice(at + mark.length).split('/')[0]
+    const top = clean.slice(0, at)
+    if (id) {
+      const sep = clean.includes('\\') && !clean.includes('/') ? '\\' : '/'
+      const has = await host.fs.exists(`${top}${sep}${S.N.boardFile.split('/').join(sep)}`).catch(() => false)
+      if (has) return top
+    }
+    at = slashed.indexOf(mark, at + 1)
+  }
+  return ''
 }
 
 /** True for a path from the top of a disk: "/...", a Windows drive ("C:/..." or "C:\...") or a share ("\\server\..."). */
