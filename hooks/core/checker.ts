@@ -188,13 +188,34 @@ export function checkerProblems(report: string, max = CHECKER_PROBLEMS_MAX): str
   const h = lines.findLastIndex(l => /^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?$/.test(l))
   if (h < 0) return []
   const out: string[] = []
+  let cur: string | null = null
+  const flush = () => { if (cur !== null && cur.trim()) out.push(oneLine(cur, 300)); cur = null }
   for (const l of lines.slice(h + 1)) {
-    if (!/^- ?$/.test(l) && !l.startsWith('- ')) break
-    if (out.length >= max) break
-    const t = l.slice(2).trim()
-    if (t) out.push(oneLine(t, 300))
+    if (/^[-*] ?$/.test(l) || /^[-*] /.test(l)) {
+      flush()
+      cur = l.slice(2)
+    } else if (!l.trim()) continue // blank lines under the heading or between items
+    else if (cur !== null && /^\s+\S/.test(l)) cur += ` ${l.trim()}` // an item running onto an indented line
+    else break
   }
-  return out
+  flush()
+  return out.slice(0, max)
+}
+
+/**
+ * T-1085: the lines of the Problems block itself (after the last "Problems:" heading, up to a markdown heading), one line each,
+ * "- "/"* " bullets removed. For a block with no "- " items, so the update never quotes the report's prose. [] when there is none.
+ */
+export function problemsBlockLines(report: string, max = CHECKER_PROBLEMS_MAX): string[] {
+  const lines = String(report ?? '').split('\n').map(l => l.trim())
+  const h = lines.findLastIndex(l => /^(#{1,6}\s*)?(\*\*|__|\*|_)?Problems:?(\*\*|__|\*|_)?:?$/.test(l))
+  if (h < 0) return []
+  const out: string[] = []
+  for (const l of lines.slice(h + 1)) {
+    if (/^#{1,6}\s/.test(l)) break
+    if (l) out.push(oneLine(l.replace(/^[-*+]\s+/, ''), 300))
+  }
+  return out.filter(Boolean).slice(0, max)
 }
 
 /** checkerLine as a history entry to add: "checker-ok", "checker-problems" (with its `problems` fact), or "checker" with no verdict. */

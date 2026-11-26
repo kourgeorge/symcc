@@ -4,7 +4,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
-import { notProse } from '../hooks/core/checker'
+import { notProse, checkerProblems, problemsBlockLines } from '../hooks/core/checker'
 import { makeAsk } from '../hooks/board'
 import { historyEvent, historyLineWords, workerStartedEntry, withHistory, noteAddedLine } from '../hooks/core/history'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped, adoptedCheckers } from '../hooks/app/state'
@@ -578,11 +578,48 @@ test("failing tests sent back to the worker come under a heading that says what 
 test('when its retries are used up, a checker report fails the task with the report', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true, {}, { auto_retries: 0 }))
-  const t = await finish(w, async id => checkerFinished(id, 'src/a.ts:1 the old behavior is gone'))
+  const t = await finish(w, async id => checkerFinished(id, 'I looked around.\nProblems:\n- src/a.ts:1 the old behavior is gone\n- src/b.ts:2 it crashes'))
   expect(t.status).toBe('failed')
-  expect(t.note).toBe('the checker found problems: src/a.ts:1 the old behavior is gone')
-  expect(leadQueue.join('\n')).toContain("The checker's report:\nsrc/a.ts:1 the old behavior is gone")
+  const said = leadQueue.join('\n')
+  expect(said).toContain("not merged. Its checker (symcc-T-1-checker) — an agent that tries to break each change before it merges — found 2 problems. No automatic tries left (0 of 0 automatic tries used).")
+  expect(said).toContain("Checker symcc-T-1-checker's report (try 1):\nProblems:\n- src/a.ts:1 the old behavior is gone\n- src/b.ts:2 it crashes")
+  expect(said).not.toContain('…')
+  expect(said).not.toContain('I looked around')
   expect(w.git.main).toBe(M1)
+})
+
+test('checkerProblems counts every item after a blank line, and a "## Problems" heading (problemsBlockLines) and indented follow-on lines', () => {
+  expect(checkerProblems('Problems:\n\n- a\n- b', Infinity)).toEqual(['a', 'b'])
+  expect(problemsBlockLines('## Problems\n- a\n- b', Infinity)).toEqual(['a', 'b'])
+  expect(checkerProblems('Problems:\n- a\n  more\n- b', Infinity)).toEqual(['a more', 'b'])
+  expect(checkerProblems('Intro.\nProblems:\n- a\n\n- b', Infinity)).toEqual(['a', 'b'])
+  expect(checkerProblems('Problems:\n- a\n\nDone text', Infinity)).toEqual(['a'])
+})
+
+test('a Problems block with "* " bullets is quoted as it is, never the first prose line', async () => {
+  expect(problemsBlockLines('I checked it.\nProblems:\n* src/a.ts:1 x\n* src/b.ts:2 y')).toEqual(['src/a.ts:1 x', 'src/b.ts:2 y'])
+  const w = world()
+  await saveBoard(w.$, boardWith(true, {}, { auto_retries: 0 }))
+  await finish(w, async id => checkerFinished(id, 'I checked T-1 with probes and found two things.\nProblems:\n* src/a.ts:1 x\n* src/b.ts:2 y'))
+  const said = leadQueue.join('\n')
+  expect(said).toContain('found 2 problems')
+  expect(said).toContain("report (try 1):\nProblems:\n- src/a.ts:1 x\n- src/b.ts:2 y")
+  expect(said).not.toContain('I checked T-1')
+})
+
+test('the checker update counts every problem and never starts with an ellipsis', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true, {}, { auto_retries: 0 }))
+  await finish(w, async id => checkerFinished(id, 'Problems:\n' + [1, 2, 3, 4, 5, 6, 7].map(i => `- p${i}`).join('\n')))
+  const said = leadQueue.join('\n')
+  expect(said).toContain('found 7 problems')
+  expect(said).toContain('- p5\n- … and 2 more')
+  expect(said).not.toContain('- p6')
+  leadQueue.length = 0
+  const w2 = world()
+  await saveBoard(w2.$, boardWith(true, {}, { auto_retries: 0 }))
+  await finish(w2, async id => checkerFinished(id, 'x'.repeat(5000) + '\nsrc/a.ts broke'))
+  expect(leadQueue.join('\n')).not.toContain('- …')
 })
 
 test('in review mode an OK from the checker sends the task to review, not merged', async () => {
