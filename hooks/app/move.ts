@@ -1,6 +1,6 @@
 import type { Host } from '../host'
 import { find, patchTask, withHistory, endedBy, isInvestigation, intoOf, failedOnClash, gitNote, type BoardTask } from '../board'
-import { S, finishing } from './state'
+import { S, finishing, workers } from './state'
 import { load, change, now } from './store'
 import { gitReady, branchExists, prepareWorktree, taskBranch, worktreeDir } from './git'
 import { haltChecker } from './checker'
@@ -26,6 +26,8 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
   if (!t) throw new Error(`${id} is not on the board`)
   if (!MOVABLE.includes(t.status)) throw new Error(`${t.id} is ${t.status}; a task can be moved from todo, doing, failed, waiting or review`)
   if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
+  // A running worker may have half-done uncommitted edits: only "work" may stop it (a move never commits or deletes them).
+  if (stage !== 'work' && t.status === 'doing' && !checkingNow(t.id) && [...workers.values()].some(w => w.task === t.id)) throw new Error(`${t.id}'s worker is still running; move it to work, or wait until it hands back`)
   if (stage !== 'work') {
     if (isInvestigation(t)) throw new Error(`${t.id} is an investigation: it has no work to check, test or review`)
     if (!(await branchExists($, taskBranch(t)))) throw new Error(`${t.id} has no branch yet (no worker has made work for it); move it to work instead`)

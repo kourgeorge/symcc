@@ -1714,3 +1714,22 @@ test('T-1072: stage review then approve runs the tests; stage check tells the le
   expect(leadQueue.some(m => String(m).includes('plugin reloaded'))).toBe(false)
   await runTool(w2.$, 'drop', { task: 'T-1' })
 })
+
+test('T-1072: while a worker runs, a move to check, tests or review is refused with no git write; work is allowed', async () => {
+  for (const stage of ['check', 'tests', 'review', 'work']) {
+    const w = world()
+    inRepo(w)
+    await saveBoard(w.$, boardWith(false))
+    workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+    const before = w.calls.length
+    const go = runTool(w.$, 'change', { task: 'T-1', stage })
+    if (stage === 'work') {
+      await go
+    } else {
+      await expect(go).rejects.toThrow('worker is still running')
+      expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+      expect(w.calls.slice(before).some(c => /git (add|commit|reset|clean)/.test(c))).toBe(false)
+    }
+    workers.clear()
+  }
+})
