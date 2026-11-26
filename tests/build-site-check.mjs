@@ -190,7 +190,8 @@ for (const p of pagesAll.filter(p => p.startsWith('research/') && p !== 'researc
 {
   const idx = read('research/index.html')
   for (const p of pagesAll.filter(p => p.startsWith('research/') && p !== 'research/index.html')) {
-    const n = idx.split(`href="${p.slice('research/'.length)}"`).length - 1
+    const href = `href="${p.slice('research/'.length)}`
+    const n = idx.split(href).slice(1).filter(rest => rest[0] === '"' || rest[0] === '#').length
     if (n !== 1) bad(`research/index.html links ${p} ${n} times, expected once`)
   }
   const lines = idx.split('<li>').slice(1).filter(li => /^<a href="[^"/]+\.html"/.test(li) && !li.startsWith('<a href="index.html"'))
