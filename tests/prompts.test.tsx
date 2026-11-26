@@ -94,14 +94,14 @@ test('the built-in prompts are filled in for the task: no placeholder is left, a
   expect(q).toContain(SCRATCH)
   expect(ROLE_PROMPTS.checker).toContain('Put any throwaway script or note under .scratch/ in that folder (never commit it); /tmp also works.')
   // T-625: probe and edit scripts are written with the Write tool, not a here-document in Bash (the guards refuse those)
-  const WRITE_SCRIPTS = "Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch/ (or /tmp), then run them in a separate command; don't write them with a here-document in Bash: the guard refuses those when they mention git or paths outside your folder."
+  const WRITE_SCRIPTS = "Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch/ (or /tmp), then run them in a separate command; don't write them with a here-document in Bash: the guard reads the whole command text, so one that mentions git commands or the main project folder is refused.\nIn Bash, use full paths: a \"..\" path piece, or a cd above the project, is refused."
   expect(p).toContain(`${SCRATCH}\n${WRITE_SCRIPTS}\n`)
   expect(q).toContain(`${SCRATCH}\n${WRITE_SCRIPTS}\n`)
   const c = checkerPrompt({ name: 'symcc', task_id: 'T-1', title: 'a', details: 'b', branch: 'symcc/T-1', folder: WT, into: 'main', role: '', diff: '(no diff)', changed_files: '  a.ts', tests: '' })
   expect(c).not.toContain('{{')
   // T-626: the checker may have no Write tool at all (Claude Code runs it read-only; on the Node host only with
   // .scratch/, T-474), so it is told to probe with bun -e / node -e by absolute path, and no tool is named
-  expect(c).toContain(`/tmp also works.\nProbe with bun -e "…" (or node -e "…") run from /tmp, importing the code by its absolute path in your folder (for example: cd /tmp && bun -e "const m = await import('${WT}/hooks/board.ts'); console.log(m)"); if you need a file, a here-document is fine only when its text has no git command and no path outside your folder (build such words from pieces, like 'gi'+'t').\n`)
+  expect(c).toContain(`/tmp also works.\nProbe with bun -e "…" (or node -e "…") run from /tmp, importing the code by its absolute path in your folder (for example: cd /tmp && bun -e "const m = await import('${WT}/hooks/board.ts'); console.log(m)"); if you need a file, a here-document is fine only when its text has no git command and no path into the main project folder (build such words from pieces, like 'gi'+'t'). In Bash, use full paths: a ".." path piece, or a cd above the project, is refused.\n`)
   expect(c).not.toContain('file-writing tool')
   expect(c).not.toContain('Write tool')
   // every placeholder written in a built-in prompt is one symcc knows

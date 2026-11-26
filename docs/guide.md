@@ -443,12 +443,14 @@ The steps, in this order:
    An edit (by any worker) that lands in your own copy of the project, outside the worker's own
    folder (for example your README.md, `.symcc/board.json` or another worker's folder), is always
    refused, without a file request: the worker is told to edit the file in its own folder instead.
-   The same goes for a worker's shell command (Bash) that names such a path, either in full
-   (`echo x > /your/project/README.md`, `cd /your/project && git commit ...`) or by climbing out of
-   its folder (`../../README.md`): it is refused, even if it only reads, because a shell line that
-   only reads can't be told apart reliably from one that writes, and the worker has its own copy of
-   every file. This is a best effort: a path put together while the command runs (for example from a
-   variable) is not seen. Paths outside the project, such as `/tmp`, are not checked, and the lead is never refused.
+   The same goes for a worker's shell command (Bash) whose text names your project folder outside
+   the worker's own folder (`echo x > /your/project/README.md`, `cd ~/project && git commit ...`):
+   it is refused, even if it only reads, because a shell line that only reads can't be told apart
+   reliably from one that writes, and the worker has its own copy of every file. Any `..` path piece
+   (`cd ..`, `../../README.md`) and a `cd` to a folder above the project (`cd /`, `cd ~`) are refused
+   too: the worker is told to use full paths. This is a plain check of the command's text, not a
+   sandbox: a path put together while the command runs (for example from a variable) is not seen.
+   Paths outside the project, such as `/tmp`, are not checked, and the lead is never refused.
 3. **Checker (optional).** With the `checker` setting on, a fresh checker reads the task and its
    changes and tries to break them. It runs outside the queue, side by side with other checkers, and
    runs no project tests. If it finds problems, they go to a new worker as a failed try and the task
@@ -1678,7 +1680,7 @@ only asks for the rest:
   (`echo ... > file`, `rm`, `sed -i` and such). symcc does not check these; your normal
   permission rules still apply.
 
-The git check works on the command text and is a best effort, not a sandbox. It also sees the open tasks, so it
+The git check works on the command's plain text (a git command named anywhere in it counts) and is a best effort, not a sandbox. It also sees the open tasks, so it
 doesn't suggest them again. To look further at the board it has symcc's two read-only tools:
 `board` (no arguments: the open tasks; `status` and `search` narrow it; `task`: one task in full
 with its latest report) and `stats`. Every symcc tool that changes something (`add`, `change`,
@@ -1826,23 +1828,27 @@ changed. Only you can pause or resume a scout; the lead is told a paused scout d
 A worker (of a change task) may change git in its own folder, on its own
 branch: `commit`, `merge` (main, another task's branch, a pull request's branch), `cherry-pick`,
 `revert`, `restore`, `checkout -- <file>`, `reset`, `rebase` of its own branch,
-`bisect`, `add`, `rm`, `mv`, `clean`, `am` and `apply`. The git command must run in
-its folder (the shell's folder, a plain `cd` before it, or `-C <folder>`), and its words may not
-come from a `$variable` (a `-m` message may). Still refused: `push`, `fetch`, `pull` (a fetch also copies tags; symcc brings the branch up to date with main itself) and any change to remotes;
+`bisect`, `add`, `rm`, `mv`, `clean`, `am`, `apply` and `init`. A git write must run in
+its folder or under `/tmp` (the shell's folder, or a `cd` to a full path in one of them); `cd /other/repo && git commit`
+is refused. Still refused, from one deny list: `push`, `fetch`, `pull` (a fetch also copies tags; symcc brings the branch up to date with main itself) and any change to remotes;
 switching to, making or deleting a branch (`checkout <branch>`, `switch`, `branch -d/-D/-m`,
 `rebase main other`, `rebase --root other`, `rebase --update-refs`, `rebase --quit` (it leaves the folder off the branch), `bisect reset other`);
-`worktree`; `config`; `tag`; every `stash` and `--autostash` on merge or rebase (the stash is shared with your own folder); any other git command (an alias or an add-on such as `git lfs` may do anything); `-c` and
-`GIT_*` settings; and anything that names your copy of the project or another task's folder. An
+`rebase -x`/`--exec` and `bisect run` (they run a program, which could be another git command);
+`worktree`; `config`; `tag`; `update-ref`; `symbolic-ref`; every `stash` and `--autostash` on merge or rebase (the stash is shared with your own folder);
+any git option before the command (`-C`, `-c`, `--git-dir`, `--work-tree`...), `GIT_*` settings, `core.hooksPath`,
+a look-up of git's own folder (`--git-dir`, `--git-common-dir`), and anything that names your copy of the project or another task's folder.
+The check reads the command's plain text: a git command named anywhere in it counts, even inside
+quotes (`sh -c 'git push'`, or a commit message that says `git push`). An
 investigation's worker still only reads with git: its changes are never kept. symcc's checks cover
 the worker's own commits too: the scope check looks at every file any commit of the branch changed, a merged-in
 branch's files included (even ones deleted again later), the secret check at every commit (merge commits too), and when a scope check fails, the undo always makes the branch's work one commit again, so a
 merged-in branch's commits (also after a fast-forward merge) never reach main through this task.
 
 A worker run by `claude -p` (the Node host) has no symcc guard, only Claude Code's own rules,
-which look at how a command starts, not at its folder or its words. There a worker may run
-`git commit`, `merge`, `cherry-pick`, `revert`, `restore`, `reset`, `add`, `rm`, `mv`, `clean`,
-`am`, `apply` and `bisect` (not `bisect reset <branch>`, and no `merge --autostash`); `checkout`, `rebase`, `fetch` and `pull` stay refused (their words
-may name or move another branch), as do the rest above and any `git -C` or `git -c`.
+made from the same deny list, which look at how a command starts, not at its folder or the rest of
+its words. There a worker may run the same commands, except that `checkout` stays refused whole
+(use `git restore <file>`) and `rebase` takes one word at most (`git rebase main`); the rest above,
+any `git -C` or `git -c`, and git after `env`, `xargs` and such stay refused.
 
 ### The checker
 
@@ -1855,30 +1861,18 @@ throwaway probes, for example by running it with odd input. It never runs the pr
 tests: they run once, in the merge queue, after it.
 
 The checker may only read with git. Any git command that changes something (commit, checkout,
-switch, reset, stash, branch or tag changes, merge, rebase, push and so on) is refused, and so are
-read-only commands with options or settings that write files or run programs (such as
-`git diff --output=...` or `-c` settings that run a program). This check works on the command text and
-is a best effort, not a sandbox: git run through a variable, a script or other shell tricks can still
-get through. There is no sandbox yet.
+switch, reset, stash, branch or tag changes, merge, rebase, push and so on) is refused, also in a
+throwaway repository under `/tmp`; only listing branches (`git branch --list`, `-a`) is fine. git
+options before the command (`-c`, `-C`...) and `GIT_*` settings are refused too. This check works on the
+command text, with the same deny list as a worker's.
 
-**Scratch repositories in /tmp.** Workers and checkers may still run git writes (`git init`,
-`add`, `commit`, `merge`...) in a throwaway repository under `/tmp` (or the system temp folder
-under `/var/folders/...`). Every folder the command acts in must be a plain literal path:
-`git init /tmp/x`, `git -C /tmp/x commit -m m`, `cd /tmp/x && git commit -am m` (the `cd` joined
-by `&&`).
+**Scratch repositories in /tmp.** A worker may run git writes in a throwaway repository under
+`/tmp`: `git init /tmp/x`, then `cd /tmp/x && git add . && git commit -m m` (a `cd` to a full path;
+`git -C` is refused). Checkers and scouts stay read-only.
 
-For a scratch repository, a git write aimed at the project, `.symcc/` or any worktree (a worker's
-own folder follows the rule above), or at a folder that can't be
-told from the text (`$TMPDIR`, `$d`, `$(mktemp -d)`, `~`, `..`, a glob, no `-C` or `cd` while the
-shell is not in the temp folder, a `cd` with a word before it such as `builtin cd`), stays refused,
-and so does `--global` or `--system` or a shortening of them (the owner's own git settings), a
-`config -f` file outside the scratch folder, and any word with a space after the git command (a
-command given in quotes, as in `rebase -x '...'`; the message of `commit`, `tag`, `merge`, `notes`
-or `stash -m` and `--author=` are fine); scouts stay read-only.
-
-This rule stops honest mistakes; it is not a security boundary: anything that needs a deliberate shell trick (`eval`, a script file,
-`sh -c` variants, symbolic links inside `.git`, files the same line writes, git hooks or settings)
-is the accepted risk and is not checked further.
+These rules stop honest mistakes; they are not a security boundary: anything that needs a deliberate
+trick (a script file, a path or git command put together while the command runs, code run by `bun`
+or `perl`, git hooks or settings) is the accepted risk and is not checked further. There is no sandbox yet.
 
 Separately, when symcc stops an agent process it started earlier (after a reload or a crash),
 it first checks that the process is still that agent (same program, started at about the

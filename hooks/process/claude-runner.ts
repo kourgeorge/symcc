@@ -4,56 +4,12 @@
 import type { HostAgentStart } from '../host'
 import { cleanTokens } from '../core/runs'
 import { SCRATCH_DIR } from '../core/path-guard'
+import { gitDeniedRules } from '../core/git-guard'
 import type { AgentRunner, ProcessOutput, RunnerEnd } from './agents'
 import type { ProcessSystem } from './system'
 
-/**
- * git subcommands a `claude -p` agent may not run (T-496): every one that writes a commit, a ref, the index, the
- * config, the stash or the worktree's files, or that makes or fetches a repository. symcc commits and merges itself.
- * Read-only use (status, diff, log, show, blame, grep, ls-files, rev-parse ...) stays allowed.
- */
-const GIT_DENIED_SUBCOMMANDS = [
-  'commit', 'merge', 'init', 'clone', 'push', 'pull', 'fetch', 'reset', 'checkout', 'switch', 'restore', 'branch',
-  'tag', 'stash', 'rebase', 'cherry-pick', 'revert', 'am', 'apply', 'add', 'rm', 'mv', 'clean', 'update-ref',
-  'symbolic-ref', 'update-index', 'read-tree', 'write-tree', 'commit-tree', 'hash-object', 'mktag', 'mktree',
-  'fast-import', 'worktree', 'config', 'remote', 'submodule', 'notes', 'replace', 'reflog', 'gc', 'prune', 'repack',
-  'pack-refs', 'maintenance', 'filter-branch', 'bisect', 'sparse-checkout', 'merge-file', 'merge-tree', 'lfs',
-]
-
-/**
- * Claude Code's Bash rules match the start of a command, not the folder it acts on, so `git -C <dir> commit` or
- * `git --git-dir=x commit` slip past `git commit`. Node-host agents have no symcc hook guard, so instead every git
- * call that starts with an option is refused (`git -*`; the named ones are listed too, for prefix-only matching),
- * as are the usual wrappers in front of git. With no scratch-git allowance, there are no git writes at all.
- */
-const GIT_DENIED_OPTIONS = ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--bare', '--no-pager', '-P', '-p', '--paginate']
-const GIT_WRAPPERS = ['env', 'command', 'exec', 'xargs', 'nohup', 'time']
-
-/**
- * T-1053: the git writes a worker may run in its own folder, on its own branch. Claude Code's rules only see how a
- * command starts, so only commands whose words can't move or name another branch are let through: checkout, rebase,
- * fetch and pull (`git checkout main`, `git rebase main other`, `git fetch . HEAD:main`) stay refused, as does stash
- * (shared with the owner's folder).
- */
-const WORKER_GIT_ALLOWED = new Set(['commit', 'merge', 'cherry-pick', 'revert', 'restore', 'reset', 'add', 'rm', 'mv', 'clean', 'am', 'apply', 'bisect'])
-
-/**
- * The deny rules for git writes, given to every `claude -p` agent (a deny rule beats any allow rule). A worker
- * (`worker` true) is not denied WORKER_GIT_ALLOWED; `git -C`, `-c` and the wrappers stay denied for it too.
- */
-export function gitDeniedRules(worker = false): string[] {
-  return [
-    ...GIT_DENIED_SUBCOMMANDS.filter(c => !(worker && WORKER_GIT_ALLOWED.has(c))).map(c => `Bash(git ${c}:*)`),
-    // a worker's bisect may not end on another branch (symcc's prep runs `git bisect reset` itself), and its merge
-    // may not leave changes in the shared stash (--autostash; git also takes a start of it, down to `--au`, which no
-    // other merge option starts with)
-    ...(worker ? ['Bash(git bisect reset *)', 'Bash(git merge *--au*)'] : []),
-    'Bash(git -*)',
-    ...GIT_DENIED_OPTIONS.map(o => `Bash(git ${o}:*)`),
-    'Bash(git --git-dir=*)', 'Bash(git --work-tree=*)', 'Bash(git --namespace=*)', 'Bash(git --exec-path=*)', 'Bash(git --config-env=*)',
-    ...GIT_WRAPPERS.map(w => `Bash(${w} git:*)`),
-  ]
-}
+// the git deny rules come from the hook guard's own list (T-1062, core/git-guard.ts)
+export { gitDeniedRules }
 
 /** The `--allowedTools` rule that lets the agent edit `file` (relative to its folder; a folder ends with "/" or is "."). */
 export function editRule(file: string): string[] {
@@ -68,7 +24,7 @@ export function editRule(file: string): string[] {
 /**
  * Claude Code's permission flags for agent `a` (claude -p has no symcc tool hook, so its own rules are the edit
  * guard; the merge-time scope check stays the backstop): every tool not allowed is refused (--permission-mode dontAsk).
- * A worker may read, search and run commands (git writes on its own branch only, WORKER_GIT_ALLOWED), and edit its task's files only (a.files; none given:
+ * A worker may read, search and run commands (git writes on its own branch only, see gitDeniedRules), and edit its task's files only (a.files; none given:
  * anywhere in its folder); a role's `web` adds WebSearch and WebFetch. A scout or checker only reads and runs commands
  * (a checker, T-551: it never runs the project's full tests itself, those run in the merge line after it).
  * `scratch` (T-456): the folder uses its throwaway SCRATCH_DIR (the project keeps no file there in git, see

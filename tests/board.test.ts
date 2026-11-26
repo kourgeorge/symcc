@@ -3,7 +3,6 @@ import { test } from './reset'
 import type { SymccMode, SymccRun, SymccScout, SymccStatus, SymccTask } from '../types'
 import { pause, commandsOf, entry } from './fakes'
 import { turnNow, withStarts } from './starts'
-import { SPEED_CAP_MS, bestMsOf, bestPairMsOf, growsSlowly } from './timing'
 
 import { parseScoutMemory, parseScoutUsage, scoutMemoryText } from '../hooks/board'
 import { type Board, type Playable, DEFAULT_ARCHIVE_DAYS, toArchive, removeArchived, archivedCount, archivedNote, depDone, readArchive, emptyArchive, addToArchive, archiveText, bringBack, parseSettingsCommand } from '../hooks/board'
@@ -19,7 +18,7 @@ import { readOld, stillOld } from './old-data-fixture'
 import { upgradeArchiveTask } from '../hooks/core/old-data'
 import { rowEndBoard, ROW_END, LEAD_BEFORE, ROW_END_NOW } from './row-end-cases'
 import { DEFAULT_NAME, ICON, ICON_ART, cleanName, namesFor } from '../hooks/name'
-import { lastRunOf, addScoutRunRecord, parseScoutRuns, scoutRunsText, SCOUT_RUNS_KEPT, STEP_WORD, asChecking, shownNote, STEP_NOTE, inLineNote, PREP_NOTE, everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, bashOutsideFolder, bashOutsideText, bashPathsToCheck, BASH_UNRESOLVED, CWD_LOST, BASH_LOST, shellCwd, bashTooManyText, BASH_TOO_MANY, BASH_PATHS_MAX, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
+import { lastRunOf, addScoutRunRecord, parseScoutRuns, scoutRunsText, SCOUT_RUNS_KEPT, STEP_WORD, asChecking, shownNote, STEP_NOTE, inLineNote, PREP_NOTE, everyText, scoutStateText, scoutRanText, scoutRow, scoutOrder, sortScouts, scoutFile, scoutReport, scoutHowTo, scoutPrompt, recentClosed, SCOUT_CLOSED_SHOWN, scoutLeadMessage, SCOUT_REPORT_CHARS, boardSections, dayLabel, groupLabel, taskDay, bannerLines, bannerRule, listRule, bannerText, startBranch, goneBranchQuestion, goneBranchOptions, parseGoneBranch, saysMergeInstead, crossBranchNotes, intoOf, branchesToDelete, worktreesToRemove, cleanupText, gitStateOf, gitNote, noGitText, setupAskText, gitignoreBase, gitignoreWith, isSecretName, parseLsTree, riskyFiles, ignoreLineFor, setupDoneText, BIG_FILE_BYTES, folderName, shortHome, boardTitle, boardLabel, statusLine, openOnStart, spokenDone, notifyOf, notifyChoices, notifyRefusal, unplayableNote, bestNotify, startRun, endRun, sumRuns, boardTotal, fmtDuration, fmtCost, fmtTokens, fmtTotal, fmtRun, workerName, workerDescription, scoutAgentName, scoutDescription, AGENT_DESCRIPTION_CHARS, DEFAULT_AUTO_RETRIES, TEST_OUTPUT_CHARS, clampRetries, onTestFail, testTail, MAX_NOT_READY, onNotReady, liveDriver, ownedHere, resetDoing, relabelSession, isFresh, backToTodo, statusCounts, STATUS_WORD, LEAD_STALE_MS, LOCK_STALE_MS, addTask, leadText, parseLead, whoDrives, boardText, emptyBoard, isLockStale, lockText, outOfScope, outOfScopeText, needFilesQuestion, parseAsk, blockedEdit, blockedEditText, editOutsideFolder, outsideFolderText, pathAliases, resolvePath, parseLock, parseBoard, parseScout, scoutText, scoutNameError, everyMinutesOf, scoutDraftError, patchTask, ready, needsReview, rejectTask, reviewTask, setMode, modeOf, modeLabel, MODE_LABEL, MODE_NAME, modeButton, nextMode, parseDiffStat, statCount, statText, cutDiff, diffKinds, DIFF_COLOR, parseCommand, parseModeCommand, commandNames, modeText, needsYouFirst, stashTask, promoteTask, backlogLabel, backlogHeader, backlogMoreLabel, BACKLOG_SHOWN, panelSections, sectionHeader, foldedRow, crewParts, withCrew, statusRoom, STATUS_WIDTH, nextScoutText, statusCell, rowExtra, fileWaitText, fitRow, hintLines, hintLineText, hintText, packRows, listKeys, taskKeys, diffKeys, scoutKeys, scoutListKeys, scoutIcon, scoutTone, scoutLastText, countFindings, scoutListRows, scoutListText, scoutPausedText, scoutMayRun, scoutWhyNot, OPEN, SETTINGS, applySettings, parseSettingValue, settingSetText, settingValue, settingsText, skippedRoleNote, roleMark, roleLine, roleChoices, mergeRoles, findRole, checkRole, roleOf, tryLabel, rolesLeadText, BUILT_IN_ROLES, WEB_SAFETY_LINE, leftoverTmpFiles, tmpName, normId, dayOf, runMs, isNothing, agentSafeName, onDemand, readBoard } from '../hooks/board'
 import { usageTokens } from '../hooks/claude/usage'
 import { EXTRA_TOOLS, ROLE_TOOL_MAP, claudeRoleTools, BASE_WORKER_TOOLS, workerTypeFor, workerTypeSuffix, workerAgentTypes, isWorkerType, asBaseWorkers, claudeNames } from '../hooks/claude/agent-types'
 import { type AgentInfo, hostAgent, isNotReady } from '../hooks/claude/agents'
@@ -1410,147 +1409,12 @@ test("an edit is judged by where symbolic links really lead (T-303)", async () =
   expect(brokenLinkText('x')).toMatch(/^Refused: x goes through a symbolic link/)
 })
 
-test("a worker's shell command naming the owner's copy of the project is refused; its own folder and /tmp are not (T-302)", () => {
-  const root = '/repo'
-  const wt = `${root}/.symcc/worktrees/T-5`
-  const home = '/home/me'
-  const no = (c: string) => bashOutsideFolder(c, wt, root, home)
-  // writes, copies, git and a ".." way out: refused
-  expect(no('echo x > /repo/README.md')).toBe('README.md')
-  expect(no('cp a /repo/.symcc/board.json')).toBe('.symcc/board.json')
-  expect(no('cd /repo && git commit -m x')).toBe('')
-  expect(no('echo x > ../../README.md')).toBe('.symcc/README.md')
-  expect(no("sed -i 's/a/b/' /repo/src/x.ts")).toBe('src/x.ts')
-  expect(no('echo x >/repo/a')).toBe('a')
-  expect(no('git -C "/repo" status')).toBe('')
-  expect(no('cd .. && ls')).toBe('.symcc/worktrees')
-  expect(no('cat $(pwd)/../../../a')).toBe('a')
-  // a named path in the owner's copy keeps its own reason; one that can't be followed is refused too (T-963)
-  expect(no('echo x > $(pwd)/../../../a')).toBe('a')
-  expect(no('echo x > $(pwd)/f')).toBe(BASH_UNRESOLVED + '$(pwd)/f')
-  expect(no('make --prefix=../../../src')).toBe('src')
-  expect(no('cat /REPO/README.md')).toBe('README.md')
-  expect(no('ls /repo/.symcc/worktrees/T-6')).toBe('.symcc/worktrees/T-6')
-  expect(no('ls /repo/.symcc/worktrees/T-55')).toBe('.symcc/worktrees/T-55')
-  expect(bashOutsideFolder('echo x > ~/README.md', wt, root, '/repo')).toBe('README.md')
-  // outside the project, in its own folder, plain commands: allowed
-  expect(no('echo x > /tmp/a')).toBeUndefined()
-  expect(no('echo x > src/a.ts')).toBeUndefined()
-  expect(no('bun test')).toBeUndefined()
-  expect(no(`sed -i s/a/b/ ${wt}/src/a.ts`)).toBeUndefined()
-  expect(no(`cd ${wt} && ls ./src/../tests`)).toBeUndefined()
-  expect(no('ls /repository/x ~/notes')).toBeUndefined()
-  expect(no("sed 's/../x/' a.ts")).toBeUndefined()
-  // not a string, or no project folder known: nothing to judge
-  expect(bashOutsideFolder(undefined, wt, root)).toBeUndefined()
-  expect(bashOutsideFolder('echo x > /repo/a', wt, '')).toBeUndefined()
-  expect(bashOutsideText('README.md', wt)).toBe(`Refused: this command names README.md in the owner's copy of the project, outside your own folder. Work only in your own folder ${wt}: use paths inside it (relative paths start there), never the owner's copy, even to read.`)
-})
-
-test("a worker's shell command: '..' paths are taken from the folder an earlier cd moved to (T-311)", () => {
-  const root = '/repo'
-  const wt = `${root}/.symcc/worktrees/T-5`
-  const home = '/home/me'
-  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, home, cwd)
-  // the worker's own files, reached with ".." after a cd: allowed
-  expect(no('cd src && cat ../package.json')).toBeUndefined()
-  expect(no('cd tests && bun test ../tests')).toBeUndefined()
-  expect(no('cd hooks/core && grep -n foo ../plugin/ask.ts')).toBeUndefined()
-  expect(no('cd tests && bun test ../tests/merge.test.ts')).toBeUndefined()
-  expect(no(`cd ${wt}/src && cat ../package.json`)).toBeUndefined()
-  expect(no('cd "src" && cat ../a; cd .. && ls')).toBeUndefined()
-  expect(no('cd src && cd .. && cat package.json')).toBeUndefined()
-  // a ".." that climbs out of the worker's folder from where the cd went: refused
-  // (from ${wt}/src four ".." reach /repo; the five in the task's example reach / and so leave the project)
-  expect(no('cd src && echo x > ../../../../README.md')).toBe('README.md')
-  expect(no('cd src/a && echo x > ../../../../../README.md')).toBe('README.md')
-  expect(no('cd src && echo x > ../../../../../README.md')).toBeUndefined()
-  expect(no('cd src\ncat ../../../../README.md')).toBe('README.md')
-  expect(no('cd /tmp && cat ../repo/README.md')).toBe('README.md')
-  expect(no('cd ~ && cat ../../repo/a')).toBe('a')
-  expect(no('cd && cat ../../repo/a')).toBe('a')
-  // a cd that may not have worked (";", "||"), or ran in a subshell: the worker's folder is tried too
-  expect(no('cd src; cat ../x')).toBe('.symcc/worktrees/x')
-  expect(no('cd src || cat ../x')).toBe('.symcc/worktrees/x')
-  expect(no('cd src && true || cat ../x')).toBe('.symcc/worktrees/x')
-  expect(no('(cd src && pwd) && cat ../x')).toBe('.symcc/worktrees/x')
-  expect(no('cd src | cat ../x')).toBe('.symcc/worktrees/x')
-  expect(no('cd src & cat ../x')).toBe('.symcc/worktrees/x')
-  expect(no('echo "a && cd src && b" && cat ../x')).toBe('.symcc/worktrees/x')
-  // a cd that can't be followed: later ".." paths are judged from the worker's folder, as before
-  expect(no('cd - && cat ../x')).toBe('.symcc/worktrees/x')
-  expect(no('cd src && cd - && cat ../x')).toBe('.symcc/worktrees/x')
-  expect(no('cd "$(dirname a)" && cat ../x')).toBe('.symcc/worktrees/x')
-  expect(no('cd "$(dirname a)" && ls')).toBe(BASH_UNRESOLVED + '"$(dirname a)"')
-  expect(no('cd src && cd - && cat ../../../README.md')).toBe('README.md')
-  // the shell's own folder, when the caller knows it (the Bash tool keeps it between calls)
-  expect(no('cat ../x', `${wt}/src`)).toBeUndefined()
-  expect(no('cat ../../../../README.md', `${wt}/src`)).toBe('README.md')
-  expect(no('cat ../x')).toBe('.symcc/worktrees/x')
-  // a shell folder outside the worker's folder is not trusted: the worker's folder is the start (T-317)
-  expect(no('cat ../x', `${root}/src`)).toBe('.symcc/worktrees/x')
-  expect(no('cat ../x', '/')).toBe('.symcc/worktrees/x')
-  expect(no('cat ../x', 'src')).toBe('.symcc/worktrees/x')
-  expect(no('cat package.json', wt)).toBeUndefined()
-})
-
-test("a worker's shell command: a project path with a space in it, quoted or with a backslash, is still caught (T-314)", () => {
-  const root = '/Users/o/My Project'
-  const wt = `${root}/.symcc/worktrees/T-9`
-  const home = '/Users/o'
-  const no = (c: string) => bashOutsideFolder(c, wt, root, home)
-  // the owner's copy, written with quotes or "\ ": refused
-  expect(no('cat "/Users/o/My Project/README.md"')).toBe('README.md')
-  expect(no('echo hi > "/Users/o/My Project/README.md"')).toBe('README.md')
-  expect(no("cd '/Users/o/My Project' && git checkout -- .")).toBe('')
-  expect(no('cp x /Users/o/My\\ Project/hooks/a.ts')).toBe('hooks/a.ts')
-  expect(no("cat '/Users/o/my project/README.md'")).toBe('README.md')
-  expect(no('cat ~/"My Project"/README.md')).toBe('README.md')
-  expect(no('cat ~/My\\ Project/README.md')).toBe('README.md')
-  expect(no('echo "see /Users/o/My Project/README.md"')).toBe('README.md')
-  expect(no('git diff --output="/Users/o/My Project/a"')).toBe('a')
-  expect(no('cat "/Users/o/My "Project/README.md')).toBe('README.md')
-  expect(no(`cat "${wt}/../../../README.md"`)).toBe('README.md')
-  expect(no('ls "/Users/o/My Project/.symcc/worktrees/T-9 copy"')).toBe('.symcc/worktrees/T-9 copy')
-  // the worker's own folder written whole, quoted or with "\ ": allowed
-  expect(no(`cat "${wt}/src/a.ts"`)).toBeUndefined()
-  expect(no(`cat '${wt}/src/a.ts'`)).toBeUndefined()
-  expect(no(`cat ${wt.replace(/ /g, '\\ ')}/src/a.ts`)).toBeUndefined()
-  expect(no(`cd "${wt}/src" && cat ../package.json`)).toBeUndefined()
-  // a folder whose name only starts the same, and other folders: allowed
-  expect(no('cat "/Users/o/My Project2/a"')).toBeUndefined()
-  expect(no('cat "/Users/o/My Projects/a" /tmp/b')).toBeUndefined()
-  expect(no('echo "a b" > src/a.ts')).toBeUndefined()
-})
-
-test("a worker's shell command or edit naming the project through /tmp (when it is under /private/tmp) or a linked folder is refused like the direct path (T-417)", () => {
+test("an edit naming the project through /tmp (when it is under /private/tmp) or a linked folder is refused like the direct path (T-417)", () => {
   const root = '/private/tmp/t391-live/repo'
   const wt = `${root}/.symcc/worktrees/T-5`
-  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, '/home/me', cwd)
-  // the owner's copy and another task's folder, through /tmp or /private/tmp: refused
-  expect(no('test -e /tmp/t391-live/repo/README.md')).toBe('README.md')
-  expect(no('test -e /private/tmp/t391-live/repo/README.md')).toBe('README.md')
-  expect(no('cat /tmp/t391-live/repo/.symcc/worktrees/T-6/a.ts')).toBe('.symcc/worktrees/T-6/a.ts')
-  expect(no('cd /tmp/t391-live/repo && git status')).toBe('')
-  expect(no('echo "x" > "/tmp/t391-live/repo/README.md"')).toBe('README.md')
-  expect(no('cd /tmp/t391-live/repo/.symcc/worktrees/T-5 && cat ../../../README.md')).toBe('README.md')
-  // the same the other way round: the project known as /tmp, named through /private/tmp
-  expect(bashOutsideFolder('cat /private/tmp/r/README.md', '/tmp/r/.symcc/worktrees/T-5', '/tmp/r')).toBe('README.md')
-  expect(bashOutsideFolder('cat /private/var/r/README.md', '/var/r/.symcc/worktrees/T-5', '/var/r')).toBe('README.md')
-  // the worker's own folder, written either way, and a shell folder written through /tmp: allowed
-  expect(no('cat /tmp/t391-live/repo/.symcc/worktrees/T-5/src/a.ts')).toBeUndefined()
-  expect(no(`cat ${wt}/src/a.ts`)).toBeUndefined()
-  expect(no('cat ../x', '/tmp/t391-live/repo/.symcc/worktrees/T-5/src')).toBeUndefined()
-  expect(no('cd /tmp/t391-live/repo/.symcc/worktrees/T-5/src && cat ../package.json')).toBeUndefined()
-  expect(no('ls /tmp/other /private/tmp/t391-live/repo2')).toBeUndefined()
-  // a folder by two names (as written, and where its links lead): either name counts
   const real = '/Users/o/real'
   const roots = ['/Users/o/link', real]
   const wts = ['/Users/o/link/.symcc/worktrees/T-5', `${real}/.symcc/worktrees/T-5`]
-  expect(bashOutsideFolder(`cat ${real}/README.md`, wts, roots)).toBe('README.md')
-  expect(bashOutsideFolder('cat /Users/o/link/README.md', wts, roots)).toBe('README.md')
-  expect(bashOutsideFolder(`cat ${real}/.symcc/worktrees/T-5/a.ts /Users/o/link/.symcc/worktrees/T-5/b.ts`, wts, roots)).toBeUndefined()
-  // edits: the same names match
   expect(editOutsideFolder('/tmp/t391-live/repo/README.md', wt, root)).toBe('README.md')
   expect(editOutsideFolder('/tmp/t391-live/repo/.symcc/worktrees/T-5/src/a.ts', wt, root)).toBeUndefined()
   expect(editOutsideFolder(`${real}/README.md`, wts, roots)).toBe('README.md')
@@ -1561,165 +1425,6 @@ test("a worker's shell command or edit naming the project through /tmp (when it 
   expect(pathAliases('/private/var/a')).toEqual(['/private/var/a', '/var/a'])
   expect(pathAliases('/tmpx/a')).toEqual(['/tmpx/a'])
   expect(pathAliases('/Users/o')).toEqual(['/Users/o'])
-  // the paths a caller looks up on disk for links: elsewhere, and inside the worker's own folder too (T-436)
-  expect(bashPathsToCheck(`cat ~/link/README.md ${wt}/a.ts /tmp/t391-live/repo/.symcc/worktrees/T-5/b.ts`, wt, '/home/me').paths).toEqual(['/home/me/link/README.md', `${wt}/a.ts`, '/tmp/t391-live/repo/.symcc/worktrees/T-5/b.ts'])
-  expect(bashPathsToCheck(Array.from({ length: 50 }, (_, i) => `/x/${i}`).join(' '), wt)).toEqual({ paths: Array.from({ length: 50 }, (_, i) => `/x/${i}`), tooMany: false })
-  expect(bashPathsToCheck(undefined, wt)).toEqual({ paths: [], tooMany: false })
-})
-
-test("a worker's shell command: plain relative paths are looked up for links, the cd list is capped, and braces may hide a cd (T-436)", () => {
-  const root = '/repo'
-  const wt = `${root}/.symcc/worktrees/T-5`
-  const paths = (c: string, cwd?: string) => bashPathsToCheck(c, wt, '/home/me', cwd, root)
-  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, '/home/me', cwd)
-  // plain relative words, quoted alone, after a cd, and with "/" in code or here-document text; not the command name or options
-  expect(paths('cat lnk/README.md').paths).toEqual([`${wt}/lnk/README.md`])
-  expect(paths('cat "lnk" -n').paths).toEqual([`${wt}/lnk`])
-  expect(paths('cd lnk && cat README.md').paths).toEqual([`${wt}/lnk`, `${wt}/lnk/README.md`])
-  expect(paths(`python3 -c "open('lnk/a')"`).paths).toContain(`${wt}/lnk/a`)
-  expect(paths('python3 - <<EOF\nopen("lnk/a")\nEOF').paths).toContain(`${wt}/lnk/a`)
-  expect(paths(`bun -e "console.log(1)"`).paths).toEqual([])
-  // too many paths: the caller refuses instead of skipping the rest
-  const many = paths(Array.from({ length: BASH_PATHS_MAX + 1 }, (_, i) => `f${i}`).join(' ') + ' lnk/README.md')
-  expect(many).toEqual({ paths: [], tooMany: true })
-  // the folder list stops at BASH_FOLDERS_MAX: 40 cd lines, plain and in a here-document, are checked fast
-  const cds = Array.from({ length: 40 }, (_, i) => `cd d${i}`).join('\n')
-  // the fastest of 3 runs (T-509): one busy moment of the machine does not count against the cap
-  const checks = () => {
-    expect(no(`${cds}\ncat ../../../../README.md`)).toBe(BASH_TOO_MANY)
-    expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF`)).toBeUndefined()
-    // a here-document run by a shell (one only written to a file is text, T-481)
-    expect(no(`bash <<'EOF'\n${cds}\ncat ../x\nEOF`)).toBe(BASH_TOO_MANY)
-    expect(no(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF\ncat /repo/README.md`)).toBe('README.md')
-    expect(paths(`${cds}\ncat x`).tooMany).toBe(true)
-    expect(paths(`cat > /tmp/s.sh <<'EOF'\n${cds}\nEOF`).tooMany).toBe(false)
-    // a certain folder (cds joined with &&) is never over the cap, and many plain paths are not too many (T-436)
-    expect(paths(`${Array.from({ length: 17 }, (_, i) => `cd d${i}`).join(' && ')} && cat x`)).toEqual({ paths: [...Array.from({ length: 17 }, (_, i) => `${wt}/${Array.from({ length: i + 1 }, (_, k) => `d${k}`).join('/')}`), `${wt}/${Array.from({ length: 17 }, (_, k) => `d${k}`).join('/')}/x`], tooMany: false })
-    expect(paths(`cd a; cd b; cd c; cd d; cat ${Array.from({ length: 9 }, (_, i) => `f${i}`).join(' ')}`).tooMany).toBe(false)
-    expect(paths(`rm ${Array.from({ length: 129 }, (_, i) => `f${i}.txt`).join(' ')}`).tooMany).toBe(false)
-    expect(paths(`git add ${Array.from({ length: 130 }, (_, i) => `src/f${i}.ts`).join(' ')}`).tooMany).toBe(false)
-    expect(paths(`cat > notes.md <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `- see docs/x${i}.md`).join('\n')}\nEOF`).tooMany).toBe(false)
-    expect(paths(`cat ${Array.from({ length: BASH_PATHS_MAX }, (_, i) => `f${i} f${i}`).join(' ')}`).tooMany).toBe(false)
-  }
-  expect(bestMsOf(checks)).toBeLessThan(SPEED_CAP_MS)
-  // the work grows slowly with the number of cd lines (T-478): the old doubling made 40 lines take 2^30 times 10 lines
-  const cdWork = (n: number) => () => {
-    const c = Array.from({ length: n }, (_, i) => `cd d${i}`).join('\n')
-    no(`${c}\ncat ../../../../README.md`)
-    no(`bash <<'EOF'\n${c}\ncat ../x\nEOF`)
-    paths(`${c}\ncat x`)
-    paths(`cat > /tmp/s.sh <<'EOF'\n${c}\nEOF`)
-  }
-  const { small, big } = bestPairMsOf(cdWork(10), cdWork(40))
-  expect({ small, big, slow: growsSlowly(small, big, 5) }).toMatchObject({ slow: true })
-  expect(bashOutsideText(BASH_TOO_MANY, wt)).toBe(bashTooManyText(wt))
-  expect(bashTooManyText(wt)).toMatch(/^Refused: this command has too many paths or folder changes \(cd\) to check/)
-  // a few cd lines are still followed as before
-  expect(no('cd src\ncd a\ncat ../../../../../README.md')).toBe('README.md')
-  // a command word with braces may be a cd: the folder it names and the worker's folder are both tried
-  expect(paths('{cd,} /tmp && cat ../repo/README.md').paths).toContain('/repo/README.md')
-  expect(paths('c{d..d} /tmp && cat ../repo/README.md').paths).toContain('/repo/README.md')
-  expect(no('{cd,} /tmp && cat ../repo/README.md')).toBeDefined()
-  expect(no('{cd,} src && cat ../x')).toBe('.symcc/worktrees/x')
-  // a shell folder outside the project (a throwaway copy) is where relative paths start; above the project or in it, it is not
-  expect(no('cat ../hooks/a.ts', '/tmp/c/tests')).toBeUndefined()
-  expect(no('cat ../../../repo/README.md', '/tmp/c/tests')).toBe('README.md')
-  expect(no('cat ../x', '/')).toBe('.symcc/worktrees/x')
-  expect(no('cat ../x', `${root}/src`)).toBe('.symcc/worktrees/x')
-  expect(paths('cat a.ts', '/tmp/c').paths).toEqual(['/tmp/c/a.ts'])
-  expect(paths('cat a.ts', '/').paths).toEqual([`${wt}/a.ts`])
-})
-
-test("T-671: a shell folder that couldn't be read (CWD_LOST): '..' words are tried from deeper folders too, and the refusal says why", () => {
-  const root = '/repo'
-  const wt = `${root}/.symcc/worktrees/T-5`
-  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, '/home/me', cwd)
-  // as on main, a folder not read at all (undefined) starts at the top folder
-  expect(no('echo x > ../../../../README.md')).toBeUndefined()
-  // couldn't be read: the shell may be deeper, where four ".." reach the owner's copy
-  expect(no('echo x > ../../../../README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
-  expect(no('cd src && echo x > ../../../../../README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
-  expect(bashOutsideText(`${BASH_LOST}README.md`, wt)).toBe(`${bashOutsideText('README.md', wt)} symcc couldn't tell the shell's folder; use a full path.`)
-  // the shell may have climbed (`"cd" ../..` is a cd bash runs): a ".." write from the top folder is refused too
-  expect(no('echo x > ../../x', CWD_LOST)).toBe(`${BASH_LOST}.symcc/x`)
-  // as on main (folder unknown), a ".." read that leaves the worker's folder is refused
-  expect(no('cat ../package.json', CWD_LOST)).toBe(`${BASH_LOST}.symcc/worktrees/package.json`)
-  // words with no "..", and full paths, are judged as before
-  expect(no('cat src/a.ts', CWD_LOST)).toBeUndefined()
-  expect(no(`echo x > ${wt}/a`, CWD_LOST)).toBeUndefined()
-  expect(no('cat /repo/README.md', CWD_LOST)).toBe('README.md')
-  // the made-up deeper folders are not looked up on disk
-  expect(bashPathsToCheck('cat ../a', wt, '/home/me', CWD_LOST, root).paths).toEqual([`${root}/.symcc/worktrees/a`])
-  // which folder is used: a read (absolute) one; else CWD_LOST, with nothing kept from earlier
-  expect(shellCwd('/x/y')).toBe('/x/y')
-  expect(shellCwd('')).toBe(CWD_LOST)
-  expect(shellCwd('src')).toBe(CWD_LOST)
-  expect(shellCwd(undefined)).toBe(CWD_LOST)
-})
-
-test("T-671: with the shell folder unread, a long '..' word is still judged quickly and the same way", () => {
-  const root = '/repo'
-  const wt = `${root}/.symcc/worktrees/T-5`
-  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, '/home/me', cwd)
-  // words that go down and back up are cut down first: the deeper tries still catch them
-  expect(no('echo x > a/../../../../../README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
-  expect(no('echo x > ./../../../.././README.md', CWD_LOST)).toBe(`${BASH_LOST}README.md`)
-  expect(no('cat a/b/c/../../..', CWD_LOST)).toBeUndefined()
-  // a word with thousands of ".." parts: on the last try it took seconds (each ".." re-walked the whole word)
-  const n = 20000
-  const long = `${'a/'.repeat(n)}${'../'.repeat(n)}x`
-  const t0 = Date.now()
-  expect(no(`cd d1; cd d2; cd d3; cd d4; cat ${long}`, CWD_LOST)).toBeUndefined()
-  expect(no(`echo y > ${long}/../../../../../README.md`, CWD_LOST)).toBe(`${BASH_LOST}README.md`)
-  expect(Date.now() - t0).toBeLessThan(1500)
-})
-
-test("a worker's shell command: relative paths in quoted text are taken from the folder the command is really in (T-417)", () => {
-  const root = '/repo'
-  const wt = `${root}/.symcc/worktrees/T-5`
-  const no = (c: string, cwd?: string) => bashOutsideFolder(c, wt, root, '/home/me', cwd)
-  // must allow: the worker's own files reached from tests/, also as text in code passed to bun -e or node -e
-  expect(no('cd tests && cat ../hooks/claude/tools.ts')).toBeUndefined()
-  expect(no(`bun -e "import('../hooks/x')"`, `${wt}/tests`)).toBeUndefined()
-  expect(no(`cd tests && bun -e "import('../hooks/x')"`)).toBeUndefined()
-  expect(no(`cd tests && bun -e "import('../hooks/claude/tools').then(t => console.log(t))"`)).toBeUndefined()
-  expect(no(`cd tests && node -e 'require("../hooks/x"); console.log(1)'`)).toBeUndefined()
-  expect(no(`cd ${wt}/tests && bun -e "const t = await import('../hooks/claude/tools'); console.log(t)"`)).toBeUndefined()
-  expect(no(`node -e 'require("../hooks/x")'`, `${wt}/tests`)).toBeUndefined()
-  // a here-string is no here-document: what follows it is plain shell
-  expect(no('cat <<< "x" && cat ../hooks/a.ts', `${wt}/tests`)).toBeUndefined()
-  // a here-document's text: an apostrophe, ";" or "`" in it is no shell, and its relative paths are read from where the command is
-  expect(no("cd tests && cat > /tmp/p.ts <<'EOF'\nconst s = \"don't\"; run(`x`)\nawait import('../hooks/x')\nEOF\nbun /tmp/p.ts")).toBeUndefined()
-  expect(no("cd tests && bun - <<EOF\nimport('../hooks/x')\nEOF")).toBeUndefined()
-  // a throwaway copy under /tmp, with relative paths inside it
-  expect(no('cp -r . /tmp/c && cd /tmp/c/tests && cat "../hooks/a.ts"')).toBeUndefined()
-  // must refuse: real reach-outs, quoted or not, also inside a here-document run by a shell
-  expect(no('cat ../../README.md')).toBe('.symcc/README.md')
-  expect(no('cat ../../../README.md')).toBe('README.md')
-  expect(no('cat "../../../README.md"')).toBe('README.md')
-  expect(no(`bun -e "import('../../../README.md')"`)).toBe('README.md')
-  expect(no(`cd tests; bun -e "require('../../../../README.md')"`)).toBe('README.md')
-  expect(no('cd tests; cat ../x')).toBe('.symcc/worktrees/x')
-  expect(no("bash <<'X'\ncd src\ncat ../../../../README.md\nX")).toBe('README.md')
-  expect(no('cat <<EOF\n../../../README.md\nEOF')).toBe('README.md')
-  expect(no("cat > /tmp/a <<'EOF'\nhello\nEOF\ncat ../../../README.md")).toBe('README.md')
-  expect(no("cat > /tmp/a <<'EOF'\nsee /repo/README.md\nEOF")).toBe('README.md')
-  expect(no(`cd -; bun -e "import('../x')"`)).toBe('.symcc/worktrees/x')
-  expect(no(`(cd tests) && bun -e "import('../x')"`)).toBe('.symcc/worktrees/x')
-  expect(no(`cd tests || bun -e "import('../x')"`)).toBe('.symcc/worktrees/x')
-  // a cd that may fail (";", a "{ }" group) leaves the shell in the worker's folder: quoted text is checked from there too
-  expect(no('cd /nope; cat "../../../README.md"')).toBe('README.md')
-  expect(no(`cd /nope; bun -e "require('../../../README.md')"`)).toBe('README.md')
-  expect(no('{ cd /nope; }; cat "../../../README.md"')).toBe('README.md')
-  expect(no(`cd tests; bun -e "import('../hooks/x')"`)).toBe('.symcc/worktrees/hooks/x')
-  expect(no('cd /tmp/c/tests; cat "../hooks/a.ts"')).toBe('.symcc/worktrees/hooks/a.ts')
-  // a cd in here-document text may be only text: the folder the command was in still counts
-  expect(no('cat > n <<EOF\ncd /nope\nEOF\ncat "../../../README.md"')).toBe('README.md')
-  expect(no('cat > n <<EOF\ncd /nope\nEOF\ncat ../../../README.md')).toBe('README.md')
-  expect(no("cd /nope; bash <<'X'\ncat ../../../README.md\nX")).toBe('README.md')
-  // a here-string ("<<<") is not a here-document: the lines after it are plain shell
-  expect(no('cat <<< "x"\ncd /nope\ncat ../../../README.md')).toBe('README.md')
-  expect(no("cat <<<'x'\ncat ../../../README.md")).toBe('README.md')
 })
 
 test('the waiting question and the failure note for files outside the list', async () => {

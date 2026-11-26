@@ -400,61 +400,25 @@ test("T-390: when the check itself fails (the board can't be read), a worker's E
   expect(logs.filter(l => /the tool\.check hook it failed/.test(l)).length).toBe(1)
 })
 
-test("a worker's Bash command starts from its shell's current folder (session.cwd in the hook), when that is inside its folder (T-317)", async ($, on) => {
-  let here = `${WT1}/src`
-  on('session.cwd', () => ({ value: here }) as never)
-  await trackedWorker($, on)
-  // after an earlier "cd src", ".." reaches the worker's own files: allowed
-  expect((await check($, 'a1', 'Bash', { command: 'cat ../package.json' })).decision).toBe('allow')
-  // four ".." from <worktree>/src reach the owner's copy: refused
-  const out = await check($, 'a1', 'Bash', { command: 'cat ../../../../README.md' })
-  expect(out.decision).toBe('deny')
-  expect(out.reason).toMatch(/names README\.md in the owner's copy/)
-  // a shell folder outside the worker's folder is not used: paths start from the worker's top folder
-  here = `${ROOT}/src`
-  expect((await check($, 'a1', 'Bash', { command: 'cat ../package.json' })).decision).toBe('deny')
-  here = '/'
-  expect((await check($, 'a1', 'Bash', { command: 'cat ../x' })).decision).toBe('deny')
-})
-
-test("T-671: when the shell's folder can't be read, a '..' path that may climb into the owner's copy is refused, never judged from the top folder alone", async ($, on) => {
-  let here: string | null = null
+test("T-1062: a worker's Bash command is judged by its text, wherever its shell is (session.cwd in the hook) or when that can't be read", async ($, on) => {
+  let here: string | null = `${WT1}/src`
   on('session.cwd', () => {
     if (here === null) throw new Error('no folder')
     return { value: here } as never
   })
   await trackedWorker($, on)
   const bash = async (command: string) => check($, 'a1', 'Bash', { command })
-  // nothing read yet: from the top folder four ".." leave the project, but from <worktree>/src they reach the owner's copy
-  const out = await bash('echo x > ../../../../README.md')
-  expect(out.decision).toBe('deny')
-  expect(out.reason).toMatch(/names README\.md in the owner's copy/)
-  expect(out.reason).toMatch(/symcc couldn't tell the shell's folder; use a full path\.$/)
-  // paths inside the worker's folder, and full paths, are judged as before
-  expect((await bash('cat src/a.ts')).decision).toBe('allow')
-  expect((await bash(`echo x > ${WT1}/src/a.ts`)).decision).toBe('allow')
-  // nothing from an earlier read is kept: after `"cd" ../..` (a cd bash runs) from <worktree>/a/b, the shell is at the
-  // top folder, so a later `../../x` would reach the owner's copy; with the folder unread it is refused
-  here = `${WT1}/a/b`
-  expect((await bash('"cd" ../..')).decision).toBe('allow')
-  here = null
-  const up = await bash('echo x > ../../x')
-  expect(up.decision).toBe('deny')
-  expect(up.reason).toMatch(/names \.symcc\/x in the owner's copy/)
-  expect(up.reason).toMatch(/symcc couldn't tell the shell's folder/)
-  // as on main with the folder unknown, a ".." read leaving the worker's folder is refused
-  here = `${WT1}/src`
-  expect((await bash('ls')).decision).toBe('allow')
-  here = null
-  expect((await bash('cat ../package.json')).decision).toBe('deny')
-  // with the folder read, behaviour is unchanged
-  here = `${WT1}/src`
-  expect((await bash('cat ../package.json')).decision).toBe('allow')
-  const known = await bash('echo x > ../../../../README.md')
-  expect(known.decision).toBe('deny')
-  expect(known.reason).not.toMatch(/couldn't tell/)
-  here = WT1
-  expect((await bash('echo x > ../../../../README.md')).decision).toBe('allow')
+  for (const cwd of [`${WT1}/src`, `${ROOT}/src`, '/', null]) {
+    here = cwd
+    // a ".." path piece is refused ("use full paths"), the owner's copy named in full too
+    const up = await bash('cat ../package.json')
+    expect([cwd, up.decision]).toEqual([cwd, 'deny'])
+    expect(up.reason).toMatch(/has a "\.\." path piece/)
+    const owner = await bash(`echo x > ${ROOT}/README.md`)
+    expect(owner.reason).toMatch(/names README\.md in the owner's copy/)
+    // full paths inside its own folder are fine
+    expect([cwd, (await bash(`cat ${WT1}/src/a.ts`)).decision]).toEqual([cwd, 'allow'])
+  }
 })
 
 test("an investigation's edits are never refused (it has no file list), and its hand-back is its answer", async ($, on) => {

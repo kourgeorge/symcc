@@ -867,70 +867,36 @@ test("a checker's git commands that change anything are refused, read-only ones 
   await saveBoard(w.$, boardWith(true))
   await finish(w, async id => {
     const bash = (command: string) => checkEdit(w.$, id, { command })
+    // T-1062: every git write of GIT_WRITES, wherever it is in the text, and git's own options or GIT_ settings
     for (const [command, what] of [
       ['git commit -am x', 'git commit'],
       ['git checkout main', 'git checkout'],
       ['git switch main', 'git switch'],
       ['git stash', 'git stash'],
-      ['git stash push -m x', 'git stash'],
       ['cd /x && git reset --hard', 'git reset'],
-      ['git -C /x branch -f main HEAD', 'git branch'],
+      ['git -C /x branch -f main HEAD', 'git -C'],
       ['git branch -D symcc/T-2', 'git branch'],
-      ['git branch new-one', 'git branch'],
       ['git status; git tag v1', 'git tag'],
       ['git log | git update-ref refs/heads/main HEAD', 'git update-ref'],
       ['echo $(git rebase main)', 'git rebase'],
       ['sh -c "git merge main"', 'git merge'],
       ['git --no-pager cherry-pick abc', 'git cherry-pick'],
       ['/usr/bin/git push', 'git push'],
-      ['git worktree add /tmp/x', 'git worktree'],
       ['git restore --staged a.ts', 'git restore'],
-      ['git clean -fd', 'git clean'],
-      ['git apply --index p.diff', 'git apply'],
-      // read-only commands with options that write a file or run a program (the try-1 checker's three probes first)
-      ['git log -1 --format=%H --output=$(git rev-parse --git-common-dir)/refs/heads/main feat', 'git log --output'],
-      ['git grep -O"git stash;:" x', 'git grep -O'],
-      ["GIT_EXTERNAL_DIFF='git stash;:' git diff", 'git stash'],
-      ['git diff --output=/tmp/x', 'git diff --output'],
-      ['git diff --outp /tmp/x', 'git diff --outp'],
-      ['git show -o /tmp/x HEAD', 'git show -o'],
-      ['git diff -o x', 'git diff -o'],
-      ['git log -po x', 'git log -o'],
-      ['git log -pofile', 'git log -o'],
-      ['git shortlog -no x', 'git shortlog -o'],
-      ['git grep -nOvim foo', 'git grep -O'],
-      ['git grep --open-files-in-pager=vim foo', 'git grep --open-files-in-pager'],
-      ['git diff --ext-diff', 'git diff --ext-diff'],
-      ['git log -p --textconv', 'git log --textconv'],
       ['git -c core.pager=x log', 'git -c'],
-      ['git -c diff.external=x diff', 'git -c'],
-      ['git -c alias.st=!x status', 'git -c'],
-      ['git --config-env=core.pager=X log', 'git --config-env'],
       ['git --exec-path=/tmp diff', 'git --exec-path'],
-      // settings that make git run a program or use another repository, when git runs
-      ['GIT_EXTERNAL_DIFF=/tmp/x git diff', 'GIT_EXTERNAL_DIFF'],
-      ['GIT_PAGER=x git -p log', 'GIT_PAGER'],
-      ['PAGER=x git log', 'PAGER'],
-      ['env GIT_SSH_COMMAND=x git log', 'GIT_SSH_COMMAND'],
-      ['export EDITOR=x; git log', 'EDITOR'],
-      ['GIT_DIR=/x git log', 'GIT_DIR'],
-      ['GIT_CONFIG_GLOBAL=/tmp/c git diff', 'GIT_CONFIG_GLOBAL'],
-      ["GIT_PAGER=x sh -c 'git log'", 'GIT_PAGER'],
-      // git inside a VAR= value, an option value, or in capitals (macOS finds GIT too)
-      ["X='git stash;:' true", 'git stash'],
-      ['echo -X"git reset --hard"', 'git reset'],
+      ['GIT_EXTERNAL_DIFF=/tmp/x git diff', 'a GIT_ setting'],
       ['GIT stash', 'git stash'],
       ['/usr/libexec/git-core/git-stash', 'git stash'],
-      ['git-core/git-log --output=/tmp/x', 'git log --output'],
-    ] as const) expect(await bash(command)).toBe(gitWriteText(what))
-    expect(gitWriteText('git stash')).toMatch(/^Refused: git stash may change the repository or run another program, and the checker may only read with git/)
-    for (const command of ['git diff', 'git log -3', 'git status', 'git log --oneline -5', 'git diff --text --stat', 'git diff --no-ext-diff', 'git ls-files -o', 'git grep -n foo', '/usr/libexec/git-core/git-diff', 'echo "use git diff"', 'export GIT_PAGER=cat', 'grep -rn "gitWriteIn(" hooks', 'git -C src show HEAD:src/a.ts', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git branch -a', 'git branch', 'git stash list', 'git stash show -p', 'git rev-parse HEAD | cat', 'git ls-files src', 'npm test', 'git log -Sfoo', 'git log -p -G"checkout" -- hooks', "git log -L'/function gitScan/,+5:hooks/core/ask.ts'", 'git diff -Sfoo', 'git log -n3o', 'git grep -e-O foo'])
-      expect(await bash(command)).toBeUndefined()
+      ['git log -1 --format=%H --output=$(git rev-parse --git-common-dir)/refs/heads/main feat', "git's own folder"],
+    ] as const) expect([command, await bash(command)]).toEqual([command, gitWriteText(what)])
+    for (const command of ['git diff', 'git log -3', 'git status', 'git log --oneline -5', 'git ls-files -o', 'git grep -n foo', 'echo "use git diff"', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git branch -a', 'git branch', 'git rev-parse HEAD | cat', 'npm test'])
+      expect([command, await bash(command)]).toEqual([command, undefined])
     checkerFinished(id, 'OK')
   })
-  // a worker's git writes in its folder are refused as well (with the worker's own reason), its reads are not
+  // a worker's git writes are refused with the worker's own reason (with no shell folder known, even a commit), its reads are not
   workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
-  for (const [command, what] of [['git commit -am x', 'git commit'], ['git stash', 'git stash'], ['git reset --hard', 'git reset'], ['git checkout -b x', 'git checkout']] as const)
+  for (const [command, what] of [['git commit -am x', 'git in another folder'], ['git stash', 'git stash'], ['git reset --hard', 'git in another folder'], ['git checkout -b x', 'git checkout <branch>']] as const)
     expect(await checkEdit(w.$, 'ag2', { command })).toBe(workerGitWriteText(what))
   for (const command of ['git diff', 'git log -3', 'git status'])
     expect(await checkEdit(w.$, 'ag2', { command })).toBeUndefined()
