@@ -148,7 +148,7 @@ const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
  * T-1062: the one shell path rule for a worker's or checker's Bash `command`. Its text (quotes and backslashes
  * dropped) may not hold the project folder `root` (any of its names, also as `~/...` or `$HOME/...` from `home`)
  * unless that place is inside the worker's own folder `worktree` (any of its names): the answer is the named path
- * relative to the project ('' for the project itself). A `..` path piece anywhere (`cd ..`, `../x`, `a/../b`)
+ * relative to the project ('' for the project itself; also when a glob character follows, `<project>*`). A `..` path piece anywhere (`cd ..`, `../x`, `a/../b`)
  * answers BASH_DOTDOT: "use full paths"; a cd, chdir or pushd to a folder above the project (`cd /`, `cd`, `cd ~`
  * when home holds the project) answers BASH_ABOVE, as a relative path from there reaches it. Plain text, no shell parsing: a path built at run time ($X, $(...), a
  * script) is not seen. Letter case is ignored, as macOS folders usually do.
@@ -173,7 +173,7 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
     const fromHome = h ? inside(top, h, false) : undefined
     const names = fromHome ? [top, `~/${fromHome}`, `$HOME/${fromHome}`, `\${HOME}/${fromHome}`] : [top]
     for (const name of names) {
-      for (const m of flat.matchAll(new RegExp(`(?<![^${PATH_END}])${reEscape(name)}(?=$|[/${PATH_END}])(?:/[^${PATH_END}]*)?`, 'gi'))) {
+      for (const m of flat.matchAll(new RegExp(`(?<![^${PATH_END}])${reEscape(name)}(?=$|[/*?[${PATH_END}])(?:/[^${PATH_END}]*)?`, 'gi'))) {
         const abs = resolvePath('/', top + m[0].slice(name.length))
         if (insideAny(abs, wts, false) === undefined) return insideAny(abs, tops, false) ?? ''
       }

@@ -39,7 +39,13 @@ const GIT_WRITES = new Set(GIT_ALL.filter(c => !GIT_READS.has(c)))
  * pull, remote, tag, config, stash (shared with the owner's folder), update-ref, symbolic-ref, branch, switch,
  * worktree... each changes what the owner's folder shares.
  */
-const WORKER_GIT = new Set(['commit', 'merge', 'cherry-pick', 'revert', 'restore', 'reset', 'add', 'stage', 'rm', 'mv', 'clean', 'am', 'apply', 'bisect', 'rebase', 'checkout', 'init'])
+const WORKER_GIT = new Set(['commit', 'merge', 'cherry-pick', 'revert', 'restore', 'reset', 'add', 'stage', 'rm', 'mv', 'clean', 'am', 'apply', 'bisect', 'rebase', 'checkout'])
+
+/**
+ * The one `git init` a worker may run: a new scratch repository at a plain full path under /tmp (`git init /tmp/x`).
+ * No options (`--separate-git-dir` would move the owner's .git, `--template` adds hooks) and no init of the folder it is in.
+ */
+const scratchInit = (args: string[]) => args.length === 1 && /^\/(?:private\/)?tmp\/[\w.@+,-]+(?:\/[\w.@+,-]+)*\/?$/.test(args[0]!) && !args[0]!.split('/').includes('..')
 
 /** Whether option word `a` is `--<name>` or a start of it (git takes `--upd` for `--update-refs`). */
 const longStart = (a: string, name: string) => {
@@ -81,19 +87,38 @@ const WORKER_LIMITS: Record<string, { bad: (w: string[]) => string | undefined; 
   merge: { bad: w => (w.some(a => longStart(a, 'autostash')) ? 'git merge --autostash' : undefined), node: ['merge *--au*'] },
 }
 
-/** `git branch` words that only list branches. */
-const BRANCH_LIST = new Set(['--list', '-l', '-a', '--all', '-r', '--remotes', '-v', '-vv', '--verbose', '--show-current'])
+/** `git branch` options that only list branches (and their `=value` forms). */
+const BRANCH_LIST = new Set(['--list', '-l', '-a', '--all', '-r', '--remotes', '-v', '-vv', '--verbose', '--show-current', '--contains', '--no-contains', '--merged', '--no-merged', '--points-at', '--sort', '--format', '--color', '--no-color', '-i', '--ignore-case', '--column', '--no-column', '--omit-empty', '--abbrev', '--no-abbrev'])
+
+/** The options that make `git branch` list, so its other words are patterns or commits, never new branch names. */
+const BRANCH_LIST_MODE = new Set(['--list', '-l', '--contains', '--no-contains', '--merged', '--no-merged', '--points-at'])
+
+/** Whether `git branch` with words `args` only lists: only listing options, and other words only in list mode. */
+const branchListOnly = (args: string[]) => {
+  const opts = args.filter(a => a.startsWith('-')).map(a => a.split('=')[0]!)
+  return opts.every(o => BRANCH_LIST.has(o)) && (opts.length === args.length || opts.some(o => BRANCH_LIST_MODE.has(o)))
+}
 
 /** git's own options (before the command name) that change nothing; any other (-C, -c, --git-dir, --work-tree, --exec-path, --config-env...) is refused. */
 const GIT_OPTION_OK = new Set(['--no-pager', '-P', '-p', '--paginate', '--no-optional-locks', '--version', '--help'])
 
-/** A git call in a command's text: `git` (or `/usr/bin/git`) as a word, or a git program by its own name (`git-push`). */
-const GIT_AT = /(?<![\w.-])git(?:-([a-z][\w-]*))?(?=$|[\s'"`;&|()<>\\])/gi
+/**
+ * A git call in a command's text: `git` (or `/usr/bin/git`), or a git program by its own name (`git-push`), where a
+ * command starts: at the start, after `&&`, `||`, `;`, `|`, `&`, `(`, `$(`, `{`, a backquote, a line end or a quote
+ * opened by `sh -c` (`bash -lc`, `eval`...), and after leading `VAR=x` settings or env, sudo, command, exec, time,
+ * nohup, xargs, eval, if, then... So `grep "git push" docs/` and `git commit -m "make git simpler"` hold no git call.
+ */
+const GIT_AT = new RegExp(
+  String.raw`(?:^|&&|\|\||[;|&({\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)[^\S\n]+(?:-\w+[^\S\n]+)*["'])` +
+    String.raw`(?:[^\S\n]*(?:(?:env|sudo|command|exec|time|nohup|xargs|eval|if|then|do|else|elif|while|until|!)(?:[^\S\n]+-[^\s;&|]+)*|\w+=[^\s;&|]*)(?=\s))*` +
+    String.raw`[^\S\n]*(?:(?:/[\w.-]+)*/)?git(?:-([a-z][\w-]*))?(?=$|[\s'"` + '`' + String.raw`;&|()<>\\])`,
+  'gi',
+)
 
 /**
  * The first git command in Bash `command` that `who` may not run, as `git <command>` (or the option or setting that
- * refuses it), or undefined. Plain text: every `git` word counts, also inside quotes (`sh -c 'git push'`,
- * `rebase -x 'git push'`, a commit message that names `git push`); its words run up to the next `;`, `&`, `|`,
+ * refuses it), or undefined. Plain text: every git call where a command starts counts (GIT_AT, also
+ * `sh -c 'git push'` and `$(git stash)`); its words run up to the next `;`, `&`, `|`,
  * bracket, backquote, redirection or line end. Refused for everyone: a GIT_ setting, core.hooksPath, a look-up of
  * git's own folder (--git-dir, --git-common-dir...), any git option before the command but GIT_OPTION_OK. An allow
  * list: 'reader' (a scout, a checker, an investigation) may run only GIT_READS (and `git branch` only listing);
@@ -117,7 +142,8 @@ export function gitWriteIn(text: unknown, who: 'reader' | 'worker' = 'reader'): 
     // a word that is no command name (`$X`, `a.ts`) is not seen, and `git-x` counts only as one of git's own programs
     if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub) || (m[1] && !GIT_ALL.includes(sub)) || GIT_READS.has(sub)) continue
     const args = words.slice(i)
-    if (sub === 'branch' && args.every(a => BRANCH_LIST.has(a))) continue
+    if (sub === 'branch' && branchListOnly(args)) continue
+    if (sub === 'init' && who === 'worker' && scratchInit(args)) continue
     if (who === 'reader' || !WORKER_GIT.has(sub)) return `git ${sub}`
     const bad = WORKER_LIMITS[sub]?.bad(args)
     if (bad) return bad
@@ -171,7 +197,7 @@ export const gitAliases = (out: string): string[] =>
   out.split('\n').map(l => /^alias\.([^\s]+)/i.exec(l.trim())?.[1]?.toLowerCase()).filter((a): a is string => !!a)
 
 /** What every git refusal adds: how the text is read. */
-const PLAIN_TEXT = 'Every "git <word>" anywhere in the command counts, even inside quotes, and any git command not on the allowed list (an alias too) is refused; search for git text with the Grep tool, and put a commit message that names git in a file (git commit -F .scratch/msg).'
+const PLAIN_TEXT = 'Every git call where a command starts counts (also after &&, ;, |, $( and in sh -c "..."), and any git command not on the allowed list (an alias too) is refused.'
 
 /** The reason a checker reads when its Bash command runs git command `what` (from gitWriteIn), which may change something. */
 export const gitWriteText = (what: string) =>

@@ -105,8 +105,32 @@ test('T-1062: the git text is read whole: git inside quotes, after a wrapper, or
   // file names with git in them are no git call; a pipe or redirection ends git's words
   for (const c of ['cat hooks/core/git-guard.ts', 'ls .git', 'cat .gitignore', 'rm -rf /tmp/git-scratch', 'git merge main 2>&1 | tail -20', 'git log > /tmp/log', 'cd "$(git rev-parse --show-toplevel)"', 'tee -a "$LOG"', 'echo "use git"', 'git commit -F .scratch/msg', 'git --version', 'git help log'])
     expect([c, gitWriteIn(c, 'worker')]).toEqual([c, undefined])
-  // plain text: a commit message whose "git" is followed by a word counts as that git command (use -F <file>)
-  expect(gitWriteIn('git commit -m "make git handling simpler"', 'worker')).toBe('git handling')
+  // "git" counts only where a command starts: not in a search pattern or a commit message
+  for (const c of ['grep "git push" docs/', "echo 'git stash'", 'grep -c "git push" a', 'git log --grep "git push"'])
+    for (const who of ['reader', 'worker'] as const) expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, undefined])
+  expect(gitWriteIn('git commit -m "make git simpler"', 'worker')).toBe(undefined)
+  expect(gitWriteIn('git commit -m "make git simpler"')).toBe('git commit')
+  for (const [c, what] of [
+    ['x && git push', 'git push'], ['ls || git stash', 'git stash'], ['true;git tag v', 'git tag'], ['ls | git stash', 'git stash'],
+    ['(git push)', 'git push'], ['echo `git push`', 'git push'], ['ls\ngit push', 'git push'], ['env -i git push', 'git push'],
+    ['sudo git push', 'git push'], ['command git push', 'git push'], ['exec git push', 'git push'], ['time git push', 'git push'],
+    ['nohup git push', 'git push'], ['A=1 B=2 git push', 'git push'], ['if true; then git push; fi', 'git push'], ["bash -lc 'git push'", 'git push'],
+  ] as const)
+    expect([c, gitWriteIn(c, 'worker')]).toEqual([c, what])
+})
+
+test("T-1062: a worker's git init only makes a new repository under /tmp; readers keep git branch's listing words", () => {
+  const node = gitDeniedRules(true)
+  for (const c of ['git init /tmp/x', 'git init /private/tmp/a/b']) expect([c, gitWriteIn(c, 'worker')]).toEqual([c, undefined])
+  // --separate-git-dir moves the owner's .git out of its copy; --template adds hooks; a plain init re-inits the folder it is in
+  for (const c of ['git init --separate-git-dir=/tmp/zz', 'git init --separate-git-dir /tmp/zz /tmp/x', 'git init --template=/tmp/t /tmp/x', 'git init', 'git init .', `git init ${WT}`, 'git init /tmp/../Users/o/repo', 'git init-db /tmp/x']) {
+    expect([c, typeof gitWriteIn(c, 'worker')]).toEqual([c, 'string'])
+    expect([c, nodeRefuses(node, c)]).toEqual([c, true])
+  }
+  for (const c of ["git branch --list 'symcc/*'", 'git branch --contains HEAD', 'git branch --merged main', 'git branch --no-merged', 'git branch -a --sort=-committerdate', 'git branch -l symcc/T-1'])
+    expect([c, gitWriteIn(c)]).toEqual([c, undefined])
+  for (const c of ['git branch new', 'git branch -D x', 'git branch --list -m a b', 'git branch -f main HEAD', 'git branch --set-upstream-to=x'])
+    expect([c, typeof gitWriteIn(c)]).toEqual([c, 'string'])
 })
 
 test('T-1062: an allow list: aliases, add-ons and unknown git names are refused for readers and workers', () => {
@@ -158,6 +182,9 @@ test("T-1062: the shell path rule refuses the owner's folder in the text (any na
   expect(no('cd /Users/o/./repo && rm README.md')).toBe('')
   expect(no('cat /Users/o/.//./repo/./a')).toBe('a')
   expect(no('cat /Users/o/re\\\npo/a')).toBe('a')
+  // the project path with a glob right after it
+  for (const c of [`rm ${ROOT}*/README.md`, `cd ${ROOT}*`, `ls ${ROOT}?`, `ls ${ROOT}[x]`]) expect([c, no(c)]).toEqual([c, ''])
+  expect(no(`ls ${WT}/src/*.ts`)).toBe(undefined)
   // '..' anywhere: "use full paths"
   for (const c of ['cd .. && ls', 'cat ../x', 'cat a/../../b', 'echo x > ../../README.md', 'echo hi >../README.md', 'echo x 2>../log', 'cat <../a', 'x>>../../a', 'make --prefix=../src', `bun -e "import('../x')"`, `cd ${WT}/src && cat ../a`]) expect([c, no(c)]).toEqual([c, BASH_DOTDOT])
   // a cd above the project, from where a relative path reaches it
