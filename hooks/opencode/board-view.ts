@@ -887,7 +887,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const lanes = liveTaskLanes(v, nowMs)
   const running = lanes.filter(l => !l.done)
   const inner = liveInner(w)
-  const layout = liveLayout(lanes, liveColumns(lanes, v.checker === true), inner, true)
+  const layout = liveLayout(lanes, liveColumns(lanes, v.checker === true), inner)
   const frame = Math.floor(nowMs / LIVE_BLINK_MS)
   const trains = liveTrains(v, nowMs, lanes)
   const rows = new Map(lanes.map(l => [l.id, trainRows(trains.lanes[l.id] ?? [], inner)]))

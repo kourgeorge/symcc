@@ -1241,8 +1241,8 @@ words as bold headings with the same spacing):
 ─── ❯ TASKS ────────────────────────────────────────────────
 
                        work✧    check✧   queue    tests    done
- ▶ T-684 /symcc-doc…   ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2  change
-   try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9×median) · worker 812.4k · checker 287.6k · ⌕ × 1
+ ▶ T-684 /symcc-doctor checks…  ●━━━━━━━━●━━━━━━━━◉────────○────────○
+   try 2/3 · ⏱ 24m · ⌀ 1.1M (0.9×median) · worker 812.4k · checker 287.6k · ⌕ × 1  change
 ```
 
 - `NEEDS YOU` is the first section, shown only while something waits for you, and hidden (no
@@ -1266,7 +1266,7 @@ words as bold headings with the same spacing):
   `✧ = an agent works here (needs an agent slot) · ⌀ = tokens`; queue and tests use none, so there can be more lanes than
   `max_parallel`. It never sits under the task rows. When the page is shorter than the screen (the panel in VS Code), the
   empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
-- On the right: the time at the current station, or the place in the merge queue (`#2`).
+- On the right: only a finished lane has text there (`merged 3m ago`); a running lane has none (the time is in the `⏱` of its second row).
 - In VS Code (T-1003, T-1017) a running lane is three lines: the mark, the id (a link) and the full title (cut with `…` only when
   the panel is too narrow), then, indented under the title, the train and the time at the right (`try 2 · 12m`; "try"
   only from the second try), then a dim numbers line (the same text as the terminal's second row below, with the task
@@ -1283,7 +1283,7 @@ words as bold headings with the same spacing):
   from twice the median), how its tokens split between its workers and checkers, as
   `worker 5.4M · checker 1.9M` (a part that is 0 is left out, and nothing shows when there is nothing to split), and
   `⌕ × N` for how many times the checker sent the task back (`⌕` is the checker's mark; on a task row, `↺` with a number is the try). On a narrow panel the parts go in this order: first the
-  split, then `(×median)`, then `⌀`, and the clock `⏱` last; the try stays. The task type (dim) ends the first row, after the time or place (waiting child rows end with it too); the title gives way to it first, and on a panel too narrow for the type it is dropped, never wrapped. A
+  split, then `(×median)`, then `⌀`, and the clock `⏱` last; the try stays. The task type (dim) ends this second row, two spaces after the last part; on a panel too narrow for it, it is dropped, never wrapped (waiting child rows show no task type). A running row's first line has no time at its end (the `⏱` below says it), so its title gets that room. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.
 - **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend at the bottom of the Live tab, below the footer, says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `avg` marks an average (`avg ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
@@ -1295,22 +1295,22 @@ words as bold headings with the same spacing):
   failed or dropped tasks don't. Enter (or a click) on a finished lane opens its task page.
 
   ```
-   ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○      2m  change
-     try 1/3 · ⏱ 2m · ⌀ at hand-back
-   ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago  change
-     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M
+   ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○
+     try 1/3 · ⏱ 2m · ⌀ at hand-back  change
+   ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
+     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M  change
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
-  then `waits` and its task type (dim). The waiting train's id is in the accent color (orange) and the rest of the row
+  then `waits` (no task type). The waiting train's id is in the accent color (orange) and the rest of the row
   is dim gray. Topic labels in the organizational memory rows and topic grid are blue:
 
   ```
-   ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m  bug
-     try 1/3 · ⏱ 2m · ⌀ at hand-back
-     └─◇ T-713 Task files: no …  waits  change
-        └─◇ T-714 Help: /symcc-he…  waits  docs
-     └─◇ T-716 Live deps…  waits  + also T-690  feature
+   ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○
+     try 1/3 · ⏱ 2m · ⌀ at hand-back  bug
+     └─◇ T-713 Task files: no si…  waits
+        └─◇ T-714 Help: /symcc-h…  waits
+     └─◇ T-716 Live deps…  waits  + also T-690
   ```
 
   A task that waits only for another todo task hangs under that task's train, one step further in

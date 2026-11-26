@@ -153,43 +153,20 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
   const t = liveTrains(trainView, T0)
   const rows = trainRows(t.lanes['T-712']!, 100)
   expect(rows.map(r => segText(r.segs))).toEqual([
-    '  └─◇ T-713 Task files: no silent d…  waits  change',
-    '     └─◇ T-714 Help: /symcc-help shows…  waits  change',
-    '     └─◇ T-717 Waits for a todo and a …  waits  + also T-690  change',
-    '  └─◇ T-716 Live deps drawn as trai…  waits  + also T-690  change',
+    '  └─◇ T-713 Task files: no silent d…  waits',
+    '     └─◇ T-714 Help: /symcc-help shows…  waits',
+    '     └─◇ T-717 Waits for a todo and a …  waits  + also T-690',
+    '  └─◇ T-716 Live deps drawn as trai…  waits  + also T-690',
   ])
-  // T-1058: the kind ends every row and takes only title characters ("waits" and "+ also" come first)
-  for (const w of [60, 50]) for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, segText(r.segs).endsWith('change')]).toEqual([w, true])
+  // T-1074: a waiting child row shows no task type, at any width
+  for (const w of [100, 60, 50, 40]) for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, /change|feature|bug|docs/.test(segText(r.segs))]).toEqual([w, false])
   const long = [{ id: 'T-690', title: 'Waiting one with a long title here', kind: 'investigation', also: ['T-700'], trains: [] }] as never
   for (const w of [30, 40]) {
     const text = segText(trainRows(long, w)[0]!.segs)
-    expect([w, text.includes('waits') || text.includes('+1'), textWidth(text) <= w]).toEqual([w, true, true])
-    if (text.includes('investigation')) expect(text).toContain('T-690 Wai')
+    expect([w, text.includes('waits') || text.includes('+1'), textWidth(text) <= w, text.includes('investigation')]).toEqual([w, true, true, false])
   }
-  expect(segText(trainRows(long, 30)[0]!.segs)).not.toContain('investigation')
-  // a short title on a wide panel keeps its whole title and shows the kind
-  const fix = [{ id: 'T-714', title: 'Fix it', kind: 'feature', also: [], trains: [] }] as never
-  expect(segText(trainRows(fix, 120)[0]!.segs)).toBe('  └─◇ T-714 Fix it  waits  feature')
-  // the kind never replaces "waits"
-  const help = [{ id: 'T-714', title: 'Help: /symcc-help shows all', kind: 'change', also: [], trains: [] }] as never
-  expect(segText(trainRows(help, 24)[0]!.segs)).toBe('  └─◇ T-714 Hel…  change')
-  // the row with the kind equals the row without it, except for a shorter title
-  for (const also of [[], ['T-700'], ['T-700', 'T-701']]) for (let w = 18; w <= 60; w++) {
-    const mk = (kind: string) => [{ id: 'T-714', title: 'Help: /symcc-help shows all the things', kind, also, trains: [] }] as never
-    const plain = segText(trainRows(mk(''), w)[0]!.segs)
-    const withKind = segText(trainRows(mk('investigation'), w)[0]!.segs)
-    if (withKind.includes('investigation')) {
-      const tail = (s: string) => s.slice(s.indexOf('…') + 1)
-      expect([w, tail(withKind.replace('  investigation', ''))]).toEqual([w, tail(plain)])
-      expect(withKind.indexOf('…') <= plain.indexOf('…')).toBe(true)
-    } else expect([w, withKind]).toEqual([w, plain])
-  }
-  const second = [{ id: 'T-1', title: 'First', kind: 'bug', also: [], trains: help }] as never
-  const deepText = segText(trainRows(second, 30)[1]!.segs)
-  if (deepText.endsWith('change')) expect(deepText).toContain('waits')
-  expect(textWidth(deepText) <= 30).toBe(true)
-  const kinds = trainRows(t.lanes['T-712']!, 40).map(r => r.segs.at(-1)!)
-  expect(kinds.every(k => k.tone === 'dim')).toBe(true)
+  const second = [{ id: 'T-1', title: 'First', kind: 'bug', also: [], trains: [{ id: 'T-714', title: 'Help: /symcc-help shows all', kind: 'change', also: [], trains: [] }] }] as never
+  expect(textWidth(segText(trainRows(second, 30)[1]!.segs)) <= 30).toBe(true)
   expect(rows.map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
   for (const w of [100, 60, 40, 32, 24])
     for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, segText(r.segs), textWidth(segText(r.segs)) <= w]).toEqual([w, segText(r.segs), true])
@@ -234,46 +211,37 @@ test('T-690: lane lines fit the width with nothing cut, and the current station 
   const [b] = laneLines(q, l, { nowMs: T0, frame: 1 })
   expect(segText(a)).toContain('●━━━━━━━━●━━━━━━━━◉────────○────────○')
   expect(segText(b)).toContain('●━━━━━━━━●━━━━━━━━◎────────○────────○')
-  expect(segText(a).trimEnd().endsWith('#2')).toBe(true)
+  expect(segText(a).trimEnd().endsWith('○')).toBe(true)
   expect(segText(a)).toContain('T-684 /symcc-doctor')
   expect(liveBlink(1, true)).toBe('◉')
-  // T-1058: running rows end with the kind (dim) and still fit narrow widths; the kind goes when it can't fit, even a long one
+  // T-1074: a running row's first line has no task type and no time at its end; the second line ends with the task type when it
+  // fits and leaves it out when it does not; nothing is wider than the panel
   for (const kind of ['change', 'investigation'])
     for (const width of [100, 60, 40, 32, 28, 24, 20]) {
       const ks = liveLanes(view(true), T0).map(x => ({ ...x, kind }))
-      const lk = liveLayout(ks, liveStations(true), width, true)
+      const lk = liveLayout(ks, liveStations(true), width)
       for (const lane of ks) {
-        const first = laneLines(lane, lk, { nowMs: T0, frame: 0 })[0]
-        expect([kind, width, textWidth(segText(first)) <= width]).toEqual([kind, width, true])
-        if (lk.kindW) expect(segText(first).endsWith(kind) && first.at(-1)!.tone === 'dim').toBe(true)
+        const [first, second] = laneLines(lane, lk, { nowMs: T0, frame: 0 })
+        expect([kind, width, textWidth(segText(first)) <= width, textWidth(segText(second)) <= width]).toEqual([kind, width, true, true])
+        expect([kind, width, segText(first).includes(kind), /\d+m$/.test(segText(first))]).toEqual([kind, width, false, false])
+        if (segText(second).includes(kind)) expect(segText(second).endsWith(`  ${kind}`) && second.at(-1)!.tone === 'dim').toBe(true)
       }
     }
-  // the kind dropped from the first row is on no second line either
-  for (const kind of ['bug', 'investigation', 'docs']) {
-    const ks = liveLanes(view(true), T0).map(x => ({ ...x, kind }))
-    const lk = liveLayout(ks, liveStations(true), 30, true)
-    for (const lane of ks) {
-      const [first, second] = laneLines(lane, lk, { nowMs: T0, frame: 0 })
-      expect([kind, segText(first).includes(kind), segText(second).includes(kind)]).toEqual([kind, !!lk.kindW, false])
-    }
+  {
+    const ks = liveLanes(view(true), T0).map(x => ({ ...x, kind: 'change' }))
+    const wide = laneLines(ks[0]!, liveLayout(ks, liveStations(true), 120), { nowMs: T0, frame: 0 })[1]
+    expect(segText(wide).endsWith('  change')).toBe(true)
+    const tight = laneLines(ks[0]!, liveLayout(ks, liveStations(true), 40), { nowMs: T0, frame: 0 })[1]
+    expect(segText(tight).includes('change')).toBe(false)
   }
-  expect(liveLayout(liveLanes(view(true), T0).map(x => ({ ...x, kind: 'change' })), liveStations(true), 100, true).kindW).toBe(8)
-  expect(liveLayout(liveLanes(view(true), T0).map(x => ({ ...x, kind: 'investigation' })), liveStations(true), 20, true).kindW).toBe(undefined)
-  // the kind never changes the gaps or stations; it takes title characters only, and goes when the title would keep under 3
-  for (let width = 20; width <= 80; width++) {
-    const one = [{ ...liveLanes(view(true), T0)[0]!, title: 'A long title that goes on and on and on for a while', kind: 'investigation' }]
-    const a = liveLayout(one, liveStations(true), width)
-    const b = liveLayout(one, liveStations(true), width, true)
-    expect([width, b.gap, b.sep, b.labels, b.rightW]).toEqual([width, a.gap, a.sep, a.labels, a.rightW])
-    expect([width, !!b.kindW]).toEqual([width, a.titleW - 15 >= 3])
-    if (b.kindW) expect(b.titleW).toBe(a.titleW - 15)
-  }
-  // a short title on a wide panel keeps its whole title and shows the kind
-  for (const width of [80, 120, 200]) {
-    const one = [{ ...liveLanes(view(true), T0)[0]!, id: 'T-99', title: 'Fix login', kind: 'bug' }]
-    const lk = liveLayout(one, liveStations(true), width, true)
-    const first = segText(laneLines(one[0]!, lk, { nowMs: T0, frame: 0 })[0])
-    expect([width, first.includes('T-99 Fix login'), first.endsWith('bug')]).toEqual([width, true, true])
+  // the freed right column goes to the title: wider than the 12 it had room beside the minutes for at 80 columns
+  {
+    const one = [{ ...liveLanes(view(true), T0)[0]!, id: 'T-99', title: 'A rather long title that fills the room', kind: 'bug' }]
+    expect(liveLayout(one, liveStations(true), 95).rightW).toBe(0)
+    // main (before T-1074) gave titleW 12 / gap 6 at 60 columns and titleW 26 at 80; the gap stays, the title grows
+    const at60 = liveLayout(one, liveStations(true), 60)
+    expect([at60.gap, at60.titleW > 12]).toEqual([6, true])
+    expect(liveLayout(one, liveStations(true), 80).titleW).toBeGreaterThan(26)
   }
   // T-867: the tokens against the median per merged task: from twice it, "(n×median)" in the warning tone
   const over = laneLines(lanes.find(x => x.id === 'T-685')!, l, { nowMs: T0, frame: 0 })[1]
@@ -380,23 +348,19 @@ test('T-867, T-931: a lane\'s second line has no bar: ⏱, ⌀, ×median, <worke
   expect([lane.activeMs, lane.workerTokens, lane.checkerTokens]).toEqual([41 * 60_000, 5_400_000, 1_900_000])
   const l = liveLayout(lanes, liveStations(true), 120)
   const at = (width: number) => segText(laneLines(lane, { ...l, width }, { nowMs: T0, frame: 0 })[1])
-  // T-1010: the kind at the right end, under the first line's right end (the time); no kind at the start
-  const firstW = textWidth(segText(laneLines(lane, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[0]))
+  // T-1074: the kind ends the second line, two spaces after the meta text (dim); never on the first line
   const bare = (width: number) => at(width).replace(/ +change$/, '')
   const full = bare(120)
   const wFull = textWidth(full)
-  // the full meta text leaves less than 2 columns before the kind (first line: 87, meta: 80): the kind follows after 2 spaces
-  expect(firstW - wFull - 'change'.length).toBeLessThan(2)
   expect(at(120)).toBe(full + '  change')
   // too narrow for both: the kind is dropped (never wrapped), the meta text stays whole
   expect(at(wFull + 7)).toBe(full)
   expect(at(wFull)).toBe(full)
   expect(full).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) · worker 5\.4M · checker 1\.9M · ⌕ × 2$/)
-  // a shorter meta text leaves room: the kind ends exactly at the first line's width, dim
-  const short = segText(laneLines({ ...lane, workerTokens: 0, checkerTokens: 0, sentBack: 0 }, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1])
-  expect(short).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) +change$/)
-  expect(textWidth(short)).toBe(firstW)
-  expect(laneLines({ ...lane, workerTokens: 0, checkerTokens: 0, sentBack: 0 }, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1].at(-1)?.text.trim()).toBe('change')
+  // a shorter meta text: the kind still follows after 2 spaces, dim
+  const short = laneLines({ ...lane, workerTokens: 0, checkerTokens: 0, sentBack: 0 }, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1]
+  expect(segText(short)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\)  change$/)
+  expect([short.at(-1)?.text, short.at(-1)?.tone]).toEqual(['  change', 'dim'])
   // narrower: the parts go in order (the kind returns at the right when the shorter text leaves room)
   expect(bare(wFull - 1)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) · ⌕ × 2$/)
   const noSplit = textWidth(bare(wFull - 1))
