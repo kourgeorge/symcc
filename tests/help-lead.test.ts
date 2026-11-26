@@ -91,6 +91,7 @@ test('T-1129: errandFolders drops the project, its board and .git, / and the hom
   const root = '/proj'
   const home = '/Users/me'
   expect(errandFolders(['/proj/.symcc/', '/proj', '/proj/.git/', '/', home, '/Users/me/'], root, home)).toEqual([])
+  expect(errandFolders(['//', '///', '/Users/me/.', '/Users/me/./', '/users/me/', '/PROJ/x', '/a/../b'], root, home)).toEqual([])
   expect(errandFolders(['~/Desktop/t/', '/Users/me/Desktop/x/', 'rel/'], root, home)).toEqual(['/Users/me/Desktop/t/', '/Users/me/Desktop/x/'])
   const rule = claudePermissions({ kind: 'worker', files: errandFolders(['~/Desktop/t/'], root, home) }, true).allowed
   expect(rule).toContain('Edit(//Users/me/Desktop/t/**)')

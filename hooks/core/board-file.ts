@@ -585,16 +585,22 @@ export function cleanFiles(files: unknown, dir: string = DATA_DIR, outside = fal
  * itself is dropped. Relative paths are not returned (they never leave the project).
  */
 export function errandFolders(files: readonly string[] | undefined, root: string, home: string): string[] {
-  const trim = (p: string) => (p.length > 1 ? p.replace(/\/+$/, '') : p)
-  const r = trim(root.replace(/\\/g, '/'))
-  const h = trim(home.replace(/\\/g, '/'))
+  // Like path.resolve: collapse repeated slashes, drop "." parts, no trailing slash; null when it has "..".
+  const norm = (p: string): string | null => {
+    const parts = p.replace(/\\/g, '/').split('/').filter(s => s && s !== '.')
+    return parts.includes('..') ? null : `/${parts.join('/')}`
+  }
+  const r = norm(root)?.toLowerCase() ?? ''
+  const h = home ? norm(home)?.toLowerCase() ?? '' : ''
   const out: string[] = []
   for (const f0 of files ?? []) {
-    const f = f0.startsWith('~/') && h ? `${h}/${f0.slice(2)}` : f0
+    const f = f0.startsWith('~/') && home ? `${home}/${f0.slice(2)}` : f0
     if (!f.startsWith('/')) continue
-    const p = trim(f)
-    if (p === '/' || (h && p === h) || (r && (p === r || p.startsWith(`${r}/`)))) continue
-    out.push(f)
+    const n = norm(f)
+    if (n === null || n === '/') continue
+    const p = n.toLowerCase()
+    if ((h && p === h) || (r && r !== '/' && (p === r || p.startsWith(`${r}/`)))) continue
+    out.push(f.endsWith('/') ? `${n}/` : n)
   }
   return out
 }
