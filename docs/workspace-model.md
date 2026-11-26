@@ -57,7 +57,7 @@ may have moved.
 | Work items | Tasks, each done by an agent | Code task (copy, checks, merge), research or note (no merge). |
 | Inputs | Where tasks come from | The owner and the lead, plus scouts for outside sources (decision 5). |
 | Knowledge | What is remembered | Org-mem: short notes for agents, curated by the lead (`.symcc/org-mem.md`). Owner notes: answers kept as documents, for people (today "Keep as a note" writes `docs/research/<topic>.md`). |
-| Runners and hosts | What runs the agents and shows the board | Claude Code, OpenCode, the Node command line, and the Copilot host (started, not usable yet). See [Engine and clients](engine-and-clients.md). |
+| Runners and hosts | What runs the agents and shows the board | Claude Code, OpenCode, the Node command line, and the Copilot host (started, not usable yet). See [Engine and clients](architecture.md#engine-and-clients). |
 
 ## The rules
 

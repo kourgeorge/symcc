@@ -232,5 +232,5 @@ to test), [`hooks/app/`](../hooks/app/) (what symcc does, with no Claude Code in
 [`hooks/claude/`](../hooks/claude/) and [`hooks/claude/ui/`](../hooks/claude/ui/) (everything
 that talks to Claude Code, and the panel), and [`hooks/register.tsx`](../hooks/register.tsx) (only
 the wiring), with tests in [`tests/`](../tests/). See the
-[code map](contributing.md#for-developers-where-the-code-is) for more, and for
-[renaming the plugin](contributing.md#renaming-the-plugin).
+[code map](architecture.md#for-developers-where-the-code-is) for more, and for
+[renaming the plugin](architecture.md#renaming-the-plugin).

@@ -90,7 +90,7 @@ The lead keeps it moving; you come back to merged work and a few questions.
 - scouts, retries and a health check keep the work going without you pushing it
 - scouts keep finding work and the lead keeps it moving while you are away
 
-**Where it runs.** symcc is a plugin for Claude Code and for OpenCode. Work runs while your session is open: it stops when you close it and picks up next time. A small command-line version that runs the same engine without a chat window exists as a test of the idea (see [Running symcc without Claude Code](docs/contributing.md#running-symcc-without-claude-code)).
+**Where it runs.** symcc is a plugin for Claude Code and for OpenCode. Work runs while your session is open: it stops when you close it and picks up next time. A small command-line version that runs the same engine without a chat window exists as a test of the idea (see [Running symcc without Claude Code](docs/architecture.md#running-symcc-without-claude-code)).
 
 
 ## How it works
@@ -201,5 +201,5 @@ A few things are slash commands: `/symcc` opens the board, `/symcc-init` creates
 - [Get started](docs/get-started.md): install, the first board, the first task
 - [Documentation](docs/docs.md): every page: the board, tasks, scouts, running on its own, clients, troubleshooting
 - [Reference](docs/reference.md): install details, modes, commands, settings, statuses
-- [Architecture picture](docs/architecture.md) and [demo](docs/demo.md): how the pictures are made
-- [For developers](docs/contributing.md#for-developers-where-the-code-is) and [renaming the plugin](docs/contributing.md#renaming-the-plugin)
+- [Architecture](docs/architecture.md): for people who change symcc: where the code is, the engine and the clients, the tests, renaming the plugin, and the team picture
+- [Research notes](docs/research/index.md) and [the demo](docs/demo.md): investigation answers, and how the demo picture is made

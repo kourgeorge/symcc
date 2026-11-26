@@ -1,6 +1,216 @@
-# The team picture (docs/architecture.svg)
+# Architecture
 
-This page is for people who want to change the team animation. If you only want to use symcc, skip it: see the [README](../README.md).
+For people who change symcc itself: where the code is, the line between the engine and the clients, how to test it, how to rename the plugin, and how the team picture is made. If you only want to use symcc, see [Get started](get-started.md).
+
+## For developers: where the code is
+
+| File or folder | What's in it |
+|---|---|
+| [`hooks/register.tsx`](../hooks/register.tsx) | Only the wiring: the `on(...)` calls that hand Claude Code events to the modules below |
+| [`hooks/core/`](../hooks/core/) | The board as plain data (`board-file.ts`, `task.ts`, `review.ts`, `banner.ts`, `scouts.ts`, ...). No Claude Code calls, so it's easy to test |
+| [`hooks/board.ts`](../hooks/board.ts) | A barrel: it only re-exports `hooks/core/*`, so tests and other files import from one place |
+| [`hooks/app/`](../hooks/app/) | What symcc does, with no Claude Code in it (it talks to the host through `Host` in [`hooks/host.ts`](../hooks/host.ts)): the lead's tools (`tools.ts`), workers (`workers.ts`), git (`git.ts`), review and merge, scouts, roles (the built-in worker prompts they go in are in [`prompts/`](../prompts/)). Shared state is the `S` object in `state.ts`; the entry points are in `symcc.ts` |
+| [`hooks/claude/`](../hooks/claude/) | The Claude Code adapter: the `Host` made from Claude Code's `$` (`host.ts`), the tool registrations, the agent types and the panel atoms (`panel.ts`) |
+| [`hooks/claude/ui/`](../hooks/claude/ui/) | The panel pages and the part above the prompt (`list.tsx`, `task-page.tsx`, `scouts-page.tsx`, `settings.tsx`, ...) |
+| [`hooks/name.ts`](../hooks/name.ts) | Everything made from the plugin's name |
+| [`types/index.d.ts`](../types/index.d.ts) | The shapes of a task, a try, a scout |
+| [`tests/`](../tests/) | The tests: one file per area (the board logic, the panel, merging, scouts, stats, and so on) |
+| [`hosts/node/`](../hosts/node/) | symcc with no Claude Code: a `Host` made of plain Node/Bun calls (`host.ts`), the running of agents as `claude -p` processes (shared code in [`hooks/process/`](../hooks/process/): `agents.ts`, `claude-runner.ts`, `record.ts`, `system.ts`; the Node version of the system calls is `system.ts` here), and a tiny command line (`main.ts`). See "Running symcc without Claude Code" below |
+| [`hooks/opencode/`](../hooks/opencode/), [`opencode/`](../opencode/) | symcc in OpenCode 2.x: the plugin's setup and which copy runs the board (`plugin.ts`), its `Host` (`host.ts`), the edit guard (`guard.ts`), workers and scouts as OpenCode sessions (`agents.ts`), the lead (`lead.ts`), symcc's tools and slash commands (`tools.ts`), the view file for the TUI (`view.ts`), what the TUI draws (`board-view.ts`) and how (`tui.ts`), and the plugin entries OpenCode loads (`opencode/server.ts`, `opencode/tui.ts`). See [Using symcc in OpenCode](clients.md#using-symcc-in-opencode) |
+
+**Where to add a new feature:** pure logic goes in `hooks/core/`; what symcc does goes in `hooks/app/`; Claude Code wiring goes in `hooks/claude/`; panel pages go in `hooks/claude/ui/`. `hooks/app/` and `hooks/core/` must not import `claude-code` or `node:` modules, or name Claude Code's tools: `sh tests/host-free.sh` (run by `sh scripts/typecheck.sh`) checks this.
+
+**Two rules the loader needs:**
+
+- A function that takes `$` and is imported from another file must be a `function` declaration, not an arrow `const`.
+- Panel atoms (`read` / `update`) must be used in the file that declares them. From other files, use the `readX` / `updateX` helpers in `hooks/app/state.ts` (they reach the atoms in `hooks/claude/panel.ts` through the `Host`).
+
+## Engine and clients
+
+For people who change symcc's code. symcc is split into two sides: the **engine** (the part that does the work) and the **clients** (the parts that plug the engine into one program). **Why split it:** symcc runs in more than one program today (Claude Code, OpenCode, and a Node command line), and the board logic should exist once, not once per program. See [Using symcc in OpenCode](clients.md#using-symcc-in-opencode) and [Running symcc without Claude Code](#running-symcc-without-claude-code). This section says where the line is, the rule that keeps it, and which checks watch it. The plan behind it is section 12 of [the standalone app note](research/standalone-app.md).
+
+### The boundary
+
+| Side | What it is | Where it lives |
+|---|---|---|
+| Engine | Board logic, prompts, the entry functions, the `Host` interface, the process runner, and the screen helpers that need no host | `hooks/core/`, `hooks/app/`, `hooks/process/`, `hooks/host.ts`, `hooks/board.ts`, `hooks/name.ts`, `prompts/`, `kinds/`, `types/`, `hooks/opencode/board-view.ts`, and `hooks/engine.ts` |
+| Client (host adapter) | Code that knows one program: its tools, screens, hooks and plugin files | `hooks/claude/`, `hooks/register.tsx`, `hooks/opencode/` (except `board-view.ts`), `opencode/`, `hosts/node/`, `hosts/cursor/`, `hooks/copilot/` |
+
+`hooks/copilot/` is the GitHub Copilot CLI host (started in T-957, not usable yet): an extension that joins the Copilot session with symcc's lead tools and `/symcc` commands, shows the text board with `session.log`, and wakes the lead with `session.send`. Its file, command and timer parts are given in, so it imports no Node and is type-checked with the rest of `hooks/`; its tests are `tests/copilot-host.test.ts`. Agents, the edit guard, the band and the bundled `extension.mjs` come later.
+
+`hooks/opencode/board-view.ts` holds no OpenCode code, so it counts as engine, even though it sits in an OpenCode folder. Moving it is left for later (see "What is done and what is next").
+
+### The rule
+
+- The engine never imports a host. No import of `hooks/claude/`, `hooks/opencode/` (the one exception is `board-view.ts`, which `hooks/engine.ts` may re-export), `hosts/node/`, `hosts/cursor/`, `hooks/register.tsx`, `claude-code`, OpenCode, a Node built-in or Bun. Comments that only name a host are fine. Only imports count.
+- Hosts should reach the engine through `hooks/engine.ts` only. Today they still import the engine files directly. Switching them is a later step.
+
+### hooks/engine.ts
+
+`hooks/engine.ts` is a list: it only re-exports names, it holds no code. It lists what the hosts use from the engine. Nothing imports it yet. The list may lag behind the hosts: a host can start using a name before it is added here. It gets brought up to date when the split starts.
+
+### The checks
+
+- `tests/host-free.sh` (run by `sh scripts/typecheck.sh`) fails when the engine imports a host. This is the check that fails.
+- `tests/engine-names.mjs` (run by `tests/host-free.sh`) compares the list with the names the hosts import. A difference is reported as a note and never fails the tests.
+- `tests/engine.test.ts` checks that each name in `hooks/engine.ts` is the same value as in its source file.
+
+Run the first one alone with `sh tests/host-free.sh`.
+
+### What is done and what is next
+
+Done now (no code moves, nothing the owner sees changes): the `host-free` check also covers `hooks/process/`, `board-view.ts` and `hooks/engine.ts`, and `hooks/engine.ts` exists as a list.
+
+Next, for when the separate app is built:
+
+- Move the screen helpers out of `hooks/opencode/` (S1 in the note).
+- Point the three hosts at `hooks/engine.ts` (S4).
+- Add a check that hosts import the engine only through `hooks/engine.ts` (S5).
+
+### The export list
+
+This is the list in `hooks/engine.ts`, by the file each name comes from (paths are relative to the project folder; `hooks/app/ask` means `hooks/app/ask.ts`). A name marked `type` is a type only.
+
+**`hooks/app/ask`**: `ASK_TOOL_DEF`, `hookFailed`, `listedKind`
+
+**`hooks/app/board-mode`**: `setBoardMode`, `stopForQuit`
+
+**`hooks/app/git`**: `setupGit`
+
+**`hooks/app/kinds`**: `changeKind`, `kindDraftOf`, `kindLists`, `kindView`, `loadKinds`, `newKindFile`, `saveKindDraft`
+
+**`hooks/app/logo`**: `logoNow`, `noteLogoWidth`
+
+**`hooks/app/open`**: `openPane`, `paneArgs`, `type PaneTab`, `resetPane`
+
+**`hooks/app/org-mem`**: `deleteOrgMem`, `orgMemNow`, `orgMemView`, `resetOrgMemView`
+
+**`hooks/app/plan`**: `seePlan`
+
+**`hooks/app/questions`**: `answerOnBoard`, `boardAnswered`, `popupCall`
+
+**`hooks/app/review`**: `changedFiles`, `folderDiff`
+
+**`hooks/app/roles`**: `changeRole`, `loadRoles`, `newRoleFile`, `roleDraftOf`, `roleLists`, `roleView`, `saveRoleDraft`
+
+**`hooks/app/scouts`**: `cancelScoutEdit`, `editScout`, `loadScoutResults`, `loadScoutRunHistory`, `newScout`, `readScoutRunReport`, `runScoutNow`, `saveScout`, `scoutPlace`, `scoutPlaceValue`, `setScoutPaused`
+
+**`hooks/app/starts`**: `drainStarts`, `leadTurn`, `StartCancelled`
+
+**`hooks/app/state`**: `approving`, `changesCache`, `checkerRuns`, `finishing`, `openDays`, `type PaneView`, `queuedWorkers`, `S`, `scoutRuns`, `starting`, `toolName`, `useName`, `workers`
+
+**`hooks/app/store`**: `findRoot`, `isAbsolute`, `isWorkerFolder`, `load`, `mainRoot`, `normalPath`, `path`, `safeWrite`
+
+**`hooks/app/symcc`**: `agentFinished`, `type AgentRunEnd`, `BOARD_OPENED`, `type CommandAnswer`, `COMMANDS`, `guardStart`, `leadGuideText`, `leadUpdate`, `otherToolDone`, `ownerTyped`, `runCommand`, `sessionCleared`, `sessionEnd`, `sessionStart`, `sessionStarting`, `toolCall`, `toolCallFailed`, `toolCheck`, `toolCheckFailed`
+
+**`hooks/app/tell`**: `brief`, `noteForLead`, `tellLead`
+
+**`hooks/app/tools`**: `allowAskedFiles`, `ownerSettings`, `refuseAskedFiles`, `runTool`, `TOOLS`
+
+**`hooks/app/workers`**: `agentOnBoard`, `mergeOutcome`, `mergingNow`, `pump`, `type TurnEnd`
+
+**`hooks/board`**: `actionButtonLabel`, `ALL_CLEAR`, `ALWAYS_ON_KINDS`, `answerChoices`, `answeredLeadLine`, `answerText`, `archivedNote`, `archivedOf`, `BACKLOG_SHOWN`, `backlogMoreLabel`, `BAD_EVERY_STATE`, `bandBrand`, `bandLeads`, `bandNote`, `bandWhere`, `bannerCounts`, `bannerLines`, `bannerRule`, `type BannerTone`, `type BoardTask`, `boxHint`, `canMarkMerged`, `canPickRole`, `cantPlayNotify`, `checkerOn`, `copyToast`, `crossBranchNotes`, `cutDiff`, `DEFAULT_ROLE`, `type DetailRow`, `detailRows`, `DIFF_COLOR`, `DIFF_LINES`, `type DiffFile`, `diffKeys`, `diffKinds`, `emptyBoard`, `everyMinutesOf`, `everyText`, `failAsks`, `failNext`, `fileWaitText`, `findKind`, `findRole`, `fitRow`, `fmtDuration`, `fmtRun`, `fmtTotal`, `foldedRow`, `folderName`, `footerRule`, `groupLabel`, `groupSummaryParts`, `hintLines`, `intoOf`, `isAnswered`, `isCheckerRole`, `isInvestigation`, `isNothing`, `isScoutRunReport`, `isSettingPage`, `type KeyHint`, `type KindDef`, `kindMark`, `kindNameError`, `kindsKeys`, `kindTag`, `listKeys`, `localOffset`, `mergeKinds`, `mergeRoles`, `MODE_MEANING`, `MODE_NAME`, `modeButton`, `modeLabel`, `modeOf`, `needsYou`, `newestFirst`, `nextMode`, `offStatusParts`, `originOf`, `originSegs`, `type OwnerQuestion`, `ownersTurn`, `packRows`, `panelSections`, `parseScoutRuns`, `parseSettingValue`, `pickHint`, `planBandText`, `promptsOfRole`, `questionsForYou`, `questionsLabel`, `ROLE_PLACEHOLDERS`, `ROLE_PROMPTS`, `ROLE_SLOT`, `roleChoices`, `type RoleDef`, `roleEditKeys`, `roleKeys`, `roleMark`, `roleNameError`, `roleOf`, `rolePromptKeys`, `type RolePromptKind`, `rolesKeys`, `roleTag`, `rowCell`, `rowEndText`, `rowExtra`, `rowMark`, `rowStates`, `safeScoutFile`, `type ScoutEditField`, `scoutEditKeys`, `scoutFile`, `scoutHowTo`, `scoutIcon`, `scoutKeys`, `scoutLastRunProblem`, `scoutLastText`, `scoutListKeys`, `scoutListRows`, `scoutOutcomeTone`, `scoutRow`, `scoutRunLine`, `scoutRunsFile`, `scoutRunTasks`, `scoutTone`, `SEARCH_WORDS`, `searchBoxHint`, `searchLine`, `searchTasks`, `SECTION_LABEL`, `type Seg`, `SETTING_GROUPS`, `settingChoices`, `settingInfo`, `settingShown`, `type SettingName`, `type SettingPage`, `SETTINGS`, `type SettingsInput`, `settingsKeys`, `settingValue`, `shownStatus`, `showsAnswer`, `sortScouts`, `type StageMark`, `stageSegs`, `STATE_LABEL`, `stateText`, `STATUS_BADGE`, `STATUS_MARK`, `STATUS_WORD`, `statusBadge`, `statusCell`, `statusCounts`, `statusMark`, `sumRuns`, `type TaskAction`, `type TaskActionId`, `taskActions`, `taskAsks`, `taskCopyText`, `taskKeys`, `taskPhase`, `taskReports`, `taskStage`, `testsShort`, `TITLE_ROOM`, `versionMark`, `whyFailed`, `withCrew`, `wrapSegs`, `YOUR_EDITS`
+
+**`hooks/core/ask`**: `ASK_TOOL`
+
+**`hooks/core/banner`**: `shortHome`
+
+**`hooks/core/board-file`**: `normId`
+
+**`hooks/core/days`**: `when`
+
+**`hooks/core/def-files`**: `type BrokenDef`, `brokenLabel`, `brokenNamed`, `defNamed`, `defSource`, `type DefSource`, `sourceLabel`
+
+**`hooks/core/history`**: `HISTORY_COLOR`, `historyEvent`, `historyTime`
+
+**`hooks/core/org-mem`**: `ORG_MEM_EMPTY`, `ORG_MEM_TITLE`, `orgMemAbout`, `orgMemCount`, `orgMemDeleteAsk`, `orgMemFile`, `orgMemKeys`, `type OrgMemNote`, `orgMemNoteHead`, `orgMemNoteKey`
+
+**`hooks/core/path-guard`**: `spawnFailedText`
+
+**`hooks/core/prompts`**: `basePromptFor`, `SCOUT_BASE`, `WORKER_BASE`
+
+**`hooks/core/questions`**: `normQid`
+
+**`hooks/core/roles`**: `ROLE_TOOL_WORDS`
+
+**`hooks/core/runs`**: `cleanTokens`, `fmtTokens`, `sumTokens`, `TOKEN_KINDS`, `tokenCount`
+
+**`hooks/core/scouts`**: `SCOUT_BOARD_TOOLS`
+
+**`hooks/core/stats`**: `type LeadCall`, `rangeSpan`, `type StatsRange`
+
+**`hooks/core/task-sections`**: `type SectionLine`, `type TaskSection`, `taskSections`
+
+**`hooks/core/text`**: `jsonObj`, `squash`
+
+**`hooks/host`**: `ALL_FEATURES`, `type FileTouch`, `type Host`, `type HostAgent`, `type HostAgentKind`, `type HostAgentStart`, `type HostFeatures`, `type HostFileEntry`, `type HostFileStat`, `type HostLead`, `type HostRunResult`, `type HostWords`, `type LeadSend`, `type LeadUsage`, `manifestVersion`, `noUi`, `type PanelValues`, `SYMCC_WORDS`
+
+**`hooks/name`**: `cleanName`, `dataDir`, `DEFAULT_NAME`, `ICON`, `namesFor`
+
+**`hooks/opencode/board-view`**: `actionCommand`, `answerOptions`, `approveInProgress`, `approveSent`, `type ApproveSent`, `bandDraw`, `type BandHit`, `CHOICE_KEYS`, `type ChoiceKey`, `groupId`, `groupOf`, `GROUPS_OPEN`, `hasPage`, `LETTER_KEYS`, `type LetterKey`, `type Line`, `moveCursor`, `orgMemNoteOf`, `OWN_ANSWER`, `PANEL_TABS`, `type PanelAction`, `type PanelGroup`, `type PanelHit`, `type PanelKey`, `panelKeys`, `panelLines`, `panelRoleChoices`, `type PanelTab`, `panelTaskActions`, `parseViewFile`, `type ScoutRuns`, `scoutRunsIn`, `settingGroupId`, `settingGroupOf`, `SETTINGS_OPEN`, `settingsPlace`, `TASK_ACTION_COMMANDS`, `VIEW_FILE`, `VIEW_RUNS_KEPT`, `type ViewChanges`, `type ViewDef`, `viewDefs`, `type ViewFile`, `viewFileText`
+
+**`hooks/process/agents`**: `type AgentRunner`, `processAgents`, `type ProcessAgents`
+
+**`hooks/process/claude-runner`**: `claudeRunner`
+
+**`hooks/process/record`**: `PROCESSES_FILE`
+
+**`hooks/process/system`**: `type ProcessSystem`
+
+**`types`**: `type SymccMode`, `type SymccScout`, `type SymccStatus`, `type SymccTask`, `type SymccTokens`, `type SymccView`
+
+## Working on symcc
+
+- **Run the tests:** `claude plugin test .` from the project folder.
+- **Where tests live:** in `tests/`, one file per area (for example `board.test.ts` for the board logic and `pane.test.tsx` for the panel).
+- **Layout:** `hooks/core/` holds the logic you can test (plain data, no Claude Code calls). `hooks/app/` holds what symcc does, also with no Claude Code. `hooks/claude/` and `hooks/claude/ui/` do the wiring to Claude Code, and `hooks/register.tsx` only connects events. Put new logic in `hooks/core/` when you can. See the code map above.
+- **Test the Node host:** `sh scripts/test-node-host.sh` (bun test, not `claude plugin test`: it needs files and processes).
+- **Test the OpenCode plugin:** `sh scripts/test-opencode-host.sh` (bun test with a fake OpenCode context; OpenCode itself is not needed).
+- **Rebuild the SVG pictures:** the pictures are made by scripts, so don't edit them by hand. The steps are in [How to change the picture](#how-to-change-the-picture) below (for `architecture.svg`) and in [`demo.md`](demo.md) (for `demo.svg`).
+
+### Running symcc without Claude Code
+
+`hosts/node/` runs the same engine (`hooks/app/` and `hooks/core/`) from a plain command line, with each worker as its own `claude -p` process. It has no board panel, no band and no plan mode. It is a small test of the idea, not a full client. Each command is one session:
+
+```
+bun hosts/node/main.ts --root <project> tool settings '{"test_commands":["npm test"]}'
+bun hosts/node/main.ts --root <project> add "Say hello" "Create hello.txt" --files hello.txt
+bun hosts/node/main.ts --root <project> [--model haiku] tick     # starts ready tasks, waits for their tests and merges
+bun hosts/node/main.ts --root <project> board
+bun hosts/node/main.ts --root <project> cmd symcc-mode review    # any slash command
+```
+
+What the lead would be told is printed after each answer, under `[lead]`. A worker's file list is handed to `claude -p` as its own permission rules (`--permission-mode dontAsk`, with `Edit(...)` and `Write(...)` rules for the task's files, and git writes denied). There is no symcc hook guard there, so those rules are the only check on git. They come from the same deny list as the hook guard (`hooks/core/git-guard.ts`): a worker may commit, merge, cherry-pick, revert, restore, reset, add, rm, bisect and rebase its own branch, while push, fetch, pull, remote, tag, config, stash, worktree, update-ref, symbolic-ref, branch, switch, `rebase -x`/`--exec`/`--update-refs`, `bisect run` and `--autostash` are refused; a checker or scout may not change git at all. Claude Code's rules match the start of a command, not the folder it acts on, so every git call that starts with an option (`git -C <dir> ...`, `git --git-dir=...`, `git -c ...`) is refused, as are `env git`, `xargs git` and the like, `git checkout` as a whole (use `git restore <file>`) and a rebase with more than one word. Reading with git (`status`, `diff`, `log`, `show`, `blame`, `grep`) still works. A command that hides git inside another program (`sh -c "git push"`, a script) is not caught by these rules. The scope check at merge time still stands behind it. A `claude -p` worker has no `ask_owner` tool, and it can't be sent messages while it runs: to stop it, its process is ended. Every running worker, scout or checker process is written to `.symcc/processes.json` (its pid, task, folder and start time) and removed when it ends; on a fresh start symcc stops the ones an earlier run left alive and clears the rest.
+
+## Renaming the plugin
+
+The name comes from one place: `"name"` in `.claude-plugin/plugin.json`. Everything else is
+made from it: the data folder (`.<name>/`), task branches (`<name>/T-1`), the commit author,
+the agent types (`<name>:worker`, `<name>:scout`), the tool names (`mcp__<name>__add`), the
+slash commands (`/<name>`, `/<name>-mode`, `/<name>-help`, ...) and all the text on the board.
+To rename it:
+
+1. Change `"name"` in `.claude-plugin/plugin.json`, and `DEFAULT_NAME` in `hooks/name.ts`.
+2. Change the name in the `atom({ plugin: ... })` lines near the top of
+   `hooks/claude/panel.ts` (`opened`, `tab`, `scout`, `view`) and under `PluginState` in `types/claude.d.ts`. Claude Code reads
+   which values a plugin keeps before it runs, so these must be written out as text.
+3. Move the old data folder in each project, e.g. `mv .symcc .crew`. Nothing is moved for
+   you, and nothing tells you: until you move it, the plugin starts a new, empty board.
+4. Update `.gitignore` to ignore the new folder (`.crew/`).
+
+Old task branches keep their old names (`symcc/T-1`); they still work.
+
+### Adding a blog post to the site
+
+Put one Markdown file in `docs/blog/`, named `YYYY-MM-DD-<slug>.md` (the date comes from the file
+name). Start it with a `# Title` line; the paragraph right after it is the summary shown in the
+blog list and the RSS feed. The site build (`scripts/build-site.ts`) makes `blog/<slug>.html`,
+the list `blog/index.html` (newest first) and `blog/rss.xml`, and adds a Blog link to the header.
+With no files in `docs/blog/`, there is no Blog link and no blog pages.
+
+## The team picture
+
+This part is for people who want to change the team animation.
 
 `docs/architecture.svg` is the moving picture at the start of "How it works" in the README.
 It shows who does what in symcc: you (the owner), the lead, the board, the workers and the scouts.
@@ -8,7 +218,7 @@ It is one SVG file with SMIL animation only: no JavaScript, no outside fonts or 
 GitHub plays it inside an `<img>` tag. It is 900x560, loops every 41 seconds, and uses the
 same colors and rounded dark card as `docs/logo.svg`, so it looks the same in light and dark mode.
 
-## Who is in the picture
+### Who is in the picture
 
 | Role | Where | How it looks |
 |---|---|---|
@@ -19,7 +229,7 @@ same colors and rounded dark card as `docs/logo.svg`, so it looks the same in li
 | Scouts | right side | green robots with a clock: "scout: tests · every 30 min" (wakes up) and "scout: docs · every day" (keeps sleeping) |
 | main branch | very bottom | a line that grows one dot each time a task is merged |
 
-## What happens when
+### What happens when
 
 | Time (s) | Caption | What happens |
 |---|---|---|
@@ -31,7 +241,7 @@ same colors and rounded dark card as `docs/logo.svg`, so it looks the same in li
 | 24–35.8 | 6/6 Scouts look ahead on their own | The tests scout wakes up (its clock rings), looks at `search.ts` through its telescope, and sends the lead a note: "src/search.ts:42 has no tests". The lead adds T-4 to the board; free worker 1 picks it up in "worktree T-4"; checks pass; review; you approve; it is merged (dot T-4) |
 | 35.8–41 | (end card) | "You direct. The lead plans. Workers build. Scouts find what's next. Everything on one board." |
 
-## How to change it
+### How to change the picture
 
 Don't edit the SVG by hand; change the script below and run it again. Every piece is shown
 in time windows `[start, end]` in seconds (`show(...)`) and moved with `move(...)`. The
@@ -48,7 +258,7 @@ xmllint --noout docs/architecture.svg
 
 Then open `docs/architecture.svg` in a browser to watch it.
 
-## The script
+### The picture's script
 
 ```js
 // docs/architecture.svg generator. Every piece is shown in time windows [start, end]

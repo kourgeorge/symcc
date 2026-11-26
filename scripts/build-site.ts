@@ -294,7 +294,8 @@ const MAIN_SUMMARY: Record<string, string> = {
   'docs/how-it-works.md': "The parts of symcc and their names, why it is built this way, and a task's life.",
   'docs/docs.md': 'The list of every documentation page.',
   'docs/reference.md': 'Every command, setting, file and board key of symcc, in one place.',
-  'docs/engine-and-clients.md': 'For people who change symcc: what the engine is, what a client is, the rule between them and the checks that watch it.',
+  'docs/architecture.md': 'For people who change symcc: where the code is, the engine and the clients, running the tests, renaming the plugin, and the team picture.',
+  'docs/research/index.md': 'The list of research notes, newest first, one line each.',
 }
 
 export function llmsTxt(pages: Page[], root: string): string {
@@ -304,8 +305,8 @@ export function llmsTxt(pages: Page[], root: string): string {
     const sum = MAIN_SUMMARY[p.src] ?? summary(md)
     return `- [${title}](${SITE}/${mdOut(p)})${sum ? `: ${sum}` : ''}`
   }
-  const main = pages.filter(p => !p.src.startsWith('docs/research/') && !p.src.startsWith('docs/blog/'))
-  const notes = pages.filter(p => p.src.startsWith('docs/research/'))
+  const main = pages.filter(p => p === RESEARCH_INDEX || (!p.src.startsWith('docs/research/') && !p.src.startsWith('docs/blog/')))
+  const notes = pages.filter(p => p !== RESEARCH_INDEX && p.src.startsWith('docs/research/'))
   const posts = pages.filter(p => p.src.startsWith('docs/blog/'))
   return `# symcc
 
@@ -420,8 +421,8 @@ export const DOC_GROUPS: { name: string; pages: Page[] }[] = [
     { src: 'docs/reference.md', out: 'reference.html', title: 'Reference' },
   ] },
   { name: 'For contributors', pages: [
-    { src: 'docs/contributing.md', out: 'contributing.html', title: 'Working on symcc' },
-    { src: 'docs/engine-and-clients.md', out: 'engine-and-clients.html', title: 'Engine and clients' },
+    { src: 'docs/architecture.md', out: 'architecture.html', title: 'Architecture' },
+    { src: 'docs/workspace-model.md', out: 'workspace-model.html', title: 'Workspace design' },
     RESEARCH_INDEX,
     { src: 'docs/demo.md', out: 'demo.html', title: 'The demo' },
   ] },
@@ -552,24 +553,39 @@ export function stillFrame(indexHtml: string, demoJs: string): string {
   })
 }
 
+/** T-1144: docs/research/index.md is written by hand, newest first. A note it doesn't link yet (a new
+ *  "Keep as a note" writes only the note) is added at the top of its list, with the note's own summary. */
+export function withMissingNotes(md: string, pages: Page[], root: string): string {
+  const missing = pages.filter(p => p !== RESEARCH_INDEX && p.src.startsWith('docs/research/'))
+    .filter(p => !md.includes(`](${posix.basename(p.src)})`))
+  if (!missing.length) return md
+  const add = missing.map(p => {
+    const sum = summary(readFileSync(join(root, p.src), 'utf8').replace(/\r\n?/g, '\n'))
+    return `- [${p.title.replace(/[[\]]/g, '\\$&')}](${posix.basename(p.src)})${sum ? `: ${sum}` : ''}`
+  }).join('\n')
+  const lines = md.split('\n')
+  const first = lines.findIndex(l => /^- \[/.test(l))
+  if (first < 0) return `${md.trimEnd()}\n\n${add}\n`
+  lines.splice(first, 0, add)
+  return lines.join('\n')
+}
+
 export function build(root: string, out: string): string[] {
   const why = unsafeOut(root, out)
   if (why) throw new Error(`build-site: refusing --out ${out}: ${why}. Nothing was deleted.`)
   const posts = readPosts(root)
   const indexHtml = readFileSync(join(root, 'site/index.html'), 'utf8')
   const f = frame(indexHtml)
-  // the research notes' index is made below, from the notes
-  const pages: Page[] = NAV.filter(p => p !== RESEARCH_INDEX)
+  // T-1144: the research notes' index is docs/research/index.md, written by hand
+  const pages: Page[] = [...NAV]
   const researchDir = join(root, 'docs/research')
-  const research = existsSync(researchDir) ? readdirSync(researchDir).filter(n => n.endsWith('.md')).sort() : []
+  const research = existsSync(researchDir) ? readdirSync(researchDir).filter(n => n.endsWith('.md') && n !== 'index.md').sort() : []
   for (const n of research) {
     const md = readFileSync(join(researchDir, n), 'utf8')
     pages.push({ src: `docs/research/${n}`, out: `research/${n.replace(/\.md$/, '.html')}`, title: firstHeading(md) ?? n.replace(/\.md$/, '') })
   }
   for (const p of [...posts].reverse()) pages.push(p.page)
-  const byPath = new Map([...pages, RESEARCH_INDEX].map(p => [p.src, p]))
-  // docs/research/index.md is made by the build, so the docs link the folder (it works on GitHub too)
-  byPath.set('docs/research', RESEARCH_INDEX)
+  const byPath = new Map(pages.map(p => [p.src, p]))
   const images = new Set<string>()
 
   rmSync(out, { recursive: true, force: true })
@@ -584,7 +600,8 @@ export function build(root: string, out: string): string[] {
   const written = ['index.html']
   for (const page of pages) {
     const ctx: Ctx = { page, slugs: new Map(), images, pages: byPath, root }
-    const md = readFileSync(join(root, page.src), 'utf8').replace(/\r\n?/g, '\n')
+    let md = readFileSync(join(root, page.src), 'utf8').replace(/\r\n?/g, '\n')
+    if (page === RESEARCH_INDEX) md = withMissingNotes(md, pages, root)
     const file = join(out, page.out)
     mkdirSync(dirname(file), { recursive: true })
     const post = posts.findIndex(p => p.page === page)
@@ -604,16 +621,6 @@ export function build(root: string, out: string): string[] {
     writeFileSync(join(out, mdOut(page)), mdCopy(md, { ...ctx, md: true }))
   }
   writeFileSync(join(out, 'llms.txt'), llmsTxt(pages, root))
-
-  const notes = pages.filter(p => p.src.startsWith('docs/research/'))
-  const list = notes.map(p => `<li><a href="${escapeHtml(posix.basename(p.out))}">${escapeHtml(p.title)}</a></li>`).join('\n')
-  const about = 'Answers from symcc investigation tasks, kept as notes. Some are about ideas that were never built, or were built differently.'
-  const intro = `<h1 id="research-notes">Research notes</h1>\n<p>${about}</p>`
-  mkdirSync(join(out, 'research'), { recursive: true })
-  writeFileSync(join(out, RESEARCH_INDEX.out), render(RESEARCH_INDEX, `${intro}\n<ul class="notes">\n${list}\n</ul>`, f))
-  // its plain Markdown copy, for the links in the other pages' .md copies
-  writeFileSync(join(out, mdOut(RESEARCH_INDEX)), `# Research notes\n\n${about}\n\n${notes.map(p => `- [${p.title}](${posix.basename(mdOut(p))})`).join('\n')}\n`)
-  written.push(RESEARCH_INDEX.out)
 
   // T-1143: the Blog link is always in the top bar, so the blog list is always made (it may be empty)
   {

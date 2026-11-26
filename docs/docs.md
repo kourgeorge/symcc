@@ -14,7 +14,7 @@ Every detail of symcc, one topic per page. New here? Start with [Get started](ge
 
 ## For contributors
 
-- [Working on symcc](contributing.md): where the code is, running the tests, and renaming the plugin.
-- [Engine and clients](engine-and-clients.md): what the engine is, what a client is, and the rule between them.
-- [Research notes](research/): answers from investigation tasks, kept as notes.
+- [Architecture](architecture.md): where the code is, the engine and the clients and the rule between them, running the tests, renaming the plugin, and the team picture.
+- [Workspace design](workspace-model.md): the design for one board over several repos.
+- [Research notes](research/index.md): answers from investigation tasks, kept as notes, newest first.
 - [The demo](demo.md): how the demo picture is made.

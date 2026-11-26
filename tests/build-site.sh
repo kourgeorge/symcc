@@ -43,6 +43,9 @@ See [the reference](reference.md#modes) and [this page](tasks.md) and [the readm
 - two
 EOF
 printf '# A note\n\nBack to the [tasks](../tasks.md) for the whole story.\n' > "$tmp/src/docs/research/note.md"
+printf '# Research notes\n\nNewest first.\n\n- [A note](note.md): the whole story.\n' > "$tmp/src/docs/research/index.md"
+# (T-1144) a new note not yet in the hand-written index: the build adds it at the top, with its first paragraph
+printf '# A newer note\n\nWhy the sky looks blue at noon.\n' > "$tmp/src/docs/research/newer.md"
 if ! bun "$here/scripts/build-site.ts" --root "$tmp/src" --out "$tmp/small" >"$tmp/log" 2>&1; then
   bad "small build failed: $(cat "$tmp/log")"
 else
@@ -58,7 +61,9 @@ else
   grep -q '<code>y | z</code>' "$g" || bad "escaped pipe in a table cell"
   grep -q 'href="../tasks.html"' "$tmp/small/research/note.html" || bad "research note link not rewritten"
   grep -q 'href="note.html"' "$tmp/small/research/index.html" || bad "research index does not list the note"
-  grep -q 'href="research/index.html">Research notes</a>: answers' "$tmp/small/docs.html" || bad "docs index: research/ folder link not rewritten to research/index.html"
+  grep -q '<li><a href="newer.html">A newer note</a>: Why the sky looks blue at noon.</li>' "$tmp/small/research/index.html" || bad "research index: a note missing from index.md was not added with its summary"
+  tr '\n' ' ' < "$tmp/small/research/index.html" | grep -q 'href="newer.html".*href="note.html"' || bad "research index: the added note is not at the top"
+  grep -q 'href="research/index.html">Research notes</a>: answers' "$tmp/small/docs.html" || bad "docs index: research/index.md link not rewritten to research/index.html"
   grep -q 'href="../style.css"' "$tmp/small/research/note.html" || bad "research page style.css path"
   grep -q 'href="../get-started.html">Get started' "$tmp/small/research/note.html" || bad "research page nav not relinked"
   grep -q '<aside class="docs-side">' "$tmp/small/research/note.html" || bad "research note has no documentation list"

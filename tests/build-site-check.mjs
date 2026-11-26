@@ -129,7 +129,7 @@ for (const p of pagesAll) {
 // the documentation list: on the index, every doc page and every research note, in this order, the page itself marked;
 // on no other page. Every doc page in the build is in it.
 const DOCS = ['board.html', 'tasks.html', 'scouts.html', 'running-on-its-own.html', 'clients.html', 'troubleshooting.html', 'reference.html',
-  'contributing.html', 'engine-and-clients.html', 'research/index.html', 'demo.html']
+  'architecture.html', 'workspace-model.html', 'research/index.html', 'demo.html']
 const docPages = ['docs.html', ...DOCS]
 for (const p of pagesAll) {
   const t = read(p)
@@ -168,7 +168,7 @@ for (const p of ['get-started.html', 'how-it-works.html', ...docPages]) {
 // the previous / next boxes run through Get started, How it works and the documentation list
 const order = [['get-started.html', 'Get started'], ['how-it-works.html', 'How it works'], ['docs.html', 'Documentation'], ['board.html', 'The board'], ['tasks.html', 'Tasks'],
   ['scouts.html', 'Scouts'], ['running-on-its-own.html', 'Running on its own'], ['clients.html', 'Clients'], ['troubleshooting.html', 'Troubleshooting'], ['reference.html', 'Reference'],
-  ['contributing.html', 'Working on symcc'], ['engine-and-clients.html', 'Engine and clients'], ['research/index.html', 'Research notes'], ['demo.html', 'The demo']]
+  ['architecture.html', 'Architecture'], ['workspace-model.html', 'Workspace design'], ['research/index.html', 'Research notes'], ['demo.html', 'The demo']]
 order.forEach(([p], k) => {
   const t = read(p)
   const pn = /<nav class="prev-next"[\s\S]*?<\/nav>/.exec(t)?.[0] ?? ''
@@ -185,6 +185,17 @@ order.forEach(([p], k) => {
 })
 for (const p of pagesAll.filter(p => p.startsWith('research/') && p !== 'research/index.html')) {
   if (read(p).includes('prev-next')) bad(`${p}: research note has previous / next boxes`)
+}
+// (T-1144) the hand-written research index (docs/research/index.md) lists every note once, each with a summary
+{
+  const idx = read('research/index.html')
+  for (const p of pagesAll.filter(p => p.startsWith('research/') && p !== 'research/index.html')) {
+    const n = idx.split(`href="${p.slice('research/'.length)}"`).length - 1
+    if (n !== 1) bad(`research/index.html links ${p} ${n} times, expected once`)
+  }
+  const lines = idx.split('<li>').slice(1).filter(li => /^<a href="[^"/]+\.html"/.test(li) && !li.startsWith('<a href="index.html"'))
+  if (lines.length < 2) bad(`research/index.html: only ${lines.length} note lines found`)
+  for (const li of lines) if (!/<\/a>: \S/.test(li.split('</li>')[0])) bad(`research/index.html: a note line has no summary: ${li.slice(0, 120)}`)
 }
 
 // The workflow file: valid YAML with the Pages permissions and steps.

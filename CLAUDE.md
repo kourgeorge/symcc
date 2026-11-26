@@ -32,4 +32,4 @@ host's tests (`hosts/cursor/tests/`).
 
 ## Engine and clients
 
-What is engine, what is a client, and the rule between them: `docs/engine-and-clients.md`.
+What is engine, what is a client, and the rule between them: the "Engine and clients" section of `docs/architecture.md`.

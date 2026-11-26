@@ -499,7 +499,7 @@ is narrowed to steps that change nothing for anyone.
 - **Done now:** the S2 check, in a smaller form (T-634: `tests/host-free.sh` also covers `hooks/process/`,
   `board-view.ts` and `hooks/engine.ts`, with no file moved); S3 without the `package.json` `exports`
   (T-635: `hooks/engine.ts` as a list nothing imports yet; it may lag behind the hosts, and
-  `tests/engine-names.mjs` only reports drift as a note); and S6 (T-638: [the engine and clients page](../engine-and-clients.md)).
+  `tests/engine-names.mjs` only reports drift as a note); and S6 (T-638: [the engine and clients page](../architecture.md#engine-and-clients)).
 - **Later, when the separate app is built:** S1 (the file move), S4 (pointing the hosts at the entry) and
   S5 (the host-side check).
 
