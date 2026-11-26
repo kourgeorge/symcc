@@ -1721,7 +1721,7 @@ test('every setting has a row: value, default, range and meaning', () => {
   expect(settingValue({}, 'max_parallel')).toBe('3')
   const text = settingsText(b, 'crew')
   expect(text).toContain('max_parallel')
-  expect(text).toMatch(/max_parallel\s+3  \(default 3 · 1-8\) how many workers run at once/)
+  expect(text).toMatch(/max_parallel\s+3  \(default 3 · 1-8\) How many workers run at once: 1-8\./)
   expect(text).toContain('/crew-settings max_parallel 5')
 })
 

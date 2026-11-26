@@ -619,6 +619,9 @@ for (const bodyColumns of [40, 64, 100])
       // T-1105: the one shared sentence (core's settingAbout), above the choices
       expect(all, x.name).toContain(settingAbout(x.name))
     }
+    // the setting's name to type, one dim line under the description
+    expect(all).toContain('/symcc-settings max_parallel')
+    expect(all.join(' ')).toContain('max_parallel')
     // T-1105: the Mode's choices have their dim note under them, the sentence above comes first
     expect(all.indexOf(settingAbout('mode'))).toBeLessThan(all.indexOf(`paused  ${choiceNote('mode', 'paused')}`))
     for (const m of ['paused', 'review', 'auto'])

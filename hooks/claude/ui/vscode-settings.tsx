@@ -53,7 +53,8 @@ export function settingsPageVs($: $, pane: PaneParts, ctx: VsSettingsCtx) {
     const choices = picks.length ? picks : null
     const key = `vs-setting-${name}`
     // T-1105: the setting's one sentence above the choices, a dim note per choice under them (core's setting-notes)
-    const about = line(`${key}-about`, null, plain('about', settingAbout(name)))
+    // and one dim line with the name to type: /symcc-settings max_parallel
+    const about = [line(`${key}-about`, null, plain('about', settingAbout(name))), line(`${key}-name`, null, plain('name', `/${S.N.name}-settings ${name}`))]
     if (choices) {
       // a value this machine can't play (notify) stays in the list, marked, so the Select shows what is set
       const cantPlay = !choices.includes(now)
