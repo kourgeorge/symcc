@@ -112,7 +112,7 @@ const GIT_OPTION_OK = new Set(['--no-pager', '-P', '-p', '--paginate', '--no-opt
  */
 const GIT_AT = new RegExp(
   String.raw`(?:^|&&|\|\||[;|&(){\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n]|(?<!\S)-(?:exec|execdir|ok|okdir)[^\S\n])` +
-    String.raw`(?:[^\S\n]*(?:(?:env|sudo|doas|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|!)` +
+    String.raw`(?:[^\S\n]*(?:(?:(?:/[\w.-]+)*/)?(?:env|sudo|doas|command|exec|time|timeout|gtimeout|nice|ionice|nohup|setsid|xargs|parallel|caffeinate|watch|stdbuf|unbuffer|chronic|eval|if|then|do|else|elif|while|until|!)` +
     String.raw`(?:[^\S\n]+(?:-[a-zA-Z](?:[^\S\n]+(?!-)(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]+|\d[\w.]*))*|\w+=[^\s;&|]*` +
     String.raw`|\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()]+)(?=\s))*` +
     String.raw`[^\S\n]*(?:(?:/[\w.-]+)*/)?git(?:-([a-z][\w-]*))?(?=$|[\s'"` + '`' + String.raw`;&|()<>\\])`,
@@ -138,7 +138,8 @@ export function gitWriteIn(text: unknown, who: 'reader' | 'worker' = 'reader'): 
   // git's own folder holds every branch as a file (`--output=$(git rev-parse --git-common-dir)/refs/heads/main`)
   if (/--(?:git-common-dir|absolute-git-dir|git-path|git-dir)(?![\w-])/.test(command)) return "git's own folder"
   for (const m of command.matchAll(GIT_AT)) {
-    const rest = command.slice(m.index + m[0].length).split(/\d*[<>]|[;&|()`\n]/)[0]!
+    // redirects are taken out first: `git 2>/dev/null push` and `git >out push` run `git push`
+    const rest = command.slice(m.index + m[0].length).replace(/\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()`]*/g, ' ').split(/[;&|()`\n]/)[0]!
     const words = rest.split(/\s+/).map(w => w.replace(/["'\\]/g, '')).filter(Boolean)
     let i = 0
     if (!m[1]) for (; words[i]?.startsWith('-'); i++) if (!GIT_OPTION_OK.has(words[i]!)) return `git ${words[i]!.split('=')[0]}`
@@ -193,6 +194,8 @@ export function gitDeniedRules(worker = false, aliases: readonly string[] = []):
   return [
     ...[...subs.map(c => `${c}:*`), ...limits].map(r => `Bash(git ${r})`),
     'Bash(git -*)',
+    // a redirect before the command (`git 2>/dev/null push`, `git >out push`)
+    ...['>', '<', '&', ...'0123456789'].map(c => `Bash(git ${c}*)`),
     ...['-C', '-c', '--git-dir', '--work-tree', '--exec-path', '--config-env'].map(o => `Bash(git ${o}:*)`),
     // also with the wrapper's options in between (`watch -n1 git push`)
     ...GIT_WRAPPERS.flatMap(w => [`Bash(${w} git:*)`, `Bash(${w} * git *)`]),

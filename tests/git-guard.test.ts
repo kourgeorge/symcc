@@ -251,3 +251,24 @@ test("T-1062: a quoted or escaped '..', git after find -exec and other wrappers,
     }
   }
 })
+
+test('T-1062: a redirect before the git command, a wrapper by its full path, ~user and a wildcard above the project are caught', () => {
+  for (const who of ['reader', 'worker'] as const) {
+    for (const [c, what] of [
+      ['git 2>/dev/null push', 'git push'], ['git >/tmp/o push origin main', 'git push'], ['git --no-pager 2>&1 push', 'git push'], ['git &>/dev/null tag v', 'git tag'],
+      ['/usr/bin/env git push', 'git push'], ['/usr/bin/sudo git push', 'git push'],
+    ] as const) {
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, what])
+      // (git after a program named by its full path is not seen on the Node host, accepted on purpose)
+      if (c.startsWith('git ')) expect([c, who, nodeRefuses(gitDeniedRules(who === 'worker'), c)]).toEqual([c, who, true])
+    }
+    for (const c of ['git log 2>/dev/null', 'git status >/tmp/o', 'git diff 2>&1 | head']) expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, undefined])
+  }
+  const no = (c: string) => bashOutsideFolder(c, WT, ROOT, '/Users/o')
+  expect(no('cat ~o/repo/README.md')).toBe('README.md')
+  expect(no('cd ~o/ && cat repo/README.md')).toBe(BASH_ABOVE)
+  for (const c of ['ls /Users/o/*/README.md', 'rm ~/re*/README.md', 'rm /Users/o/rep?/README.md', 'cat /Users/o/{repo,x}/README.md', 'rm -r /Users/o/r*', 'ls /U*/o/repo', 'cd /Users/*/repo'])
+    expect([c, no(c)]).toEqual([c, ''])
+  for (const c of ['ls /tmp/*', `ls ${WT}/*.ts`, 'ls /Users/o/repository', 'cat ~/notes/*.md', 'ls /Users/other/*', 'echo ~1 HEAD~2'])
+    expect([c, no(c)]).toEqual([c, undefined])
+})

@@ -161,24 +161,34 @@ export function bashOutsideFolder(command: unknown, worktree: Folders, root: Fol
   const plain = joinLines(command).replace(/["'\\]/g, '')
   if (/(?:^|[\s/=:(<>&|;,{])\.\.(?=$|[\s/`;&|)<>,}])/.test(plain)) return BASH_DOTDOT
   // `a//b` and `a/./b` name the same place as `a/b`
-  const flat = plain.replace(/\/(?:\.?\/)+/g, '/')
   const h = home?.startsWith('/') ? resolvePath('/', home) : undefined
+  // home written as `~`, `~<user>`, `$HOME` or `${HOME}` is home's full path
+  const user = h ? reEscape(h.split('/').pop() ?? '') : ''
+  const homed = h ? plain.replace(new RegExp(`(?<![^${PATH_END}])(?:~(?:${user})?|\\$HOME|\\$\\{HOME\\})(?=$|[/${PATH_END}])`, 'gi'), h) : plain
+  // `a//b` and `a/./b` name the same place as `a/b`
+  const flat = homed.replace(/\/(?:\.?\/)+/g, '/')
   // a cd to a folder above the project (`cd /`, or home by `cd` or `cd ~`), from where a relative path reaches it;
   // option words (`cd -P /`, `cd -- /`) are skipped, so `cd -` (the last folder, unknown here) counts as home
   for (const m of flat.matchAll(/(?<![\w.-])(?:cd|chdir|pushd)(?=$|[\s;&|)])(?:[^\S\n]+-[^\s;&|()]*)*[^\S\n]*([^\s;&|()]*)/g)) {
-    // `cd $HOME` and `cd ${HOME}` go where `cd ~` goes
-    const w = m[1]!.replace(/^\$(?:HOME|\{HOME\})(?=\/|$)/, '~')
-    const to = w === '' || w === '~' ? h : w.startsWith('~/') && h ? resolvePath(h, w.slice(2)) : w.startsWith('/') ? resolvePath('/', w) : undefined
+    const w = m[1]!
+    const to = w === '' ? h : w.startsWith('/') ? resolvePath('/', w) : undefined
     if (to !== undefined && tops.some(t => t.toLowerCase() !== to.toLowerCase() && inside(t, to, false) !== undefined)) return BASH_ABOVE
   }
+  // a wildcard (`*`, `?`, `[`, `{`) at or above the project's own level may reach it (`/Users/o/*/README.md`)
+  for (const m of flat.matchAll(/(?<![^\s;&|<>()=:`])\/[^\s;&|<>()`]*/g)) {
+    const parts = m[0].split('/').slice(1)
+    for (const top of tops) {
+      const own = top.split('/').slice(1)
+      const k = Math.min(parts.length, own.length)
+      if (!parts.slice(0, k).some(p => /[*?[{]/.test(p))) continue
+      const like = (p: string, o: string) => new RegExp(`^${reEscape(p).replace(/\\\{[^}]*\\\}|\\\[[^\]]*\\\]/g, '.*').replace(/\\\*/g, '.*').replace(/\\\?/g, '.')}$`, 'i').test(o)
+      if (parts.slice(0, k).every((p, i) => like(p, own[i]!))) return ''
+    }
+  }
   for (const top of tops) {
-    const fromHome = h ? inside(top, h, false) : undefined
-    const names = fromHome ? [top, `~/${fromHome}`, `$HOME/${fromHome}`, `\${HOME}/${fromHome}`] : [top]
-    for (const name of names) {
-      for (const m of flat.matchAll(new RegExp(`(?<![^${PATH_END}])${reEscape(name)}(?=$|[/*?[${PATH_END}])(?:/[^${PATH_END}]*)?`, 'gi'))) {
-        const abs = resolvePath('/', top + m[0].slice(name.length))
-        if (insideAny(abs, wts, false) === undefined) return insideAny(abs, tops, false) ?? ''
-      }
+    for (const m of flat.matchAll(new RegExp(`(?<![^${PATH_END}])${reEscape(top)}(?=$|[/*?[${PATH_END}])(?:/[^${PATH_END}]*)?`, 'gi'))) {
+      const abs = resolvePath('/', top + m[0].slice(top.length))
+      if (insideAny(abs, wts, false) === undefined) return insideAny(abs, tops, false) ?? ''
     }
   }
   return undefined
