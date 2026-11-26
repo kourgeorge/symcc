@@ -505,6 +505,23 @@ test('stats: investigations end "answered", are counted on their own, and stay o
   expect(none.split('\n')[2]).toBe('4 done · 1h 45m of work · 15k tokens · 75% right first try')
 })
 
+test('stats: a done errand is counted as its own outcome, not as an investigation read by you', () => {
+  const mk = (id: string, kind: string) => task(id, { kind, status: 'done', history: hist('try 1: done') } as Partial<SymccTask>, [[10, 1000]])
+  const tasks = [mk('T-1', 'investigation'), mk('T-2', 'errand')]
+  expect(mergedHow({ kind: 'errand', history: [] })).toBe('errand')
+  const d = statsData({ tasks, nowMs: NOW, range: { kind: 'all' } })
+  expect(d.invCount).toBe(1)
+  expect(d.inv.readByOwner).toBe(1)
+  expect(d.errandsDone).toBe(1)
+  expect(d.done).toBe(0)
+  const text = statsReport({ tasks, nowMs: NOW })
+  expect(text).toContain('(1 read by you, 0 waiting to be read)')
+  expect(text).toContain('errand done')
+  const html = statsHtml(d, 'p')
+  expect(html).toContain('1 read by you')
+  expect(html).toContain('errand done')
+})
+
 /** T-622: two scouts: bugs (one merged, one dropped, two open incl. backlog) and secrets (one open, none merged). */
 function scoutTasks(): SymccTask[] {
   const scout = (s: string) => ({ origin: { by: 'scout' as const, scout: s, why: '', at: '' } })
