@@ -15,7 +15,7 @@ import { load, findRoot, startingText } from './store'
 import { noteForLead, tellLead, brief } from './tell'
 import { playable } from './voice'
 import { chatTaskText } from '../core/chat-text'
-import { runTool, viewText, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
+import { runTool, viewText, boardHtmlText, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
 import { setSymcc, setBoardMode } from './board-mode'
 import { doctor } from './doctor'
@@ -154,6 +154,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       // T-902: the Live tab's picture as text in the chat, in every client; no panel opens
       return say(await viewText(host, b, 'status'))
     case 'board':
+      if (cmd.html) return say(!loaded.board ? `${loaded.broken} Then try again.` : await boardHtmlText(host, b, true).catch((err: Error) => `Could not build the board page: ${err.message}`))
       if (!host.features.panel) return say(noPanelText())
       await openPane(host, { tab: 'live' })
       return say(boardOpened())

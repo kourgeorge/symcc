@@ -2745,6 +2745,10 @@ the same mode):
 - **Plain words work.** Slash commands may not reach symcc from a chat app, so the lead has the
   same views as a tool: ask "status", "tasks", "what's running" or "show T-5" and it posts the same
   text as `/symcc-status`, `/symcc-tasks` or `/symcc-task T-5`.
+- **The board as a picture.** Ask for the board as a picture and the lead makes one web page
+  (`.symcc/board.html`, no scripts or outside files, fine on a phone, light and dark) with the board tool's
+  `view: "html"` and sends the file with the chat's reply tool (Telegram's reply takes files). On the
+  computer, `/symcc-board html` writes the same page and opens it.
 - **Back at the terminal.** When you next type at the terminal, chat mode goes off.
 
 ---

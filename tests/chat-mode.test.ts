@@ -72,3 +72,10 @@ test('T-1100: in chat mode no lead guide, worker question or DAM guide text says
   expect(/(or|also) answer on the board/.test(workerQuestionText('T-6', 'Which color?', ['red', 'blue']))).toBe(false)
   expect(damGuideCore('symcc').includes('answer on the board')).toBe(false)
 })
+
+test('T-1103: the board-as-a-picture guide line is only in chat mode', async () => {
+  const w = await start()
+  expect(((await leadGuideText(w.host)) ?? '').includes('board view html')).toBe(false)
+  S.chat = 'telegram'
+  expect(((await leadGuideText(w.host)) ?? '').includes('board view html')).toBe(true)
+})

@@ -62,7 +62,7 @@ export function askLines(text: string, choices: readonly string[]): string[] {
 type TaskView = { tasks: SymccTask[]; questions?: readonly (Pick<OwnerQuestion, 'id' | 'text' | 'answered_at' | 'dropped'> & { options?: string[] })[] }
 
 /** A task's short word on its line: "running: test, try 2, 12m" is made by runningState; here the rest. */
-function stateWord(t: BoardTask, all: readonly SymccTask[]): string {
+export function stateWord(t: BoardTask, all: readonly SymccTask[]): string {
   if (asksMoreTime(t)) return 'needs more time?'
   if (t.status === 'review') return 'review'
   if (t.status === 'todo' || t.status === 'paused') {
@@ -74,7 +74,7 @@ function stateWord(t: BoardTask, all: readonly SymccTask[]): string {
 }
 
 /** "test, try 2, 12m": the step, the try (from the second) and the time of a running task. */
-function runningState(t: BoardTask, nowMs: number): string {
+export function runningState(t: BoardTask, nowMs: number): string {
   const step = checkStepNow(t, nowMs)
   const n = Number(t.attempts)
   const time = plain(rowCell(t, nowMs))
@@ -82,7 +82,7 @@ function runningState(t: BoardTask, nowMs: number): string {
 }
 
 /** The choices of a task's question: the real ones only (not the board's "answer here" extras). */
-function askChoices(t: BoardTask, a: ReturnType<typeof taskAsks>): string[] {
+export function askChoices(t: BoardTask, a: ReturnType<typeof taskAsks>): string[] {
   if (!a || a.overtime) return a?.choices ?? []
   return t.ask?.lead?.options?.length ? t.ask.lead.options : (t.ask?.options ?? [])
 }
