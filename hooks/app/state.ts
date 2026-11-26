@@ -178,8 +178,8 @@ export const startS = () => ({
   rolePick: null as { task: string; options: string[] } | null,
   /** the task whose "Your answer" box is open after Answer… was pressed (a waiting task with answer buttons); null = not open */
   answering: null as string | null,
-  /** which try's report the open task shows (its try number); null = the latest */
-  reportTry: null as { task: string; try: number } | null,
+  /** which agent's report the open task shows (try, worker or checker, agent id); null = the latest worker report */
+  reportTry: null as { task: string; try: number; kind: 'worker' | 'checker'; id?: string } | null,
   /** the task whose report is shown whole on VS Code's task page (else only its first part); null = none */
   reportAll: null as string | null,
   /** the folds opened on VS Code's task page (Time and cost: closed by default), for the task shown; null = all closed */

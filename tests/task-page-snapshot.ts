@@ -457,7 +457,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -647,20 +647,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -678,8 +664,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -736,6 +732,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
@@ -1250,7 +1260,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -1440,30 +1450,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -1477,8 +1463,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -1531,6 +1527,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
@@ -2019,7 +2029,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -2209,20 +2219,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -2240,8 +2236,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -2321,6 +2327,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
@@ -2328,14 +2348,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
               }
             ]
@@ -2348,6 +2360,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -2849,7 +2869,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -3039,30 +3059,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -3076,8 +3072,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -3145,18 +3151,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
-                ]
               }
             ]
           },
@@ -3166,7 +3160,37 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -3626,7 +3650,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -3813,20 +3837,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"text"},"children":["  "]},
               {"type":"Text","props":{"color":"text"},"children":["Tests: claude plugin test . passed."]}
             ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
           }
         ]
       },
@@ -3839,8 +3849,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -3887,14 +3907,28 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -4407,7 +4441,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -4594,30 +4628,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"text"},"children":["  "]},
               {"type":"Text","props":{"color":"text"},"children":["Tests: claude plugin test . passed."]}
             ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
           }
         ]
       },
@@ -4626,8 +4636,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -4668,12 +4688,26 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
                 "children": [
-                  " · ",
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -5108,7 +5142,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 1)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 1 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-1.md"]},
           {
             "type": "Text",
@@ -5125,7 +5159,12 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 25m · 4.6k tokens (0.4× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  ● try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
           {"type":"Text","props":{"color":"success"},"children":["  try 2: 5m (running)"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 25m · 4.6k tokens in all · ~$0.42"]}
         ]
@@ -5161,6 +5200,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
@@ -5632,7 +5685,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 1)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 1 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-1.md"]},
           {
             "type": "Text",
@@ -5645,7 +5698,12 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 25m · 4.6k tokens (0.4× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  ● try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
           {"type":"Text","props":{"color":"success"},"children":["  try 2: 5m (running)"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 25m · 4.6k tokens in all · ~$0.42"]}
         ]
@@ -5673,6 +5731,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["n"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
@@ -6124,7 +6196,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -6314,20 +6386,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -6345,8 +6403,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -6426,6 +6494,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
@@ -6433,14 +6515,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
               }
             ]
@@ -6453,6 +6527,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -6917,7 +6999,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -7107,30 +7189,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -7144,8 +7202,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -7213,18 +7281,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
-                ]
               }
             ]
           },
@@ -7234,7 +7290,37 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -9429,7 +9515,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -9619,20 +9705,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -9650,8 +9722,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -9671,6 +9753,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
@@ -9678,14 +9774,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
               }
             ]
@@ -9698,6 +9786,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -10122,7 +10218,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -10312,30 +10408,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -10349,8 +10421,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -10370,18 +10452,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
-                ]
               }
             ]
           },
@@ -10391,7 +10461,37 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -10796,7 +10896,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -10986,20 +11086,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -11017,8 +11103,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -11065,14 +11161,28 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -11503,7 +11613,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -11693,30 +11803,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -11730,8 +11816,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -11772,12 +11868,26 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
                 "children": [
-                  " · ",
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -12406,7 +12516,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -12596,20 +12706,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -12627,8 +12723,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -12675,14 +12781,28 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -13341,7 +13461,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -13531,30 +13651,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -13568,8 +13664,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -13610,12 +13716,26 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
                 "children": [
-                  " · ",
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -14082,7 +14202,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -14269,20 +14389,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"text"},"children":["  "]},
               {"type":"Text","props":{"color":"text"},"children":["Tests: claude plugin test . passed."]}
             ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
           }
         ]
       },
@@ -14295,8 +14401,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -14343,14 +14459,28 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -14861,7 +14991,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -15048,30 +15178,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"text"},"children":["  "]},
               {"type":"Text","props":{"color":"text"},"children":["Tests: claude plugin test . passed."]}
             ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
           }
         ]
       },
@@ -15080,8 +15186,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -15122,12 +15238,26 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
                 "children": [
-                  " · ",
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]

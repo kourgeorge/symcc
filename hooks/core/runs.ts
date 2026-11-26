@@ -273,6 +273,11 @@ export const AGENT_MARK: Record<SymccRunAgent['kind'], string> = { worker: '▸'
  * [] for a try with no entries (or none with an id).
  */
 export function agentLines(r: SymccRun, nowMs?: number): string[] {
+  return agentRows(r, nowMs).map(a => a.text)
+}
+
+/** T-1104: the agent lines of try `r` with the agent's kind and full id (what a press on the line needs). */
+export function agentRows(r: SymccRun, nowMs?: number): { text: string; kind: SymccRunAgent['kind']; id: string }[] {
   // an entry with no id (a stand-in made from an old try's sums, or on a try older than AGENT_TRIES_KEPT) has no line
   // an entry marked "dropped" is an id kept from a try that was taken off (withoutOpenRun); it did not work on this one
   return agentsOf(r).filter(a => a.id && a.ended_by !== 'dropped').map(a => {
@@ -280,7 +285,7 @@ export function agentLines(r: SymccRun, nowMs?: number): string[] {
     const end = a.ended ?? (r.ended && Date.parse(r.ended) >= Date.parse(a.started) ? r.ended : undefined)
     const ms = runMs({ started: a.started, ...(end ? { ended: end } : {}), ...(r.restarts ? { restarts: r.restarts } : {}), ...(r.idle ? { idle: r.idle } : {}) }, nowMs)
     const used = [fmtDuration(ms), a.tokens && fmtTok(tokenCount(a.tokens)), a.cost !== undefined && `~${fmtCost(a.cost)}`].filter(Boolean).join(' · ')
-    return `${AGENT_MARK[a.kind]} ${a.kind.padEnd(7)} ${shortAgentId(a.id!).padEnd(8)} ${used}`
+    return { text: `${AGENT_MARK[a.kind]} ${a.kind.padEnd(7)} ${shortAgentId(a.id!).padEnd(8)} ${used}`, kind: a.kind, id: a.id! }
   })
 }
 

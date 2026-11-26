@@ -1082,8 +1082,8 @@ are about changes; under "How tasks ended" a read investigation shows as
   folder's name, so two projects usually differ with no setup; picking a sound on the Settings page plays its chime.
   (There used to be a separate `sound_set` setting; an old board with `notify` `sound` is read as `sound N` once.)
 - Panel keys: `a` approve, `x` reject or drop, `d` changes, `p` pause, `u` resume,
-  `r` retry, `m` switch approve merge / auto merge, `f` search the tasks, `n` needs review, `1`-`9` a try's report on the task
-  page, `k` / `j` the previous / next task or scout on its page, `t` / `l` / `s` / `c` switch views, `b` back.
+  `r` retry, `m` switch approve merge / auto merge, `f` search the tasks, `n` needs review, `1`-`9` a try's worker report on the task
+  page (Enter on a line of ▍Runs: that agent's report), `k` / `j` the previous / next task or scout on its page, `t` / `l` / `s` / `c` switch views, `b` back.
 - Copy, `y` on the task page: puts the task on the clipboard as plain text (its title, status, role,
   where it came from, why, what to do with the notes and your answers, the files it may change,
   what it waits for and the latest worker report). A toast says `T-12 copied`, or why it
@@ -1147,11 +1147,11 @@ plain sentences on what the whole task has done so far. The worker writes them a
 every report, `Done: …`; symcc keeps the latest one on the task, puts it in the commit message and in
 the lead's `✓ merged` update. An old task, or one whose report has no `Done:` line, shows no ▍Done.
 
-Further down, under ▍Report, the buttons that show an earlier try's report look the same:
-`[Try 1] [Try 2] [● Try 3]` (● the one shown); their keys, `1`-`9`, are in the key line
-(`1-3 a try's report`), not in the buttons. On the desktop and mobile apps these and the boxes'
-Cancel buttons are the app's own buttons, labelled `Try 1` and `Cancel` with no brackets, as
-the header's buttons there.
+Further down, ▍Report is one section for whichever agent's report you picked in ▍Runs (T-1104):
+its heading says exactly whose and which try, `▍Report · try 3 · worker af4…74a` or
+`▍Report · try 1 · checker a6f…53d` (`▍Report · try 2 · worker` when no agent id is known). The page
+opens on the latest try's worker report. The try keys, `1`-`9`, show that try's worker report and
+are in the key line: `1-3 a try's report · Enter on a Runs line: its report`.
 
 On a narrow panel lines 3 and 4 wrap between their groups, never inside a button; a group wider
 than the panel wraps between its buttons, and with no room left the page group goes to its own
@@ -1184,6 +1184,14 @@ cost and agent ids are kept: the sums are worked out from it. Only the last 5 tr
 agents' ids (and so their lines); older tries keep every agent's tokens but no ids, so they show
 no lines.
 In VS Code the folded `▸ Time and cost` row says the same sum.
+
+Each agent line that has a report file is a button (T-1104): click it, or move to it and press Enter
+(in OpenCode `↑↓` then Enter), and ▍Report shows that agent's report: a worker's is the try's
+worker report, a checker's is its own saved report. The line being shown has a `●` before it. A
+line with no report file (a checker that saved none) is plain text. A worker restarted on the same
+try has two worker lines and one report file: both open it. A try with no agent lines (older than
+the last 5) is one `try N` line, a button when that try's worker report exists. VS Code draws the
+lines as link-style buttons, like its other buttons on the page.
 
 A scout's page has the same shape:
 
@@ -1611,10 +1619,11 @@ task, and the ID on a commit takes you back to the task and your request.
   problems`), then the checker's own line (`checker symcc-T-3-checker: found problems: <its
   first problem>`, or `OK`), never the two joined in one line,
   **Commits** lists the commits each try made and the one that was merged, and **Report**
-  shows the worker's full final report for the latest try, and under it **Checker (try 2) ·
-  symcc-T-3-checker** the checker's full report of that try (not shown when the try had no
-  checker; VS Code draws it as Markdown too). When more than one try has a
-  report, press the try's number (`1`, `2`, ...) to read that try's report. `/symcc-task T-3`
+  shows the worker's full final report for the latest try. Press an agent's line in **Runs** (a
+  worker's or a checker's, each with a report file) to read that agent's report in the same
+  section, whose heading names it (`Report · try 2 · checker a6f…53d`; VS Code draws it as
+  Markdown too). When more than one try has a report, press the try's number (`1`, `2`, ...) to
+  read that try's worker report. `/symcc-task T-3`
   shows the first 40 lines (at most 4,000 characters) and says where the full report is.
 - **Asking the lead.** The lead's `board` tool shows the same: with `task: T-3` it gives the
   task in full with its latest report (cut like `/symcc-task`) and the files of older tries'
