@@ -1935,6 +1935,8 @@ test('T-1079: one try read top to bottom: each history line has one actor, in or
 
 test('T-996: a report whose only findings say "worse than main: none" is OK, and a follow-ups section before OK is OK', () => {
   expect(checkerVerdict('Problems:\n- worse than main: none')).toEqual({ ok: true })
+  const mixed = 'Problems:\n- worse than main: none, but src/a.ts:3 opens a new hole'
+  expect(checkerVerdict(mixed)).toEqual({ ok: false, report: mixed })
   expect(checkerVerdict('Follow-ups (not blocking):\n- src/a.ts:3 main already lacks a check\n\nOK')).toEqual({ ok: true })
   expect(checkerVerdict('Problems:\n- worse than main: none\n- src/a.ts:3 new hole: run x')).toEqual({ ok: false, report: 'Problems:\n- worse than main: none\n- src/a.ts:3 new hole: run x' })
 })

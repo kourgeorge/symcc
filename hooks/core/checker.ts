@@ -95,7 +95,7 @@ export function checkerVerdict(answer: string): CheckerVerdict | null {
   if (OK_LINE.test(lines.at(-1) ?? '')) return { ok: true }
   // T-996: a Problems block whose only items say "worse than main: none" is no problem (gaps main already has are follow-ups)
   const items = checkerProblems(text)
-  if (items.length && items.every(i => /worse than main:\s*none\b/i.test(i))) return { ok: true }
+  if (items.length && items.every(i => /^[-*_`\s]*worse than main:\s*none[.*_`\s]*$/i.test(i.trim()))) return { ok: true }
   return { ok: false, report: text }
 }
 
