@@ -13,7 +13,7 @@
 // No key hints: the search is a box at the top. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
-import { openAfter, isFinished, statusMark, archivedNote, archivedOf, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, kindTag, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus, LIST_TONE } from '../../board'
+import { openAfter, isFinished, statusMark, archivedNote, archivedOf, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, rowTitle, fitRow, WAITS_FOR, kindTag, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus, LIST_TONE } from '../../board'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
@@ -131,7 +131,7 @@ export async function listPageVs($: $, pane: PaneParts) {
     const open = act(() => panelValues($).updateOpened(() => x.id))
     if (ended) {
       const lead = 2 + x.id.length + 2
-      const title = twoLines(x.title, width - depth, lead)
+      const title = twoLines(rowTitle(x), width - depth, lead)
       const words = `${mdText(title.text)}${title.cut ? ` ${mdText(MORE)}` : ''}`
       return (
         <Box key={`vs-task-${x.id}`} flexDirection="column" paddingLeft={depth}>
@@ -149,7 +149,7 @@ export async function listPageVs($: $, pane: PaneParts) {
     const cell = col?.cells.get(x.id) ?? soloCell(x)
     const idWidth = col?.idWidth ?? x.id.length
     const lead = (needs ? 2 : 0) + idWidth + 1 + cell.length + 1
-    const fit = vsFit(depth + lead, x.title.trim() || NO_TITLE, rowEnd, room, x.status === 'failed')
+    const fit = vsFit(depth + lead, x.title.trim() ? rowTitle(x) : NO_TITLE, rowEnd, room, x.status === 'failed')
     const words = x.title.trim() ? mdText(fit.title) : ''
     const rest = fit.rest
     return (

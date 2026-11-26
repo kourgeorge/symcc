@@ -24,7 +24,7 @@ import type { OwnerQuestion } from '../core/questions'
 import {
   gitNotice, isFinished, statusCounts, newestFirst, bandLeads, bandNote, bandBrand, bandWhere, boardBrand, modeLabel, modeOf, planBandText, withCrew, questionsForYou,
   bannerLines, bannerRule, footerRule, type BannerTone, panelSections, localOffset, when, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, ALL_CLEAR,
-  rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
+  rowStates, rowTitle, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, fileWaitText, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutFindingsOf, findingsLine, findingsDefaultLine, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
   SETTING_GROUPS, isSettingPage, settingInfo, settingDots, settingsRuleWidth, settingRowValue, settingsHelpOf, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
@@ -1516,7 +1516,7 @@ function listBody(f: ViewFile, cursor: number, open0: Record<PanelGroup, boolean
   const row = (x: SymccTask, indent: number): Line => {
     const closed = isFinished(x) || x.status === 'backlog'
     const lead = indent + idWidth + 3 + cellWidth + gap.length
-    const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs), w, x.status === 'failed')
+    const fit = fitRow(lead, rowTitle(x), rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs), w, x.status === 'failed')
     const state = states.get(x.id) ?? { front: '', tag: '', back: '' }
     const sel = x.id === selected
     return [
@@ -1610,7 +1610,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   // T-751: the page header, as on Claude Code's task page: where you are (‹ Tasks or ‹ Live, its place in that list),
   // the title, the state, the buttons in groups (core's taskActions), a thin rule; it stays at the top while the rest scrolls
   addAll(headerLines({
-    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: t.title, color: TASK_ID_COLOR, size: sizeSegs(t),
+    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: rowTitle(t), color: TASK_ID_COLOR, size: sizeSegs(t),
     state: taskStateGroups(t, { nowMs, merging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? false, nowMs) }),
     buttons: taskButtons(t, busy),
   }, w))

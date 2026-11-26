@@ -2208,6 +2208,19 @@ one `general` task: each extra task costs a worker run, a test run and a merge.
 - If a task's branch was deleted, the task waits and asks you whether to merge into another
   branch instead. Nothing is marked failed.
 
+### Projects: a folder with several repos
+
+When the board folder is not a repo itself but holds repos (`~/repositories/client`, `~/repositories/server`),
+each of those folders is a **project**: a folder directly below the board folder that has its own `.git`. symcc keeps no
+list of them; it finds them by folder name. A task can name its project (`project` on `symcc add` / `symcc change`, for
+example "add this to client"). A wrong name is refused, and the answer lists the folders that are projects. Rows and task
+pages show a small tag in front of the title, like `[client] Fix login`. A board inside one repo has no projects: no tag
+shows and `add` works as before.
+
+For now this is data and display only: git, merges and tests still run in the board's own folder. You can already give a
+project its own test commands with the settings tool (`project` plus `test_commands`); they are stored in `board.json`
+and used later.
+
 ### A folder without git
 
 symcc needs **git** (the program) and a git repo with at least one commit: each worker

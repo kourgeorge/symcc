@@ -26,7 +26,7 @@ export const kindFor = (kind: unknown, role: unknown): TaskKind => (isKind(kind)
  * A new task on board `b`. `merge_into` is the branch it merges into (and its worker's copy starts
  * from): the branch checked out in the project now; "main" when not given.
  */
-export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; priority?: number; needs_review?: boolean; backlog?: boolean; role?: string; kind?: unknown; origin?: OriginInput; merge_into?: string }, now: string, dir: string = DATA_DIR): [Board, BoardTask] {
+export function addTask(b: Board, f: { title: string; details?: string; files?: unknown; after?: unknown; priority?: number; needs_review?: boolean; backlog?: boolean; role?: string; kind?: unknown; origin?: OriginInput; merge_into?: string; project?: string }, now: string, dir: string = DATA_DIR): [Board, BoardTask] {
   const title = clean(f.title, 200)
   if (!title) throw new Error('a task needs a title')
   const origin = makeOrigin(f.origin, now, b)
@@ -48,6 +48,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     created_at: now,
     updated_at: now,
     ...(f.needs_review === true ? { needs_review: true } : {}),
+    ...(clean(f.project, 255) ? { project: clean(f.project, 255) } : {}),
     ...(cleanRole(f.role) ? { role: cleanRole(f.role) } : {}),
     // "change" is the default, so it is never stored
     ...(kindFor(f.kind, f.role) !== DEFAULT_KIND ? { kind: kindFor(f.kind, f.role) } : {}),
@@ -107,6 +108,11 @@ export function patchTask(b: Board, id: string, patch: TaskPatch, now: string, d
     else delete next.kind
     // T-1129: only an errand's files may be absolute folders outside the project
     if (!isErrand({ kind }) && next.files?.some(f => f.startsWith('/'))) next.files = next.files.filter(f => !f.startsWith('/'))
+  }
+  if (patch.project !== undefined) {
+    const project = clean(patch.project, 255)
+    if (project) next.project = project
+    else delete next.project
   }
   if (patch.needs_review !== undefined) {
     if (patch.needs_review === true) next.needs_review = true

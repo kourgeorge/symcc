@@ -6,7 +6,7 @@ import { type Board, type BoardTask } from './board-file'
 import { openAfter } from './archive'
 import { cutTitle, padWidth, textWidth } from './width'
 import { boardSections, localOffset } from './days'
-import { panelSections, rowMark, rowCell, MORE_TIME_CELL, SECTION_LABEL } from './panel'
+import { panelSections, rowMark, rowCell, rowTitle, MORE_TIME_CELL, SECTION_LABEL } from './panel'
 import { asksMoreTime } from './commands'
 import { openQuestions, questionLine, questionsLabel } from './questions'
 
@@ -69,7 +69,7 @@ export function tasksListText(b: Board, nowMs: number, name: string = DEFAULT_NA
     out.push(`${g.label} (${g.tasks.length})`)
     for (const r of rows.filter(r => r.g === g.key)) {
       const lead = `  ${rowMark(r.t, nowMs)} ${r.t.id.padEnd(idW)}  ${padWidth(r.state, stateW)}  `
-      out.push(lead + cutTitle(r.t.title, Math.max(8, width - textWidth(lead))))
+      out.push(lead + cutTitle(rowTitle(r.t), Math.max(8, width - textWidth(lead))))
     }
   }
   if (!rows.length) {

@@ -1,6 +1,6 @@
 // The board panel's Tasks view: the list of tasks by section.
 import type { SymccTask } from '../../../types'
-import { isFinished, statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, rowStates, stateText, rowMark, TITLE_ROOM, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, questionsLabel, type OwnerQuestion, ownersTurn, shownStatus, LIST_TONE } from '../../board'
+import { isFinished, statusMark, archivedNote, archivedOf, localOffset, panelSections, SECTION_LABEL, BACKLOG_SHOWN, foldedRow, backlogMoreLabel, groupLabel, ALL_CLEAR, rowStates, rowTitle, stateText, rowMark, TITLE_ROOM, fitRow, rowExtra, listKeys, searchTasks, SEARCH_WORDS, searchLine, searchBoxHint, questionsLabel, type OwnerQuestion, ownersTurn, shownStatus, LIST_TONE } from '../../board'
 import { openDays, S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import { claudeHost } from '../host'
@@ -181,7 +181,7 @@ export async function listPage($: $, pane: PaneParts) {
         const closed = isFinished(x) || x.status === 'backlog'
         const lead = r.indent + idWidth + 3 + cellWidth + gap.length
         const state = states.get(x.id) ?? { front: '', tag: '', back: '' }
-        const fit = fitRow(lead, x.title, rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs), width, x.status === 'failed')
+        const fit = fitRow(lead, rowTitle(x), rowExtra(x, v.tasks, v.home_branch ?? '', v.max_minutes, nowMs), width, x.status === 'failed')
         return (
           <Button key={row(x.id)} plain autoFocus={i === firstButton ? true : undefined} onPress={act(() => panelValues($).updateOpened(() => x.id))}>
             {r.indent ? <Text>{' '.repeat(r.indent)}</Text> : null}

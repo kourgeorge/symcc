@@ -6,7 +6,7 @@ import type { SymccTask } from '../../types'
 import { type BoardTask, STATUS_WORD } from './board-file'
 import { openAfter } from './archive'
 import { boardSections, localOffset } from './days'
-import { panelSections, rowCell } from './panel'
+import { panelSections, rowCell, rowTitle } from './panel'
 import { taskAsks } from './panel'
 import { asksMoreTime, needsYou } from './commands'
 import { openQuestions, type OwnerQuestion } from './questions'
@@ -101,7 +101,7 @@ export function askChoices(t: BoardTask, a: ReturnType<typeof taskAsks>): string
 /** One task: its line, then (while it waits for an answer) its question and numbered choices. */
 function taskLines(t: BoardTask, all: readonly SymccTask[], nowMs: number, running = false): string[] {
   const detail = running ? runningState(t, nowMs) : ''
-  const head = `${t.id} ${running ? 'running' : stateWord(t, all)}: ${detail ? `${detail}: ` : ''}${cut(t.title, TITLE_MAX)}`
+  const head = `${t.id} ${running ? 'running' : stateWord(t, all)}: ${detail ? `${detail}: ` : ''}${cut(rowTitle(t), TITLE_MAX)}`
   const out = [head]
   if (needsYou(t, nowMs) && (t.status === 'waiting' || asksMoreTime(t))) {
     const a = taskAsks(t)
@@ -173,6 +173,7 @@ export function chatTaskText(t: SymccTask, report: ChatReport | null | undefined
   const L =[`${t.id}: ${plain(t.title)}`]
   const changed = historyLineText({ at: t.updated_at } as never, nowMs).split('  ')[0]
   L.push(`Status: ${STATUS_WORD[t.status]}${Number(t.attempts) > 0 ? `, try ${t.attempts}` : ''}${changed ? `, changed ${changed}` : ''}`)
+  if ((t as BoardTask).project) L.push(`Project: ${plain((t as BoardTask).project!)}`)
   L.push(t.origin?.why ? `Why: ${plain(t.origin.why)}` : plain(fromText(t, 100)))
   if (t.status === 'waiting' && t.ask?.text) L.push(...askLines(taskAsks(t as BoardTask)?.text ?? t.ask.text, askChoices(t as BoardTask, taskAsks(t as BoardTask))))
   L.push('What to do:', t.details.trim() ? cutPart(t.details, PART_MAX) : '(no details)')

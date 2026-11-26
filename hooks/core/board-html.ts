@@ -10,7 +10,7 @@ import { shortSha, taskCommits } from './commits'
 import { statusMark } from './details'
 import { localOffset } from './days'
 import { fromText } from './origin'
-import { panelSections, taskAsks } from './panel'
+import { panelSections, projectTag, taskAsks } from './panel'
 import { openQuestions, type OwnerQuestion } from './questions'
 import { escapeHtml as E } from './stats-html'
 
@@ -30,7 +30,7 @@ main{max-width:720px;margin:0 auto;padding:12px}h1{font-size:1.3rem;margin:.2em 
 /** One task as a card: mark, id, title; its state; kind and who asked; the question with numbered choices; a short "what to do". */
 function card(t: BoardTask, all: readonly SymccTask[], nowMs: number, opts: { running?: boolean; ask?: boolean; why?: boolean; commit?: boolean } = {}): string {
   const state = opts.running ? `${STATUS_WORD.doing}: ${runningState(t, nowMs)}` : t.status === 'waiting' || t.status === 'failed' || t.status === 'review' || t.status === 'done' ? STATUS_WORD[t.status] : stateWord(t, all)
-  const meta = [state, t.kind ? `kind: ${t.kind}` : '', plain(fromText(t, 80))].filter(Boolean).join(' · ')
+  const meta = [state, projectTag(t), t.kind ? `kind: ${t.kind}` : '', plain(fromText(t, 80))].filter(Boolean).join(' · ')
   const a = opts.ask ? taskAsks(t) : null
   const ask = a ? `<div class="ask">${E(a.text)}</div><ol>${askChoices(t, a).map(c => `<li>${E(c)}</li>`).join('')}</ol>` : ''
   const why = opts.why && t.note ? `<div class="meta">why: ${E(t.note)}</div>` : ''

@@ -6,6 +6,9 @@ import { isNum, isObj, parseStamp } from './text'
 import { historyEntryOk } from './history'
 import { type OwnerQuestion, cleanAsk, cleanQuestions } from './questions'
 
+/** T-1137: the optional settings of one project. */
+export type ProjectSettings = { test_commands?: string[] }
+
 export type Board = {
   version: 1
   next_id: number
@@ -48,6 +51,8 @@ export type Board = {
    * joins the merge line where its tests run (see core/checker.ts); absent or false: off, the default
    */
   checker?: boolean
+  /** T-1137: the settings of a project (a repo folder below the board folder), by folder name; only test_commands for now (stored, not used yet) */
+  projects?: Record<string, ProjectSettings>
   tasks: BoardTask[]
   /** what was moved to archive.json: counts and the tries' totals, so views don't read the archive */
   archived?: ArchivedTotals
@@ -139,7 +144,7 @@ const PHASES: readonly Phase[] = ['claimed', 'worker', 'checker']
  * A task as the board file keeps it: `live`: what only one running try holds (see Live). `failed_on`: why a "failed" task failed, when a later step needs to
  * know (only "clash": its branch conflicts with the one it merges into, so its next try merges that in first).
  */
-export type BoardTask = SymccTask & { live?: Live; failed_on?: 'clash'; answer?: string; suggested?: string[]; size?: ChangeSize; done?: string }
+export type BoardTask = SymccTask & { /** T-1137: the folder below the board folder (a repo of its own) the task belongs to; missing = no project */ project?: string; live?: Live; failed_on?: 'clash'; answer?: string; suggested?: string[]; size?: ChangeSize; done?: string }
 
 /** T-1080: how big a task's change is: files changed, lines added and lines removed (git diff --shortstat); saved at each hand-back and at the merge. */
 export type ChangeSize = { files: number; added: number; removed: number }
@@ -387,6 +392,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   scout_findings: v => isScoutFindings(v),
   tests_with_changes: v => isTestsWithChanges(v),
   checker: v => typeof v === 'boolean',
+  projects: v => isObj(v) && Object.values(v).every(p => isObj(p) && (p.test_commands === undefined || (Array.isArray(p.test_commands) && p.test_commands.every(c => typeof c === 'string')))),
 }
 
 /**
@@ -451,6 +457,7 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
     if (ask) x.ask = ask
     else delete x.ask
   }
+  if ('project' in x && !(typeof x.project === 'string' && x.project.trim())) delete x.project
   if ('merge_into' in x && !(typeof x.merge_into === 'string' && x.merge_into.trim())) delete x.merge_into
   if ('kind' in x) {
     if (kindOf(x) === DEFAULT_KIND) delete x.kind

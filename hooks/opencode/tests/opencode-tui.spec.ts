@@ -69,6 +69,15 @@ test('the view file round-trips, and a broken or foreign one reads as none', () 
   expect(viewPaths('/work/proj/.symcc/worktrees/T-1')).toEqual(['/work/proj/.symcc/worktrees/T-1/.symcc/view.json'])
 })
 
+test('T-1137: a task row and its page show the project tag; a task with no project shows none', () => {
+  const f = viewFile()
+  const g: ViewFile = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-4' ? ({ ...t, project: 'client' } as SymccTask) : t)) } }
+  const list = panelLines(g, { opened: '', cursor: 0 }, NOW, 120).lines.map(lineText)
+  expect(list.find(l => l.includes('T-4'))).toContain('[client] a later one')
+  expect(list.find(l => l.includes('T-2'))).not.toContain('[')
+  expect(panelLines(g, { opened: 'T-4', cursor: 0 }, NOW, 120).lines.map(lineText).join('\n')).toContain('[client] a later one')
+})
+
 test('T-630: the panel and the band show no all-time total of the tries ("total: … tokens in all over N tries"); a task page keeps its own', () => {
   const f = viewFile()
   const runs = [{ started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:12:00.000Z', agents: [{ kind: 'worker' as const, started: '2026-11-19T10:00:00.000Z', ended: '2026-11-19T10:12:00.000Z', tokens: { input: 40_000 } }] }]
