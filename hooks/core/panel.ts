@@ -715,13 +715,15 @@ export const actionButtonLabel = (x: TaskAction): string => x.label
 /** The keys at the bottom of a task's page: one hint per action button with a key (taskActions), in the buttons'
  *  order; then, when more than one try has a saved report (`reports`, their try numbers), "1-3 a try's report"
  *  (unless the answer buttons take the number keys, `answering`: the dim line under them tells those keys,
- *  choiceKeysHint); "y copy", `nav` (T-751: "k j prev/next" when the page has others in its list, see
+ *  choiceKeysHint); `runsReport` (T-1104): "Enter on a Runs line: its report"; "y copy", `nav` (T-751: "k j prev/next" when the page has others in its list, see
  *  core/page-header.ts navHint), "↑↓ scroll" and "b back" always come last. */
-export function taskKeys(actions: readonly TaskAction[], reports: readonly number[] = [], answering = false, nav: KeyHint | null = null): KeyHint[] {
+export function taskKeys(actions: readonly TaskAction[], reports: readonly number[] = [], answering = false, nav: KeyHint | null = null, runsReport = false): KeyHint[] {
   const k = (key: string, word: string): KeyHint => ({ key, word })
   const keys: KeyHint[] = actions.filter(x => x.key && x.id !== 'copy').map(x => k(x.key!, x.word))
   const keyed = answering ? [] : reports.filter(n => n >= 1 && n <= 9)
   if (reports.length > 1 && keyed.length) keys.push(k(keyed.length > 1 ? `${keyed[0]}-${keyed[keyed.length - 1]}` : `${keyed[0]}`, "a try's report"))
+  // T-1104: Enter on an agent line of the Runs part shows its report
+  if (runsReport) keys.push(k('Enter', 'on a Runs line: its report'))
   return [...keys, k('y', 'copy'), ...(nav ? [nav] : []), k('↑↓', 'scroll'), k('b', 'back')]
 }
 

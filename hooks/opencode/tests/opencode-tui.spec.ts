@@ -2109,8 +2109,8 @@ test('T-580: OpenCode\'s task page has the same sections as Claude Code\'s (core
   expect(parseViewFile(viewFileText(f))?.view.changes).toEqual(f.view.changes)
   const page = (id: string, report?: { file: string; text: string | null | undefined }) => panelLines(f, { opened: id, cursor: 0, ...(report ? { taskReport: report } : {}) }, NOW, 100)
   const heads = (id: string) => page(id).lines.map(lineText).filter(l => l.startsWith('▍'))
-  expect(heads('T-2')).toEqual(['▍Details', '▍Changes (1 file, against main)', '▍What to do', '▍History (2, newest first)', '▍Report (try 2, 2 of 2)', '▍Runs   2 tries · 0s'])
-  expect(heads('T-4')).toEqual(['▍Why it failed', '▍Details', '▍What to do', '▍History (2, newest first)', '▍Report (try 2, 2 of 2)', '▍Runs   2 tries · 0s'])
+  expect(heads('T-2')).toEqual(['▍Details', '▍Changes (1 file, against main)', '▍What to do', '▍History (2, newest first)', '▍Report · try 2 · worker', '▍Runs   2 tries · 0s'])
+  expect(heads('T-4')).toEqual(['▍Why it failed', '▍Details', '▍What to do', '▍History (2, newest first)', '▍Report · try 2 · worker', '▍Runs   2 tries · 0s'])
   expect(heads('T-5')).toEqual(['▍Details', '▍What to do', '▍History (1, newest first)'])
   // each section's lines are the shared model's, in order
   const report = { file: '.symcc/reports/T-2-try-2.md', text: 'Fixed it.\n\nAll tests pass.' }
@@ -2120,7 +2120,7 @@ test('T-580: OpenCode\'s task page has the same sections as Claude Code\'s (core
   for (const s of model) {
     const at = lines.indexOf(`▍${s.title}`)
     expect(at).toBeGreaterThan(0)
-    expect(lines.slice(at + 1, at + 1 + s.lines.length)).toEqual(s.lines.map(l => (l.segs.length ? l.segs.map(g => g.text).join('') : ' ')))
+    expect(lines.slice(at + 1, at + 1 + s.lines.length).map(l => l.replace(/^› /, '  '))).toEqual(s.lines.map(l => (l.segs.length ? l.segs.map(g => g.text).join('') : ' ')))
   }
   expect(lines).toContain('  Fixed it.')
   expect(lines).toContain('  folder: .symcc/worktrees/T-2 · edit files there, then approve (the tests run again)')
@@ -4641,4 +4641,56 @@ test('T-1080: the size line under the title wraps to the panel width, never cut'
   const texts = lines.map(l => l.map(p => p.text).join(''))
   expect(texts.every(t => t.length <= 40)).toBe(true)
   expect(texts.join('\n')).toContain('+539')
+})
+
+/** T-1104: the view file with T-2 having three tries, each with a worker and a checker (and their saved reports). */
+function threeTriesViewFile(): ViewFile {
+  const f = viewFile()
+  const ids = [1, 2, 3].map(n => [`w${n}00000000${n}`, `c${n}00000000${n}`] as const)
+  const runs = [1, 2, 3].map(n => ({ started: AT, ended: AT, report: `.symcc/reports/T-2-try-${n}.md`, agents: [{ id: ids[n - 1]![0], kind: 'worker' as const, started: AT, ended: AT }, { id: ids[n - 1]![1], kind: 'checker' as const, started: AT, ended: AT }] }))
+  const history = [1, 2, 3].map(n => ({ kind: 'checker-problems', at: AT, text: `try ${n}: checker found problems`, try: n, report: `.symcc/reports/T-2-try-${n}-checker.md` }))
+  const tasks = f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, attempts: 3, runs, history } : t)) as ViewFile['view']['tasks']
+  return { ...f, view: { ...f.view, tasks } }
+}
+
+test('T-1104: OpenCode\'s task page: one ▍Report, six pressable Runs lines (click or Enter), the picked line marked ●, number keys open a try\'s worker report', async () => {
+  const f = threeTriesViewFile()
+  const texts: [string, string][] = [1, 2, 3].flatMap(n => [[`/work/proj/.symcc/reports/T-2-try-${n}.md`, `WORKER text ${n}`], [`/work/proj/.symcc/reports/T-2-try-${n}-checker.md`, `CHECKER text ${n}`]] as [string, string][])
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)], ...texts])
+  const fc = fakeCtx({})
+  const board = startTui(fc.ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = fc.slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 100, focused: true, close: () => undefined, focus: () => undefined } as never) as El
+  const lines = () => rowEls(panel).map(r => r.text)
+  const settle = () => new Promise<void>(res => setTimeout(res, 0))
+  const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 100).ids
+  for (let i = 0; i < ids.indexOf('T-2'); i++) await board.press('down', 's')
+  await board.press('open', 's')
+  await settle()
+  // opens on the latest worker report; no Checker section, no Try buttons
+  expect(lines().filter(l => l.startsWith('▍Report'))).toEqual(['▍Report · try 3 · worker w30…003'])
+  expect(lines().some(l => l.startsWith('▍Checker'))).toBe(false)
+  expect(lines()).toContain('  WORKER text 3')
+  const model = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 100)
+  expect(model.ids.length).toBe(6)
+  expect(model.keys.map(k => `${k.key} ${k.word}`)).toContain("1-3 a try's report")
+  expect(model.keys.map(k => `${k.key} ${k.word}`)).toContain('Enter on a Runs line: its report')
+  // a click on try 1's checker line shows that checker's report and marks the line
+  const checkerRow = rowEls(panel).find(r => r.text.includes('⌕ checker') && r.text.includes('c10…001'))!
+  ;(checkerRow.segs[0]!.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+  await settle()
+  expect(lines().filter(l => l.startsWith('▍Report'))).toEqual(['▍Report · try 1 · checker c10…001'])
+  expect(lines()).toContain('  CHECKER text 1')
+  expect(lines().filter(l => l.includes('●') && l.includes('⌕ checker'))).toEqual(['› ● ⌕ checker c10…001  0s'])
+  // the cursor is on that line (index 1): down twice reaches try 2's worker line, and Enter shows its report
+  await board.press('down', 's')
+  await board.press('open', 's')
+  await settle()
+  expect(lines().filter(l => l.startsWith('▍Report'))).toEqual(['▍Report · try 2 · worker w20…002'])
+  expect(lines()).toContain('  WORKER text 2')
+  // the number key 1: try 1's worker report
+  await board.press('1', 's')
+  await settle()
+  expect(lines().filter(l => l.startsWith('▍Report'))).toEqual(['▍Report · try 1 · worker w10…001'])
+  expect(lines()).toContain('  WORKER text 1')
 })
