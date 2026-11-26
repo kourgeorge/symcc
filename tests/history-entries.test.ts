@@ -203,3 +203,10 @@ test('T-1079: the lead\'s change and question lines say "lead:", and every worke
   const [k, x, f] = resultEntry({ role: 'coder', attempts: 2 }, 'failed', 'I did it', 'worker ended early', { reason: 'other', agent: 'symcc-T-1' })
   expect(historyLineText(historyEntry(k, x, T, f)).includes('worker symcc-T-1:')).toBe(true)
 })
+
+test('T-1079: the out-of-time hand-back line says "worker <name>:", also without a saved name', () => {
+  const [k, x, f] = tryEntry({ role: 'general', attempts: 2 }, 'out-of-time', 'out of time; handed back: I fixed the parser', { reason: 'timeout', by: 'worker', agent: 'symcc-T-1' })
+  expect(historyLineText(historyEntry(k, x, T, f)).includes('worker symcc-T-1: try 2')).toBe(true)
+  const [k2, x2, f2] = tryEntry({ role: 'general', attempts: 2 }, 'out-of-time', 'out of time; handed back: x', { reason: 'timeout' })
+  expect(historyLineText(historyEntry(k2, x2, T, f2)).includes('worker: try 2')).toBe(true)
+})
