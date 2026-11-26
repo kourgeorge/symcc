@@ -6337,23 +6337,47 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-pick-mode","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Whether work runs, and whether finished work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["merges on its own or waits for you."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:paused","label":"○ paused"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:paused","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:paused","label":"○ paused"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  nothing starts; running work stops"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:review","label":"○ approve merge"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:review","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:review","label":"○ approve merge"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work waits for you to approve"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide"},"children":["● auto merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:auto","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide"},"children":["● auto merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work that passes merges on its own"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -6699,23 +6723,47 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-pick-mode","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Whether work runs, and whether finished work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["merges on its own or waits for you."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:paused","label":"○ paused"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:paused","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:paused","label":"○ paused"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  nothing starts; running work stops"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:review","label":"○ approve merge"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:review","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:review","label":"○ approve merge"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work waits for you to approve"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:auto","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work that passes merges on its own"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -7069,23 +7117,47 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-pick-mode","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Whether work runs, and whether finished work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["merges on its own or waits for you."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:paused","label":"○ paused"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:paused","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:paused","label":"○ paused"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  nothing starts; running work stops"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:review","label":"○ approve merge"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:review","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:review","label":"○ approve merge"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work waits for you to approve"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:auto","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work that passes merges on its own"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -7597,35 +7669,73 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-pick-notify","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["What plays when a task is merged or a worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["asks you something."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:voice","label":"○ voice"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:voice","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:voice","label":"○ voice"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["    says what happened out loud"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 1","label":"○ sound 1"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 1","label":"○ sound 1"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 1"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide"},"children":["● sound 2"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 2","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide"},"children":["● sound 2"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 2"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 3","label":"○ sound 3"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 3","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 3","label":"○ sound 3"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 3"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:off","label":"○ off"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:off","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:off","label":"○ off"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["      nothing plays"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -7971,35 +8081,73 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-pick-notify","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["What plays when a task is merged or a worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["asks you something."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:voice","label":"○ voice"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:voice","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:voice","label":"○ voice"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["    says what happened out loud"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 1","label":"○ sound 1"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 1","label":"○ sound 1"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 1"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● sound 2"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 2","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● sound 2"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 2"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 3","label":"○ sound 3"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 3","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 3","label":"○ sound 3"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 3"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:off","label":"○ off"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:off","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:off","label":"○ off"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["      nothing plays"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -8353,35 +8501,73 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-pick-notify","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["What plays when a task is merged or a worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["asks you something."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:voice","label":"○ voice"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:voice","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:voice","label":"○ voice"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["    says what happened out loud"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 1","label":"○ sound 1"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 1","label":"○ sound 1"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 1"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● sound 2"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 2","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● sound 2"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 2"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 3","label":"○ sound 3"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 3","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 3","label":"○ sound 3"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 3"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:off","label":"○ off"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:off","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:off","label":"○ off"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["      nothing plays"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -8587,6 +8773,8 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-box-max_parallel","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["How many workers run at once: 1-8."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {"key":"setting-edit","label":"max_parallel","placeholder":"a whole number, 1-8","value":"2","autoFocus":true},
@@ -8936,6 +9124,8 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-box-max_parallel","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["How many workers run at once: 1-8."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {"key":"setting-edit","label":"max_parallel","placeholder":"a whole number, 1-8","value":"2","autoFocus":true},
@@ -9293,6 +9483,8 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-box-max_parallel","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["How many workers run at once: 1-8."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {"key":"setting-edit","label":"max_parallel","placeholder":"a whole number, 1-8","value":"2","autoFocus":true},
@@ -9697,6 +9889,9 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-box-test_commands","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Shell commands that must all pass before work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["is merged: one line, or up to 5 as a list."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {
@@ -10057,6 +10252,9 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-box-test_commands","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Shell commands that must all pass before work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["is merged: one line, or up to 5 as a list."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {
@@ -10425,6 +10623,9 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"key":"setting-box-test_commands","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Shell commands that must all pass before work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["is merged: one line, or up to 5 as a list."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {

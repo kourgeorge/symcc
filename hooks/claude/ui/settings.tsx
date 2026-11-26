@@ -18,6 +18,7 @@ import { claudeHost } from '../host'
 import { type DefRow, type DefCol, type CodePick, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICKS, CODE_PICK_LABEL, CODE_PICK_HINT, defsCountText, defWord, defLayout, defCells, defCellTone, defLineText, newDefText, roleWritesLine, codePickOf } from '../../core/def-table'
 import { type CodeDraft, roleRows, kindRows, saveRoleEdit } from './role-table'
 import { plural } from '../../core/text'
+import { pickBoxParts, settingAbout, wrapWords } from '../../core/setting-notes'
 
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
 const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`
@@ -533,12 +534,18 @@ export async function settingsPage($: $, pane: PaneParts) {
     else S.settingEdit = { name, value: now === 'none' && info.kind === 'commands' ? '' : now, error: '' }
     $.ui.invalidate('ui.render')
   })
+  /** The setting's description in dim text, one Text per wrapped line, then an empty line (T-1105). */
+  const aboutLines = (name: string, lines: string[]) => [
+    ...lines.map((t, i) => <Text key={`about-${name}-${i}`} color={C('inactive')}>{t}</Text>),
+    <Text key={`about-gap-${name}`}> </Text>,
+  ]
   const editBox = (name: SettingName) => {
     if (S.settingEdit?.name !== name) return null
     const ed = S.settingEdit
     const info = settingInfo(name)!
     return (
       <Box key={`setting-box-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
+        {aboutLines(name, wrapWords(settingAbout(name), pane.width - 4))}
         <Input
           key="setting-edit"
           label={name}
@@ -563,13 +570,25 @@ export async function settingsPage($: $, pane: PaneParts) {
   const pickBox = (name: SettingName) => {
     if (S.settingPick?.name !== name) return null
     const now = settingValue(viewAsBoard(v), name)
+    const parts = pickBoxParts(name, S.settingPick.options, pane.width - 4)
     return (
       <Box key={`setting-pick-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
-        {S.settingPick.options.map(o => (
-          <Button key={`pick:${o}`} autoFocus={o === now ? true : undefined} onPress={saveIt({ [name]: o })}>
-            <Text bold={o === now} color={C(o === now ? 'ide' : 'text')}>{o === now ? `● ${settingShown(name, o)}` : `○ ${settingShown(name, o)}`}</Text>
-          </Button>
-        ))}
+        {aboutLines(name, parts.about)}
+        {S.settingPick.options.map((o, i) => {
+          const r = parts.rows[i]!
+          const button = (
+            <Button key={`pick:${o}`} autoFocus={o === now ? true : undefined} onPress={saveIt({ [name]: o })}>
+              <Text bold={o === now} color={C(o === now ? 'ide' : 'text')}>{o === now ? `● ${settingShown(name, o)}` : `○ ${settingShown(name, o)}`}</Text>
+            </Button>
+          )
+          if (!r.note.length) return button
+          const rest = r.note.map((t, j) => <Text key={`note-${o}-${j}`} color={C('inactive')}>{`${j === 0 ? r.pad : '  '}${t}`}</Text>)
+          return r.inline ? (
+            <Box key={`pick-row:${o}`} flexDirection="row">{button}{rest}</Box>
+          ) : (
+            <Box key={`pick-row:${o}`} flexDirection="column">{button}{rest}</Box>
+          )
+        })}
         {cancelButton}
         <Text color={C('inactive')}>{pickHint('x')}</Text>
       </Box>

@@ -992,7 +992,11 @@ are about changes; under "How tasks ended" a read investigation shows as
   `checker` and `enabled` flip on/off; `mode`, `notify`, `scout_findings` and `tests_with_changes` open a pick list (paused / approve merge
   / auto merge; only the notify choices this computer can play; off / ask / review); numbers and `test_commands` open an edit box (the typed line is one
   command, run as one shell line, so `cd web && npm test` works as in a shell; several commands go in a list,
-  `["npm test", "npm run lint"]`, up to 5; `none` clears them). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
+  `["npm test", "npm run lint"]`, up to 5; `none` clears them). Every box starts with one dim sentence on what the
+  setting does (a number's range is in it), then an empty line; in a pick list each choice has a short dim note
+  after it, or under it when the line is too narrow, e.g. `paused`: "nothing starts; running work stops". VS Code
+  shows the sentence above the choices and the notes under them; OpenCode shows them in its dialog (the words are in
+  `hooks/core/setting-notes.ts`). Enter on an empty box or Cancel (`x`) cancels; Back (`b`) goes to the Tasks list. Saving uses the same checks and limits as
   telling the lead, and a toast says what changed, e.g. `max_parallel set to 5`. A value
   over its limit is cut to it and the toast says so.
 - Under **Workers**, the **Roles** row says how many worker roles there are (e.g.
