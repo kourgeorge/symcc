@@ -23,6 +23,9 @@ export const squash = (s: string) => s.replace(/\s+/g, ' ').trim()
 /** `s` cut to `n` characters, ending with "…" when cut. */
 export const ellipsis = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1).trimEnd()}…`)
 
+/** "1 task", "2 tasks"; `many` for words that don't just add an s ("tries"). */
+export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+
 /** A task id's number ("T-12" → 12; 0 when there is none), for ordering. */
 export const num = (id: string) => Number(id.replace(/\D/g, '')) || 0
 

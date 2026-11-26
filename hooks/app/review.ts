@@ -1,10 +1,11 @@
 import type { SymccTask } from '../../types'
-import { type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withHistory, findRole, roleOf, isProseRole, notProse, notProseText, docsOnly, PROSE_TESTS_SKIPPED, PROSE_DOCS_CHECKS } from '../board'
+import { type ChangeSize, parseNumstat, hasMergedChanges, parseShortstat, type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withHistory, findRole, roleOf, isProseRole, notProse, notProseText, docsOnly, PROSE_TESTS_SKIPPED, PROSE_DOCS_CHECKS } from '../board'
 import { loadRoles } from './roles'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
 import { change, load, now, path, safeWrite } from './store'
+import { timed } from './slow-log'
 import { inMergeLine, type TurnLimit } from './merge-line'
 import { tellLead } from './tell'
 import { logQueue } from './evidence'
@@ -105,7 +106,7 @@ export async function changesText($: Host, target: string, t: SymccTask, file = 
  * `timedOut`: a test command was stopped by its time limit (these minutes); it fails like a failing test, with its
  * output in `testOutput` (T-547), only its note says so (see settle).
  */
-export type CheckResult = { ok: boolean; detail: string; reason?: FailReason; earlier?: boolean; timedOut?: number; command?: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; checker?: boolean; again?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean; moved?: boolean }
+export type CheckResult = { ok: boolean; detail: string; reason?: FailReason; earlier?: boolean; timedOut?: number; command?: string; conflict?: boolean; testOutput?: string; review?: boolean; merged?: string; notes?: string[]; blocked?: Blockers; untested?: string; size?: ChangeSize; checker?: boolean; again?: boolean; noVerdict?: string; secrets?: string[]; ask?: string; gone?: boolean; moved?: boolean }
 
 /** T-733: how many times one try's branch goes back into the merge line for each reason (main moved by hand, a reload cut its tests off), so it can't loop. */
 export const AGAIN_MAX = 2
@@ -168,6 +169,17 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // the branch this task merges into: the one checked out when it was made
   const target = intoOf(t)
   await markStep($, t, 'prep', stopped)
+  // T-1053: a worker may change git in its own folder; a rebase or bisect it left unfinished is ended first, so the
+  // folder is on the task's branch again and symcc's commit lands there
+  const onBranch = await backOnBranch($, dir, taskBranch(t))
+  if (onBranch) return { ok: false, reason: 'other', detail: onBranch }
+  // T-1053: a merge or cherry-pick (revert, am) it left stopped on a conflict is aborted, so no conflict markers get
+  // committed; one it resolved but did not commit is finished by symcc's commit below
+  const unfinished = await endUnfinished($, dir)
+  if (unfinished) return { ok: false, reason: 'other', detail: unfinished }
+  // T-1053: the worker's own commits of this try (a commit, a merge of another branch), saved with the try's commits
+  const own = await workerCommits($, t, dir, target)
+  made.push(...own)
   // The worker's throwaway folder (T-456) is kept out by its info/exclude line. It is not named in the add: git add
   // fails on a pathspec naming an ignored path (T-477). As a second safeguard, anything under it that still got staged
   // is unstaged below, but not where the project keeps files there in git (scratchOn false): those are staged as usual.
@@ -187,7 +199,11 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   }
   const unstaged = await unstage($, dir, left)
   if (unstaged) return { ok: false, reason: 'other', detail: `symcc could not leave out files that look like secrets (${nameList(left)}): ${unstaged}` }
-  const committed = await commitTry($, t, dir, made)
+  const before = made.length
+  let committed = await commitTry($, t, dir, made)
+  // T-1053: the worker committed everything itself: an empty commit of symcc's for this try still ends the branch, so
+  // its tip names the task and try (a reload finds the try merged, see alreadyMerged; the task page reads its commits)
+  if (!committed && own.length && made.length === before) committed = await commitTry($, t, dir, made, undefined, true)
   if (committed) return { ok: false, reason: 'other', detail: `symcc could not commit the work: ${committed}` }
   if (!(await branchExists($, target))) return goneResult(target)
   const main = await gitOk($, ['rev-parse', `refs/heads/${target}`])
@@ -199,7 +215,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // so they are not in the history that merges (a fast-forward would bring in every commit as it is).
   // Only the ones still there at the end are taken out of the new commit (and reported); a deletion
   // stays a deletion (commits that only delete such a file are not counted, see above).
-  const inHistory = secretFiles(await touchedSince($, base, head))
+  const inHistory = secretFiles(await touchedSince($, base, head, true))
   const inBranch = secretFiles(await changedSince($, base, head, true))
   if (inHistory.length || inBranch.length) {
     const why = await dropFromBranch($, t, dir, base, inBranch, made)
@@ -209,9 +225,12 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     left.push(...inBranch)
   }
   const secrets = [...new Set(left)].sort()
+  // T-1080: how big the work is, saved on the task with this try's outcome (the merge turn measures it again with main merged in)
+  const size0 = await sizeOf($, base, head)
   // A merge removes the task's folder afterwards (git worktree remove --force deletes untracked files too),
   // so on a merge the left-out files are first moved out of it to keepLeftOut's folder; otherwise they stay in the folder.
   const withSecrets = async (r: CheckResult): Promise<CheckResult> => {
+    if (size0 && !r.size) r = { ...r, size: size0 }
     if (!secrets.length) return r
     const where = r.ok && r.merged ? await keepLeftOut($, t.id, dir, secrets) : undefined
     return { ...r, secrets, detail: `${r.detail}; ${secretsLeftText(secrets, where)}` }
@@ -228,7 +247,10 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
     }
     return { ok: false, reason: 'nochange', detail: 'the worker made no change' }
   }
-  const bad = outOfScope(changed, t.files, S.N.dir)
+  // T-1053: every file any commit of the branch changed counts, not only its net change: a worker may merge another
+  // branch in and then delete its file outside the task, and that branch's commits would still reach the target
+  const touched = [...new Set([...changed, ...(await touchedSince($, base, head))])]
+  const bad = outOfScope(touched, t.files, S.N.dir)
   if (bad.length) {
     // On approve the owner's edits stay in the folder: once the files are allowed, approving again merges them.
     if (mode !== 'finish') return withSecrets({ ok: false, reason: 'scope', detail: outOfScopeText(bad, t.files) })
@@ -239,7 +261,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   // the scope check the same way, so such a role can never merge code; and its prose-only change skips the tests
   const role = findRole(await loadRoles($).catch(() => S.roles), roleOf(t))
   const prose = isProseRole(role)
-  const code = prose ? notProse(changed) : []
+  const code = prose ? notProse(touched) : []
   if (code.length) {
     if (mode !== 'finish') return withSecrets({ ok: false, reason: 'scope', detail: notProseText(role!.name, code) })
     const undo = await undoOutOfScope($, t, dir, base, code, made)
@@ -310,11 +332,12 @@ async function changedSince($: Host, base: string, head: string, noDeleted = fal
 
 /**
  * Every file added or changed by any single commit from `base` to `head` (not just the net change: a file
- * added and later deleted again is listed too). Commits that only delete a file don't list it (--diff-filter=d);
- * merge commits list nothing (git log's default).
+ * added and later deleted again is listed too, and so is a file a commit only deletes, unless `noDeleted`);
+ * a merge commit lists the files it changed against every parent (--cc: what the merge itself added, T-1053), not
+ * the ones it only brought in from one side (those are listed by their own commits).
  */
-async function touchedSince($: Host, base: string, head: string): Promise<string[]> {
-  const d = await git($, ['log', '--format=', '--name-only', '--no-renames', '--diff-filter=d', '-z', `${base}..${head}`])
+async function touchedSince($: Host, base: string, head: string, noDeleted = false): Promise<string[]> {
+  const d = await git($, ['log', '--cc', '--format=', '--name-only', '--no-renames', ...(noDeleted ? ['--diff-filter=d'] : []), '-z', `${base}..${head}`])
   if (d.exitCode !== 0) throw new Error(`git log --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`)
   return [...new Set(d.stdout.split('\0').map(f => f.replace(/^\n+/, '')).filter(Boolean))]
 }
@@ -342,19 +365,91 @@ async function dropFromBranch($: Host, t: SymccTask, dir: string, base: string, 
 }
 
 /**
- * After a try failed the scope check: puts the files outside the task (`bad`) on the task's branch
- * back to how they are at `base` (the merge base) and commits that, so the next try in the same
- * folder starts clean and keeps the work inside the task's files. Returns '' when done, or a note
- * to add to the failure when it could not be undone.
+ * After a try failed the scope check: the branch's work since `base` (the merge base) is made one commit on `base`
+ * again (git reset --soft), with the files outside the task (`bad`) put back to how they are at `base`, so the next
+ * try in the same folder starts clean and keeps the work inside the task's files. Always one commit (T-1053): a
+ * worker's merge (also a fast-forward one) may have brought in another branch's commits, which would otherwise still
+ * reach the target later, and a file a commit changed and a later one undid would fail every next try's scope check.
+ * Returns '' when done, or a note to add to the failure when it could not be undone.
  */
 async function undoOutOfScope($: Host, t: SymccTask, dir: string, base: string, bad: string[], made: string[]): Promise<string> {
+  const head = (await git($, ['rev-parse', 'HEAD'], dir)).stdout.trim()
+  // only files the branch changed in the end are put back; one only a commit in between changed goes with the squash
+  const net = new Set(head ? await changedSince($, base, head).catch(() => bad) : bad)
+  const back = bad.filter(f => net.has(f))
+  const r = await git($, ['reset', '-q', '--soft', base], dir)
+  if (r.exitCode !== 0) return `. Could not undo them on the task's branch: ${gitFailText(r)}`
   // :(literal): names are taken as they are, never as patterns.
-  for (let i = 0; i < bad.length; i += 100) {
-    const r = await git($, ['restore', `--source=${base}`, '--staged', '--worktree', '--', ...bad.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
+  for (let i = 0; i < back.length; i += 100) {
+    const r = await git($, ['restore', `--source=${base}`, '--staged', '--worktree', '--', ...back.slice(i, i + 100).map(f => `:(literal)${f}`)], dir)
     if (r.exitCode !== 0) return `. Could not undo them on the task's branch: ${(r.stderr || r.stdout).trim().slice(0, 200)}`
   }
   const c = await commitTry($, t, dir, made, `${t.id}: undo changes outside the task`)
   return c ? `. Could not undo them on the task's branch: ${c}` : ''
+}
+
+/**
+ * T-1053: the commits the worker made itself on task `t`'s branch in folder `dir` (its first-parent line since
+ * `target`, oldest first): those that carry no Task line of `t`'s (symcc's own commits do) and that no earlier try
+ * saved. A worker may commit and merge in its own folder; these are saved with the try's commits.
+ */
+async function workerCommits($: Host, t: SymccTask, dir: string, target: string): Promise<string[]> {
+  const r = await git($, ['log', '--first-parent', '--reverse', '-z', '--format=%H%n%B', `refs/heads/${target}..HEAD`], dir)
+  if (r.exitCode !== 0) return []
+  const saved = new Set((t.runs ?? []).flatMap(x => (Array.isArray(x?.commits) ? x.commits : [])))
+  return r.stdout
+    .split('\0')
+    .map(e => ({ sha: e.slice(0, e.indexOf('\n') < 0 ? e.length : e.indexOf('\n')).trim(), body: e.slice(e.indexOf('\n') + 1) }))
+    .filter(e => /^[0-9a-f]{40}([0-9a-f]{24})?$/.test(e.sha) && !saved.has(e.sha) && !isTaskCommit(e.body, t.id, S.N.name))
+    .map(e => e.sha)
+}
+
+/**
+ * T-1053: puts folder `dir` back on `branch` when the worker left it off (a rebase or bisect not finished: HEAD is
+ * detached): `git bisect reset` and `git rebase --abort` (the branch as it was before that rebase). '' when it is on
+ * the branch (or git can't tell), else why not.
+ */
+async function backOnBranch($: Host, dir: string, branch: string): Promise<string> {
+  const ref = `refs/heads/${branch}`
+  const off = async () => {
+    const r = await git($, ['symbolic-ref', '-q', 'HEAD'], dir)
+    return r.exitCode === 1 || (r.exitCode === 0 && !!r.stdout.trim() && r.stdout.trim() !== ref)
+  }
+  if (!(await off())) return ''
+  await git($, ['bisect', 'reset'], dir)
+  if (await off()) await git($, ['rebase', '--abort'], dir)
+  return (await off()) ? `the worker left its folder off the task's branch ${branch} (HEAD is elsewhere), so symcc could not commit the work there` : ''
+}
+
+/**
+ * T-1053: ends a merge, cherry-pick, revert or `git am` the worker left stopped on a conflict in folder `dir`, so its
+ * conflict markers are never staged and committed: while files are still unmerged, each is aborted, which puts the
+ * files back as they were before it; files still unmerged with nothing to abort (`cherry-pick -n`, `merge --squash`)
+ * are reset with `git reset --merge`. One the worker fully resolved but did not commit is kept: symcc's own commit
+ * then finishes it (a merge becomes a merge commit), as the merge_main prompt allows. A `git am` is always aborted
+ * (a commit does not end it). '' when fine, else why symcc can't commit (files still unmerged after that).
+ */
+async function endUnfinished($: Host, dir: string): Promise<string> {
+  const pending = async (ref: string) => {
+    const r = await git($, ['rev-parse', '-q', '--verify', ref], dir)
+    return r.exitCode === 0 && !!r.stdout.trim()
+  }
+  const unmerged = async () => {
+    const r = await git($, ['ls-files', '-u', '-z'], dir)
+    return r.exitCode === 0 && !!r.stdout.trim()
+  }
+  if (await unmerged()) {
+    for (const [ref, cmd] of [['MERGE_HEAD', 'merge'], ['CHERRY_PICK_HEAD', 'cherry-pick'], ['REVERT_HEAD', 'revert']] as const) {
+      if (await pending(ref)) await git($, [cmd, '--abort'], dir)
+    }
+    // a conflict with nothing to abort (cherry-pick -n, merge --squash, revert -n): put the files back to HEAD's, so
+    // the folder isn't stuck for this try and every later one
+    if (await unmerged()) await git($, ['reset', '-q', '--merge'], dir)
+  }
+  const apply = (await git($, ['rev-parse', '--path-format=absolute', '--git-path', 'rebase-apply'], dir)).stdout.trim()
+  if (apply && (await $.fs.exists(apply).catch(() => false))) await git($, ['am', '--abort'], dir)
+  if (await unmerged()) return 'the worker left files with unresolved merge conflicts in its folder, so symcc did not commit them'
+  return ''
 }
 
 /** Git's error in a few words: the first lines of its error output, plus a hint when it is about commit signing. */
@@ -371,10 +466,10 @@ function gitFailText(r: { stdout: string; stderr: string }): string {
  * unchanged); only a new HEAD counts as a commit of this try and is added to `made`.
  * Returns '' when fine, or git's error when the commit failed for another reason (e.g. signing).
  */
-async function commitTry($: Host, t: SymccTask, dir: string, made: string[], subject?: string): Promise<string> {
+async function commitTry($: Host, t: SymccTask, dir: string, made: string[], subject?: string, empty = false): Promise<string> {
   const before = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
-  // The message ends with trailers (task, origin, why, try); see commitMessage.
-  const c = await git($, [...asSymcc(), 'commit', '-q', '--no-verify', '-m', commitMessage(t, { name: S.N.name, ...(subject ? { subject } : {}) })], dir)
+  // The message ends with trailers (task, origin, why, try); see commitMessage. `empty`: commit even with nothing staged.
+  const c = await git($, [...asSymcc(), 'commit', '-q', '--no-verify', ...(empty ? ['--allow-empty'] : []), '-m', commitMessage(t, { name: S.N.name, ...(subject ? { subject } : {}), ...((t as BoardTask).done ? { done: (t as BoardTask).done } : {}) })], dir)
   const head = (await git($, ['rev-parse', '-q', '--verify', 'HEAD'], dir)).stdout.trim()
   if (head && head !== before) {
     made.push(head)
@@ -418,7 +513,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   // the catch-up with the target shows as "test" (owner's choice, Q-30), so the Stage line only moves on: queue → test → merge
   await markStep($, t, 'testing', stopped)
   if ((await git($, ['merge-base', '--is-ancestor', main, tip])).exitCode !== 0) {
-    const m = await git($, [...asSymcc(), 'merge', '--no-edit', '--no-verify', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}` }), main], dir)
+    const m = await timed($, `${t.id} catch up`, () => git($, [...asSymcc(), 'merge', '--no-edit', '--no-verify', '-m', commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}`, ...((t as BoardTask).done ? { done: (t as BoardTask).done } : {}) }), main], dir))
     if (m.exitCode !== 0) {
       await git($, ['merge', '--abort'], dir)
       // Only a real conflict is one: any other failure (e.g. signing the merge commit) is git's error, and retrying on conflicts can't help it.
@@ -449,7 +544,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
       for (const cmd of cmds) {
         await refresh()
         let thrown: string | undefined
-        const r = await $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: testTimeoutMs(b) }).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
+        const r = await timed($, `${t.id} test run`, () => $.run(['/bin/sh', '-c', cmd], { cwd: dir, timeoutMs: testTimeoutMs(b) })).catch((e: Error) => ((thrown = String(e?.message ?? e)), { exitCode: 1, stdout: '', stderr: thrown }))
         // T-547: stopped by its time limit: it fails like a failing test, its output goes to a new try (see settle)
         if (r.exitCode !== 0 && ranOutOfTime(r, thrown)) {
           const min = limitMinutes(testTimeoutMs(b))
@@ -471,11 +566,13 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   const passed = proseSkip ? `; ${PROSE_TESTS_SKIPPED}` : skipped ? `; ${testsSkippedText(tree)}` : docsRun ? `; ${PROSE_DOCS_CHECKS}` : '; tests passed'
   // tests_with_changes: a change task's work that edits code but no test file is flagged (not on the owner's approve).
   const flag = testsWithChangesOf(b)
+  // T-1080: the size of what merges (or waits for review): the target as it is now against the tested tip
+  const size = await sizeOf($, main, candidate)
   const untested = mode !== 'approve' && flag !== 'off' && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : ''
   const flagged = untested ? { untested } : {}
   // the checker gave no verdict (it ran before the line): the task waits for the owner's review, nothing merged
-  if (noVerdict) return { ok: true, review: true, noVerdict, ...flagged, detail: `checks passed, but ${noVerdict}; ready for review, nothing merged yet` }
-  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return { ok: true, review: true, ...flagged, detail: `checks passed${cmds.length || proseSkip ? passed : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` }
+  if (noVerdict) return { ok: true, review: true, noVerdict, ...(size ? { size } : {}), ...flagged, detail: `checks passed, but ${noVerdict}; ready for review, nothing merged yet` }
+  if (mode === 'finish' && (needsReview(b, t) || (untested && flag === 'review'))) return { ok: true, review: true, ...(size ? { size } : {}), ...flagged, detail: `checks passed${cmds.length || proseSkip ? passed : '; no test command set'}; ready for review, nothing merged yet${untested ? ` (${untested})` : ''}` }
   // Move main forward (compare-and-swap). If the person has main checked out, update their
   // files too, but never over their uncommitted changes, untracked or ignored files in files the merge changes.
   const s = stopped()
@@ -484,7 +581,7 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
   if (!(await branchExists($, target))) return goneResult(target)
   await markStep($, t, 'merging', stopped)
   const current = (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
-  const moved = await moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' })
+  const moved = await timed($, `${t.id} merge`, () => moveTarget(args => git($, args), { target, id: t.id, from: main, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === 'approve' ? 'approve' : 'retry' }))
   if (!moved.ok && !(await branchExists($, target))) return goneResult(target)
   if (!moved.ok) return { ok: false, detail: moved.detail, ...(moved.reason ? { reason: moved.reason } : {}), ...(moved.blocked ? { blocked: moved.blocked } : {}), ...(moved.detail === movedText(target) ? { moved: true } : {}) }
   const tests = !cmds.length && !proseSkip ? '; no test command set' : skipped || testsRun || proseSkip ? passed : ''
@@ -494,7 +591,87 @@ async function upToDateTestMove($: Host, t: SymccTask, dir: string, b: Board, mo
     const n = await git($, ['diff', '--name-only', '--no-renames', '-z', '--diff-filter=AM', main, candidate])
     notes = researchNotes(n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : changed)
   }
-  return { ok: true, merged: candidate, ...(notes.length ? { notes } : {}), ...flagged, detail: `merged into ${target} (${shortSha(candidate)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
+  return { ok: true, merged: candidate, ...(size ? { size } : {}), ...(notes.length ? { notes } : {}), ...flagged, detail: `merged into ${target} (${shortSha(candidate)})${mode === 'approve' ? '; approved by the owner' : ''}${tests}` }
+}
+
+/** T-1080: the size of the change from commit `from` to commit `to` (a shortstat diff); undefined when there is none or it can't be read. */
+export async function sizeOf($: Host, from: string, to: string): Promise<ChangeSize | undefined> {
+  const r = await git($, ['diff', '--shortstat', '--no-renames', from, to]).catch(() => null)
+  return r && r.exitCode === 0 ? parseShortstat(String(r.stdout ?? '')) : undefined
+}
+
+/** T-1086: what main was before a done task's merged commit: the second parent of symcc's catch-up merge (its parents are the task's tip, then main);
+ *  else the first commit down the first-parent line that is not the task's own. '' when git does not have the commit. */
+export async function mergedBefore($: Host, t: Pick<SymccTask, 'id' | 'runs'>, merged: string): Promise<string> {
+  // T-1096: commits the worker made itself have no Task line; the try saved them, so they count as the task's own too
+  const saved = new Set((t.runs ?? []).flatMap(r => (Array.isArray(r?.commits) ? r.commits : [])))
+  const own = (sha: string, msg: string) => saved.has(sha) || isTaskCommit(msg, t.id, S.N.name)
+  const p = await git($, ['rev-list', '--parents', '-n', '1', merged]).catch(() => null)
+  if (!p || p.exitCode !== 0) return ''
+  const [, first, second] = String(p.stdout ?? '').trim().split(/\s+/)
+  if (!first) return ''
+  if (second) {
+    // symcc's own merge commit (the task's trailer): main is its second parent. A merge made by hand on main: its first parent is main.
+    const m = await git($, ['log', '-n', '1', '--format=%B', merged]).catch(() => null)
+    if (m && m.exitCode === 0 && isTaskCommit(String(m.stdout ?? ''), t.id, S.N.name)) return second
+    // the worker's own merge of main (saved in the runs) sits on the task's line: its first parent is the task's own commit
+    if (saved.has(merged)) {
+      const f = await git($, ['log', '-n', '1', '--format=%B', first]).catch(() => null)
+      if (f && f.exitCode === 0 && own(first, String(f.stdout ?? ''))) return second
+    }
+    return first
+  }
+  const log = await git($, ['log', '--first-parent', '-n', '200', '--format=%H%x1f%P%x1f%B%x1e', merged]).catch(() => null)
+  if (!log || log.exitCode !== 0) return first
+  for (const entry of String(log.stdout ?? '').split('\x1e')) {
+    const [sha, parents, msg] = entry.trim().split('\x1f')
+    if (!sha) continue
+    if (!own(sha, msg ?? '')) return sha
+    // the task's own merge of main (symcc's catch-up, or the worker's own): main as it was then is its second parent
+    const second = (parents ?? '').split(' ')[1]
+    if (second) return second
+  }
+  return first
+}
+
+/** What a done task's page shows under Changes: its files, the commit it merged as, and what main was before it. */
+export type MergedChanges = { files: DiffFile[]; error: string; merged: string; before: string }
+
+/** T-1086: the answers kept in memory for the page (nothing is saved in the data folder); null: nothing to show. */
+const mergedMemo = new Map<string, MergedChanges | null>()
+
+/** Forgets the answers kept in memory (a plugin reload; tests). */
+export function resetMergedChanges() {
+  mergedMemo.clear()
+}
+
+/**
+ * T-1086: a done change task's Changes: `git diff --numstat <main before> <merged commit>`, read from the commits
+ * the task recorded; null for an investigation or errand, a task with no merged commit, or when git has none of it.
+ */
+export async function mergedChanges($: Host, t: SymccTask): Promise<MergedChanges | null> {
+  if (!hasMergedChanges(t)) return null
+  const merged = (t as BoardTask).merged!
+  const key = `${t.id}:${merged}`
+  if (mergedMemo.has(key)) return mergedMemo.get(key)!
+  const before = await mergedBefore($, t, merged)
+  const r = before ? await git($, ['diff', '--numstat', '--no-renames', before, merged]).catch(() => null) : null
+  const files = r && r.exitCode === 0 ? parseNumstat(String(r.stdout ?? '')) : []
+  const got = files.length ? { files, error: '', merged, before } : null
+  // a missing commit or an empty diff is a final answer (kept); a failed git diff is tried again next time
+  if (!before || r?.exitCode === 0) mergedMemo.set(key, got)
+  return got
+}
+
+/** T-1086: said in place of a done task's diff when git no longer has its commits. */
+export const DIFF_GONE = 'diff not available'
+
+/** T-1086: a done task's diff (all files, or just `file`) from git: `git diff <before> <merged> -- <file>`; DIFF_GONE when git has no such commits. */
+export async function mergedDiff($: Host, t: SymccTask, file = ''): Promise<string> {
+  const c = await mergedChanges($, t).catch(() => null)
+  if (!c) return DIFF_GONE
+  const r = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', c.before, c.merged, ...(file ? ['--', file] : [])]).catch(() => null)
+  return r && r.exitCode === 0 ? String(r.stdout ?? '') : DIFF_GONE
 }
 
 /** T-527: the git tree id of commit `commit` (the code a test run tests), or '' when git can't tell. */
@@ -539,13 +716,13 @@ export async function alreadyMerged($: Host, t: Pick<SymccTask, 'id' | 'branch' 
  * landed on the target branch (`merged`). Read fresh inside the change, so no other write is lost.
  * A failure to save is told to the lead, never hidden; the merge itself already happened.
  */
-export async function recordCommits($: Host, id: string, made: readonly string[], merged?: string) {
-  if (!made.length && !merged) return
+export async function recordCommits($: Host, id: string, made: readonly string[], merged?: string, size?: ChangeSize) {
+  if (!made.length && !merged && !size) return
   try {
     await change($, x => {
       const cur = find(x, id)
       if (!cur) return x
-      return patchTask(x, id, { runs: addCommits(cur.runs, made), ...(merged ? { merged } : {}) }, now())
+      return patchTask(x, id, { runs: addCommits(cur.runs, made), ...(merged ? { merged } : {}), ...(size ? { size } : {}) }, now())
     })
   } catch (e) {
     tellLead($, `${id}: could not save its commits on the board (${(e as Error).message.slice(0, 200)}). Commits: ${[...made, ...(merged ? [merged] : [])].join(', ')}`)

@@ -17,12 +17,12 @@ export type Command =
   | { kind: 'open' }
   | { kind: 'tasks' }
   /** /<name>-board: opens the board panel (on Live), as /<name> does where there is a panel */
-  | { kind: 'board' }
+  | { kind: 'board'; html?: true }
   /** /<name>-status (T-902): the Live tab's picture as text in the chat; never opens the panel */
   | { kind: 'status' }
   /** /<name>-scout with no name: opens the panel on the Scouts view and reloads the scout files (a text list with no panel) */
   | { kind: 'scouts' }
-  | { kind: 'show'; id: string }
+  | { kind: 'show'; id: string; page?: number }
   /** /<name>-task T-5 <verb> [...]: one of the task page's actions, as the lead's tools do it (see TASK_VERBS) */
   | { kind: 'task-do'; id: string; verb: TaskVerb; reason?: string; role?: string; on?: boolean; anyway?: boolean }
   | { kind: 'approve'; id: string }
@@ -154,13 +154,16 @@ export function parseCommand(command: string, args: string, current: SymccMode =
     case 'tasks':
       return s ? use(`/${name}-tasks`) : { kind: 'tasks' }
     case 'board':
-      return s ? use(`/${name}-board`) : { kind: 'board' }
+      return s === 'html' ? { kind: 'board', html: true } : s ? use(`/${name}-board [html]`) : { kind: 'board' }
     case 'status':
       return s ? use(`/${name}-status`) : { kind: 'status' }
     case 'task': {
       if (!isId(id)) return use(taskUsage(name))
       if (words.length === 1) return { kind: 'show', id: normId(id!) }
-      const verb = words[1]!.toLowerCase() as TaskVerb
+      const w1 = words[1]!.toLowerCase()
+      if (w1 === 'more' && words.length === 2) return { kind: 'show', id: normId(id!), page: 2 }
+      if (w1 === 'page' && words.length === 3 && /^\d+$/.test(words[2]!) && Number(words[2]) >= 1) return { kind: 'show', id: normId(id!), page: Number(words[2]) }
+      const verb = w1 as TaskVerb
       if (!TASK_VERBS.includes(verb)) return use(taskUsage(name))
       const rest = s.replace(/^\S+\s+\S+\s*/, '').trim()
       const at = { kind: 'task-do' as const, id: normId(id!), verb }

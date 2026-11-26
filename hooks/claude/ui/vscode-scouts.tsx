@@ -13,9 +13,8 @@ import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
 import type { PaneParts } from './parts'
 import { row } from './arrows'
-import { resetPane } from '../../app/open'
 import { claudeHost } from '../host'
-import { vsBadge, vsFooter, vsHref, vsLink, mdLink, vsSection, cutEnd } from './vscode'
+import { vsFooter, vsHref, vsLink, mdLink, vsSection, cutEnd } from './vscode'
 import { vsRowRoom } from './vscode-list'
 import { type PageHeader, vsPageHeader } from './page-header'
 
@@ -89,7 +88,7 @@ export function scoutsListVs($: $, pane: PaneParts) {
   }
 
   const newBox = S.naming ? (
-    <Box key="vs-scout-new" flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
+    <Box key="vs-scout-new" flexDirection="column">
       <Input
         key="scout-new-name"
         label="New scout's name"
@@ -113,16 +112,13 @@ export function scoutsListVs($: $, pane: PaneParts) {
     <Box flexDirection="column" gap={1}>
       {header('scouts')}
       {scouts.length ? plain('vs-scouts-findings-default', findingsDefaultLine(board)) : null}
-      {scouts.length === 0 ? <Box key="vs-scouts-howto" flexDirection="column" borderStyle="round" borderColor={C('subtle')} paddingX={1}>{scoutHowTo(S.N.name).map((line, i) => plain(`howto-${i}`, line.replace(/ \([a-z]\)(?=\s|$)/g, ''), i === 0 ? 'text' : 'inactive'))}</Box> : null}
+      {scouts.length === 0 ? <Box key="vs-scouts-howto" flexDirection="column">{scoutHowTo(S.N.name).map((line, i) => plain(`howto-${i}`, line.replace(/ \([a-z]\)(?=\s|$)/g, ''), i === 0 ? 'text' : 'inactive'))}</Box> : null}
       {scouts.length ? (
         <Box key="vs-scouts-rows" flexDirection="column">
           {scouts.map(scoutLine)}
         </Box>
       ) : null}
       {newBox}
-      <Box key="vs-scouts-back-row" flexDirection="row">
-        <Button key="scouts-back" label="← Tasks" variant="secondary" onPress={act(() => resetPane(claudeHost($), 'tasks'))} />
-      </Box>
       {vsFooter(vs, 'scouts-keys')}
     </Box>
   )
@@ -165,7 +161,7 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run: st
             <Button key="scout-run-back" label={`← ${sc.name}`} variant="secondary" autoFocus onPress={closeRun} />
           </Box>
           <Text key="vs-run-title" wrap="wrap">
-            <Text bold color={C('claude')}>{sc.name}</Text>
+            <Text bold color={C('text')}>{sc.name}</Text>
             <Text color={C('inactive')}>{` · run that ended ${opened.run.ended}`}</Text>
           </Text>
           {plain('vs-run-line', scoutRunLine(opened.run, opened.tasks, nowMs), scoutOutcomeTone(opened.run.outcome))}
@@ -183,7 +179,7 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run: st
   const cycleFindings = act(async () => $.ui.toast(S.N.toast(await cycleScoutFindings(claudeHost($), sc.name))))
   return (
     <Box key="vs-scout-page" flexDirection="column" gap={1}>
-      {vsPageHeader(pane, header)}
+      {vsPageHeader(pane, { ...header, color: 'text' })}
       <Box key="vs-scout-findings-row" flexDirection="row" flexWrap="wrap" columnGap={2}>
         {plain('vs-scout-findings-line', findingsLine(sc.findings, board), 'text')}
         {vsLink(vs, 'scout-findings', mdLink('Change', findingsHref), [[findingsHref, cycleFindings]])}
@@ -201,17 +197,19 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run: st
         'Runs',
         shown.length
           ? [
-              plain('vs-runs-hint', 'Click a run to see its report'),
-              // each run: its time a link that opens its report (text, not a Button: VS Code draws a Button as a blue box),
-              // and under it what it found, in its outcome's color
+              // each run is one line: its time a link that opens its report (text, not a Button: VS Code draws a
+              // Button as a blue box), then what it found, in its outcome's color, cut with "…" to the room left
               ...shown.map(x => {
                 const line = scoutRunLine(x.run, x.tasks, nowMs)
                 const cut = line.indexOf(' · ')
                 const href = vsHref('run', x.run.ended)
+                const time = cut < 0 ? line : line.slice(0, cut)
                 return (
-                  <Box key={`vs-run-${x.run.ended}`} flexDirection="column">
-                    {vsLink(vs, row(`scout-run:${x.run.ended}`), `run ${mdLink(cut < 0 ? line : line.slice(0, cut), href)}`, [[href, showRun(x.run.ended)]])}
-                    {cut < 0 ? null : <Text key={`vs-run-${x.run.ended}-info`} wrap="wrap" color={C(scoutOutcomeTone(x.run.outcome))}>{line.slice(cut + 3)}</Text>}
+                  <Box key={`vs-run-${x.run.ended}`} flexDirection="row" columnGap={1}>
+                    <Box key={`vs-run-${x.run.ended}-time`} flexShrink={0} minWidth={time.length + 4}>
+                      {vsLink(vs, row(`scout-run:${x.run.ended}`), `run ${mdLink(time, href)}`, [[href, showRun(x.run.ended)]])}
+                    </Box>
+                    {cut < 0 ? null : <Text key={`vs-run-${x.run.ended}-info`} wrap="truncate" color={C(scoutOutcomeTone(x.run.outcome))}>{line.slice(cut + 3)}</Text>}
                   </Box>
                 )
               }),
@@ -248,8 +246,8 @@ export function scoutEditPageVs($: $, pane: PaneParts) {
     <Box key="vs-scout-edit-page" flexDirection="column" gap={1}>
       <Box key="vs-scout-edit-top" flexDirection="column">
         <Box key="vs-edit-title" flexDirection="row" flexWrap="wrap" columnGap={2}>
-          <Text key="name" wrap="wrap" bold color={C('claude')}>{d.scout}</Text>
-          {vsBadge(vs, 'vs-edit-badge', d.isNew ? 'new scout' : 'editing', 'warning')}
+          <Text key="name" wrap="wrap" bold color={C('text')}>{d.scout}</Text>
+          <Text key="vs-edit-badge" color={C('inactive')}>{d.isNew ? 'new scout' : 'editing'}</Text>
         </Box>
         {r ? plain('vs-edit-facts', [r.every, r.model, r.ran].filter(Boolean).join(' · ')) : null}
         {plain('vs-edit-note-0', `Save writes ${file}; other front matter keys are kept.`)}

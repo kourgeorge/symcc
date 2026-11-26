@@ -1,6 +1,8 @@
 import type { SymccTask } from '../../types'
 import { isFinished, priorityError, makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, filesAllowedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, PROSE_ROLE_TEXT, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
 import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
+import { checkerReportOf } from '../core/task-sections'
+import { sizeSegs } from '../core/page-header'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
@@ -9,6 +11,7 @@ import { S, heard, workers, starting, toolName } from './state'
 import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { statsHtml, openCommands } from '../core/stats-html'
+import { boardHtml } from '../core/board-html'
 import { doctor } from './doctor'
 import { noteForLead, brief, tellLead } from './tell'
 import { playable, playSample } from './voice'
@@ -16,30 +19,53 @@ import { pump, startNow, approve, mergeWaiting, checkingNow, stopAsked, CHECKING
 import { stopWorker, setBoardMode, setSymcc } from './board-mode'
 import { answerOvertime } from './cleanup'
 import { haltChecker } from './checker'
-import { questionTool, boardAnswered } from './questions'
+import { moveStage } from './move'
+import { isCheckerAsk, parseCheckerAnswer, CHECKER_ASK_OPTIONS } from '../board'
+import { questionTool, boardAnswered, popup, answerTail } from './questions'
 import { markMerged } from './merged'
-import { publish, enableHere } from './lead'
-import { orgMemTool } from './org-mem'
+import { publish, enableHere, statusView } from './lead'
+import { orgMemTool, orgMemNow } from './org-mem'
+import { tasksListText } from '../core/task-list'
+import { liveStatusText } from '../core/live-text'
+import { chatTasksText, chatStatusText, chatTaskText } from '../core/chat-text'
 import { ORG_MEM_MAX_LINES, TOPIC_MAX_CHARS } from '../core/org-mem'
-import { canRunNow, runNowLine, runNowPlanText, runNowQuestion, runNowRefusal, runNowShares, runNowWaits } from '../core/run-now'
+import { backlogMovedText, canRunNow, runNowLine, runNowPlanText, runNowQuestion, runNowRefusal, runNowShares, runNowWaits } from '../core/run-now'
 
 /** T-717: how the lead keeps org-mem's topics tidy (in the orgmem tool's description and the lead's guide). */
 const TOPIC_RULES = 'reuse an existing topic when it fits (a new one only when nothing fits); keep about 6-10 topics; split a topic past ~15 notes, and merge one with only 1-2 notes into a close one; a topic disappears when its last note goes.'
 
 // ---------------- the lead's tools ----------------
 
+/** T-1024: an add with the title and details of a task added within this long answers that task instead of adding another. */
+/** T-1079: a history line the lead's change or question wrote is the lead's ("lead: ..."); the owner's answer stays the owner's. */
+const leadLine = (l: HistoryAdd): HistoryAdd => (l[0] === 'answer' ? l : [l[0], l[1], { ...l[2], by: 'lead' }])
+const leadLines = (ls: HistoryAdd[]): HistoryAdd[] => ls.map(leadLine)
+const sameJson =(x: unknown, y: unknown): boolean => JSON.stringify(x) === JSON.stringify(y)
+const ADD_AGAIN_MS = 5 * 60_000
+
 /** The latest saved report of task `t` (see taskReports): its file and text; text null when the file can't be read. Null when there is none. */
-export async function latestReport($: Host, t: SymccTask): Promise<{ file: string; try: number; text: string | null } | null> {
+export async function latestReport($: Host, t: SymccTask): Promise<ReportRead | null> {
   const r = taskReports(t).at(-1)
   if (!r) return null
-  return { ...r, text: await $.fs.read(path(r.file)).then(x => String(x), () => null) }
+  const read = (file: string) => $.fs.read(path(file)).then(x => String(x), () => null)
+  // T-1079: the checker's saved report of that try comes with it (its own section in taskText)
+  const c = checkerReportOf(t, r.try)
+  return { ...r, text: await read(r.file), ...(c ? { checker: { file: c.file, agent: c.agent, text: await read(c.file) } } : {}) }
 }
 
+/** A saved report read from its file (text null when it can't be read), with the try's checker report when it had one (T-1079). */
+export type ReportRead = { file: string; try: number; text: string | null; checker?: { file: string; agent: string; text: string | null } }
+
 /** Task `t` as text for /<name>-task; `report` is its latest saved report (latestReport), shown last. */
-export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: { file: string; try: number; text: string | null } | null, archivedDone: string[] = []): string {
+export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: ReportRead | null, archivedDone: string[] = []): string {
   const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
+  // T-1080: how big its change is, right under the title
+  const size = sizeSegs(t as BoardTask)
+  if (size) L.push(size.map(x => x.text).join(''))
   L.push(fromText(t, 120))
+  // T-1080: what the whole task has done so far (its worker's latest "Done:" line)
+  if ((t as BoardTask).done) L.push(`Done: ${(t as BoardTask).done}`)
   if (t.origin?.why) L.push(`why: ${t.origin.why}`)
   if (t.origin?.evidence) L.push(`seen by ${S.N.name}: ${t.origin.evidence}`)
   if (shownNote(t)) L.push(`${stateLabelLower()}: ${shownNote(t)}`)
@@ -64,6 +90,7 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
   if (t.research_notes?.length) L.push('', ...t.research_notes.map(f => `Research: ${f}`))
   if (report === null && t.attempts > 0) L.push('', 'Report: no saved report')
   if (report) L.push('', `Report (try ${report.try}, ${report.file}):`, ...(report.text === null ? ['  (could not read the file)'] : reportPreview(report.text, report.file).map(l => (l ? `  ${l}` : ''))))
+  if (report?.checker) L.push('', `Checker (try ${report.try}${report.checker.agent ? ` · ${report.checker.agent}` : ''}, ${report.checker.file}):`, ...(report.checker.text === null ? ['  (could not read the file)'] : reportPreview(report.checker.text, report.checker.file).map(l => (l ? `  ${l}` : ''))))
   const older = taskReports(t).filter(r => r.try !== report?.try)
   if (report && older.length) L.push('', 'Older tries\' reports:', ...older.map(r => `  try ${r.try}: ${r.file}`))
   if (running) L.push('', 'A worker is on it now: open it from the agents list to watch.')
@@ -95,6 +122,7 @@ ${features.panel ? `  /${S.N.name} opens everything; /${S.N.name}-WORD does one 
   (approve, reject, diff), and mode and settings change how the board works.`}
 ${features.panel ? `  /${S.N.name}                     open the board panel (↑↓ move, Enter opens, f searches the tasks, t / l / s / c switch views)
   /${S.N.name}-board               open the board panel (on Live), as /${S.N.name} does
+  /${S.N.name}-board html          write the board as one web page (${S.N.dir}/board.html) and open it
   /${S.N.name}-tasks               list the open tasks in the chat (what needs you, running, in review,
                        failed, to do), then the backlog and today's done and dropped counts
   /${S.N.name}-scout               open the panel on the scouts view and reload the scout files` : `  /${S.N.name}                     show the board
@@ -165,8 +193,9 @@ ${features.panel ? '' : `  /${S.N.name}-board               show the board panel
   /${S.N.name}-doctor [fix [id ...]] check ${S.N.dir}/ and git: old migration backups, task branches
                        already merged, folders of finished tasks, stale worktree entries,
                        files near the 4 MB limit, stray files and a stuck board, with sizes;
-                       "fix" cleans up every item it offers, "fix b-T-5 w-T-5" only those. Unmerged
-                       branches and folders with uncommitted changes are only listed
+                       "fix" cleans up every item it offers, "fix b-T-5 w-T-5" only those. For a dropped
+                       task, fix also deletes its folder with unsaved changes and its unmerged
+                       branch (they can't be got back); for other tasks such work is only listed
   /${S.N.help} [TOPIC]           this manual
 ${features.panel ? `On the board: t tasks · l live · s scouts · c settings · m switch approve merge / auto merge.
 In the settings view: Enter on a row changes it: on/off flips, mode, notify, scout_findings and
@@ -174,7 +203,7 @@ In the settings view: Enter on a row changes it: on/off flips, mode, notify, sco
   · Cancel (x) or Enter on an empty box leaves it · b back to the tasks.
 In the panel nothing needs Esc: Enter on an empty text box cancels it (on the search it clears the
   search), and pick lists and pages have a Cancel or Back button. On the board list x clears a search.
-In an open task: b back · p pause · u resume · r retry · x drop · w watch the worker · n needs review on/off
+In an open task: b back · p pause · u resume · r retry · x drop · e run now (to do tasks) · w watch the worker · n needs review on/off
   · y copy the task's content · z stash to the backlog (a task to do, paused or failed)
   · l pick the worker role (a task to do, paused, failed or in the backlog).
   · h already merged: marks a failed, waiting, paused or dropped task done whose work was merged by hand (checked with git first; nothing is merged or tested).
@@ -266,7 +295,9 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     every slot is busy (one over; nothing else starts until back under) or the board is
     paused (only that one starts). One that waits on unfinished tasks asks first.
   • A worker gets only its task, its folder, its allowed files and the test commands.
-    It can't see the board or this chat, and must not commit, push or merge.
+    It can't see the board or this chat. It may change git only in its own folder, on its
+    own branch (commit, merge, cherry-pick, restore...); push, fetch, pull, other branches,
+    worktree, config, tags and stash are refused.
   • A resumed or retried task starts over with a fresh worker.
   • A worker's edit of a file outside its list is refused and recorded as a request;
     the worker then stops. The task waits for you: ${features.panel ? `on its page press Allow (the files
@@ -354,7 +385,7 @@ This section is for the main conversation only. If you are a subagent (a ${S.N.n
 
 The project has a shared task board (${S.N.dir}/board.json) that you and the owner manage together by talking. You decide how the work runs:
 - Turn what the owner wants into tasks with ${S.N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes. Every change task's details say how the change will be tested, e.g. "Done when: tests show …" (the test that will check it). A change task whose commit edits code but no test file is flagged before merging (setting tests_with_changes: ask, the default, merges it and tells you "T-5 changed code but no test", so follow up with a test task or ask the owner; review makes it wait for the owner's review; off does nothing). Test files: in a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder (or a folder ending .Test/.Tests), or with test/spec/e2e/cy as a name part split by . _ or - (a.test.ts, a-test.ts, a.cy.ts), or a name ending in Test/Tests (FooTest.java); latest.ts and run-tests.sh are not tests. Docs: .md/.mdx, README/CHANGELOG/LICENSE names, images/video/audio/fonts, non-code files under docs/ (not docs/build.ts or Notice.tsx). A docs-only change is never flagged.
-- Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly; for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
+- Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly (when those words are a short reply like "yes", quote “<the owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<the reply>”); for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - Workers can't read the board or ${S.N.dir}/ (no board tool, and their folder is their own copy). To hand a worker an earlier task's answer, give its task from_task (that task's latest report is copied into the worker's folder and its prompt names it), or name the report file (${S.N.dir}/reports/T-n-try-N.md, or T-n-try-*.md for the latest), or paste the key facts into the details.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
@@ -363,22 +394,24 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged. Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers to a task) and merges they approved don't send you a message: they come as "Meanwhile" lines (also quiet retries, reload restarts and plain merges): at the top of the next board update, or beside the owner's next message if that comes first. They need no reply; just take them into account. Only the owner setting up git, or allowing or refusing a task's files on the board, wakes you at once with a board update.
 ${
-  S.W.askPopup
-    ? `- Ask every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") with ${S.W.askPopup} (2 to 4 short options). ${S.N.name} puts each such question on the board by itself as a Q-n, so don't also add a ${S.N.name} question for it. Whichever the owner answers first closes the other: a board answer comes back as the pop-up's answer, and a pop-up answer closes the Q-n (the tool result says so). If the owner closes the pop-up without answering, the Q-n stays on the board, and a later board answer wakes you with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it." (already closed: act on it and don't ask again). Only for a question with 5 or 6 options, first add it with ${S.N.name} question (action add), then ask it with ${S.W.askPopup} with the same question text and the first 3 options plus "the rest on the board": the pop-up is tied to that Q-n. Drop a question that no longer matters (${S.N.name} question action drop). A question about one task stays ${S.N.name} ask.
-- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask in the chat with ${S.W.askPopup}, with the same options (where a line here says numbered plain chat text, use ${S.W.askPopup} with those options), with the question's header set to exactly the task id (T-5; an id only mentioned in the question text doesn't tie it). ${S.N.name} ties that pop-up to the task's own board question (no Q-n is added): whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into the task for you (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a note), and the tool result says what was done and what is left for you (e.g. a reject's reason: then ${S.N.name} reject yourself). ${S.W.askPopup} takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board" (or the owner types one under Other); when the owner picks "the rest on the board", the board question stays open and a board update brings their answer. Don't stack two questions under the same numbers: ask one at a time.`
-    : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "or answer on the board". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
-- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "or answer on the board". Don't stack two questions under the same numbers: ask one at a time.`
-}
+  popup()
+    ? `- Ask every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") with ${popup()} (2 to 4 short options). ${S.N.name} puts each such question on the board by itself as a Q-n, so don't also add a ${S.N.name} question for it. Whichever the owner answers first closes the other: a board answer comes back as the pop-up's answer, and a pop-up answer closes the Q-n (the tool result says so). If the owner closes the pop-up without answering, the Q-n stays on the board, and a later board answer wakes you with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it." (already closed: act on it and don't ask again). Only for a question with 5 or 6 options, first add it with ${S.N.name} question (action add), then ask it with ${popup()} with the same question text and the first 3 options plus "the rest on the board": the pop-up is tied to that Q-n. Drop a question that no longer matters (${S.N.name} question action drop). A question about one task stays ${S.N.name} ask.
+- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask in the chat with ${popup()}, with the same options (where a line here says numbered plain chat text, use ${popup()} with those options), with the question's header set to exactly the task id (T-5; an id only mentioned in the question text doesn't tie it). ${S.N.name} ties that pop-up to the task's own board question (no Q-n is added): whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into the task for you (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a note), and the tool result says what was done and what is left for you (e.g. a reject's reason: then ${S.N.name} reject yourself). ${popup()} takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board" (or the owner types one under Other); when the owner picks "the rest on the board", the board question stays open and a board update brings their answer. Don't stack two questions under the same numbers: ask one at a time.`
+    : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "${answerTail()}". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
+- Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask as plain chat text with numbered options, plus "${answerTail()}". Don't stack two questions under the same numbers: ask one at a time.`
+}${S.chat ? `\n- When the owner asks "status", "tasks", "what's running" or "show T-5" in plain words, answer with ${S.N.name} board view status, view tasks, or task T-5, and post that text to the chat. When the owner says "more" or "more tasks" (or the text ended with "say 'more …'"), call the same view (or task) again with page 2, then 3, and so on, and post that. Page again only on "say 'more …'": a filtered list's "+N more match: narrow the search" can't be paged. To show the board as a picture, make it with ${S.N.name} board view html and send the file it names with the chat's reply tool (Telegram's reply takes files).` : ''}
 - The board has one mode (${S.N.name} settings mode): "paused" stops every worker and scout and starts nothing new, "review" (shown to the owner as "approve merge") runs work but every finished task that passes waits for the owner, "auto" (shown as "auto merge"; the default) merges finished work that passes on its own. Tasks in review can be approved or rejected in every mode.
 - In mode "review", ask the owner before every ${S.N.name} add, whatever the task comes from (the owner's words, a scout finding, a worker's report, your own idea): say in one or two lines what the task would be, and add it only after a yes. In mode "auto" you add tasks as usual. Plain answers, notes (add_details) and board actions (approve, pause, settings) need no asking.
 - Review before merge (optional): in mode review, or with needs_review on one task (${S.N.name} add / change), a finished task that passes stays "ready for review" instead of merging. You get "T-5 is ready for review": show the owner the change (its branch), then ${S.N.name} approve T-5 (merge it) or ${S.N.name} reject T-5 with the owner's reason (a fresh worker redoes it). Only approve when the owner says so. Going from review to auto does not merge tasks already in review.
+- Moving a task to a stage: ${S.N.name} change T-5 with stage (work, check, tests or review) moves it, with its branch as it is, to that stage of its run. Use it when the owner wants a step skipped or repeated, e.g. "no need to check again, just test" is stage tests (the merge queue now, no checker; it merges if its tests pass); check starts a fresh checker; work is a new worker try; review waits for the owner. A running worker or checker is stopped first. It uses no automatic retry.
+- A task that failed for good: don't retry it on your own (even though a retry is possible). Ask the owner first, unless they already said to retry that task. A task the checker sent back twice waits for the owner on its own with "Merge as is / Keep fixing / Drop"; put their answer in with ${S.N.name} change answer: their words.
 - Work merged by hand: when a task's branch was merged outside the board (by the owner, or by you on the owner's word, e.g. its only failure was the merge tests timing out), don't drop it and don't let a new worker redo it: ${S.N.name} merged T-5 marks it done. ${S.N.name} checks with git that all its commits are in the branch it merges into and refuses with the reason if not; nothing is merged or tested, its folder and branch are cleaned up, and tasks waiting on it start. It works for a task that is to do, running, failed, waiting, paused, in review or dropped. Use it only after the owner's word or a rule the owner set.
-- Investigation or change (the kind parameter of ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself.
-- An answered investigation ("T-5 is answered") waits in review for the owner to read its answer; it has nothing to merge. Tell the owner the answer in the chat, short and plain (read it with ${S.N.name} board task T-5), and offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "or answer on the board". On the owner's word: ${S.N.name} approve T-5 is Done (it ends done; its folder is removed, and its branch too unless it has commits from earlier tries, which are kept; the reply says so), ${S.N.name} approve T-5 with keep_note: true is Keep as a note (Done, plus a new docs task that writes docs/research/<topic>.md from the answer and merges as usual), and ${S.N.name} reject T-5 with their follow-up question is Ask more (a fresh try gets the question and the earlier answer).
+- Investigation or change (the kind parameter of ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself. Add an errand (kind: errand) when the owner wants something done that is not a change to the project (tidy a folder outside the repo, gather files, write something outside the project): the worker's report is its result and the task ends done on its own, in every mode. Investigation: the owner wants an answer to read; errand: the owner wants something done.
+- An answered investigation ("T-5 is answered") waits in review for the owner to read its answer; it has nothing to merge. Tell the owner the answer in the chat, short and plain (read it with ${S.N.name} board task T-5), and offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "${answerTail()}". On the owner's word: ${S.N.name} approve T-5 is Done (it ends done; its folder is removed, and its branch too unless it has commits from earlier tries, which are kept; the reply says so), ${S.N.name} approve T-5 with keep_note: true is Keep as a note (Done, plus a new docs task that writes docs/research/<topic>.md from the answer and merges as usual), and ${S.N.name} reject T-5 with their follow-up question is Ask more (a fresh try gets the question and the earlier answer).
 - A worker that tries to edit a file outside its task's files is refused (${S.N.name} records the path as a request) and stops; the task then waits for the owner, asking to allow those files. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you are told at once) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files another way (e.g. a shell command) fails its try at the merge's scope check.
-- A worker that needs the owner to decide something calls its own question tool, ${toolName('ask_owner')} (maybe with options, which the board shows as buttons), and stops; that tool is for workers only: you never call it (to make a task wait with your own question, use ${S.N.name} ask). The task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "symcc: T-5 needs you" (the project's name first) (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as numbered plain chat text, plus "or answer on the board". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
+- A worker that needs the owner to decide something calls its own question tool, ${toolName('ask_owner')} (maybe with options, which the board shows as buttons), and stops; that tool is for workers only: you never call it (to make a task wait with your own question, use ${S.N.name} ask). The task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "symcc: T-5 needs you" (the project's name first) (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as numbered plain chat text, plus "${answerTail()}". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
 - A worker whose run ended on an API error (retries used up, the context limit) or a refusal fails its try with that reason, and nothing is checked or merged; its work stays in its folder and branch, so ${S.N.name} retry continues from there. But when ${S.N.name} itself stopped that worker (a reload, a takeover, driving moved to another session), the try does not fail: a new worker goes on with the same try. What a worker writes in its hand-back is only its report: symcc never reads a question or a file request out of it.
-- A worker that runs past its time limit (max_minutes, plus any time the owner added) is not stopped: it keeps working, its task stays doing with the note "over time; asked the owner", and you are told "T-5 has run 45 min. Give it more time?" with the options +30 min | +60 min | Stop it (the owner hears "needs you" too, and the board shows them as buttons). Ask the owner in the chat, offering those choices as numbered plain chat text, plus "or answer on the board"; put their pick into the task with ${S.N.name} change and answer: "+30 min", "+60 min" (any "+N min" works) or "Stop it". More time moves that task's limit later and the worker goes on. Stop it (or no answer by the limit plus max_minutes again) tells the worker to write down what it has and hand back; a few minutes later it is stopped and the task fails, with its work kept in its folder, branch and report, so a retry continues from there.
+- A worker that runs past its time limit (max_minutes, plus any time the owner added) is not stopped: it keeps working, its task stays doing with the note "over time; asked the owner", and you are told "T-5 has run 45 min. Give it more time?" with the options +30 min | +60 min | Stop it (the owner hears "needs you" too, and the board shows them as buttons). Ask the owner in the chat, offering those choices as numbered plain chat text, plus "${answerTail()}"; put their pick into the task with ${S.N.name} change and answer: "+30 min", "+60 min" (any "+N min" works) or "Stop it". More time moves that task's limit later and the worker goes on. Stop it (or no answer by the limit plus max_minutes again) tells the worker to write down what it has and hand back; a few minutes later it is stopped and the task fails, with its work kept in its folder, branch and report, so a retry continues from there.
 - To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its history; a running task restarts). A change to a running task's details, title or files (add_details too) restarts its try, so put a note in the same change as an answer instead of sending it a moment later. After a checker send-back (or any other retry, not a task's first try), add your note within a minute of the retry starting: a retry under a minute old starts again with the note on the same try number (no lost try); later, the note restarts it as a new try. Changing only its priority or after-list keeps it running (saved for its next try). details rewrites the whole text, so use it only for a full rewrite, never both at once.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
@@ -407,28 +440,28 @@ Talk like a team lead about the board. News first: the first line says what happ
 - Out of work (last task merged, nothing to do, running or waiting) with a backlog: name 2-3 backlog items to move to todo (bugs and safety first), so the owner can pick.
 - An update that only says an agent is starting ends with "No reply needed; end the turn without a message.": send no message at all.
 - New task: "Added T-n  <title in ≤ 10 words>", then one line for what waits on what, if anything.
-- Question for the owner (in chat text): the question in one sentence, then the choices numbered, then "(or answer on the board)".
+- Question for the owner (in chat text): the question in one sentence, then the choices numbered, then "(${answerTail()})".
 - A worker's or checker's report: at most 3 short bullets of what matters to the owner (what changed for them, any limit or risk), not its file list.
 - Longer explanations (the owner asks how, why, WDYT): plain English, short sentences, a table or a sketch when it helps.`
 
 /** The kind parameter of add and change. */
-const KIND_PARAM = () => ({ type: 'string', description: `The task type: ${[...new Set([...BUILT_IN_KINDS.filter(n => !S.kinds.some(k => k.name === n && k.off)), ...kindNames(S.kinds)])].join(', ')}, or the owner's own (see your instructions for what each is for); change when unsure. Every task type but investigation runs like change (the default): the worker changes files, which are committed, tested and merged. investigation: the worker finds an answer and hands it back; nothing is committed, tested or merged, and it always waits for the owner to read it (even in mode auto). A researcher task is an investigation unless you give kind; use change (or docs) for a researcher when the owner wants a lasting document that later tasks will read.` })
+const KIND_PARAM = () => ({ type: 'string', description: `The task type: ${[...new Set([...BUILT_IN_KINDS.filter(n => !S.kinds.some(k => k.name === n && k.off)), ...kindNames(S.kinds)])].join(', ')}, or the owner's own (see your instructions for what each is for); change when unsure. Every task type but investigation and errand runs like change (the default): the worker changes files, which are committed, tested and merged. investigation: the worker finds an answer and hands it back; nothing is committed, tested or merged, and it always waits for the owner to read it (even in mode auto). errand: general work that isn't a change to the project; the task ends done on its own after the worker hands back, and nothing is merged. A researcher task is an investigation unless you give kind; use change (or docs) for a researcher when the owner wants a lasting document that later tasks will read.` })
 
 export const TOOLS = () => [
   {
     name: 'board',
-    description: `Show the ${S.N.name} task board. With nothing: the open tasks and the backlog in full, done and dropped ones only as counts. With status and/or search: only the tasks that match (search takes filter words like last:5, top:3, since:2d, type:bug, waits-on:T-3, blocks:T-3, stuck); limit / sort keep the newest or next-to-run ones. With task: that one task in full (also an archived one), with its latest worker report and the files of older tries' reports.`,
-    inputSchema: { type: 'object', properties: { task: { type: 'string', description: 'A task id, e.g. T-12, to see in full with its latest report.' }, status: { type: 'array', items: { type: 'string', enum: [...BOARD_STATUSES, 'open'] }, description: 'Only tasks with one of these statuses; "open" = everything not done, dropped or backlog. E.g. ["done"] to see the done tasks.' }, search: { type: 'string', description: 'Words; only tasks matching every word (id, title, details, role, status, origin), the same way as the board panel\'s search. Filter words too: last:N (the N changed most recently, newest first), top:N (the next N to run), since:30m / 2h / 2d / 2026-11-18 (changed since), status:done (or open), type:bug, role:tester, waits-on:T-3 (tasks waiting on T-3, directly or through a chain), blocks:T-3 (the not-done tasks T-3 still waits for), stuck (todo tasks that can\'t start: something they wait for is failed, paused, waiting, dropped or missing). E.g. "last:5 status:done" or "waits-on:T-3 status:todo".' }, limit: { type: 'number', description: 'Show at most this many (the same as last:N, or top:N with sort "order").' }, sort: { type: 'string', enum: ['newest', 'order'], description: 'newest: most recently changed first (as last:); order: what runs next first (as top:).' } } },
+    description: `Show the ${S.N.name} task board. With nothing: the open tasks and the backlog in full, done and dropped ones only as counts. With status and/or search: only the tasks that match (search takes filter words like last:5, top:3, since:2d, type:bug, waits-on:T-3, blocks:T-3, stuck); limit / sort keep the newest or next-to-run ones. With task: that one task in full (also an archived one), with its latest worker report and the files of older tries' reports. With view "tasks" or "status": exactly the text of /${S.N.name}-tasks or /${S.N.name}-status (in chat mode the short chat shape), to post to a chat.`,
+    inputSchema: { type: 'object', properties: { view: { type: 'string', enum: ['tasks', 'status', 'html'], description: 'tasks: the open tasks list (as /symcc-tasks); status: the Live status (as /symcc-status). Chat shape in chat mode. html: writes the board as one page file and answers its path, to send as a file.' }, page: { type: 'number', description: 'Chat mode only: 2, 3, ... = the next part of a cut chat text (with view, or with task). Use it when the owner says "more".' }, task: { type: 'string', description: 'A task id, e.g. T-12, to see in full with its latest report.' }, status: { type: 'array', items: { type: 'string', enum: [...BOARD_STATUSES, 'open'] }, description: 'Only tasks with one of these statuses; "open" = everything not done, dropped or backlog. E.g. ["done"] to see the done tasks.' }, search: { type: 'string', description: 'Words; only tasks matching every word (id, title, details, role, status, origin), the same way as the board panel\'s search. Filter words too: last:N (the N changed most recently, newest first), top:N (the next N to run), since:30m / 2h / 2d / 2026-11-18 (changed since), status:done (or open), type:bug, role:tester, waits-on:T-3 (tasks waiting on T-3, directly or through a chain), blocks:T-3 (the not-done tasks T-3 still waits for), stuck (todo tasks that can\'t start: something they wait for is failed, paused, waiting, dropped or missing). E.g. "last:5 status:done" or "waits-on:T-3 status:todo".' }, limit: { type: 'number', description: 'Show at most this many (the same as last:N, or top:N with sort "order").' }, sort: { type: 'string', enum: ['newest', 'order'], description: 'newest: most recently changed first (as last:); order: what runs next first (as top:).' } } },
   },
   {
     name: 'add',
     description: `Add a task to the ${S.N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: 'object', required: ['title', 'details', 'why', 'origin_by'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, priority: { type: 'integer', minimum: -20, maximum: 19, description: 'Like Unix nice: lower runs first. Every task starts at 0; give urgent work -1, -2…, later work 1, 2… A whole number from -20 to 19.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' }, role: { type: 'string', description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, kind: KIND_PARAM(), why: { type: 'string', description: 'Required. One line: why this task exists.' }, origin_by: { type: 'string', enum: ['owner', 'scout', 'worker', 'lead'], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: 'string', description: "For an owner request: the owner's words, quoted exactly." }, scout: { type: 'string', description: `For a scout finding: the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs").` }, from_task: { type: 'string', description: 'For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12.' }, how: { type: 'string', enum: ['split', 'follow-up'], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } },
+    inputSchema: { type: 'object', required: ['title', 'details', 'why', 'origin_by'], properties: { title: { type: 'string' }, details: { type: 'string', description: 'What to build and how we know it works.' }, files: { type: 'array', items: { type: 'string' }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: 'array', items: { type: 'string' }, description: 'Task IDs that must be done first.' }, priority: { type: 'integer', minimum: -20, maximum: 19, description: 'Like Unix nice: lower runs first. Every task starts at 0; give urgent work -1, -2…, later work 1, 2… A whole number from -20 to 19.' }, needs_review: { type: 'boolean', description: 'Wait for the owner to approve before merging, even when the board merges on its own (mode auto).' }, backlog: { type: 'boolean', description: 'Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo.' }, role: { type: 'string', description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, kind: KIND_PARAM(), why: { type: 'string', description: 'Required. One line: why this task exists.' }, origin_by: { type: 'string', enum: ['owner', 'scout', 'worker', 'lead'], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: 'string', description: "For an owner request: the owner's words, quoted exactly. When they are a short reply (\"yes\"), write: “<owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<reply>”." }, scout: { type: 'string', description: `For a scout finding: the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs").` }, from_task: { type: 'string', description: 'For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12.' }, how: { type: 'string', enum: ['split', 'follow-up'], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } },
   },
   {
     name: 'change',
     description: 'Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version (except when only priority, after or needs_review change: those are saved and its worker keeps running); a waiting, failed or in-review one goes back to work; a paused one stays paused with the change saved (only resume or retry starts it again); a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
-    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, details: { type: 'string', description: 'The new details: replaces the whole text. To add a line, use add_details instead.' }, add_details: { type: 'string', description: 'A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task\'s history too. Not together with details.' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, priority: { type: 'integer', minimum: -20, maximum: 19, description: 'Lower runs first; 0 is normal (urgent: -1, -2…; later: 1, 2…). A whole number from -20 to 19.' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
+    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, stage: { type: 'string', enum: ['work', 'check', 'tests', 'review'], description: "Move the task, with its branch as it is, to this stage of its run (only on its own, nothing else changes): work = a new worker try; check = a fresh checker now, then the merge line; tests = the merge line now, no checker (merges if its tests pass); review = ready for the owner (approve then runs the tests). A running worker or checker is stopped first. Works from todo, doing, failed, waiting and review; uses no automatic retry." }, details: { type: 'string', description: 'The new details: replaces the whole text. To add a line, use add_details instead.' }, add_details: { type: 'string', description: 'A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task\'s history too. Not together with details.' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, priority: { type: 'integer', minimum: -20, maximum: 19, description: 'Lower runs first; 0 is normal (urgent: -1, -2…; later: 1, 2…). A whole number from -20 to 19.' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review". For an answered investigation it is Done: the task ends done, nothing is merged, its folder is removed, and its branch too unless it has commits from earlier tries, which are kept (the reply says so); with keep_note: true (Keep as a note) a new small docs task is added too that writes docs/research/<topic>.md from the saved answer and merges as usual.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, keep_note: { type: 'boolean', description: 'Only for an answered investigation: also add a docs task that keeps its answer as docs/research/<topic>.md.' } } } },
   { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review". For an answered investigation it is Ask more: the reason is the follow-up question; it goes back to "todo" and the fresh try gets the question and the earlier answer in its details.', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker (for an answered investigation: the follow-up question).' } } } },
@@ -443,7 +476,7 @@ export const TOOLS = () => [
   { name: 'merged', description: `Mark a task done whose work is already merged outside the board (by hand), e.g. after its only failure was the merge tests timing out. ${S.N.name} checks it with git first: every commit on the task's branch must be in the branch it merges into (merged, fast-forwarded, or rebased as equal changes); if not, it is refused with the reason ("T-5's branch has 2 commits that aren't in main yet"). Works for a task that is to do, running (its worker is stopped first), failed, waiting, paused, in review or dropped. The task becomes done with the history line "merged outside the board (<commit>); marked done by the lead", its commits are recorded, its folder and branch are cleaned up like after a merge, and tasks waiting on it can start. Nothing is merged and no test runs. Only on the owner's word or a rule the owner set.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
-  { name: 'run', description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. For a task that is to do, paused, failed, dropped (as a retry) or in the backlog (it moves to todo). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its history says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, anyway: { type: 'boolean', description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
+  { name: 'run', description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. Only for a task that is to do; any other task is refused with a short reason (retry it or move it to todo first). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its history says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, anyway: { type: 'boolean', description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
   {
     name: 'scouts',
     description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt, whole last report and its last few runs: when, outcome, findings, tasks made from it and its report file). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; optional findings: auto = you decide where its tasks go, backlog = every task from its findings goes to the backlog, default (or left out) = follow the board's scout_findings setting; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (a paused scout runs too, once, and stays paused; refused with the reason when it is already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
@@ -477,7 +510,7 @@ export const TOOLS = () => [
   },
   {
     name: 'doctor',
-    description: `Check the project's ${S.N.dir}/ folder and git (like the owner's /${S.N.name}-doctor): old migration backups (the newest is kept), task branches of done or dropped tasks already in their branch, folders of finished tasks with no changes, stale git worktree entries, data files near the 4 MB read limit, stray files, and running tasks with no worker or a lead.json of a gone session. Without fix it only lists them, with sizes; each one that can be cleaned up has a short id made from what it is (b-T-5 a branch, w-T-5 a task folder, m-1101-1000 a backup by its date and time, p-worktrees the stale worktree entries). fix cleans up: "all", or the ids from the list (e.g. "b-T-5 m-1101-1000"); an id the list no longer offers is skipped and named, never matched to another item. Only give fix after the owner said yes in the chat (once for all, or for the items they picked). Branches with unmerged work, folders with uncommitted changes, reports, org-mem, scouts, roles and task types are never deleted. While a merge runs it still lists (the merging task's folder and branch are marked "being merged"), but fix changes nothing until the merge is done.`,
+    description: `Check the project's ${S.N.dir}/ folder and git (like the owner's /${S.N.name}-doctor): old migration backups (the newest is kept), task branches of done or dropped tasks already in their branch, folders of finished tasks with no changes, stale git worktree entries, data files near the 4 MB read limit, stray files, and running tasks with no worker or a lead.json of a gone session. Without fix it only lists them, with sizes; each one that can be cleaned up has a short id made from what it is (b-T-5 a branch, w-T-5 a task folder, m-1101-1000 a backup by its date and time, p-worktrees the stale worktree entries). fix cleans up: "all", or the ids from the list (e.g. "b-T-5 m-1101-1000"); an id the list no longer offers is skipped and named, never matched to another item. Only give fix after the owner said yes in the chat (once for all, or for the items they picked). A dropped task's folder with uncommitted changes and its branch with unmerged commits are offered too (the list says what is lost; fix removes them with --force and branch -D); those of any other task are only listed, never deleted. Reports, org-mem, scouts, roles and task types are never deleted. While a merge runs it still lists (the merging task's folder and branch are marked "being merged"), but fix changes nothing until the merge is done.`,
     inputSchema: { type: 'object', properties: { fix: { type: 'string', description: 'Only after the owner confirmed: "all", or the item ids from the list, e.g. "b-T-5 m-1101-1000".' } } },
   },
 ]
@@ -616,6 +649,23 @@ async function defChanged($: Host, a: In, said: string): Promise<string> {
   return said
 }
 
+/** The text /symcc-tasks (view "tasks") or /symcc-status (view "status") prints: the chat shape while S.chat is set. */
+export async function viewText($: Host, b: Awaited<ReturnType<typeof load>>, view: 'tasks' | 'status', page = 1): Promise<string> {
+  if (view === 'tasks') return S.chat ? chatTasksText(b, Date.now(), undefined, '', page) : tasksListText(b, Date.now(), S.N.name)
+  const sv = await statusView($, b)
+  const notes = (await orgMemNow($)).notes
+  return S.chat ? chatStatusText(sv, notes, Date.now(), undefined, page) : liveStatusText(sv, notes, Date.now(), S.N.name)
+}
+
+/** T-1103: writes the board as one page (.<name>/board.html); answers its full path and one line on what is in it. `open` also opens it in the browser. */
+export async function boardHtmlText($: Host, b: Awaited<ReturnType<typeof load>>, open = false): Promise<string> {
+  const out = path(`${S.N.dir}/board.html`)
+  const project = S.root.split(/[\\/]/).filter(Boolean).pop() ?? S.root
+  await $.fs.write(out, boardHtml(b, project, Date.now()))
+  const opened = open ? await openInBrowser($, out) : false
+  return `${out}\nThe board as one page: Needs you (questions with their choices, reviews, failed), Running, To do, Done today, and the counts.${open ? (opened ? ' (opened in your browser)' : ' (open it in your browser)') : ''}`
+}
+
 export async function runTool($: Host, name: string, a: In): Promise<string> {
   const id = str(a.task) ?? ''
   // A task moved to archive.json is read-only; only retry brings back a dropped one.
@@ -635,10 +685,15 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       return questionTool($, a)
     case 'board': {
       const b = await load($)
+      const page = typeof a.page === 'number' && a.page >= 1 ? Math.floor(a.page) : 1
+      if (a.view === 'tasks' || a.view === 'status') return viewText($, b, a.view, page)
+      if (a.view === 'html') return boardHtmlText($, b)
+      if (a.view !== undefined && a.view !== '') throw new Error('view must be "tasks", "status" or "html"')
       if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { status: parseStatusFilter(a.status), search: str(a.search), limit: typeof a.limit === 'number' ? a.limit : undefined, sort: a.sort === 'order' || a.sort === 'newest' ? a.sort : undefined, kinds: [...BUILT_IN_KINDS, ...kindNames(S.kinds)], driving: S.driving }, S.version)
       const t = find(b, id) ?? (await findArchived($, id))
       if (!t) throw new Error(`${id} is not on the board or in the archive`)
       const archived = !find(b, id)
+      if (S.chat) return chatTaskText(t, archived ? undefined : await latestReport($, t), Date.now(), page)
       return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport($, t), b.archived_done)}`
     }
     case 'add': {
@@ -657,6 +712,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       let forced = false
       const own = scout && a.origin_by === 'scout' ? await scoutFindingsFor($, scout) : undefined
       let reviewMode = false
+      let again = false
       const [t, all] = await change($, b => {
         reviewMode = modeOf(b) === 'review'
         // check what the lead said first, then add the plugin's own evidence next to it
@@ -664,8 +720,20 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         // scout_findings backlog: a scout's finding goes to the backlog, whatever the lead asked
         forced = findingToBacklog(b, a.origin_by, own) && a.backlog !== true
         const [y, added] = addTask(b, { title: str(a.title) ?? '', details: str(a.details), files: a.files, after: a.after, priority: priorityIn(a), needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true || forced, S.plan), role, kind, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into }, now(), S.N.dir)
+        // T-1024: a retried add (the first one timed out after it went through) must not make a second task: the same
+        // whole input within a few minutes, on a task that is not dropped or done, answers the task already there
+        const first = b.tasks.find(x => x.status !== 'dropped' && x.status !== 'done' && Date.parse(now()) - Date.parse(x.created_at) < ADD_AGAIN_MS
+          && x.title === added.title && x.details === added.details && sameJson(x.files, added.files) && sameJson(x.after, added.after)
+          && x.priority === added.priority && (x.status === 'backlog') === (added.status === 'backlog') && (x.needs_review ?? false) === (added.needs_review ?? false)
+          && (x.role ?? '') === (added.role ?? '') && (x.kind ?? '') === (added.kind ?? '') && x.merge_into === added.merge_into
+          && sameJson({ ...x.origin, evidence: undefined, at: undefined }, { ...added.origin, evidence: undefined, at: undefined }))
+        if (first) {
+          again = true
+          return [b, [first, b.tasks]] as [Board, [SymccTask, SymccTask[]]]
+        }
         return [y, [added, y.tasks]] as [Board, [SymccTask, SymccTask[]]]
       })
+      if (again) return `${t.id} ${t.title} was added just before by the same add, so nothing was added again`
       // a scout's finding: saved in that scout's latest run that reported, so the run lists it even once archived
       const og = originOf(t)
       if (og?.by === 'scout' && og.scout) await linkTaskToScoutRun($, og.scout, t.id, all)
@@ -684,12 +752,26 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const t = await taskOrThrow($, id)
       priorityIn(a)
       if (t.status === 'done') throw new Error(`${t.id} is done; add a new task instead`)
+      if (a.stage !== undefined) {
+        const own = ['title', 'details', 'add_details', 'answer', 'files', 'after', 'priority', 'role', 'kind', 'needs_review', 'backlog', 'merge_into']
+        const extra = Object.keys(a).filter(k => own.includes(k) && a[k] !== undefined && a[k] !== null)
+        if (extra.length) throw new Error(`stage moves a task on its own; nothing was saved. Send ${extra.join(', ')} in a separate change call`)
+        return moveStage($, t.id, String(a.stage))
+      }
       if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
       // Refused, not saved for later: the lead sees the result of the check first, then changes it.
       if (checkingNow(t.id)) throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`)
       // An answer to a running worker's "give it more time?" question: only that, nothing else changes.
       const overtime = str(a.answer)?.trim() && (t as BoardTask).live?.time_ask ? await answerOvertime($, t.id, str(a.answer)!) : undefined
       if (overtime) return overtime
+      // T-996: the owner's answer to "sent back twice by the checker": Merge as is goes on to the tests (no checker), Drop drops it,
+      // Keep fixing falls through to the usual answer (one more try; test_output still holds the checker's report)
+      if (str(a.answer)?.trim() && t.status === 'waiting' && isCheckerAsk(t.ask?.text)) {
+        const pick = parseCheckerAnswer(str(a.answer)!)
+        if (!pick) throw new Error(`Nothing changed: ${t.id} waits for one of ${CHECKER_ASK_OPTIONS.join(', ')}`)
+        if (pick === 'merge') return moveStage($, t.id, 'tests')
+        if (pick === 'drop') return runTool($, 'drop', { task: t.id, reason: 'dropped by the owner after two checker send-backs' })
+      }
       // An answer to a task that no longer waits (the owner answered on the board first): change nothing at all.
       if (str(a.answer)?.trim() && t.status !== 'waiting') return alreadyAnsweredText(t, a)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
@@ -748,7 +830,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         await scratchGone()
         await change($, x => promoteTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir), t.id, now()))
         void pump($)
-        return `${t.id} moved from the backlog to todo`
+        const nb = (await load($)).tasks
+        return backlogMovedText(nb, nb.find(x => x.id === t.id) ?? t)
       }
       if (t.status === 'backlog') {
         await scratchGone()
@@ -767,7 +850,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         const p = fields()
         // No restart line, but a changed after-list still gets its "waits on changed" line (the health check counts them).
         await change($, x => {
-          const lines = changeLines(t, p, false)
+          const lines = leadLines(changeLines(t, p, false))
           return patchTask(x, t.id, { ...p, ...(lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {}) }, now(), S.N.dir)
         })
         return `${t.id} updated (its worker keeps running; this counts from its next try)`
@@ -786,7 +869,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ''}: ${answer}`
       await change($, x => {
         const cur = find(x, t.id) ?? t
-        const lines = changeLines(t, patch, wasDoing && !fresh, answer, note)
+        const lines = leadLines(changeLines(t, patch, wasDoing && !fresh, answer, note))
         const end = fresh ? { attempts: Math.max(0, cur.attempts - 1), runs: withoutOpenRun(cur.runs) } : wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {}
         return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: withHistory(cur.history, now(), ...lines) } : {}) }, now(), S.N.dir)
       })
@@ -822,7 +905,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       const asked = t.status === 'doing' && !checkingNow(t.id)
       // T-732: a to-do task asked about gets a line too, so the stats count the wait as waiting for the owner
-      const line: HistoryAdd | null = asked ? stoppedEntry(t, 'the lead asked the owner a question') : t.status === 'todo' ? ['asked', 'the lead asked the owner a question'] : null
+      const line: HistoryAdd | null = asked ? leadLine(stoppedEntry(t, 'the lead asked the owner a question')) : t.status === 'todo' ? ['asked', 'the lead asked the owner a question', { by: 'lead' }] : null
       await change($, x => patchTask(x, t.id, { status: 'waiting', ask: makeAsk('lead', (str(a.question) ?? '').slice(0, 1000), now()), note: 'waiting for you', ...(failedOnClash(t) ? { merge_main: true } : {}), ...(line ? { history: withHistory((find(x, t.id) ?? t).history, now(), line) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
       await haltChecker($, t.id, 'the task was sent to the owner')
       return `${t.id} now waits for the owner`
@@ -919,8 +1002,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
 }
 
 /**
- * T-954: Run now (the lead's run tool, the task pages' Run now, /<name>-task T-5 run [anyway]): task `id` goes to todo
- * (from paused, failed, dropped or the backlog) and its worker starts at once, past max_parallel and a paused board.
+ * T-954: Run now (the lead's run tool, the task pages' Run now, /<name>-task T-5 run [anyway]): the to-do task `id`'s worker starts at once, past max_parallel and a paused board.
  * A task that waits on unfinished tasks only starts with `anyway` (the owner's "Start anyway"); else the reply is the
  * question and nothing changes. Only in the window that drives the board, and never in plan mode.
  */
@@ -939,17 +1021,12 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   const busy = workers.size + starting.size
   const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : undefined
   const paused = modeOf(b) === 'paused'
-  const from = t.status
-  // as retry: a failed or dropped task's automatic retries start over, and one that failed on a clash merges main in first
-  const again = from === 'failed' || from === 'dropped'
-  const clashed = failedOnClash(t) || (from !== 'failed' && !!t.merge_main)
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || !canRunNow(cur)) return x
-    const y = cur.status === 'backlog' ? promoteTask(x, t.id, now()) : x
-    return patchTask(y, t.id, { status: 'todo', note: 'started now by the owner', ...(again ? { test_tries: 0 } : {}), merge_main: clashed || undefined }, now())
+    return patchTask(x, t.id, { note: 'started now by the owner' }, now())
   })
-  const line = runNowLine({ waits: anyway ? waits : [], ...(over ? { over } : {}), paused, from })
+  const line = runNowLine({ waits: anyway ? waits : [], ...(over ? { over } : {}), paused })
   const claimed = await startNow($, t.id, line)
   const after = claimed ? undefined : find(await load($), t.id)
   // its start failed outright (startNow failed the task): say so, not "it starts when there is room"
@@ -960,7 +1037,6 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   const shares = runNowShares((await load($)).tasks, t)
   return [
     `${t.id} started now`,
-    from === 'backlog' ? ' (moved from the backlog to todo)' : '',
     anyway && waits.length ? ` without waiting for ${waits.map(w => w.id).join(', ')}` : '',
     over ? `; it runs one over the limit (${busy + 1}/${b.max_parallel} agents busy), and nothing else starts until the count is back under` : '',
     paused ? '; the board stays paused: only this task runs' : '',

@@ -2,7 +2,7 @@
 // with git (here a fake git), and the terminal and VS Code Live tabs draw it (OpenCode's: hooks/opencode/tests).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { BRANCH_ROWS_MAX, LIVE_INDENT, LIVE_TONE, liveBranches, liveFinishedLanes, segText } from '../hooks/core/live'
+import { BRANCH_ROWS_MAX, LIVE_INDENT, liveInner, LIVE_TONE, liveBranches, liveFinishedLanes, segText } from '../hooks/core/live'
 import { LIST_TONE } from '../hooks/core/details'
 import { textWidth } from '../hooks/core/width'
 import { branchFacts, readBranches, BRANCH_CACHE_MS } from '../hooks/app/branches'
@@ -184,28 +184,34 @@ for (const bodyColumns of [100, 40])
     await ui.unmount()
   })
 
-test('T-727: the VS Code Live tab draws the Branches section with real lines, and a click on a row opens its task', async ($, on) => {
-  seedBoard(on, { view: liveView() })
-  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
-  await ui.press({ key: 'tab-live' })
-  expect((await ui.find({ key: 'live-br-head' }))?.props.label).toBe('▾ BRANCHES')
-  // T-933, T-973: the key line ends the Tasks section, under the lanes and above Branches; no divider lines
-  const keys = (await ui.findAll({})).map(n => String(n.key))
-  expect(keys.indexOf('live-legend')).toBeGreaterThan(keys.indexOf('live-lanes'))
-  expect(keys.indexOf('live-legend')).toBeLessThan(keys.indexOf('live-br-head'))
-  expect(keys.indexOf('live-divider')).toBe(-1)
-  expect((await ui.find({ key: 'live-br-main-text' }))?.text).toBe('main  c1c1c1c · 2 min ago')
-  const svgs = await ui.findAll({ type: 'Svg' })
-  const main = svgs.find(x => x.props.alt === BRANCH_LINES_100[1]!.trim())
-  expect(String(main?.props.alt)).toBe(BRANCH_LINES_100[1]!.trim())
-  expect((String(main?.props.source).match(/<circle/g) ?? []).length).toBe(7)
-  for (const [i, id] of ['T-724', 'T-721', 'T-725', 'T-726'].entries()) {
-    const svg = svgs.find(x => x.props.alt === BRANCH_LINES_100[i + 2]!.trim())
-    expect(String(svg?.props.source)).toContain('<path')
-    expect((await ui.find({ key: branchKey(id) }))?.props.pressableLinks).toEqual([vsHref('task', id)])
-  }
-  expect((await ui.find({ key: 'live-br-note:T-721' }))?.text).toBe('▶ running · +3 commits · 1 behind')
-  expect((await ui.find({ key: 'live-br-note:T-726' }))?.text).toBe('not started')
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1004: the VS Code Live tab draws main and each branch on one line, no SVG, nothing wider than the panel (${bodyColumns} columns)`, async ($, on) => {
+    seedBoard(on, { view: liveView() })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.press({ key: 'tab-live' })
+    expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('Branches')
+    const keys = (await ui.findAll({})).map(n => String(n.key))
+    expect(keys.indexOf('live-lanes')).toBeLessThan(keys.indexOf('live-br-head'))
+    expect(keys.indexOf('live-divider')).toBe(-1)
+    // no graph pictures in the section
+    // (the only pictures left are the lanes' tracks and their station header)
+    expect((await ui.findAll({ type: 'Svg' })).filter(x => !/^T-\d+ at /.test(String(x.props.alt)) && !String(x.props.source).includes('<text')).map(x => x.props.alt)).toEqual([])
+    // one line each: main and the task branches, the id cell then the figures
+    const row = async (k: string) => (await ui.find({ key: k }))
+    for (const k of ['live-br-main-row', 'live-br-line:T-724', 'live-br-line:T-721', 'live-br-line:T-725', 'live-br-line:T-726']) expect([k, (await row(k))?.props.flexDirection ?? 'row']).toEqual([k, 'row'])
+    const inner = liveInner(bodyColumns)
+    const cell = Number((await row('live-br-main-row-id'))?.props.width)
+    expect(cell).toBeGreaterThanOrEqual(5)
+    const figs = [['live-br-main-text', 'c1c1c1c · 2 min ago'], ['live-br-note:T-721', '▶ running · +3 commits · 1 behind'], ['live-br-note:T-726', 'not started']] as const
+    for (const [k, want] of figs) {
+      const t = String((await row(k))?.text)
+      expect(t.length + cell + 1).toBeLessThanOrEqual(inner)
+      if (bodyColumns >= 64) expect(t).toBe(want)
+    }
+    expect(String((await row('live-br-note:T-724'))?.text)).toMatch(/^merged 3m ago/)
+    // a narrow panel gets core's shorter wording, so the "behind" count stays
+    expect(String((await row('live-br-note:T-725'))?.text)).toMatch(/\d+ behind$|↓\d+$/)
+    for (const id of ['T-724', 'T-721', 'T-725', 'T-726']) expect((await ui.find({ key: branchKey(id) }))?.props.pressableLinks).toEqual([vsHref('task', id)])
   await ui.press({ key: branchKey('T-721'), link: { href: vsHref('task', 'T-721') } })
   expect(await ui.find({ key: 'live-br-head' })).toBeUndefined()
   expect(await ui.find({ type: 'Text', text: /Record which test failed/ })).toBeDefined()
@@ -245,7 +251,7 @@ for (const surface of ['terminal', 'desktop', 'mobile'] as const)
     expect([heads.length, /^─── ❯ ORGANIZATIONAL MEMORY {3}\d+ \/ 60 ─+$/.test(heads[3] ?? '')]).toEqual([4, true])
     expect(live.filter(l => (!l.startsWith('─── ❯ ') && l.includes('── ')) || /^─+$/.test(l)).length).toBe(1)
     // the lines under a heading are indented by 1 (T-767; a running lane starts "▶ ")
-    for (const l of [' ▶ T-7', '  main ', ' ✓ ', '   newest [all]']) expect([l, live.some(x => x.startsWith(l))]).toEqual([l, true])
+    for (const l of [' ▶ T-7', '  main ', ' ✓ ', ' newest [all]']) expect([l, live.some(x => x.startsWith(l))]).toEqual([l, true])
     for (const isHead of LIVE_HEADS) {
       const at = live.findIndex(isHead)
       expect([at, at > 0]).toEqual([at, true])
@@ -274,29 +280,27 @@ test('T-973: the VS Code Live tab has the Status, Tasks, Branches, Today and Org
   const tree = await ui.drawn()
   const page = vsNodes(tree).find(n => n.type === 'Box' && ((n.children ?? []) as VsNode[]).some(k => vsKey(k) === 'live-tasks'))!
   expect(page.props?.gap).toBe(1)
-  expect(((page.children ?? []) as VsNode[]).map(vsKey)).toEqual(['vs-header', 'live-status', 'live-tasks', 'live-br', 'live-today', 'live-om', 'live-foot'])
-  // each heading: a plain Button, the chevron and the name in UPPERCASE; open but the folded Organizational memory
-  const heads: [string, string][] = [['live-status-head', '▾ STATUS'], ['live-tasks-head', '▾ TASKS'], ['live-br-head', '▾ BRANCHES'], ['live-today-head', '▾ TODAY'], ['live-om-head', '▸ ORGANIZATIONAL MEMORY']]
+  expect(((page.children ?? []) as VsNode[]).map(vsKey)).toEqual(['vs-header', 'live-status', 'live-sep-1', 'live-tasks', 'live-sep-2', 'live-br', 'live-sep-3', 'live-today', 'live-sep-4', 'live-om', 'live-foot'])
+  // T-1003: each heading is plain bold words (no Button, no chevron, no UPPERCASE), nothing folds; the Tasks heading has its dim backlog count
+  const heads: [string, string][] = [['live-status-head', 'Status'], ['live-tasks-head', 'Tasks'], ['live-br-head', 'Branches'], ['live-today-head', 'Today']]
+  const backlog = liveView().value.tasks.filter(t => t.status === 'backlog').length
   for (const [k, label] of heads) {
     const b = await ui.find({ key: k })
-    expect([k, b?.type, b?.props.plain, b?.props.label]).toEqual([k, 'Button', true, label])
-    expect([k, vsNodes(b).find(n => n.type === 'Text' && n.props?.bold)?.props?.size]).toEqual([k, 'footnote'])
+    expect([k, b?.type, b?.props.label, b?.text]).toEqual([k, 'Box', undefined, k === 'live-tasks-head' && backlog ? `${label}${backlog} backlog` : label])
+    expect([k, vsNodes(b).find(n => n.type === 'Text')?.props?.bold]).toEqual([k, true])
   }
-  // the counts as badges on the right: the backlog's on Tasks, "n / 60" on Organizational memory
-  const backlog = liveView().value.tasks.filter(t => t.status === 'backlog').length
-  const count = async (k: string) => {
-    const c = await ui.find({ key: `${k}-count` })
-    return c ? [c.type, c.text, c.props.borderStyle, c.props.backgroundColor] : undefined
-  }
-  expect(await count('live-tasks-head')).toEqual(backlog ? ['Box', `${backlog} backlog`, 'round', 'inactive'] : undefined)
-  const om = await count('live-om-head')
-  expect([om?.[0], /^\d+ \/ 60$/.test(String(om?.[1])), om?.[2], om?.[3]]).toEqual(['Box', true, 'round', 'inactive'])
-  expect(await count('live-today-head')).toBeUndefined()
-  // Status: Mode, Branch, Tests as label/value rows
+  expect((await ui.findAll({ type: 'Button' })).filter(b => /^[▾▸]/.test(String(b.props.label)))).toEqual([])
+  // Organizational memory is one line: its name, "n / 60", and an "All notes" link
+  const om = await ui.find({ key: 'live-om' })
+  expect([om?.type, /^Organizational memory\d+ \/ 60$/.test(String((await ui.find({ key: 'live-om-head' }))?.text))]).toEqual(['Box', true])
+  const all = await ui.find({ key: 'live-om-all' })
+  expect([all?.type, all?.props.text]).toEqual(['Markdown', `[All notes](${vsHref('page', 'orgmem')})`])
+  // Status: Mode (with "change" a link), Scouts, Branch, Tests as label/value rows
   const status = async (k: string) => [(await ui.find({ key: `live-status-rows-${k}-label` }))?.text, (await ui.find({ key: `live-status-rows-${k}-value` }))?.text]
   expect((await status('mode'))[0]).toBe('Mode')
   expect((await status('mode'))[1]).toMatch(/^⏵ auto merge · agents \d\/3 busy/)
-  expect((await status('mode'))[1]).toContain(MODE_MEANING.auto)
+  expect((await ui.find({ key: 'live-mode-switch' }))?.props.text).toBe(`[change](${vsHref('mode', 'review')})`)
+  expect((await status('scouts'))[0]).toBe('Scouts')
   expect((await status('branch'))[0]).toBe('Branch')
   expect((await status('branch'))[1]).toMatch(/^main\s*· (this|another) window drives$/)
   expect((await status('tests'))[0]).toBe('Tests')
@@ -304,7 +308,7 @@ test('T-973: the VS Code Live tab has the Status, Tasks, Branches, Today and Org
   // Today: its rows
   for (const k of ['results', 'tokens', 'time']) expect([k, !!(await ui.find({ key: `live-today-rows-${k}` }))]).toEqual([k, true])
   // no divider rules, no blank Text rows, no padding or margin on top of the page's gap
-  const ruleTexts = new Set(vsNodes(page).filter(n => vsKey(n) === 'tabs-rule').flatMap(n => vsNodes(n)))
+  const ruleTexts = new Set(vsNodes(page).filter(n => vsKey(n) === 'tabs-rule' || vsKey(n).startsWith('live-sep-')).flatMap(n => vsNodes(n)))
   const texts = vsNodes(page).filter(n => n.type === 'Text' && !ruleTexts.has(n)).map(vsText)
   expect(texts.filter(t => /[─—]{3,}/.test(t))).toEqual([])
   expect(texts.filter(t => t.length > 0 && !t.trim())).toEqual([])
@@ -313,25 +317,31 @@ test('T-973: the VS Code Live tab has the Status, Tasks, Branches, Today and Org
   await ui.unmount()
 })
 
-test('T-973: a VS Code Live heading folds and opens its section; the choice stays when the tab is left and shown again', async ($, on) => {
+// T-1037: one thin separator between each pair of shown sections: none on top or at the bottom, none doubled when Branches is hidden
+for (const hideBranches of [false, true])
+  test(`T-1037: the VS Code Live tab has one separator between each pair of sections${hideBranches ? ' (no Branches)' : ''}`, async ($, on) => {
+    const view = liveView()
+    if (hideBranches) (view.value as { branches?: unknown }).branches = undefined
+    seedBoard(on, { view })
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
+    await ui.press({ key: 'tab-live' })
+    const page = vsNodes(await ui.drawn()).find(n => n.type === 'Box' && ((n.children ?? []) as VsNode[]).some(k => vsKey(k) === 'live-tasks'))!
+    const keys = ((page.children ?? []) as VsNode[]).map(vsKey).filter(k => k !== 'vs-header' && k !== 'live-foot')
+    const sections = hideBranches ? ['live-status', 'live-tasks', 'live-today', 'live-om'] : ['live-status', 'live-tasks', 'live-br', 'live-today', 'live-om']
+    expect(keys.filter(k => !k.startsWith('live-sep-'))).toEqual(sections)
+    expect(keys.map(k => (k.startsWith('live-sep-') ? '-' : 's')).join('')).toBe(sections.map(() => 's').join('-'))
+    const sep = vsNodes(page).find(n => vsKey(n) === 'live-sep-1')!
+    expect(vsText(sep)).toMatch(/^─+$/)
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  })
+
+test('T-1003: nothing folds on the VS Code Live tab: a heading is not pressable, every section stays open', async ($, on) => {
   seedBoard(on, { view: liveView() })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
   await ui.press({ key: 'tab-live' })
-  expect(await ui.find({ key: 'live-today-rows' })).toBeDefined()
-  await ui.press({ key: 'live-today-head' })
-  expect(await ui.find({ key: 'live-today-rows' })).toBeUndefined()
-  expect((await ui.find({ key: 'live-today-head' }))?.props.label).toBe('▸ TODAY')
-  // the Organizational memory section starts folded; a press opens it
-  expect(await ui.find({ key: 'live-om-note-row:1' })).toBeUndefined()
-  await ui.press({ key: 'live-om-head' })
-  expect((await ui.find({ key: 'live-om-head' }))?.props.label).toBe('▾ ORGANIZATIONAL MEMORY')
-  // to the Tasks tab and back: Today still folded, the notes still open
-  await ui.press({ key: 'tab-tasks' })
-  await ui.press({ key: 'tab-live' })
-  expect(await ui.find({ key: 'live-today-rows' })).toBeUndefined()
-  expect((await ui.find({ key: 'live-om-head' }))?.props.label).toBe('▾ ORGANIZATIONAL MEMORY')
-  await ui.press({ key: 'live-today-head' })
-  expect(await ui.find({ key: 'live-today-rows' })).toBeDefined()
+  for (const k of ['live-status-rows', 'live-today-rows', 'live-lanes']) expect([k, !!(await ui.find({ key: k }))]).toEqual([k, true])
+  for (const k of ['live-status-head', 'live-today-head', 'live-om-head']) expect([k, (await ui.find({ key: k }))?.type]).toEqual([k, 'Box'])
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
@@ -340,9 +350,8 @@ test('T-773: a freshly opened VS Code board (no tab saved) shows the Live tab an
   seedBoard(on, { view: liveView(), tab: undefined })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
   const tabs = await tabBar(ui)
-  expect(tabs.map(t => t.which)).toEqual(['live', 'tasks', 'scouts', 'settings'])
-  expect(tabs.filter(t => t.marked).map(t => t.which)).toEqual(['live'])
-  expect((await ui.find({ key: 'live-br-head' }))?.props.label).toBe('▾ BRANCHES')
+  expect(tabs.text?.startsWith('**Live**')).toBe(true)
+  expect((await ui.find({ key: 'live-br-head' }))?.text).toBe('Branches')
   await ui.unmount()
 })
 
@@ -368,4 +377,17 @@ test('T-794: a task merged 3 minutes ago keeps a dim Branches row joining main; 
   const far = branchTasks(T0).map(t => (t.id === 'T-724' ? { ...t, merged: 'c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6' } : t))
   const narrow = liveBranches({ tasks: far as never[], branches: branchFactsAt(T0) }, T0, 40)!
   expect(narrow.rows.find(r => r.id === 'T-724')!.col).toBe(0)
+})
+
+test('T-1004: the VS Code branch figures keep their colors: far behind is the warning color', async ($, on) => {
+  const base = liveView()
+  const late = { ...base, value: { ...base.value, branches: { ...branchFactsAt(T0), tasks: { ...branchFactsAt(T0).tasks, 'T-725': { ahead: 2, behind: 9, base: sha('c9') } } } } }
+  seedBoard(on, { view: late })
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 64 }, surface: 'vscode' })
+  await ui.press({ key: 'tab-live' })
+  const texts = (await ui.findAll({ type: 'Text' })).filter(t => /9 behind/.test(String(t.text)))
+  expect(texts.length).toBe(1)
+  const dim = (await ui.findAll({ type: 'Text' })).find(t => /^\+3 commits$/.test(String(t.text)))
+  expect(dim).toBeDefined()
+  expect(texts[0]!.props.color).not.toBe(dim!.props.color)
 })

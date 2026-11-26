@@ -45,7 +45,7 @@ if (checked < 50) bad(`only ${checked} internal links checked; expected many mor
 const SITE = 'https://kourgeorge.github.io/symcc/'
 const GITHUB = /^https:\/\/github\.com\/kourgeorge\/symcc\/(blob|tree)\/main\/([^#?]+)/
 const llmsFile = join(out, 'llms.txt')
-const pages = html.map(f => relative(out, f)).filter(p => p !== 'index.html' && p !== 'research/index.html')
+const pages = html.map(f => relative(out, f)).filter(p => p !== 'index.html' && p !== 'research/index.html' && p !== 'blog/index.html')
 if (!existsSync(llmsFile)) bad('missing llms.txt')
 else {
   const llms = readFileSync(llmsFile, 'utf8')
@@ -87,6 +87,56 @@ for (const p of pages) {
 }
 if (mdChecked < 50) bad(`only ${mdChecked} links checked in the .md copies; expected many more`)
 
+// (T-1088) doc page layout: contents list, marked nav link, previous / next boxes.
+const read = p => readFileSync(join(out, p), 'utf8')
+const guide = read('guide.html')
+const h2ids = [...guide.matchAll(/<h2 id="([^"]+)"/g)].map(m => m[1])
+if (h2ids.length < 3) bad('guide.html has fewer than 3 h2 headings')
+const side = /<aside class="toc-side">[\s\S]*?<\/aside>/.exec(guide)?.[0] ?? ''
+const fold = /<details class="toc-fold">[\s\S]*?<\/details>/.exec(guide)?.[0] ?? ''
+if (!side) bad('guide.html has no side contents list')
+if (!fold || !fold.includes('On this page')) bad('guide.html has no folded "On this page" list')
+for (const id of h2ids) for (const [name, part] of [['side', side], ['fold', fold]]) {
+  if (!part.includes(`href="#${id}"`)) bad(`guide.html: ${name} contents has no link to #${id}`)
+}
+if (!/<li class="l3"><a href="#/.test(side)) bad('guide.html: contents has no indented h3 entry')
+if (guide.indexOf('class="toc-fold"') > guide.indexOf('<h1')) bad('guide.html: folded contents is not above the text')
+// a short page (fewer than 3 h2 headings) has none
+for (const p of ['research/index.html', 'overview.html']) {
+  const t = read(p)
+  const n = (t.match(/<h2 /g) ?? []).length
+  const has = t.includes('toc-side') || t.includes('toc-fold')
+  if (n < 3 && has) bad(`${p}: has ${n} h2 headings but a contents list`)
+  if (n >= 3 && !has) bad(`${p}: has ${n} h2 headings but no contents list`)
+}
+if (read('research/index.html').includes('toc-')) bad('research/index.html should have no contents list')
+// the nav order, the marked nav link and the previous / next boxes
+const order = [['overview.html', 'Overview'], ['guide.html', 'Guide'], ['reference.html', 'Reference'], ['engine-and-clients.html', 'Engine and clients'], ['research/index.html', 'Research notes']]
+order.forEach(([p, title], k) => {
+  const t = read(p)
+  const marked = [...t.matchAll(/<a href="([^"]+)" aria-current="page">([^<]*)<\/a>/g)]
+  if (marked.length !== 1 || marked[0][2] !== title) bad(`${p}: nav link marked is ${JSON.stringify(marked.map(m => m[2]))}, expected ${title}`)
+  const pn = /<nav class="prev-next"[\s\S]*?<\/nav>/.exec(t)?.[0] ?? ''
+  if (!pn) { bad(`${p}: no previous / next boxes`); return }
+  const want = (n, cls, label) => {
+    const m = new RegExp(`<a class="${cls}" href="([^"]+)"><span class="label">${label}</span><span class="title">([^<]*)</span></a>`).exec(pn)
+    if (!n) { if (m) bad(`${p}: has a ${label} box but should not`); return }
+    if (!m) { bad(`${p}: no ${label} box`); return }
+    const wantHref = relative(dirname(p), n[0]) || n[0]
+    if (m[1] !== wantHref || m[2] !== n[1]) bad(`${p}: ${label} box is ${m[1]} / ${m[2]}, expected ${wantHref} / ${n[1]}`)
+  }
+  want(order[k - 1], 'prev', 'Previous')
+  want(order[k + 1], 'next', 'Next')
+})
+// research notes and blog pages: their section's nav link is marked, same layout
+for (const p of html.map(f => relative(out, f)).filter(p => p.startsWith('research/') && p !== 'research/index.html')) {
+  if (!/aria-current="page">Research notes</.test(read(p))) bad(`${p}: Research notes nav link not marked`)
+  if (read(p).includes('prev-next')) bad(`${p}: research note has previous / next boxes`)
+}
+for (const p of html.map(f => relative(out, f)).filter(p => p.startsWith('blog/'))) {
+  if (!/aria-current="page">Blog</.test(read(p))) bad(`${p}: Blog nav link not marked`)
+}
+
 // The workflow file: valid YAML with the Pages permissions and steps.
 const wf = Bun.YAML.parse(readFileSync(workflow, 'utf8'))
 if (!wf || typeof wf !== 'object') bad('workflow is not a YAML map')
@@ -99,6 +149,13 @@ else {
   const uses = steps.map(s => s.uses ?? '').join(' ')
   for (const a of ['actions/upload-pages-artifact', 'actions/deploy-pages', 'oven-sh/setup-bun']) if (!uses.includes(a)) bad(`workflow: no ${a} step`)
   if (!steps.some(s => /scripts\/build-site\.ts/.test(s.run ?? ''))) bad('workflow: no step runs scripts/build-site.ts')
+}
+
+// (T-1090) the home page keeps its h2 spacing and table rows as before T-1088
+if (existsSync(join(out, 'style.css'))) {
+  const css = readFileSync(join(out, 'style.css'), 'utf8')
+  if (!/main\.home h2\s*\{[^}]*margin-top:\s*1\.6em/.test(css)) bad('style.css: main.home h2 does not set margin-top 1.6em')
+  if (!/main\.home tbody tr:nth-child\(even\) td\s*\{\s*background:\s*none/.test(css)) bad('style.css: main.home tables still get zebra rows')
 }
 
 for (const f of fails) console.log(`FAIL: ${f}`)

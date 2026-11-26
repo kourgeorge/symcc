@@ -1,5 +1,5 @@
 import { cutLine } from '../core/reports'
-import { DAM_POST_LINE, damGuideCore } from '../core/dam'
+import { chatPostLine, damGuideCore } from '../core/dam'
 import { S, leadQueue, meanwhile } from './state'
 import type { Host } from '../host'
 
@@ -31,6 +31,12 @@ export function meanwhileText(lines: readonly string[], shown = MEANWHILE_SHOWN)
  * it (takeBoardUpdate) on its next hook that can carry text. `urgent`: the owner must act on it now (a worker needs
  * them, a worker's time is up); the update it goes in is sent as urgent (LeadSend: OpenCode gives it mid-turn).
  */
+/** True when a prompt is symcc's own update to the lead (board update or health check), not the owner's. */
+export function isOwnUpdate(text: string): boolean {
+  const t = text.trimStart()
+  return t.startsWith(`[${S.N.name}] Board update`) || t.startsWith(`[${S.N.name} health check]`)
+}
+
 export function tellLead(host: Host, text: string, how?: { urgent?: boolean }) {
   if (!S.enabledNow) return // the plugin is disabled: no "[name] Board update" messages
   leadQueue.push(text)
@@ -87,14 +93,16 @@ export function takeBoardUpdate(): string | undefined {
   const ending = startOnly
     ? 'No reply needed; end the turn without a message.'
     : `Lead: decide what happens next on the board (use the ${S.N.name} tools), then tell the owner briefly.\nReply shape: one line per task ("✓ T-5  merged   what it means"); a routine update with no news is one short line at most.`
-  return `[${S.N.name}] Board update:\n\n${before ? `${before}\n\n` : ''}${body}\n\n${ending}${startOnly ? '' : damEnding()}`
+  // an update with only the health check's text opens with that label, not with "Board update:" (the text carries its own)
+  const label = !before && body.split('\n\n').every(l => l.startsWith(`[${S.N.name} health check]`)) ? '' : `[${S.N.name}] Board update:\n\n`
+  return `${label}${before ? `${before}\n\n` : ''}${body}\n\n${ending}${startOnly ? '' : damEnding()}`
 }
 
 /**
  * T-922: in a DAM session (run from Slack) a board update that wants a reply also carries the guide's core (prompt.compose
  * may be skipped there) and ends with the line telling the lead to post its reply to Slack; '' in any other session.
  */
-const damEnding = () => (S.dam ? `\n\n${damGuideCore(S.N.name)}\n\n${DAM_POST_LINE}` : '')
+const damEnding = () => (S.chat ? `${S.chat === 'dam' ? `\n\n${damGuideCore(S.N.name)}` : ''}\n\n${chatPostLine(S.chat)}` : '')
 
 /** An answer cut to one short line, for a "Meanwhile" line. */
 export const brief = (text: string) => cutLine(text, 200)

@@ -15,7 +15,7 @@ export const PARTS_DIR = 'tasks'
 /** How many task ids share one parts file. */
 export const PARTS_PER_FILE = 50
 /** The task fields a finished task keeps in board.json; everything else is in its parts file. */
-export const STUB_KEYS = ['id', 'title', 'status', 'priority', 'after', 'kind', 'role', 'attempts', 'branch', 'merge_into', 'merged', 'created_at', 'updated_at'] as const
+export const STUB_KEYS = ['id', 'title', 'status', 'priority', 'after', 'kind', 'role', 'attempts', 'branch', 'merge_into', 'merged', 'size', 'created_at', 'updated_at'] as const
 /** The stub's field naming its parts file (relative to the data folder, e.g. "tasks/T-600.json"). */
 export const PARTS_KEY = 'parts'
 

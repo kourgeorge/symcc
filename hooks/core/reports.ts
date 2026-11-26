@@ -1,5 +1,6 @@
 // Each try's full worker report, kept in a file (<dir>/reports/<T-id>-try-<N>.md), and short clean cuts of it.
 import type { SymccTask } from '../../types'
+import { plural } from './text'
 
 /** The most of a report that is kept (characters); a longer one is cut there, with a line saying so. */
 export const REPORT_MAX_CHARS = 50_000
@@ -9,6 +10,9 @@ export const REPORT_PREVIEW_LINES = 40
 
 /** Where try `attempt` of task `id` keeps its report, relative to the project: "<dir>/reports/T-3-try-2.md". */
 export const reportFile = (dir: string, id: string, attempt: number) => `${dir}/reports/${id}-try-${attempt}.md`
+
+/** T-1079: where the checker of try `attempt` of task `id` keeps its full report: "<dir>/reports/T-3-try-2-checker.md". */
+export const checkerReportFile = (dir: string, id: string, attempt: number) => `${dir}/reports/${id}-try-${attempt}-checker.md`
 
 /** The text saved for a report: the worker's answer, trimmed, cut at REPORT_MAX_CHARS with a line saying so. */
 export function reportText(answer: string): string {
@@ -72,5 +76,21 @@ export function reportPreview(text: string, file: string, lines = REPORT_PREVIEW
   }
   if (kept.length === all.length && kept.at(-1) === all.at(-1)) return all
   const left = all.length - kept.length
-  return [...kept, `… (${left ? `${left} more line${left === 1 ? '' : 's'}` : 'cut'}) full report: ${file}`]
+  return [...kept, `… (${left ? plural(left, 'more line') : 'cut'}) full report: ${file}`]
+}
+
+/** T-1080: the longest "Done:" sentence kept on a task (characters). */
+export const DONE_MAX_CHARS = 300
+
+/**
+ * The worker's "Done:" line: 1-2 plain sentences on what the whole task has done so far, a line starting `Done:` at the
+ * top of its report (one of its first 5 lines; a little markdown around the word is fine). '' when the report has none.
+ */
+export function doneLine(report: string): string {
+  const lines = report.split('\n').map(l => l.trim()).filter(Boolean).slice(0, 5)
+  for (const l of lines) {
+    const m = /^(?:[>#*_\s-]*)(?:\*\*|__)?done(?:\*\*|__)?\s*:(?:\*\*|__)?\s*(.+)$/i.exec(l)
+    if (m) return cutLine(m[1]!.replace(/\*\*|__/g, ''), DONE_MAX_CHARS)
+  }
+  return ''
 }

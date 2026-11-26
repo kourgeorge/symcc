@@ -1,9 +1,9 @@
 // The board panel's Live tab (T-690): one "railway lane" per task in doing, showing the station it is at on its way to
-// the merge (work → check → queue → tests → merged), its tokens, then what starts next and today's numbers. Everything
+// the merge (work → check → queue → tests → done), its tokens, then what starts next and today's numbers. Everything
 // a client needs is worked out here, the lane text included (cut titles, station marks, the blinking current station),
 // so each client (Claude Code's terminal panel now; VS Code and OpenCode later) only draws the segments.
 import type { SymccMode, SymccTask } from '../../types'
-import { type BoardTask, byRunOrder, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
+import { type BoardTask, type ChangeSize, OPEN, byRunOrder, DEFAULT_AUTO_RETRIES, emptyBoard, kindOf, isInvestigation, modeOf } from './board-file'
 import { stageStep, taskPhase, type PhaseStage } from './phase'
 import { handedBack, shownStatus } from './lead'
 import { median, taskFigures } from './stats'
@@ -14,7 +14,7 @@ import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, TOPIC_UNSORTED, ORG_MEM_ALL, orgMemNe
 import { depDone } from './archive'
 import { dayOf, localOffset } from './days'
 import { modeLabel, needsReview } from './review'
-import { num } from './text'
+import { num, plural } from './text'
 import { asksMoreTime, needsYou } from './commands'
 import { fileWaitText, rowMark, STEP_WORD, taskAsks } from './panel'
 import { isOpenQuestion } from './questions'
@@ -23,6 +23,7 @@ import { newestFirst } from './settings'
 import { isAnswered } from './task'
 import { viewMarks } from './board-parts'
 import { STATUS_MARK } from './details'
+import { sizeText } from './commits'
 
 /**
  * The kinds and times of task `t`'s history lines. A board view's done or dropped task (viewTask, e.g. OpenCode's)
@@ -47,10 +48,10 @@ function sentBackOf(t: { history?: readonly { kind: string; at?: string; reason?
 }
 
 /** The stations of a lane, in the order a task passes them. */
-export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'you' | 'merged' | 'answer'
-/** T-846: every station, in the order the lanes' columns have them. 'you' (the owner reads and approves) sits before 'merged' on
- *  a task that needs review; 'answer' ends an investigation's lane (work → answer). */
-export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 'tests', 'you', 'merged', 'answer']
+export type LiveStation = 'work' | 'check' | 'queue' | 'tests' | 'you' | 'done'
+/** T-846: every station, in the order the lanes' columns have them. 'you' (the owner reads and approves) sits before 'done' on
+ *  a task that needs review; 'done' ends every lane, an investigation's too (work → done). */
+export const LIVE_STATIONS: readonly LiveStation[] = ['work', 'check', 'queue', 'tests', 'you', 'done']
 /** T-760: the mark after a station name where an agent works (work, check): those stations need an agent slot. */
 export const LIVE_AGENT_MARK = '✧'
 /** The line under the lanes that says what LIVE_AGENT_MARK after a station name means. */
@@ -113,7 +114,7 @@ export function liveIdle(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_done'
   const tasks = view.tasks as BoardTask[]
   if (!tasks.length && !(view.archived_done ?? []).length) return wrap(LIVE_IDLE.fresh)
   if (modeOf(view) === 'paused') return wrap(LIVE_IDLE.paused)
-  const open = tasks.filter(t => t.status !== 'done' && t.status !== 'dropped' && t.status !== 'backlog')
+  const open = tasks.filter(t => OPEN.includes(t.status))
   if (open.length) {
     const sorted = [...open.filter(t => needsYou(t, nowMs)), ...open.filter(t => !needsYou(t, nowMs))]
     const head = `Nothing running · ${open.length} waiting`
@@ -158,7 +159,7 @@ export function liveIdleFacts(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_
   const none = { next: [], more: 0, backlog: 0 }
   if (!tasks.length && !(view.archived_done ?? []).length) return { kind: 'fresh', text, ...none }
   if (modeOf(view) === 'paused') return { kind: 'paused', text, ...none }
-  if (tasks.some(t => t.status !== 'done' && t.status !== 'dropped' && t.status !== 'backlog')) return { kind: 'waiting', text, ...none }
+  if (tasks.some(t => OPEN.includes(t.status))) return { kind: 'waiting', text, ...none }
   const { last, items } = idleDone(tasks)
   const next = items.slice(0, IDLE_BACKLOG).map(t => ({ id: t.id, title: t.title }))
   return { kind: 'done', text, ...(last ? { last: { id: last.t.id, ago: idleAgo(nowMs - last.at) } } : {}), next, more: items.length - next.length, backlog: items.length }
@@ -173,11 +174,11 @@ export function liveIdleLine(view: Pick<LiveView, 'tasks' | 'mode' | 'archived_d
   return textWidth(whole) <= w ? whole : whole.startsWith('Nothing running') ? (liveIdle(view, nowMs, w)[0] ?? '') : fitText(whole, w)
 }
 /** The stations of a normal code task that merges on its own: check only when the checker setting is on. */
-export const liveStations = (checker: boolean): LiveStation[] => LIVE_STATIONS.filter(s => s !== 'you' && s !== 'answer' && (s !== 'check' || checker))
-/** T-846: the stations of one task's real path: an investigation goes work → answer; a task that needs review has "you" before merged. */
+export const liveStations = (checker: boolean): LiveStation[] => LIVE_STATIONS.filter(s => s !== 'you' && (s !== 'check' || checker))
+/** T-846: the stations of one task's real path: an investigation goes work → done; a task that needs review has "you" before done. */
 export function laneStations(t: { kind?: unknown }, checker: boolean, review: boolean): LiveStation[] {
-  if (isInvestigation(t as SymccTask)) return ['work', 'answer']
-  return LIVE_STATIONS.filter(s => s !== 'answer' && (s !== 'check' || checker) && (s !== 'you' || review))
+  if (isInvestigation(t as SymccTask)) return ['work', 'done']
+  return LIVE_STATIONS.filter(s => (s !== 'check' || checker) && (s !== 'you' || review))
 }
 /** T-846: the columns the lanes share (the label line over them): every station any lane has, in order; the usual stations when no lane runs. */
 export function liveColumns(lanes: readonly Pick<LiveLane, 'stations'>[], checker: boolean): LiveStation[] {
@@ -262,6 +263,8 @@ export type LiveLane = {
   /** T-771: set on a finished lane (a task merged in the last LIVE_FINISHED_MS):
    *  when it merged and the word its right column says ("merged 3m ago"). */
   done?: { atMs: number; word: 'merged' }
+  /** T-1080: a finished lane's change size (the task's saved size); ends its second line as "+539 −3,722" */
+  size?: ChangeSize
 }
 
 /** T-771: how long a just-merged task keeps its lane (drawn finished, dim), and at most how many such lanes there are. */
@@ -282,7 +285,7 @@ function stationOf(stage: PhaseStage, checker: boolean): LiveStation {
     case 'test':
       return 'tests'
     case 'merge':
-      return 'merged'
+      return 'done'
   }
 }
 
@@ -359,9 +362,9 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
       const stations = laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
       let stage: PhaseStage = taskPhase(t, nowMs).stage ?? 'worker'
       if (stage === 'worker' && handedBack(t)) stage = 'prep'
-      const investigation = stations.includes('answer')
-      // an approve running on a task with a "you" station: the owner said yes, so it sits at merged, never back at tests
-      let station: LiveStation = waiting ? 'you' : investigation ? (stage === 'worker' ? 'work' : 'answer') : t.status !== 'doing' && stations.includes('you') ? 'merged' : stationOf(stage, checker)
+      const investigation = isInvestigation(t)
+      // an approve running on a task with a "you" station: the owner said yes, so it sits at done, never back at tests
+      let station: LiveStation = waiting ? 'you' : investigation ? (stage === 'worker' ? 'work' : 'done') : t.status !== 'doing' && stations.includes('you') ? 'done' : stationOf(stage, checker)
       const skipped = checker && !investigation && checkSkipped(t, stage, waiting)
       // a docs-only change has no check to sit at: in prep it is already waiting for the queue
       if (skipped && station === 'check') station = 'queue'
@@ -450,6 +453,7 @@ export function liveFinishedLanes(view: LiveView, nowMs: number): LiveLane[] {
         tries: Math.max(tryNo, tryNo - auto + retries),
         ...(total > 0 ? { tokens: total } : {}),
         ...(usual ? { usual } : {}),
+        ...((t as BoardTask).size ? { size: (t as BoardTask).size } : {}),
         ...usageOf(t),
         sentBack: marksOf(t).filter(h => h.kind === 'checker-problems').length,
         enteredMs: done.atMs,
@@ -519,7 +523,7 @@ export function liveScoutMark(runs: readonly LiveScoutRun[] | undefined, nowMs: 
     const text = ` ${names}`, tail = ` · ${nextText}`
     if (textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text + tail) <= room) return { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text, next: tail }
   }
-  for (const f of [names, `${n} scout${n === 1 ? '' : 's'}`, `${n}`]) {
+  for (const f of [names, plural(n, 'scout'), `${n}`]) {
     const text = ` ${f}`
     if (textWidth(LIVE_SCOUT_GAP + LIVE_SCOUT_MARK + text) <= room) return { gap: LIVE_SCOUT_GAP, mark: LIVE_SCOUT_MARK, text }
   }
@@ -646,10 +650,10 @@ export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE
 export type LiveLayout = { width: number; idW: number; titleW: number; gap: number; labels: string[]; rightW: number; sep: number; stations: LiveStation[] }
 
 const LABELS: Record<LiveStation, string>[] = [
-  { work: 'work✧', check: 'check✧', queue: 'queue', tests: 'tests', you: 'you', merged: 'merged', answer: 'answer' },
-  { work: 'wrk✧', check: 'chk✧', queue: 'que', tests: 'tst', you: 'you', merged: 'mrg', answer: 'ans' },
-  { work: 'w✧', check: 'c✧', queue: 'q', tests: 't', you: 'y', merged: 'm', answer: 'a' },
-  { work: 'w', check: 'c', queue: 'q', tests: 't', you: 'y', merged: 'm', answer: 'a' },
+  { work: 'work✧', check: 'check✧', queue: 'queue', tests: 'tests', you: 'you', done: 'done' },
+  { work: 'wrk✧', check: 'chk✧', queue: 'que', tests: 'tst', you: 'you', done: 'done' },
+  { work: 'w✧', check: 'c✧', queue: 'q', tests: 't', you: 'y', done: 'd' },
+  { work: 'w', check: 'c', queue: 'q', tests: 't', you: 'y', done: 'd' },
 ]
 const MAX_GAP = 8
 const MIN_GAP = 2
@@ -657,8 +661,8 @@ const TITLE_W = 12
 const TITLE_MAX = 40
 const RIGHT_W = 6
 
-/** A lane line's width with these columns. */
-const laneWidth = (idW: number, titleW: number, k: number, gap: number, sep: number, rightW = RIGHT_W) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap + sep + rightW
+/** A lane line's width with these columns. With no right column (T-1074) the last station name ("done", 3 past its mark) still needs its room. */
+const laneWidth = (idW: number, titleW: number, k: number, gap: number, sep: number, rightW = 0) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap + (rightW ? sep + rightW : gap >= 4 ? 3 : 0)
 
 /**
  * The layout of `lanes` at `width` columns: gaps of 8 and a 12-column title (wider, up to the longest title, when the
@@ -669,15 +673,17 @@ export function liveLayout(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Par
   const idW = Math.max(4, ...lanes.map(l => textWidth(l.id)))
   const k = stations.length
   const longest = Math.max(3, ...lanes.map(l => textWidth(l.title)))
-  const make = (titleW: number, gap: number, sep: number, rightW = RIGHT_W): LiveLayout => {
+  const make = (titleW: number, gap: number, sep: number, rightW = right): LiveLayout => {
     const set = LABELS.find(s => stations.slice(0, -1).every(st => textWidth(s[st]) <= gap)) ?? LABELS[LABELS.length - 1]!
     return { width, idW, titleW, gap, labels: stations.map(s => set[s]), rightW, sep, stations: [...stations] }
   }
   const base = Math.min(TITLE_W, longest)
+  // T-1074: a running lane's first line has no right column (its second line has the time); only a finished lane has one
+  const right = lanes.some(l => l.done) ? RIGHT_W : 0
   // T-771: a finished lane's "merged 10m ago" wants a wider right column; when the stations and the title can't keep
   // their room beside it, the right column stays narrow and the lane says the shorter "10m ago" (laneRight)
-  const wide = Math.max(RIGHT_W, ...lanes.map(l => (l.done ? textWidth(`${l.done.word} 10m ago`) : 0)))
-  if (wide > RIGHT_W)
+  const wide = Math.max(right, ...lanes.map(l => (l.done ? textWidth(`${l.done.word} 10m ago`) : 0)))
+  if (wide > right)
     for (let gap = MAX_GAP; gap >= MIN_GAP; gap--) {
       if (laneWidth(idW, base, k, gap, 2, wide) <= width) {
         const room = width - laneWidth(idW, base, k, gap, 2, wide)
@@ -685,17 +691,18 @@ export function liveLayout(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Par
       }
     }
   for (let gap = MAX_GAP; gap >= MIN_GAP; gap--) {
-    if (laneWidth(idW, base, k, gap, 2) <= width) {
-      const room = width - laneWidth(idW, base, k, gap, 2)
-      return make(gap === MAX_GAP ? Math.min(TITLE_MAX, longest, base + room) : base, gap, 2)
+    // the gap is chosen as if the right column were still there (the track stays as it was); the minutes' room goes to the title
+    if (laneWidth(idW, base, k, gap, 2, RIGHT_W) <= width) {
+      const room = width - laneWidth(idW, base, k, gap, 2, right)
+      return make(Math.min(TITLE_MAX, longest, base + room), gap, 2)
     }
   }
-  for (let titleW = base - 1; titleW >= 3; titleW--) if (laneWidth(idW, titleW, k, MIN_GAP, 2) <= width) return make(titleW, MIN_GAP, 2)
-  if (laneWidth(idW, 0, k, MIN_GAP, 2) <= width) return make(0, MIN_GAP, 2)
+  for (let titleW = base - 1; titleW >= 3; titleW--) if (laneWidth(idW, titleW, k, MIN_GAP, 2, right) <= width) return make(titleW, MIN_GAP, 2)
+  if (laneWidth(idW, 0, k, MIN_GAP, 2, right) <= width) return make(0, MIN_GAP, 2)
   // T-846: with many shared columns even that is too wide: the spacing between columns shrinks first (gap 1, then the
   // spaces around the stations, then gap 0), only then the labels (the one-letter set picks itself)
-  if (laneWidth(idW, 0, k, 1, 2) <= width) return make(0, 1, 2)
-  if (laneWidth(idW, 0, k, 1, 1) <= width) return make(0, 1, 1)
+  if (laneWidth(idW, 0, k, 1, 2, right) <= width) return make(0, 1, 2)
+  if (laneWidth(idW, 0, k, 1, 1, right) <= width) return make(0, 1, 1)
   return make(0, 0, 1)
 }
 
@@ -742,14 +749,14 @@ export const segText = (xs: readonly LiveSeg[]): string => xs.map(x => x.text).j
  * A lane's two lines as segments, never wider than the layout's width (unless even the tightest layout is wider):
  * 1. "▶ T-684 /symcc-doc…  ●━━━━━━━━●━━━━━━━━◉────────○────────○      #2": passed stations ●━━, the current one blinking
  *    (`frame`, liveBlink), future ──○; the right column the queue place or the time at the station;
- * 2. "  bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · <worker 5.4M · checker 1.9M> · ⌕ × 2" (T-867, T-931): kind and
+ * 2. "  bug try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6× median) · worker 5.4M · checker 1.9M · ⌕ × 2" (T-867, T-931): kind and
  *    try, its active time (all tries), the whole task's tokens (all its tries) and how many times the board's median
  *    tokens per merged task that is (the warning tone from LANE_WARN_TIMES), its tokens by agent kind in < > (a 0 part
  *    left out, no < > when there is none) and the checker's send-backs. When narrow, parts go: the < > split, then
  *    "× median", then the kind, then ⌀, then ⏱ (never before the tokens); never cut. A running worker's tokens are known
  *    only at its hand-back: until then the earlier tries' sum with " + …", or "⌀ at hand-back".
  */
-export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; frame: number; steady?: boolean }): [LiveSeg[], LiveSeg[]] {
+export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; frame: number; steady?: boolean; noTime?: boolean; noKind?: boolean }): [LiveSeg[], LiveSeg[]] {
   const sep = ' '.repeat(l.sep)
   const track: LiveSeg[] = []
   const done = !!lane.done
@@ -776,7 +783,7 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   // T-767: "▶ " before the id; the mark and id bold in the accent color ('run'), the title normal text; T-771: a finished lane's title dim
   // T-850: a finished lane has "✓ " (dim) there instead, its id stays in the accent color
   const name = segs({ text: done ? `${LIVE_DONE_MARK} ` : LIVE_RUN_MARK, tone: done ? 'dim' : 'run' }, { text: padWidth(lane.id, l.idW), tone: 'run' }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? 'dim' : 'text' })
-  const first = [...name, { text: sep, tone: 'text' as const }, ...track, { text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: 'dim' as const }]
+  const first = [...name, { text: sep, tone: 'text' as const }, ...track, ...(done && l.rightW ? [{ text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: 'dim' as const }] : [])]
   // the second line (T-867: plain numbers, no bar)
   // T-982: the checker's send-backs, "⌕ × 2" (spaces around ×, at every width)
   const back: LiveSeg | false = lane.sentBack > 0 && { text: `⌕ × ${lane.sentBack}`, tone: 'dim' }
@@ -784,24 +791,29 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   // "(7.6× median)": against the board's usual tokens per merged task; the warning tone from twice it
   const times = lane.tokens !== undefined && lane.usual ? lane.tokens / lane.usual : undefined
   const shown = times !== undefined && laneTimes(times)
-  const median: LiveSeg | false = shown && { text: ` (${shown.text}× median)`, tone: shown.warn ? 'warning' : 'dim' }
+  const median: LiveSeg | false = shown && { text: ` (${shown.text}×median)`, tone: shown.warn ? 'warning' : 'dim' }
   const tokens = (withMedian: boolean): LiveSeg[] =>
     lane.tokens === undefined
       ? done ? [] : [{ text: `${TOKEN_SIGN} at hand-back`, tone: 'dim' }]
       : segs({ text: fmtTok(lane.tokens), tone: 'text' }, lane.more && { text: ' + …', tone: 'dim' }, withMedian && median)
-  const time: LiveSeg[] = lane.activeMs ? [{ text: `⏱ ${rowDuration(lane.activeMs)}`, tone: 'dim' }] : []
+  const time: LiveSeg[] = lane.activeMs && !o.noTime ? [{ text: `⏱ ${rowDuration(lane.activeMs)}`, tone: 'dim' }] : []
   // T-931: the tokens by agent kind together in ‹ ›, without ⌀ ("<worker 2.1M · checker 380.9k>"); none when no split
   const agents = [lane.workerTokens && `worker ${fmtTokens(lane.workerTokens)}`, lane.checkerTokens && `checker ${fmtTokens(lane.checkerTokens)}`].filter((x): x is string => !!x)
-  const split: LiveSeg[] = agents.length ? [{ text: `<${agents.join(' · ')}>`, tone: 'dim' }] : []
-  /** The line with the parts up to `level` (4: all; 3: no ‹ › split; 2: no "× median"; 1 (no kind): no ⌀; 0: no ⏱).
+  const split: LiveSeg[] = agents.length ? [{ text: agents.join(' · '), tone: 'dim' }] : []
+  /** The line with the parts up to `level` (4: all; 3: no split; 2: no "×median"; 1: no ⌀; 0: no ⏱).
    *  T-931: the clock first, then the tokens, then the split; the clock is dropped only after the tokens. */
-  const line = (level: number, withKind: boolean): LiveSeg[] => {
-    const lead: LiveSeg = { text: `  ${withKind ? `${lane.kind} ` : ''}try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }
-    const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], back ? [back] : []].filter(x => x.length)
+  // T-1080: a finished lane's change size ends the line ("+539 −3,722", no files part); it is the first part dropped
+  const size: LiveSeg[] = lane.size ? [{ text: sizeText(lane.size, false), tone: 'dim' }] : []
+  const line = (level: number, withSize = false): LiveSeg[] => {
+    const lead: LiveSeg = { text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }
+    const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], back ? [back] : [], withSize ? size : []].filter(x => x.length)
     return segs(lead, ...parts.flatMap((x, i): LiveSeg[] => [{ text: ' · ', tone: 'dim' }, ...x]))
   }
-  const tries: LiveSeg[][] = [4, 3, 2].map(n => line(n, true))
-  tries.push(line(2, false), line(1, false), line(0, false), segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
+  // T-1074: the task type ends the second line (dim, two spaces after the meta text); dropped (never wrapped) when it does not fit
+  const withKind = (xs: LiveSeg[]): LiveSeg[] => [...xs, { text: `  ${lane.kind}`, tone: 'dim' as const }]
+  // each level with the kind, then without it, before a part of the meta text goes
+  const tries: LiveSeg[][] = [...(size.length ? [o.noKind ? line(4, true) : withKind(line(4, true))] : []), ...[4, 3, 2, 1, 0].flatMap(n => (o.noKind ? [line(n)] : [withKind(line(n)), line(n)]))]
+  tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
   const second = tries.find(fits) ?? tries[tries.length - 1]!
   // T-771: a finished lane's second line is dim throughout
   return [first, done ? second.map(x => (x.tone === 'text' && !x.text.trim() ? x : { ...x, tone: 'dim' })) : second]
@@ -809,7 +821,7 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
 
 // T-715: waiting trains. A todo task that still waits for an unfinished task hangs, as a "train" (└─◇), under the lane
 // of the running task it waits for, or under the train of the todo task it waits for (a chain), down to a lane:
-//                  work   check  queue  tests  merged
+//                  work   check  queue  tests  done
 // ▶ T-712 Scout or… ●━━━━━━◉──────○──────○──────○  2m
 //   bug try 1/3 · ⏱ 2m · ⌀ 1.1M (0.3× median) · <worker 1.1M>
 //   └─◇ T-713 Task files: no si…  waits
@@ -1006,14 +1018,12 @@ export function todayLines(d: LiveToday, width: number, triesOnly = false): stri
 
 // ---------------- T-769: ▍Today's second and third lines ----------------
 //   ⌀ per task 2.8M · 9m work · 23m start-to-merge   ⏱ 13h 06m agent work · ≈ $64
-//   ░░█████████████▓▓▒ lead 3% · workers 84% · checkers 8% · scouts 5%
+//   ████████████████ lead 3% · workers 84% · checkers 8% · scouts 5%
 //   08 ▁▂▃▅▇▆▅▃▅▇█▆▃ 20   busiest 14:00 · 42.1M tokens   first try 34%   ⌀ 2.4 tries   ⌕ 68 sent back by the checker
 
 /** Who spent today's tokens, in the bar's order. */
 export type TodayWho = 'workers' | 'checkers' | 'scouts' | 'lead'
 export const TODAY_WHO: readonly TodayWho[] = ['lead', 'workers', 'checkers', 'scouts']
-/** The bar's cell for each, so the parts can be told apart without colors too. */
-export const TODAY_WHO_CELL: Record<TodayWho, string> = { workers: '█', checkers: '▓', scouts: '▒', lead: '░' }
 /** How many cells the stacked bar has. */
 export const TODAY_BAR = 16
 const SPARK = '▁▂▃▄▅▆▇█'
@@ -1144,7 +1154,7 @@ export function todayBar(who: TodayMore['who'], n: number = TODAY_BAR): LiveSeg[
       cells[big]!--
       cells[i] = 1
     }
-  return who.flatMap((w, i) => (cells[i]! > 0 ? [{ text: TODAY_WHO_CELL[w.who].repeat(cells[i]!), tone: w.who }] : []))
+  return who.flatMap((w, i) => (cells[i]! > 0 ? [{ text: '█'.repeat(cells[i]!), tone: w.who }] : []))
 }
 
 /** The hours as a sparkline, ▁ to █ (a space for an hour with no tokens). */
@@ -1360,9 +1370,9 @@ export function liveTodayLines(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs:
   const first = todayLines({ ...d, tokens }, width, triesOnly).map((text): LiveSeg[] =>
     text.endsWith(TRIES_ONLY) ? [{ text: text.slice(0, -TRIES_ONLY.length), tone: 'text' }, { text: TRIES_ONLY, tone: 'dim' }] : [{ text, tone: 'text' }])
   // T-855: with no lane there is no key line, so the dim note that ⌀ means tokens ends the section
-  // T-889: then the dim yesterday and last 7 days lines
+  // T-889: then the dim yesterday and last 7 days lines (T-1043: after one blank line)
   const past = pastLines(pastDays(v.tasks, nowMs, 1, offsetMin), pastDays(v.tasks, nowMs, 7, offsetMin), width)
-  return [...first, ...todayMoreLines(more, width), ...past, ...(note ? wrapLine(TOKENS_NOTE, width).map((text): LiveSeg[] => [{ text, tone: 'dim' }]) : [])]
+  return [...first, ...todayMoreLines(more, width), ...(past.length ? [[] as LiveSeg[]] : []), ...past, ...(note ? wrapLine(TOKENS_NOTE, width).map((text): LiveSeg[] => [{ text, tone: 'dim' }]) : [])]
 }
 
 /** T-973: one label/value row of a section (VS Code's Live tab): its key, its label ("Tokens") and its value in parts. */
@@ -1410,8 +1420,11 @@ export function liveTodayRows(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs: 
     const parts = [p.merged > 0 && `${p.merged} merged`, p.tokens > 0 && fmtTokens(p.tokens), p.workMs >= 1000 && pastTime(p.workMs)].filter((x): x is string => !!x)
     if (parts.length) rows.push({ key, label, segs: [{ text: parts.join(' · '), tone: 'text' }] })
   }
+  const before = rows.length
   past('yesterday', TODAY_ROW.yesterday, pastDays(v.tasks, nowMs, 1, offsetMin))
   past('week', TODAY_ROW.week, pastDays(v.tasks, nowMs, 7, offsetMin))
+  // T-1043: one blank row between today's rows and the past rows (only when a past row shows)
+  if (rows.length > before) rows.splice(before, 0, { key: 'gap', label: '', segs: [] })
   return rows
 }
 
@@ -1441,7 +1454,7 @@ export type LiveOrgMem = {
 
 /** The most columns of the topic grid. */
 export const ORG_MEM_GRID_MAX = 4
-const GRID_LEAD = '   '
+const GRID_LEAD = '  '
 const GRID_GAP = '    '
 const NEWEST_TOPIC_MAX = 16
 
@@ -1475,7 +1488,7 @@ function orgMemHead(n: number, width: number): LiveSeg[] {
 
 /** The newest notes' lines: "   11-21  tests      text cut with …", the topic column as wide as the longest topic shown (cut when narrow). */
 function newestLines(notes: readonly OrgMemNote[], width: number): { note: OrgMemNote; segs: LiveSeg[] }[] {
-  const lead = '   '
+  const lead = '  '
   const dayW = 5
   const longest = Math.max(0, ...notes.map(x => textWidth(x.topic)))
   // the text keeps at least about half of the room; the topic column gives way first
@@ -1536,11 +1549,11 @@ export function liveOrgMem(notes: readonly OrgMemNote[], width: number): LiveOrg
   const w = liveInner(full)
   return {
     head: orgMemHead(notes.length, full),
-    newestLabel: '  newest',
+    newestLabel: 'newest',
     all: { label: ORG_MEM_ALL, text: `[${ORG_MEM_ALL}]` },
     newest: newestLines(orgMemNewest(notes), w),
     empty: notes.length ? '' : `  ${ORG_MEM_EMPTY}`,
-    topicsLabel: '  topics',
+    topicsLabel: 'topics',
     grid: topicGrid(orgMemTopicCounts(notes), w),
   }
 }
@@ -1656,7 +1669,7 @@ function branchLabels(x: BranchItem, nowMs: number): LiveSeg[][] {
   // T-913: the state after the id ("‖ paused"); when narrow the word goes first, the mark stays
   const word: LiveSeg[] = st ? [{ text: ` ${st.mark} ${st.word}`, tone: st.tone }, dot] : [{ text: ' ', tone: 'dim' }]
   const mark: LiveSeg[] = st ? [{ text: ` ${st.mark}`, tone: st.tone }, { text: ' ', tone: 'dim' }] : [{ text: ' ', tone: 'dim' }]
-  const long: LiveSeg[] = [{ text: `+${ahead} commit${ahead === 1 ? '' : 's'}`, tone: 'text' }, dot, { text: `${behind} behind`, tone: late }]
+  const long: LiveSeg[] = [{ text: `+${plural(ahead, 'commit')}`, tone: 'text' }, dot, { text: `${behind} behind`, tone: late }]
   const mid: LiveSeg[] = [{ text: `+${ahead}`, tone: 'text' }, dot, { text: `${behind} behind`, tone: late }]
   return [
     [id, ...word, ...long],

@@ -15,6 +15,7 @@ import type { SymccScout, SymccTask } from '../../types'
 import { type BoardTask, DEFAULT_AUTO_RETRIES, isInvestigation, kindOf, STATUS_WORD } from './board-file'
 import { type Seg, STATUS_BADGE, STATUS_MARK, statusMark, wrapSegs } from './details'
 import { originOf } from './origin'
+import { shortSha, sizeText } from './commits'
 import { DEFAULT_ROLE, isCheckerRole, roleNameError, roleOf } from './roles'
 import { ALWAYS_ON_KINDS, kindNameError } from './kinds'
 import { type DefSource, defNamed } from './def-files'
@@ -23,13 +24,14 @@ import { stageStep, taskPhase } from './phase'
 import { everyText, scoutRanText, scoutStateText, type ScoutRunRecord, sortScouts } from './scouts'
 import { liveLanes, liveTrains, type LiveTrain, type LiveView } from './live'
 import { localOffset } from './days'
+import { plural } from './text'
 
 export type { ActionGroup }
 export { GROUP_ORDER }
 
 /** The tab a page was opened from: its Back button names it ("‹ [Tasks]", "‹ [Live]", "‹ [Scouts]"). */
-export type PageFrom = 'tasks' | 'live' | 'scouts' | 'roles'
-export const FROM_WORD: Record<PageFrom, string> = { tasks: 'Tasks', live: 'Live', scouts: 'Scouts', roles: 'Roles' }
+export type PageFrom = 'tasks' | 'live' | 'scouts' | 'roles' | 'settings'
+export const FROM_WORD: Record<PageFrom, string> = { tasks: 'Tasks', live: 'Live', scouts: 'Scouts', roles: 'Roles', settings: 'Settings' }
 /** The Back button's words, the tab's name: "Tasks" (drawn "[Tasks]" after the arrow, see whereLine). */
 export const backText = (from: PageFrom): string => FROM_WORD[from]
 /** The arrow before the Back button: "‹ " (not part of the button, T-775). */
@@ -164,6 +166,19 @@ export function taskStateGroups(t: BoardTask, o: { nowMs: number; merging?: bool
   return [status, what, ...(from ? [[from]] : []), ...(note ? [[{ text: note, color: 'inactive', italic: true }]] : [])]
 }
 
+/**
+ * T-1080: the line right under a task's title, how big its change is: "merged c2fb0c16 · 25 files · +539 −3,722", or before
+ * it is merged "branch symcc/T-5 · 25 files · +539 −3,722". Null when the task has no saved size (an investigation, an
+ * errand, or nothing committed yet).
+ */
+export function sizeSegs(t: Pick<BoardTask, 'size' | 'merged' | 'branch' | 'status'>): Seg[] | null {
+  const z = t.size
+  if (!z) return null
+  const where = t.status === 'done' && t.merged ? `merged ${shortSha(t.merged)}` : t.branch ? `branch ${t.branch}` : ''
+  const [added = '', removed = ''] = sizeText(z, false).split(' ')
+  return [...(where ? [{ text: where, color: 'inactive' }, dot()] : []), { text: sizeText(z).split(' · ')[0]!, color: 'inactive' }, dot(), { text: added, color: 'success' }, { text: ' ', color: 'text' }, { text: removed, color: 'error' }]
+}
+
 /** Line 3 of a scout's page, in groups: its state or how often it runs ("◉ running now", "◷ every 2 days"), when
  *  it runs next, and when it last ran with what came of it ("last ran 2h ago: 2 findings → T-736, T-739"). `last`:
  *  its newest run and the tasks made from it. */
@@ -176,7 +191,7 @@ export function scoutStateGroups(sc: SymccScout, nowMs: number, last?: { run: Sc
   const lastSegs: Seg[] = [{ text: ran.startsWith('ran ') ? `last ${ran}` : ran, color: 'inactive' }]
   if (last && ran.startsWith('ran ')) {
     const n = last.run.findings
-    lastSegs.push({ text: `: ${n} finding${n === 1 ? '' : 's'}`, color: n ? 'warning' : 'inactive' })
+    lastSegs.push({ text: `: ${plural(n, 'finding')}`, color: n ? 'warning' : 'inactive' })
     if (last.tasks.length) lastSegs.push({ text: ` → ${last.tasks.join(', ')}`, color: 'claude' })
   }
   return [first, lastSegs]

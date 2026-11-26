@@ -136,7 +136,7 @@ export const PROMPT_SECTIONS: readonly PromptSection[] = [
     template: k => `${TEXTS[k]!.where}${k === 'change' ? '\n{{merge_main}}\n{{earlier_work}}' : ''}`,
     text: c => {
       const t = c.task
-      const merge = c.kind === 'change' && t?.merge_main ? `First, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (for this one step only you may run that git merge; still don't commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.` : ''
+      const merge = c.kind === 'change' && t?.merge_main ? `First, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (commit the merge yourself, or leave it for symcc to commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.` : ''
       const work = c.kind === 'change' && c.commits?.length ? `Your earlier tries' work is already here: it is committed on your branch, and your folder shows it. Their commits:\n${c.commits.map(l => `- ${l}`).join('\n')}` : ''
       return [fixed(c, 'where'), merge, work].filter(Boolean).join('\n\n')
     },

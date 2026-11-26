@@ -10,7 +10,7 @@ import { runBy } from './agent-fixture'
 import { statsUsage } from '../hooks/core/stats'
 import { ran } from './fakes'
 import type { ProcessRunResult } from 'claude-code'
-import { DAM_POST_LINE } from '../hooks/core/dam'
+import { DAM_POST_LINE, chatPostLine } from '../hooks/core/dam'
 
 const T0 = 1_800_000_000_000
 const ISO = '2026-11-13T00:00:00.000Z'
@@ -36,7 +36,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[]; env?: Recor
   const ended = new Set<string>()
   const toasts: string[] = []
   const spawned: string[] = []
-  const state = { gitFails: false, dropPrompts: false }
+  const state = { gitFails: false, dropPrompts: false, throwOnce: false }
 
   function git(args: string[]): Res {
     // a repo with a commit, so work can start
@@ -76,7 +76,13 @@ function world(on: On, o: { agents?: { id: string; type: string }[]; env?: Recor
     return { value: ok() }
   })
   on('tool.call', (_, e) => (tools.push(e.tool), { result: 'ran' }))
-  on('prompt.submit', (_, e) => (state.dropPrompts ? { drop: 'blocked by a settings hook' } : (prompts.push(e.text), contexts.push(e.context), { text: e.text, context: e.context })) as never)
+  // `throwOnce`: the next prompt.submit beneath the plugin throws (then the flag clears); the engine skips it and,
+  // with nothing else beneath, the plugin's next() rejects (T-1049)
+  on('prompt.submit', (_, e) => {
+    if (!state.throwOnce) return (state.dropPrompts ? { drop: 'blocked by a settings hook' } : (prompts.push(e.text), contexts.push(e.context), { text: e.text, context: e.context })) as never
+    state.throwOnce = false
+    throw new Error('a lower prompt hook broke')
+  })
   on('turn.start', (_, e) => ({ turnId: e.turnId }))
   on('command.run', () => ({ text: 'not a symcc command' }))
   on('agent.list', () => ({ value: (o.agents ?? []).map(a => ({ ...a, status: ended.has(a.id) ? 'completed' : 'running' })) }) as never)
@@ -253,6 +259,40 @@ test("T-968: an owner's prompt that is dropped before the chat puts its Meanwhil
   expect((w.contexts[w.prompts.indexOf('and then?')] ?? []).join('\n')).not.toContain('The owner rejected T-1')
 })
 
+// T-1049: a prompt.submit beneath the plugin that throws (`throwOnce`). The engine skips the broken hook; with nothing else
+// beneath to answer, the plugin's next() rejects, its catch puts the Meanwhile lines back, and passOn's next() replays that
+// failure (the engine's replay-safe next), so this prompt never reaches the chat. The lines must wait for the next one.
+const contextOf = (w: ReturnType<typeof world>, text: string) => (w.contexts[w.prompts.indexOf(text)] ?? []).join('\n')
+const rejectedLines = (w: ReturnType<typeof world>) => w.contexts.filter(c => (c ?? []).join('\n').includes('The owner rejected T-1 ("too big")')).length
+
+test("T-1049: a prompt a lower hook throws on doesn't reach the chat, and the next prompt carries its Meanwhile line exactly once", async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(reviewBoard()))
+  await run($, 'symcc-reject', 'T-1 too big')
+  w.state.throwOnce = true
+  await expect($.prompt.submit({ text: 'what now?', origin: { kind: 'composer' } } as never)).rejects.toThrow('prompt.submit')
+  expect(w.prompts).toEqual([])
+  // the line was put back: the next prompt that gets through carries it, once
+  await $.prompt.submit({ text: 'and now?', origin: { kind: 'composer' } } as never)
+  const context = contextOf(w, 'and now?')
+  expect(context).toContain('The owner rejected T-1 ("too big")')
+  expect(context.split('The owner rejected T-1').length - 1).toBe(1)
+})
+
+test('T-1049: after a lower hook throws on a prompt, only the first of two later prompts carries the Meanwhile line (not put back twice, not lost)', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(reviewBoard()))
+  await run($, 'symcc-reject', 'T-1 too big')
+  w.state.throwOnce = true
+  await expect($.prompt.submit({ text: 'what now?', origin: { kind: 'composer' } } as never)).rejects.toThrow('prompt.submit')
+  await $.prompt.submit({ text: 'and now?', origin: { kind: 'composer' } } as never)
+  await $.prompt.submit({ text: 'and then?', origin: { kind: 'composer' } } as never)
+  expect(w.prompts).toEqual(['and now?', 'and then?'])
+  expect(contextOf(w, 'and now?')).toContain('The owner rejected T-1 ("too big")')
+  expect(contextOf(w, 'and then?')).not.toContain('The owner rejected T-1')
+  expect(rejectedLines(w)).toBe(1)
+})
+
 // ---------------- commands with a broken board.json ----------------
 
 test('/symcc-help still shows the manual when board.json is broken', async ($, on) => {
@@ -360,7 +400,7 @@ const DAM_IMAGE = { PLATFORM_HARNESS: 'claude-code' }
 
 const COMPOSE = { model: 'claude-opus-5-5', promptModel: 'claude-opus-5-5', surfaces: ['terminal'], tools: [], outputStyle: null, traits: [] } as never
 
-/** Whether the lead's guide in the system prompt ends with the post-to-Slack line (S.dam is on in the plugin). */
+/** Whether the lead's guide in the system prompt ends with the post-to-Slack line (S.chat is "dam" in the plugin). */
 async function slackLine($: Eng): Promise<boolean> {
   const lead = (await $.prompt.compose(COMPOSE)).sections.find(x => x.id === 'symcc:lead')
   expect(lead).toBeDefined()
@@ -377,7 +417,7 @@ async function damStart($: Eng, on: On, env: Record<string, string> = DAM_IMAGE)
   return w
 }
 
-test("T-943: in a DAM image, an owner's sdk prompt through prompt.submit turns the Slack line on (S.dam)", async ($, on) => {
+test("T-943: in a DAM image, an owner's sdk prompt through prompt.submit turns the Slack line on (S.chat)", async ($, on) => {
   await damStart($, on)
   await say($, 'add a search box', { origin: { kind: 'sdk' } })
   expect(await slackLine($)).toBe(true)
@@ -398,6 +438,12 @@ test('T-943: in a DAM image, a bridge prompt leaves the Slack line off', async (
 test("T-943: in a DAM image, symcc's own board update sent with origin sdk leaves the Slack line off", async ($, on) => {
   await damStart($, on)
   await say($, '[symcc] Board update:\n\nT-1 merged.', { origin: { kind: 'sdk' } })
+  expect(await slackLine($)).toBe(false)
+})
+
+test("T-1061: in a DAM image, the health check's own update sent with origin sdk leaves the Slack line off", async ($, on) => {
+  await damStart($, on)
+  await say($, '[symcc health check] Triage needed (an automatic check, not a scout or a worker): found a problem:\n- T-1 waits.', { origin: { kind: 'sdk' } })
   expect(await slackLine($)).toBe(false)
 })
 
@@ -565,4 +611,16 @@ test('mcp__symcc__approve for a task to do answers "error: T-1 is not ready for 
   const r = (await $.tool.call({ tool: 'mcp__symcc__approve', task: 'T-1' } as never)) as { result?: string }
   expect(r.result).toBe('error: T-1 is not ready for review (it is to do); only a task in review can be approved')
   expect(w.board().tasks[0]!.status).toBe('todo')
+})
+
+test('T-1098: a prompt from a chat channel is the owner\'s words and turns chat mode on; the next composer prompt turns it off', async ($, on) => {
+  const w = await damStart($, on, {})
+  await say($, 'add a search box', { origin: { kind: 'channel', server: 'telegram' } })
+  const lead = (await $.prompt.compose(COMPOSE)).sections.find(x => x.id === 'symcc:lead')
+  expect(lead!.text.endsWith(chatPostLine('telegram'))).toBe(true)
+  expect(lead!.text).not.toContain('AskUserQuestion')
+  void w
+  await say($, 'and a filter')
+  const after = (await $.prompt.compose(COMPOSE)).sections.find(x => x.id === 'symcc:lead')
+  expect(after!.text.includes('reply tool')).toBe(false)
 })

@@ -17,17 +17,23 @@ export const REST_ON_BOARD = 'the rest on the board'
 /** Does pop-up answer `a` pick REST_ON_BOARD (alone, or among a multi-select's comma-joined picks)? Then it is no answer. */
 const restOnBoard = (a: string) => a.split(',').some(p => squash(p).toLowerCase() === REST_ON_BOARD)
 
+/** T-1098: the host's pop-up question tool, or '' when the owner writes from a chat app (the pop-up is invisible there: numbered plain text instead). */
+export const popup = (): string => (S.chat ? '' : S.W.askPopup)
+
+/** What ends a chat question: how to answer in a chat app, else that the owner can also answer on the board. */
+export const answerTail = (): string => (S.chat ? 'reply with the number or your own words' : 'or answer on the board')
+
 /** How the lead offers n options in the chat: with the host's pop-up question tool (it takes at most 4, so with
  *  more the first 3 plus "the rest on the board"), or as numbered plain chat text when the host has none (T-570). */
 export const optionsVia = (n: number): string =>
-  S.W.askPopup
-    ? `with ${S.W.askPopup}${n > 4 ? ` (it takes at most 4 options: show the first 3 plus "${REST_ON_BOARD}", or the owner types one under Other)` : ''}`
+  popup()
+    ? `with ${popup()}${n > 4 ? ` (it takes at most 4 options: show the first 3 plus "${REST_ON_BOARD}", or the owner types one under Other)` : ''}`
     : 'as numbered plain chat text'
 
 /** After "If they answer on the board first …": with a pop-up, one whose header is task `id` is tied to its board question (T-579); '' with none. */
 export const popupTied = (id: string): string =>
-  S.W.askPopup
-    ? ` Set the ${S.W.askPopup} question's header to exactly ${id}: ${S.N.name} then ties the pop-up to ${id}'s board question, so whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into ${id} for you (the tool result says what was done, and what is left for you).`
+  popup()
+    ? ` Set the ${popup()} question's header to exactly ${id}: ${S.N.name} then ties the pop-up to ${id}'s board question, so whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into ${id} for you (the tool result says what was done, and what is left for you).`
     : ''
 
 /** The question tool's actions. */
@@ -49,9 +55,9 @@ export async function questionTool(host: Host, a: In): Promise<string> {
       return [y, [q, y]] as [Board, [typeof q, Board]]
     })
     sayQuestion(host, b, q.id)
-    if (S.W.askPopup)
-      return `added ${q.id} "${q.text}" with the options ${q.options.join(' | ')} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, offering the options ${optionsVia(q.options.length)}, with the same question text: ${S.N.name} ties that pop-up to ${q.id}, so whichever the owner answers first closes the other, and a board answer comes back as the pop-up's answer. (Next time just ask with ${S.W.askPopup}: it puts the question on the board by itself.)`
-    return `added ${q.id} "${q.text}" with the options ${q.options.join(' | ')} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, offering the options ${optionsVia(q.options.length)}, plus "or answer on the board". If the owner answers in the chat, close it with ${S.N.name} question action answer, id ${q.id} and their answer; a board answer reaches you at once in a board update ("The owner answered your question ${q.id} …: … Act on it.").`
+    if (popup())
+      return `added ${q.id} "${q.text}" with the options ${q.options.join(' | ')} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, offering the options ${optionsVia(q.options.length)}, with the same question text: ${S.N.name} ties that pop-up to ${q.id}, so whichever the owner answers first closes the other, and a board answer comes back as the pop-up's answer. (Next time just ask with ${popup()}: it puts the question on the board by itself.)`
+    return `added ${q.id} "${q.text}" with the options ${q.options.join(' | ')} (the owner can also type their own). It shows on the board under "Questions for you" until it is answered. Ask it briefly in the chat too, offering the options ${optionsVia(q.options.length)}, plus "${answerTail()}". If the owner answers in the chat, close it with ${S.N.name} question action answer, id ${q.id} and their answer; a board answer reaches you at once in a board update ("The owner answered your question ${q.id} …: … Act on it.").`
   }
   if (action === 'answer' || action === 'drop') {
     const id = normQid(a.id)

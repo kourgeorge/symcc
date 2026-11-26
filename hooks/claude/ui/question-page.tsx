@@ -8,7 +8,7 @@ import { when } from '../../core/days'
 import { answerOnBoard } from '../../app/questions'
 import type { PaneParts } from './parts'
 import { answerBox } from './answer-box'
-import { vsCallout, vsChoices, vsFooter, vsHref, vsLink, mdLink } from './vscode'
+import { vsChoices, vsHref, vsLink, mdLink } from './vscode'
 import { claudeHost } from '../host'
 
 /** The keys at the bottom of a question's page: only b back; the answer keys are told under the buttons (choiceKeysHint). */
@@ -47,27 +47,24 @@ export function questionPage($: $, pane: PaneParts, q: OwnerQuestion) {
   )
 }
 
-/** The question's page in VS Code: a "← Tasks" link back, then the question in a box with its answers as numbered
- *  lines you click (vsChoices) and a "Your answer" box always there. No key hints. */
+/** The question's page in VS Code (T-1009): a "‹ Tasks" link back, the id (dim) and title, the question as plain bold
+ *  words, its answers as numbered links (keys 1-9 work too) and a "Your answer" box. No border, no hint. */
 function questionPageVs(pane: PaneParts, q: OwnerQuestion, answers: string[], back: () => void, send: (text: string) => () => void) {
   const { Box, Text, Input, C, vs } = pane
   const backHref = vsHref('page', 'back/question-back')
   return (
     <Box flexDirection="column" gap={1}>
-      {vsLink(vs, 'question-back', mdLink('← Tasks', backHref), [[backHref, back]])}
+      {vsLink(vs, 'question-back', mdLink('‹ Tasks', backHref), [[backHref, back]])}
       <Box key="vs-question-head" flexDirection="column">
         <Text key="vs-question-title" wrap="wrap">
-          <Text bold color={C('claude')}>{q.id}</Text>
+          <Text color={C('inactive')}>{q.id}</Text>
           <Text bold color={C('text')}>  Question for you</Text>
         </Text>
         <Text key="vs-question-asked" wrap="wrap" color={C('inactive')}>{`asked by the lead · ${when(q.asked_at)}`}</Text>
       </Box>
-      {vsCallout(vs, 'vs-sec-question', '?', 'The lead asks', 'warning', [
-        <Text key="vs-question" wrap="wrap" bold color={C('text')}>{q.text}</Text>,
-        answers.length ? vsChoices(vs, answers, i => send(answers[i]!)) : null,
-        <Input key="answer" label="Your answer" submitLabel="Send" placeholder={answers.length ? 'or type your own answer' : 'type your answer'} autoFocus={answers.length ? undefined : true} onSubmit={value => send(value)()} />,
-      ].filter(Boolean) as never[])}
-      {vsFooter(vs, 'question-keys')}
+      <Text key="vs-question" wrap="wrap" bold color={C('text')}>{q.text}</Text>
+      {answers.length ? vsChoices(vs, answers, i => send(answers[i]!)) : null}
+      <Input key="answer" label="Your answer" submitLabel="Send" placeholder={answers.length ? 'or type your own answer' : 'type your answer'} autoFocus={answers.length ? undefined : true} onSubmit={value => send(value)()} />
     </Box>
   )
 }

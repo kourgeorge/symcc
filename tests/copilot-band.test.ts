@@ -32,7 +32,7 @@ test('a fresh lead.json of another session makes this window follow; off and emp
   // no session known, or an old heartbeat: this window drives
   expect(bandStatusText({ board: text(b), lead }, { nowMs: NOW })?.includes('drives here')).toBe(true)
   expect(bandStatusText({ board: text(b), lead: JSON.stringify({ session: 'other', heartbeat: NOW - 3_600_000 }) }, { nowMs: NOW, session: 'me' })?.includes('drives here')).toBe(true)
-  expect(bandStatusText({ board: text({ ...b, enabled: false }), lead: null }, { nowMs: NOW })).toBe(offStatusLine('symcc', false, false, undefined, NOW, statusRoom()))
+  expect(bandStatusText({ board: text({ ...b, enabled: false }), lead: null }, { nowMs: NOW })).toBe(offStatusLine('symcc', false, false))
   expect(bandLine({ board: text(emptyBoard()), lead: null }, { nowMs: NOW })).toBe('')
   expect(bandLine({ board: null, lead: null }, { nowMs: NOW })).toBe('')
 })

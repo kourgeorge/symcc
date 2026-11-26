@@ -27,24 +27,25 @@ import {
   rowStates, rowMark, TITLE_ROOM, fitRow, rowExtra, questionsLabel, archivedOf, archivedNote, statusMark, detailRows, detailRowLines, wrapSegs, hintLineText,
   type KeyHint, type Seg, type BoardTask, intoOf, taskActions, taskAsks, fileWaitText, actionButtonLabel, packRows, type TaskAction, type TaskActionId,
   ownersTurn, shownStatus, sortScouts, scoutListRows, scoutFindingsOf, findingsLine, findingsDefaultLine, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile,
-  SETTING_GROUPS, SETTINGS, isSettingPage, settingInfo, settingShown, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
+  SETTING_GROUPS, isSettingPage, settingInfo, settingDots, settingsRuleWidth, settingRowValue, settingsHelpOf, settingValue, viewAsBoard, cantPlayNotify, groupSummaryParts,
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
-  DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning,
+  DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning, DRIVE_HERE_LABEL, showsDriveButton,
   searchTasks, showsHeader, type BoardPage, groupLabel,
   LIVE_TABS, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveNowSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { notSetUpAnswer } from '../core/settings'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
-import { taskSections, type TaskSection } from '../core/task-sections'
+import { taskSections, runLines, type ReportPick, type TaskSection } from '../core/task-sections'
+import { taskReports } from '../core/reports'
 import type { TaskBranchFacts } from '../core/task-branch'
 import { type RoleChange, CHANGED_HEADING, changeLines, changesOfRole, roleStateGroups } from '../core/role-changes'
 import { type DefRow, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICK_LABEL, roleTableRow, kindTableRow, defsCountText, defLayout, defCells, defCellTone, newDefText, roleWritesLine, codePickOf } from '../core/def-table'
 import { defActions, roleButtons as headerRoleButtons } from '../core/page-header'
-import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, TASK_ID_COLOR, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
+import { type ActionGroup, groupSegLines, headerRule, inGroups, navHint, navRow, packGroups, type PageFrom, PILL_COLOR, pillText, placeIn, scoutAbout, scoutButtons as headerScoutButtons, scoutListNames, scoutStateGroups, sizeSegs, TASK_ID_COLOR, taskPlace, taskStateGroups, titleLines, whereLine } from '../core/page-header'
 import { LIST_TONE, sessionNote } from '../core/details'
 import type { SearchMore } from '../core/panel'
-import { isObj } from '../core/text'
+import { isObj, plural } from '../core/text'
 import type { DiffFile } from '../core/review'
 import { DEFAULT_NAME, dataDir } from '../name'
 import { ORG_MEM_EMPTY, ORG_MEM_SUBTITLE, orgMemPageCount, orgMemAbout, orgMemKeys, orgMemNoteHead, orgMemFile, orgMemOfTopic, orgMemPageTitle, orgMemTopicEmpty, type OrgMemNote } from '../core/org-mem'
@@ -221,7 +222,7 @@ export type PanelGroup = 'backlog' | 'done' | 'dropped'
  *  and (T-680) press a task page's button that has no key (Drop in review): `action`, its id in core's taskActions;
  *  and (T-706) on a role's or kind's edit page, change one of its boxes (`editField`) or press Save (`save`);
  *  and (T-946) open or fold an older day's row in the open Done group (`day`, "2026-11-22"). */
-export type PanelHit = { open: string } | { group: PanelGroup } | { more: 'backlog' } | { day: string } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId } | { editField: DefEditField } | { save: true }
+export type PanelHit = { open: string } | { group: PanelGroup } | { more: 'backlog' } | { day: string } | { key: PanelKey } | { tab: PanelTab } | { scout: string } | { run: string } | { setting: SettingName } | { page: string } | { choice: number } | { settingGroup: string } | { action: TaskActionId } | { editField: DefEditField } | { save: true } | { report: ReportPick }
 
 /** One colored piece of a line, with what a click on it does (only the footer's key hints have one). */
 export type DrawSeg = Seg & { hit?: PanelHit }
@@ -325,6 +326,10 @@ export type PanelChoice = {
   sent?: { id: string; answer: string }
   /** the open task's latest report (T-580), read from its file: its text undefined while it is read, null when it can't be */
   taskReport?: { file: string; text: string | null | undefined }
+  /** T-1104: the agent picked in the Runs section whose report the Report section shows (left out: the latest worker report) */
+  taskPick?: ReportPick
+  /** T-1104: the cursor over the task page's pressable Runs lines (Enter shows that line's report) */
+  pageCursor?: number
   /** the task whose approve this panel just sent, and when (ms): its page shows the approve's first step at once (see
    *  approveSent), as Claude Code's task page does */
   approving?: ApproveSent
@@ -587,6 +592,9 @@ export function gitRowLines(v: Pick<PaneView, 'git_state'> & Partial<Pick<PaneVi
   return lines
 }
 
+/** T-1052: the banner's Drive here button (d), shown while another session drives (and this window is on). */
+export const DRIVE_HERE_BUTTON: PanelButton = { label: DRIVE_HERE_LABEL, hit: { key: 'd' } }
+
 /** The banner's Check again button (g) while git is not installed: looks again, so installing git by hand moves the notice on. */
 export const CHECK_GIT_BUTTON: PanelButton = { label: 'Check again (g)', hit: { key: 'g' } }
 
@@ -621,6 +629,9 @@ export function panelKeys(f: ViewFile | null, opened: string, tab: PanelTab = 't
 /** The keys of the Live tab (core's liveKeys), but w (watch worker: OpenCode's panel can't show a worker's session). */
 export const panelLiveKeys = (): KeyHint[] => liveKeys().filter(k => k.key !== 'w')
 
+/** T-1104: whether task `t`'s Runs section has a line to press (an agent or try with a report file). */
+export const taskHasRunLines = (t: BoardTask): boolean => !!t.runs?.some((r, i) => runLines(t, r, i, 0, null).some(l => l.pick))
+
 function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string, heading: boolean, merging: boolean): KeyHint[] {
   if (tab === 'live') return orgMemPageTopic(opened) !== null ? orgMemKeys(false, orgMemOfTopic(orgMemIn(f), orgMemPageTopic(opened)).length > 0) : panelLiveKeys()
   const move = { key: '↑↓', word: 'move' }
@@ -652,7 +663,14 @@ function tabKeys(f: ViewFile | null, opened: string, tab: PanelTab, run: string,
   const q = f?.view.questions?.find(x => x.id === opened)
   if (q) return [{ key: 'a', word: 'answer' }, back]
   if (!t) return [back]
-  return [...(taskAsks(t, f?.view.max_minutes) ? [{ key: 'a', word: 'answer' }] : []), ...panelTaskActions(t, merging).map(a => ({ key: a.key!, word: a.word })), back]
+  const asks = !!taskAsks(t, f?.view.max_minutes)
+  // T-1104: 1-9 a try's worker report (when no question takes the number keys), and Enter on a pressable Runs line its report
+  const tries = taskReports(t).map(r => r.try).filter(n => n >= 1 && n <= 9)
+  const reportKeys = [
+    ...(!asks && taskReports(t).length > 1 && tries.length ? [{ key: tries.length > 1 ? `${tries[0]}-${tries.at(-1)}` : `${tries[0]}`, word: "a try's report" }] : []),
+    ...(taskHasRunLines(t) ? [move, { key: 'Enter', word: 'on a Runs line: its report' }] : []),
+  ]
+  return [...(asks ? [{ key: 'a', word: 'answer' }] : []), ...panelTaskActions(t, merging).map(a => ({ key: a.key!, word: a.word })), ...reportKeys, back]
 }
 
 /** Whether task `t`'s approve is in progress at `nowMs`: this panel just sent it (approveSent, `approving`), or the board
@@ -676,6 +694,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     ...(l.art ? [{ text: l.art, color: 'ide' }] : []),
     ...l.parts.map(p => ({ text: p.text, color: TONE[p.tone], ...(p.bold ? { bold: true } : {}) })),
   ])
+  if (showsDriveButton(v, v.driving ?? false)) banner.push([{ text: buttonText(DRIVE_HERE_BUTTON), color: 'ide', hit: DRIVE_HERE_BUTTON.hit }])
   banner.push(...gitRowLines(v, w, f.name))
   const tab = choice.tab ?? 'tasks'
   // T-700: the header (banner, tabs, rule) only on a list page, as on the terminal panel and VS Code (core's showsHeader)
@@ -701,7 +720,7 @@ export function panelLines(f: ViewFile | null, choice: PanelChoice, nowMs: numbe
     const t = choice.opened ? f.view.tasks.find(x => x.id === choice.opened) : undefined
     // the approve in progress takes the same buttons and keys away (approveInProgress)
     const busy = !!t && approveInProgress(f, t, choice.approving, nowMs)
-    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore) : null
+    const page = choice.opened ? openedPage(f, choice.opened, nowMs, w, choice.sent?.id === choice.opened ? choice.sent.answer : '', choice.taskReport, choice.approving?.id === choice.opened && approveSent(f, choice.approving, nowMs), busy, choice.from ?? 'tasks', choice.search ?? '', choice.searchMore, choice.taskPick, choice.pageCursor ?? 0) : null
     body = page ?? listBody(f, choice.cursor, { ...GROUPS_OPEN, ...choice.groups }, nowMs, w, choice.search ?? '', choice.searchMore, choice.backlogAll ?? false, choice.openDays ?? [])
     keys = panelKeys(f, page ? choice.opened : '', 'tasks', '', false, !!page && busy)
     if (!page) modeRow = modeLines(f, !!choice.search?.trim(), w)
@@ -1114,7 +1133,7 @@ function defsCount(f: ViewFile, list: DefList): string {
   const all = defsIn(f, list)
   const off = all.filter(x => x.off).length
   const noun = list === 'roles' ? 'role' : 'task type'
-  return `${all.length} ${noun}${all.length === 1 ? '' : 's'}${off ? ` · ${off} off` : ''}`
+  return `${plural(all.length, noun)}${off ? ` · ${off} off` : ''}`
 }
 
 /** A role or task type of the view file as a line of the Roles or Kinds table (core's def-table.ts). */
@@ -1134,6 +1153,8 @@ function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
   const all = defsIn(f, list)
   const noun = list === 'roles' ? 'role' : 'kind'
   const rows = all.map(x => viewDefRow(list, x))
+  const nav = navRow('settings', '', w)
+  b.add([...nav.left, { text: ' '.repeat(nav.pad) }].map(p => ({ text: p.text, color: 'go' in p && p.go ? PILL_COLOR : 'inactive', ...('go' in p && p.go ? { hit: { key: 'back' } as PanelHit } : {}) })))
   b.add([{ text: `▍${list === 'roles' ? 'Roles' : 'Task types'}`, color: 'suggestion', bold: true }, { text: `  ${defsCountText(noun, rows)}`, color: 'inactive' }])
   const layout = defLayout(rows, list === 'roles' ? ROLE_COLS : KIND_COLS, w)
   if (!all.length) b.add([{ text: `  (none in the board's view yet)`, color: 'inactive' }])
@@ -1157,7 +1178,7 @@ function defsList(f: ViewFile, list: DefList, cursor: number, w: number): Body {
   b.blank()
   // T-706: Claude Code's "+ New role" / "+ New kind" (n), one plain line
   b.add([{ text: `  ${newDefText(noun)}`, color: 'text' }], { key: 'n' })
-  return { ...b, ids, selected, head: 2 }
+  return { ...b, ids, selected, head: 3 }
 }
 
 /** One role's or kind's page: its name, where it comes from and whether it is off, what it is for; a role's model,
@@ -1365,60 +1386,65 @@ function orgMemBody(f: ViewFile, cursor: number, w: number, topic = ''): Body {
   return { ...b, ids, selected, head: headLines }
 }
 
-/** The Settings tab: each group (Work, Checks before merging, ...) as a heading that opens or closes, like the
- *  Claude Code board's (T-585): "▸ Work · auto · 3 at once" closed (its values in short, core's groupSummaryParts),
- *  "▾ Work" open with its settings under it: name, value, default and range, and what it does on the line under it;
- *  the Roles and Task types rows open their pages. */
+/** The Settings tab: each group (Work, Checks before merging, ...) as a heading that opens or closes, as the Claude Code
+ *  board's (T-585, T-1047): closed, "▸ Work   auto · 3 at once" (the title padded, its values in short, core's
+ *  groupSummaryParts; on a narrow panel "▸ Work · auto · 3 at once"); open, "▾ Work" with a row per setting, "Label ..... value"
+ *  (units and the mode as core's settingRowValue). Under a thin rule the selected row's help (core's settingsHelpOf): its label,
+ *  what it does, then "name · default X · range"; a heading shows its hint. The Roles and Task types rows open their pages. */
 function settingsBody(f: ViewFile, cursor: number, open: readonly string[], w: number): Body {
   const b = bodyMaker()
   const v = f.view
-  const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
   const ids = settingRows(open)
   const selected = ids[Math.min(Math.max(0, cursor), ids.length - 1)]!
   const pages = { roles: defsCount(f, 'roles'), kinds: defsCount(f, 'kinds') }
+  const padWidth = Math.max(...SETTING_GROUPS.map(g => g.title.length)) + 3
+  const stacked = w - 4 - padWidth < 12
   for (const g of SETTING_GROUPS) {
     b.blank()
     const isOpen = open.includes(g.title)
     const front = { text: settingGroupId(g.title) === selected ? '› ' : '  ', color: 'ide', bold: true }
     const hit = { settingGroup: g.title }
     if (!isOpen) {
-      const sum = groupSummaryParts(g, viewAsBoard(v), Math.max(20, w - 4), pages)
-      b.add([front, { text: `▸ ${sum.title}`, color: 'text', bold: true }, ...(sum.values ? [{ text: sum.values, color: 'inactive' }] : [])], hit)
+      const sum = groupSummaryParts(g, viewAsBoard(v), stacked ? w - 4 : w - 4 - padWidth + g.title.length + 3, pages)
+      const short = stacked ? '' : sum.values.replace(/^ · /, '')
+      b.add([front, { text: `▸ ${stacked ? sum.title + sum.values : sum.title.padEnd(padWidth)}`, color: 'text', bold: true }, ...(short ? [{ text: short, color: 'inactive' }] : [])], hit)
       continue
     }
     b.add([front, { text: `▾ ${g.title}`, color: 'text', bold: true }], hit)
     for (const item of g.items) {
       if (isSettingPage(item)) {
         const label = item === 'roles' ? 'Roles' : 'Task types'
-        const hit = { page: item }
         b.add(
           [
             { text: item === selected ? '› ' : '  ', color: 'ide', bold: true },
-            { text: label.padEnd(nameWidth), color: 'claude', bold: true },
-            { text: ` ${defsCount(f, item)}`, color: 'text', bold: true },
+            { text: label, color: 'text' },
+            { text: settingDots(label), color: 'inactive' },
+            { text: `${defsCount(f, item)}`, color: 'claude', bold: true },
           ],
-          hit,
+          { page: item },
         )
-        b.add([{ text: `    Enter opens the ${label} page: the ${item === 'roles' ? 'worker roles' : 'task types'}, to open, turn off or reset`, color: 'inactive' }], hit)
         continue
       }
       const x = settingInfo(item)!
-      const hit = { setting: x.name }
-      const sel = x.name === selected
       const unplayable = x.name === 'notify' && cantPlayNotify(v)
       b.add(
         [
-          { text: sel ? '› ' : '  ', color: 'ide', bold: true },
-          { text: x.name.padEnd(nameWidth), color: 'claude', bold: true },
-          { text: ` ${settingShown(x.name, settingValue(viewAsBoard(v), x.name))}`, color: 'text', bold: true },
+          { text: x.name === selected ? '› ' : '  ', color: 'ide', bold: true },
+          { text: x.label, color: 'text' },
+          { text: settingDots(x.label), color: 'inactive' },
+          { text: settingRowValue(x.name, settingValue(viewAsBoard(v), x.name)), color: 'claude', bold: true },
           ...(unplayable ? [{ text: " (can't play here: nothing plays)", color: 'warning' }] : []),
-          { text: ` · default ${x.default} · ${x.range}`, color: 'inactive' },
         ],
-        hit,
+        { setting: x.name },
       )
-      for (const l of wrapSegs([{ text: x.meaning, color: 'inactive' }], w - 4)) b.add([{ text: '    ', color: 'inactive' }, ...l], hit)
     }
   }
+  const sel = isSettingPage(selected) ? { page: selected } : settingInfo(selected) ? { setting: selected } : { group: SETTING_GROUPS.find(g => settingGroupId(g.title) === selected)?.title ?? SETTING_GROUPS[0]!.title }
+  const help = settingsHelpOf(sel)
+  b.blank()
+  b.add([{ text: '─'.repeat(settingsRuleWidth(w)), color: 'inactive' }])
+  if (help.name) b.add([{ text: help.name, color: 'text', bold: true }])
+  for (const l of help.lines) for (const wl of wrapSegs([{ text: l, color: 'inactive' }], w)) b.add(wl)
   b.blank()
   b.add([{ text: `Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /${f.name}-settings NAME VALUE · or tell the lead`, color: 'inactive' }])
   b.blank()
@@ -1540,6 +1566,15 @@ function questionRow(q: OwnerQuestion, front: string, idWidth: number, w: number
   ]
 }
 
+/** T-1104: the id of a pressable Runs line (its cursor id): "report:2:checker:a6f1" (no agent id: "report:2:worker:"). */
+export const reportPickId = (p: ReportPick) => `report:${p.try}:${p.kind}:${p.id ?? ''}`
+
+/** T-1104: the pick of a pressable Runs line's cursor id; undefined for any other id. */
+export function reportPickOf(id: string): ReportPick | undefined {
+  const m = /^report:(\d+):(worker|checker):(.*)$/.exec(id)
+  return m ? { try: Number(m[1]), kind: m[2] as 'worker' | 'checker', ...(m[3] ? { id: m[3] } : {}) } : undefined
+}
+
 /** How many lines of a long History or Report section the task page shows; the rest is cut with "… (n more lines)"
  *  (the whole report stays in its file, named in the section). */
 export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { history: 30, report: 40 }
@@ -1548,7 +1583,7 @@ export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { histo
  *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,
  *  T-580: Why it failed, Answer, Details, Changes, What to do, History, Report, Runs), with the latest report's text
  *  (`report`, read by the TUI) and the changed files from the view file; null when it is gone. */
-function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = '', more?: SearchMore): Body | null {
+function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = '', report?: PanelChoice['taskReport'], merging = false, busy = false, from: PageFrom = 'tasks', search = '', more?: SearchMore, pick?: ReportPick, pageCursor = 0): Body | null {
   const v = f.view
   const b = bodyMaker()
   const addAll = (ls: Line[]) => ls.forEach(l => b.add(l))
@@ -1574,7 +1609,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
   // T-751: the page header, as on Claude Code's task page: where you are (‹ Tasks or ‹ Live, its place in that list),
   // the title, the state, the buttons in groups (core's taskActions), a thin rule; it stays at the top while the rest scrolls
   addAll(headerLines({
-    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: t.title, color: TASK_ID_COLOR,
+    from, label: t.id, place: taskPlace(v, t.id, from, nowMs, search, more), title: t.title, color: TASK_ID_COLOR, size: sizeSegs(t),
     state: taskStateGroups(t, { nowMs, merging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? false, nowMs) }),
     buttons: taskButtons(t, busy),
   }, w))
@@ -1599,6 +1634,7 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
     nowMs,
     detail: { roles: defsIn(f, 'roles'), kinds: defsIn(f, 'kinds'), all: v.tasks, when: iso => when(iso), board: v, merging, driving: v.driving ?? false, ...(v.archived_done ? { archivedDone: v.archived_done } : {}) },
     ...(report ? { texts: { [report.file]: report.text } } : {}),
+    ...(pick ? { shown: pick } : {}),
     changes: v.changes?.[t.id] ?? null,
     // T-761: the Branch section, from the facts the server side read with git (app/branches.ts)
     ...(v.task_branches?.[t.id] ? { branch: v.task_branches[t.id] } : {}),
@@ -1607,14 +1643,24 @@ function openedPage(f: ViewFile, id: string, nowMs: number, w: number, sent = ''
     // here a click on a file, like d, shows all the task's changes (there is no one-file diff)
     changesHint: '  d (or a click on a file) shows the changes',
   })
+  // T-1104: the agent lines of Runs with a report file are lines to press (a click, or Enter with the cursor on them)
+  const pressable = sections.flatMap(sec => (sec.id === 'runs' ? sec.lines.filter(l => l.pick).map(l => l.pick!) : []))
+  const ids = pressable.map(reportPickId)
+  const selected = ids.length ? ids[Math.min(Math.max(0, pageCursor), ids.length - 1)]! : ''
   for (const sec of sections) {
     b.add([{ text: ' ', color: 'text' }])
     b.add([{ text: `▍${sec.title}`, color: 'suggestion', bold: true }])
     const most = SECTION_LINES[sec.id] ?? Infinity
-    sec.lines.slice(0, most).forEach(l => b.add(l.segs.length ? l.segs : [{ text: ' ', color: 'text' }], l.action ? { key: 'd' } : null))
+    sec.lines.slice(0, most).forEach(l => {
+      if (!l.pick) return b.add(l.segs.length ? l.segs : [{ text: ' ', color: 'text' }], l.action ? { key: 'd' } : null)
+      const hit: PanelHit = { report: l.pick }
+      const mark = reportPickId(l.pick) === selected
+      const first = l.segs[0]!
+      b.add([{ ...first, text: mark ? `›${first.text.slice(1)}` : first.text, hit }], hit)
+    })
     if (sec.lines.length > most) b.add([{ text: `  … (${sec.lines.length - most} more lines)`, color: 'inactive' }])
   }
-  return { ...b, ids: [], selected: id, head }
+  return { ...b, ids, selected: selected || id, head }
 }
 
 /** A numbered choice of a question as Claude Code's question pop-up shows it ("  1. Allow", "  3. Answer…"; T-651):
@@ -1687,7 +1733,7 @@ export const scoutButtons = (sc: Pick<SymccScout, 'running' | 'paused'>): HeadBu
 /** A page header's lines (T-751, core/page-header.ts): where you are (Back and, with a place, "‹ 2 of 6 ›": each a
  *  click), the title, the state (wrapping between its groups), the buttons in their groups (each "[Pause]" in the
  *  text color, T-775; wrapping between groups, never inside a button), then a thin rule. */
-export function headerLines(hd: { from: PageFrom; label: string; place: ReturnType<typeof placeIn>; title: string; color: string; state: Seg[][]; buttons: HeadButton[] }, w: number): Line[] {
+export function headerLines(hd: { from: PageFrom; label: string; place: ReturnType<typeof placeIn>; title: string; color: string; size?: Seg[] | null; state: Seg[][]; buttons: HeadButton[] }, w: number): Line[] {
   const where = whereLine(hd.from, hd.label, hd.place, w)
   const go: Record<string, PanelHit> = { back: { key: 'back' }, prev: { key: 'prev' }, next: { key: 'next' } }
   // Back is a button like the others ("[Tasks]", the text color); the arrow and the pager stay dim
@@ -1699,7 +1745,7 @@ export function headerLines(hd: { from: PageFrom; label: string; place: ReturnTy
       return [...(gap ? [{ text: ' '.repeat(gap), color: 'text' }] : []), { text: pillText(x), color: x.fact ? 'inactive' : PILL_COLOR, ...(x.fact ? {} : { hit: x.hit }) }]
     }),
   )
-  return [first, ...titleLines(hd.label, hd.title, hd.color, w), ...groupSegLines(hd.state, w), ...rows, [{ text: headerRule(w), color: 'ide' }]]
+  return [first, ...titleLines(hd.label, hd.title, hd.color, w), ...(hd.size ? wrapSegs(hd.size, Math.max(8, Math.floor(w) - hd.label.length - 2)).map(l => [{ text: ' '.repeat(hd.label.length + 2), color: 'text' }, ...l]) : []), ...groupSegLines(hd.state, w), ...rows, [{ text: headerRule(w), color: 'ide' }]]
 }
 
 /** A row of buttons, going on to more rows when it doesn't fit `w` (core's packRows, as Claude Code's buttonRows),
@@ -1744,6 +1790,8 @@ export type PanelAction =
   | { kind: 'scout-new'; scout: string; prompt: string }
   | { kind: 'setup-git' }
   | { kind: 'check-git' }
+  /** (T-1052) the banner's Drive here button: /<name>-drive */
+  | { kind: 'drive' }
 
 /**
  * T-888: the hidden mark the board panel puts at the end of the text of every slash command it sends (an invisible
@@ -1772,6 +1820,7 @@ export function actionCommand(a: PanelAction, name: string = DEFAULT_NAME): { na
   if (a.kind === 'def-save') return { name: `${name}-settings`, text: `${defCommandWord(a.def)} ${a.name} save ${JSON.stringify(a.fields)}` }
   if (a.kind === 'scout-new') return { name: `${name}-scout`, text: `${a.scout} new ${a.prompt.trim()}` }
   if (a.kind === 'setup-git') return { name: `${name}-settings`, text: 'git setup' }
+  if (a.kind === 'drive') return { name: `${name}-drive`, text: '' }
   if (a.kind === 'check-git') return { name: `${name}-settings`, text: 'git check' }
   return { name: `${name}-answer`, text: `${a.id} ${a.answer.trim()}` }
 }

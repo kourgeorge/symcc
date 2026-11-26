@@ -4706,11 +4706,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto merge · 2 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 2 at onc…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 2 at once · 45 min · 2 re…"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Work                    "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 2 at onc…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -4719,18 +4719,18 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands · tes…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Checks before merging"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 2 test commands · tes…"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Checks before merging   "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands · tes…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Workers"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 0 roles · 6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Workers                 "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -4739,30 +4739,24 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Scouts","label":"▸ Scouts · findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Scouts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · findings: backlog"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Scouts                  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["findings: backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify sound 2 · open on s…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify sound 2 · open…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Board and alerts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · notify sound 2 · open on s…"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Board and alerts        "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["notify sound 2 · open…"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -4903,11 +4897,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto merge · 2 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 2 at onc…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 2 at once · 45 min · 2 re…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work                    "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 2 at onc…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -4916,18 +4910,18 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands · tes…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Checks before merging"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 2 test commands · tes…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Checks before merging   "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands · tes…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 0 roles · 6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers                 "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -4936,30 +4930,24 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Scouts","label":"▸ Scouts · findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Scouts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · findings: backlog"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Scouts                  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["findings: backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify sound 2 · open on s…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify sound 2 · open…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · notify sound 2 · open on s…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts        "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["notify sound 2 · open…"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -5108,11 +5096,11 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto merge · 2 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 2 at onc…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 2 at once · 45 min · 2 re…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work                    "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 2 at onc…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -5121,18 +5109,18 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands · tes…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Checks before merging"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 2 test commands · tes…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Checks before merging   "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands · tes…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 0 roles · 6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers                 "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -5141,30 +5129,24 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Scouts","label":"▸ Scouts · findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Scouts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · findings: backlog"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Scouts                  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["findings: backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify sound 2 · open on s…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify sound 2 · open…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · notify sound 2 · open on s…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts        "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["notify sound 2 · open…"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -5319,82 +5301,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -5406,135 +5358,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -5549,19 +5418,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -5573,34 +5442,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -5612,81 +5459,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -5833,82 +5637,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -5920,135 +5694,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6063,19 +5754,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6087,34 +5778,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6126,81 +5795,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -6355,82 +5981,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6442,135 +6038,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6585,19 +6098,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6609,34 +6122,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6648,81 +6139,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -6877,53 +6325,59 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-pick-mode","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Whether work runs, and whether finished work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["merges on its own or waits for you."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:paused","label":"○ paused"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:paused","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:paused","label":"○ paused"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  nothing starts; running work stops"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:review","label":"○ approve merge"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:review","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:review","label":"○ approve merge"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work waits for you to approve"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide"},"children":["● auto merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:auto","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide"},"children":["● auto merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work that passes merges on its own"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -6931,54 +6385,42 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -6990,135 +6432,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -7133,19 +6492,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -7157,34 +6516,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -7196,81 +6533,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -7417,53 +6711,59 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-pick-mode","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Whether work runs, and whether finished work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["merges on its own or waits for you."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:paused","label":"○ paused"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:paused","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:paused","label":"○ paused"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  nothing starts; running work stops"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:review","label":"○ approve merge"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:review","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:review","label":"○ approve merge"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work waits for you to approve"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:auto","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work that passes merges on its own"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -7471,54 +6771,42 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -7530,135 +6818,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -7673,19 +6878,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -7697,34 +6902,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -7736,81 +6919,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -7965,53 +7105,59 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-pick-mode","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Whether work runs, and whether finished work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["merges on its own or waits for you."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:paused","label":"○ paused"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:paused","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:paused","label":"○ paused"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ paused"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  nothing starts; running work stops"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:review","label":"○ approve merge"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:review","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:review","label":"○ approve merge"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ approve merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work waits for you to approve"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto merge"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:auto","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:auto","label":"● auto merge","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● auto merge"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  finished work that passes merges on its own"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -8019,54 +7165,42 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -8078,135 +7212,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -8221,19 +7272,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -8245,34 +7296,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -8284,81 +7313,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -8513,82 +7499,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -8600,135 +7556,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -8743,19 +7616,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -8767,34 +7640,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -8806,76 +7657,85 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-pick-notify","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["What plays when a task is merged or a worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["asks you something."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:voice","label":"○ voice"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:voice","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:voice","label":"○ voice"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["    says what happened out loud"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 1","label":"○ sound 1"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 1","label":"○ sound 1"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 1"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide"},"children":["● sound 2"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 2","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide"},"children":["● sound 2"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 2"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 3","label":"○ sound 3"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 3","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 3","label":"○ sound 3"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 3"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:off","label":"○ off"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:off","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:off","label":"○ off"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["      nothing plays"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -8883,42 +7743,28 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -9065,82 +7911,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9152,135 +7968,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9295,19 +8028,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9319,34 +8052,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9358,76 +8069,85 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-pick-notify","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["What plays when a task is merged or a worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["asks you something."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:voice","label":"○ voice"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:voice","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:voice","label":"○ voice"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["    says what happened out loud"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 1","label":"○ sound 1"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 1","label":"○ sound 1"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 1"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● sound 2"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 2","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● sound 2"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 2"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 3","label":"○ sound 3"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 3","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 3","label":"○ sound 3"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 3"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:off","label":"○ off"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:off","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:off","label":"○ off"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["      nothing plays"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -9435,42 +8155,28 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -9625,82 +8331,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9712,135 +8388,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9855,19 +8448,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9879,34 +8472,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -9918,76 +8489,85 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-pick-notify","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["What plays when a task is merged or a worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["asks you something."]},
+          {"type":"Text","children":[" "]},
           {
-            "type": "Button",
-            "props": {"key":"pick:voice","label":"○ voice"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:voice","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:voice","label":"○ voice"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ voice"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["    says what happened out loud"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 1","label":"○ sound 1"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 1","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 1","label":"○ sound 1"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 1"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 1"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● sound 2"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 2","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 2","label":"● sound 2","autoFocus":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["● sound 2"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 2"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:sound 3","label":"○ sound 3"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:sound 3","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:sound 3","label":"○ sound 3"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ sound 3"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["  a short chime, sound set 3"]}
+            ]
           },
           {
-            "type": "Button",
-            "props": {"key":"pick:off","label":"○ off"},
-            "press": {"plugin":"symcc"},
-            "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+            "type": "Box",
+            "props": {"key":"pick-row:off","flexDirection":"row"},
+            "children": [
+              {
+                "type": "Button",
+                "props": {"key":"pick:off","label":"○ off"},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"bold":false,"color":"text"},"children":["○ off"]}]
+              },
+              {"type":"Text","props":{"color":"inactive"},"children":["      nothing plays"]}
+            ]
           },
           {"type":"Button","props":{"key":"setting-cancel","label":"Cancel (x)","hotkey":"x"},"press":{"plugin":"symcc"}},
           {"type":"Text","props":{"color":"inactive"},"children":["Enter picks · x cancels"]}
@@ -9995,42 +8575,28 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -10185,46 +8751,30 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["2"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-box-max_parallel","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["How many workers run at once: 1-8."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {"key":"setting-edit","label":"max_parallel","placeholder":"a whole number, 1-8","value":"2","autoFocus":true},
@@ -10236,44 +8786,32 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -10285,135 +8823,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -10428,19 +8883,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -10452,34 +8907,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -10491,81 +8924,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -10712,46 +9102,30 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-box-max_parallel","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["How many workers run at once: 1-8."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {"key":"setting-edit","label":"max_parallel","placeholder":"a whole number, 1-8","value":"2","autoFocus":true},
@@ -10763,44 +9137,32 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -10812,135 +9174,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -10955,19 +9234,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -10979,34 +9258,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -11018,81 +9275,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -11247,46 +9461,30 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-box-max_parallel","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["How many workers run at once: 1-8."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {"key":"setting-edit","label":"max_parallel","placeholder":"a whole number, 1-8","value":"2","autoFocus":true},
@@ -11298,44 +9496,32 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -11347,135 +9533,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -11490,19 +9593,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -11514,34 +9617,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -11553,81 +9634,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -11782,82 +9820,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -11869,28 +9877,21 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-box-test_commands","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Shell commands that must all pass before work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["is merged: one line, or up to 5 as a list."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {
@@ -11913,115 +9914,42 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -12036,19 +9964,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -12060,34 +9988,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -12099,81 +10005,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -12320,82 +10183,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -12407,28 +10240,21 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-box-test_commands","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Shell commands that must all pass before work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["is merged: one line, or up to 5 as a list."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {
@@ -12451,115 +10277,42 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -12574,19 +10327,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -12598,34 +10351,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -12637,81 +10368,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -12866,82 +10554,52 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:mode",
-          "label": "mode               auto merge · default auto merge · paused " +
-            "/ approve merge / auto merge · paused: nothing runs; approve" +
-            " merge: finished work waits for your approval; auto merge: i" +
-            "t merges on its own",
-          "plain": true
-        },
+        "props": {"key":"setting:mode","label":"Mode: auto merge","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["mode              "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","auto merge"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto merge",
-              " · ",
-              "paused / approve merge / auto merge",
-              " · ",
-              "paused: nothing runs; approve merge: finished work waits for your approval; auto merge: it merges on its own"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Mode"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ................ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto merge"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:max_parallel","label":"max_parallel       2 · default 3 · 1-8 · how many workers run at once","plain":true},
+        "props": {"key":"setting:max_parallel","label":"Workers at once: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_parallel      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","3"," · ","1-8"," · ","how many workers run at once"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Workers at once"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:max_minutes",
-          "label": "max_minutes        45 · default 45 · 5-600 · a worker running longer makes symcc ask the owner for more time",
-          "plain": true
-        },
+        "props": {"key":"setting:max_minutes","label":"Time per worker: 45 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["max_minutes       "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","45"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","45"," · ","5-600"," · ","a worker running longer makes symcc ask the owner for more time"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Time per worker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ..... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["45 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:auto_retries","label":"auto_retries       2 · default 2 · 0-10 · new tries on their own after failing tests","plain":true},
+        "props": {"key":"setting:auto_retries","label":"Retries on failure: 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["auto_retries      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","2"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","2"," · ","0-10"," · ","new tries on their own after failing tests"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Retries on failure"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:enabled","label":"enabled            on · default on · on / off · off: the whole plugin rests and Claude works as normal","plain":true},
+        "props": {"key":"setting:enabled","label":"Symcc on: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["enabled           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","on"," · ","on / off"," · ","off: the whole plugin rests and Claude works as normal"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Symcc on"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............ "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -12953,28 +10611,21 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:test_commands",
-          "label": "test_commands      [\"claude plugin test .\",\"sh scripts/typec" +
-            "heck.sh\"] · default none · one shell line, or a list of up t" +
-            "o 5 lines · must all pass before work is merged",
-          "plain": true
-        },
+        "props": {"key":"setting:test_commands","label":"Test commands: [\"claude plugin test .\",\"sh scripts/typecheck.sh\"]","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_commands     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","none"," · ","one shell line, or a list of up to 5 lines"," · ","must all pass before work is merged"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["[\"claude plugin test .\",\"sh scripts/typecheck.sh\"]"]}
         ]
       },
       {
         "type": "Box",
         "props": {"key":"setting-box-test_commands","flexDirection":"column","borderStyle":"round","borderColor":"ide","paddingX":1},
         "children": [
+          {"type":"Text","props":{"color":"inactive"},"children":["Shell commands that must all pass before work"]},
+          {"type":"Text","props":{"color":"inactive"},"children":["is merged: one line, or up to 5 as a list."]},
+          {"type":"Text","children":[" "]},
           {
             "type": "Input",
             "props": {
@@ -12997,115 +10648,42 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:docs_test_commands",
-          "label": "docs_test_commands none · default none · one shell line, or " +
-            "a list of up to 5 lines · run instead of test_commands when " +
-            "a prose-only role (code: false) changed only prose, e.g. a d" +
-            "ocs link check; none: such a change runs no test",
-          "plain": true
-        },
+        "props": {"key":"setting:docs_test_commands","label":"Docs test commands: none","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["docs_test_commands"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","none"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "none",
-              " · ",
-              "one shell line, or a list of up to 5 lines",
-              " · ",
-              "run instead of test_commands when a prose-only role (code: f" +
-                "alse) changed only prose, e.g. a docs link check; none: such" +
-                " a change runs no test"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Docs test commands"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["none"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:test_minutes","label":"test_minutes       10 · default 10 · 1-120 · how long each test command may run before merging","plain":true},
+        "props": {"key":"setting:test_minutes","label":"Time per test: 10 min","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["test_minutes      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","10"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","10"," · ","1-120"," · ","how long each test command may run before merging"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Time per test"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["10 min"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:tests_with_changes",
-          "label": "tests_with_changes ask · default ask · off / ask / review · " +
-            "a change task that edits code but no test file: ask: it merg" +
-            "es and the lead is told \"T-3 changed code but no test\"; revi" +
-            "ew: it waits for your review instead; off: nothing (test fil" +
-            "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-            " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-            ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-            "md files, images and non-code files under docs/ are never fl" +
-            "agged)",
-          "plain": true
-        },
+        "props": {"key":"setting:tests_with_changes","label":"Code without tests: ask","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["tests_with_changes"]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","ask"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "ask",
-              " · ",
-              "off / ask / review",
-              " · ",
-              "a change task that edits code but no test file: ask: it merg" +
-                "es and the lead is told \"T-3 changed code but no test\"; revi" +
-                "ew: it waits for your review instead; off: nothing (test fil" +
-                "es are in test/, tests/, __tests__/, spec/, e2e/ or cypress/" +
-                " folders or have a test name like a.test.ts, a-test.ts, a.cy" +
-                ".ts, login.e2e.ts, FooTest.java; docs-only changes such as ." +
-                "md files, images and non-code files under docs/ are never fl" +
-                "agged)"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Code without tests"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["ask"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:checker",
-          "label": "checker            off · default off · off / on · on: after " +
-            "the prep step and before a change joins the merge queue (whe" +
-            "re its tests run), a fresh checker tries to break it; OK goe" +
-            "s on, a list of problems sends it back to its worker (counts" +
-            " as a retry); investigations and docs-only changes skip it",
-          "plain": true
-        },
+        "props": {"key":"setting:checker","label":"Checker: off","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["checker           "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","off"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "off",
-              " · ",
-              "off / on",
-              " · ",
-              "on: after the prep step and before a change joins the merge " +
-                "queue (where its tests run), a fresh checker tries to break " +
-                "it; OK goes on, a list of problems sends it back to its work" +
-                "er (counts as a retry); investigations and docs-only changes" +
-                " skip it"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Checker"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............. "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["off"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -13120,19 +10698,19 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
         "props": {"key":"settings-roles","label":"Roles: 0 roles","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Roles             "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","0 roles"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Roles page: the worker roles, to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Roles"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["0 roles"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"settings-kinds","label":"Task types: 6 task types","plain":true},
+        "props": {"key":"settings-kinds","label":"Task types: 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["Task types        "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","6 task types"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · Enter opens the Task types page: to open, edit, turn off or add"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Task types"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" .......... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -13144,34 +10722,12 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:scout_findings",
-          "label": "scout_findings     backlog · default auto · auto / backlog ·" +
-            " the default for scouts without their own findings choice. a" +
-            "uto: the lead decides, a scout finding it adds goes to todo " +
-            "and runs; backlog: every task added from a scout finding goe" +
-            "s to the backlog and waits for you",
-          "plain": true
-        },
+        "props": {"key":"setting:scout_findings","label":"Scout findings: backlog","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["scout_findings    "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","backlog"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "auto",
-              " · ",
-              "auto / backlog",
-              " · ",
-              "the default for scouts without their own findings choice. au" +
-                "to: the lead decides, a scout finding it adds goes to todo a" +
-                "nd runs; backlog: every task added from a scout finding goes" +
-                " to the backlog and waits for you"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Scout findings"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ...... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["backlog"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -13183,81 +10739,38 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:notify",
-          "label": "notify             sound 2 · default voice (else sound N, N " +
-            "picked from the project name, else off) · voice / sound 1 / " +
-            "sound 2 / sound 3 / off · when a task is merged or a worker " +
-            "asks you something: \"symcc: T-3 done\" / \"symcc: T-5 needs yo" +
-            "u\" out loud, the project name first (voice), or a chime from" +
-            " sound set N, so you can tell which project chimed (on macOS" +
-            " sound 1: Glass and Ping, sound 2: Hero and Pop, sound 3: Su" +
-            "bmarine and Funk; the second one when a question waits); pic" +
-            "king a sound plays its chime",
-          "plain": true
-        },
+        "props": {"key":"setting:notify","label":"Alert: sound 2","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["notify            "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","sound 2"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [
-              " · default ",
-              "voice (else sound N, N picked from the project name, else off)",
-              " · ",
-              "voice / sound 1 / sound 2 / sound 3 / off",
-              " · ",
-              "when a task is merged or a worker asks you something: \"symcc" +
-                ": T-3 done\" / \"symcc: T-5 needs you\" out loud, the project n" +
-                "ame first (voice), or a chime from sound set N, so you can t" +
-                "ell which project chimed (on macOS sound 1: Glass and Ping, " +
-                "sound 2: Hero and Pop, sound 3: Submarine and Funk; the seco" +
-                "nd one when a question waits); picking a sound plays its chi" +
-                "me"
-            ]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Alert"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ............... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["sound 2"]}
         ]
       },
       {
         "type": "Button",
-        "props": {"key":"setting:open_on_start","label":"open_on_start      on · default on · on / off · open the board panel when a session starts","plain":true},
+        "props": {"key":"setting:open_on_start","label":"Open on start: on","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["open_on_start     "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","on"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · default ","on"," · ","on / off"," · ","open the board panel when a session starts"]}
+          {"type":"Text","props":{"color":"text"},"children":["  Open on start"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["on"]}
         ]
       },
       {
         "type": "Button",
-        "props": {
-          "key": "setting:archive_days",
-          "label": "archive_days       14 · default 14 · 0-3650 (0 = never) · done and dropped tasks older than this move to archive.json",
-          "plain": true
-        },
+        "props": {"key":"setting:archive_days","label":"Archive after: 14 days","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["archive_days      "]},
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":[" ","14"]},
-          {
-            "type": "Text",
-            "props": {"color":"inactive"},
-            "children": [" · default ","14"," · ","0-3650 (0 = never)"," · ","done and dropped tasks older than this move to archive.json"]
-          }
+          {"type":"Text","props":{"color":"text"},"children":["  Archive after"]},
+          {"type":"Text","props":{"color":"inactive"},"children":[" ....... "]},
+          {"type":"Text","props":{"bold":true,"color":"claude","weight":"semibold"},"children":["14 days"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {

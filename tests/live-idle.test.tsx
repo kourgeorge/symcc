@@ -111,14 +111,14 @@ for (const c of CASES) {
         expect((await ui.find({ key: `live-next-row:${id}` }))?.text.startsWith('◇')).toBe(true)
       }
       const more = await ui.find({ key: 'live-backlog-more' })
-      expect(more ? [more.type, more.props.label, more.props.plain, more.props.dimColor] : undefined).toEqual(done.more ? ['Button', done.more, true, true] : undefined)
+      expect(more ? [more.type, more.props.text, more.props.pressableLinks] : undefined).toEqual(done.more ? ['Markdown', `[${done.more}](${vsHref('more', 'backlog')})`, [vsHref('more', 'backlog')]] : undefined)
     }
     // the one main action while nothing runs: tell the lead what is next
     const ask = await ui.find({ key: 'live-ask-lead' })
     expect([ask?.type, ask?.props.variant, ask?.props.label]).toEqual(['Button', 'primary', ASK_LEAD])
     expect((await ui.findAll({ type: 'Button' })).filter(b => b.props.variant === 'primary').length).toBe(1)
     if (done?.more) {
-      await ui.press({ key: 'live-backlog-more' })
+      await ui.press({ key: 'live-backlog-more', link: { href: vsHref('more', 'backlog') } })
       expect(await tabBar(ui)).toEqual(wantTabs('tasks', { tasks: c.tasks.length, scouts: 0 }))
       expect(await ui.find({ key: `vs-task-${done.next[0]}` })).toBeDefined()
     }

@@ -92,7 +92,7 @@ async function header(ui: { find: (q: object) => Promise<unknown> }, vscode = fa
 const CASES: [string, string, string, string[]][] = [
   ['T-504', '▶ doing · worker · ⏱ 25m', 'ide', ['main pause', 'danger drop', 'page needs-review', 'page copy']],
   ['T-501', '◆ ready for review', 'warning', ['main approve', 'task show-changes', 'danger reject', 'danger drop', 'page needs-review', 'page copy']],
-  ['T-502', '✗ failed', 'error', ['main retry', 'task run-now', 'task stash', 'task role', 'task already-merged', 'danger drop', 'page needs-review', 'page copy']],
+  ['T-502', '✗ failed', 'error', ['main retry', 'task stash', 'task role', 'task already-merged', 'danger drop', 'page needs-review', 'page copy']],
 ]
 for (const [id, status, color, groups] of CASES)
   for (const surface of ['terminal', 'desktop', 'mobile'] as const)
@@ -201,7 +201,7 @@ test('T-751: a narrow terminal page wraps the state and the buttons between grou
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
   const h = await header(ui)
   const rows = kids(h).filter(k => keyOf(k)?.startsWith('hdr-buttons-')).map(textOf)
-  expect(rows).toEqual(['[Retry]', '[Run now] [Stash to backlog]', '[Role] [Already merged]', '[Drop]', '[☐ Needs review] [Copy]'])
+  expect(rows).toEqual(['[Retry]', '[Stash to backlog] [Role]', '[Already merged]   [Drop]', '[☐ Needs review] [Copy]'])
   for (const r of rows) expect(r.length).toBeLessThanOrEqual(30)
   const state = kids(kids(h)[2]).map(textOf)
   expect(state).toEqual(['✗ failed', 'change · worker · try 2/4', '♟ from you   tests failed'])
@@ -212,7 +212,7 @@ test('T-751: in VS Code the same header: Back and a pager, the title, state chip
   seedRich(on, 'T-501')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const h = await header(ui, true)
-  expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions', 'vs-header-rule'])
+  expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions'])
   expect((await ui.find({ key: 'back' }))?.props.label).toBe('Tasks')
   expect(textOf(await ui.find({ key: 'vs-back' }))).toMatch(/^‹/)
   const place = placeIn(LIST, 'T-501')!
@@ -270,7 +270,7 @@ for (const surface of ['terminal', 'desktop', 'mobile', 'vscode'] as const)
       await ui.press({ key: 'next-key' })
       await ui.redraw()
     } else {
-      expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions', 'vs-header-rule'])
+      expect(kids(h).map(keyOf)).toEqual(['vs-where', 'vs-head', 'vs-state', 'vs-actions'])
       expect((await ui.find({ key: 'scout-back' }))?.props.label).toBe('Scouts')
       for (const b of kids(await ui.find({ key: 'vs-actions' })).filter(n => n.type === 'Button')) expect(b.props?.variant, keyOf(b)).toBe(keyOf(b) === 'scout-run' ? 'primary' : 'secondary')
       await ui.press({ key: 'next' })

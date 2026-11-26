@@ -1298,13 +1298,6 @@ export const BEFORE: Record<string, unknown> = {
               {"type":"Text","children":["   "]},
               {
                 "type": "Button",
-                "props": {"key":"run-now","label":"Run now","plain":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Run now]"]}]
-              },
-              {"type":"Text","children":[" "]},
-              {
-                "type": "Button",
                 "props": {"key":"stash","label":"Stash to backlog","plain":true},
                 "press": {"plugin":"symcc"},
                 "children": [{"type":"Text","props":{"color":"text"},"children":["[Stash to backlog]"]}]
@@ -1315,6 +1308,13 @@ export const BEFORE: Record<string, unknown> = {
                 "props": {"key":"role","label":"Role","plain":true},
                 "press": {"plugin":"symcc"},
                 "children": [{"type":"Text","props":{"color":"text"},"children":["[Role]"]}]
+              },
+              {"type":"Text","children":["   "]},
+              {
+                "type": "Button",
+                "props": {"key":"drop","label":"Drop","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Drop]"]}]
               }
             ]
           },
@@ -1322,13 +1322,6 @@ export const BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-1","flexDirection":"row"},
             "children": [
-              {
-                "type": "Button",
-                "props": {"key":"drop","label":"Drop","plain":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Drop]"]}]
-              },
-              {"type":"Text","children":["   "]},
               {
                 "type": "Button",
                 "props": {"key":"needs-review","label":"☐ Needs review","plain":true},
@@ -1352,7 +1345,6 @@ export const BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
@@ -1425,10 +1417,6 @@ export const BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
-          },
-          {
-            "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["general"]}
@@ -1459,6 +1447,10 @@ export const BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -1503,14 +1495,6 @@ export const BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["z"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" stash to backlog"]}
                 ]
@@ -1518,6 +1502,10 @@ export const BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["l"]},{"type":"Text","props":{"color":"inactive"},"children":[" role"]}]
+              },
+              {
+                "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["x"]},{"type":"Text","props":{"color":"inactive"},"children":[" drop"]}]
               }
             ]
           },
@@ -1527,12 +1515,8 @@ export const BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["x"]},{"type":"Text","props":{"color":"inactive"},"children":[" drop"]}]
-              },
-              {
-                "type": "Text",
                 "children": [
-                  " · ",
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["n"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
                 ]
@@ -1824,11 +1808,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at onc…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 3 at once · 45 min · 2 re…"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Work                    "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 3 at onc…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -1837,18 +1821,18 @@ export const BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands · tes…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Checks before merging"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 2 test commands · tes…"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Checks before merging   "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands · tes…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Workers"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 0 roles · 6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Workers                 "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -1857,30 +1841,24 @@ export const BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Scouts","label":"▸ Scouts · findings: auto","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Scouts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · findings: auto"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Scouts                  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["findings: auto"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open on sta…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open o…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Board and alerts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · notify voice · open on sta…"]}
+          {"type":"Text","props":{"bold":true,"color":"text"},"children":["▸ Board and alerts        "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · open o…"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -1999,19 +1977,17 @@ export const BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Button","props":{"key":"retry","label":"Retry","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
             "type": "Box",
             "props": {"key":"hdr-buttons-1","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"needs-review","label":"☐ Needs review","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -2025,7 +2001,6 @@ export const BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
@@ -2099,13 +2074,6 @@ export const BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["general"]}
             ]
@@ -2137,6 +2105,13 @@ export const BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -2186,14 +2161,6 @@ export const BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["z"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" stash to backlog"]}
                 ]
@@ -2204,6 +2171,14 @@ export const BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["l"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" role"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" drop"]}
                 ]
               }
             ]
@@ -2216,14 +2191,6 @@ export const BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" drop"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
                 ]
@@ -2539,11 +2506,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at onc…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 3 at once · 45 min · 2 re…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work                    "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 3 at onc…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -2552,18 +2519,18 @@ export const BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands · tes…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Checks before merging"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 2 test commands · tes…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Checks before merging   "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands · tes…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 0 roles · 6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers                 "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -2572,30 +2539,24 @@ export const BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Scouts","label":"▸ Scouts · findings: auto","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Scouts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · findings: auto"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Scouts                  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["findings: auto"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open on sta…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open o…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · notify voice · open on sta…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts        "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · open o…"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {
@@ -3334,19 +3295,17 @@ export const BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Button","props":{"key":"retry","label":"Retry","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":["   "]},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
             "type": "Box",
             "props": {"key":"hdr-buttons-1","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"needs-review","label":"☐ Needs review","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -3360,7 +3319,6 @@ export const BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
@@ -3434,13 +3392,6 @@ export const BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["general"]}
             ]
@@ -3472,6 +3423,13 @@ export const BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -3521,14 +3479,6 @@ export const BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["z"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" stash to backlog"]}
                 ]
@@ -3539,6 +3489,14 @@ export const BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["l"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" role"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" drop"]}
                 ]
               }
             ]
@@ -3551,14 +3509,6 @@ export const BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" drop"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
                 ]
@@ -3874,11 +3824,11 @@ export const BEFORE: Record<string, unknown> = {
       {"type":"Text","props":{"wrap":"truncate","color":"ide"},"children":["━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"]},
       {
         "type": "Button",
-        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at once · 45 min · 2 re…","plain":true,"autoFocus":true},
+        "props": {"key":"group:Work","label":"▸ Work · auto merge · 3 at onc…","plain":true,"autoFocus":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · auto merge · 3 at once · 45 min · 2 re…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Work                    "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["auto merge · 3 at onc…"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -3887,18 +3837,18 @@ export const BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Checks before merging","label":"▸ Checks before merging · 2 test commands · tes…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Checks before merging"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 2 test commands · tes…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Checks before merging   "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["2 test commands · tes…"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 6 task types","plain":true},
+        "props": {"key":"group:Workers","label":"▸ Workers · 0 roles · 7 task types","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · 0 roles · 6 task types"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Workers                 "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["0 roles · 7 task types"]}
         ]
       },
       {"type":"Text","children":[" "]},
@@ -3907,30 +3857,24 @@ export const BEFORE: Record<string, unknown> = {
         "props": {"key":"group:Scouts","label":"▸ Scouts · findings: auto","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Scouts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · findings: auto"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Scouts                  "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["findings: auto"]}
         ]
       },
       {"type":"Text","children":[" "]},
       {
         "type": "Button",
-        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open on sta…","plain":true},
+        "props": {"key":"group:Board and alerts","label":"▸ Board and alerts · notify voice · open o…","plain":true},
         "press": {"plugin":"symcc"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts"]},
-          {"type":"Text","props":{"color":"inactive"},"children":[" · notify voice · open on sta…"]}
+          {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["▸ Board and alerts        "]},
+          {"type":"Text","props":{"color":"inactive"},"children":["notify voice · open o…"]}
         ]
       },
       {"type":"Text","children":[" "]},
-      {
-        "type": "Text",
-        "props": {"color":"inactive"},
-        "children": [
-          "Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /",
-          "symcc",
-          "-settings NAME VALUE · or tell the lead"
-        ]
-      },
+      {"type":"Text","props":{"color":"inactive"},"children":["────────────────────────────────────────────────"]},
+      {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Work"]},
+      {"type":"Text","props":{"wrap":"wrap","color":"inactive"},"children":["How work runs: the mode, how many workers, how long and how often they retry."]},
       {"type":"Text","children":[" "]},
       {"type":"Button","props":{"key":"settings-back","label":"Back (b)","hotkey":"b"},"press":{"plugin":"symcc"}},
       {

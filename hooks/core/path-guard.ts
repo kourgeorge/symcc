@@ -1,7 +1,6 @@
-// The folder guards: where an edit or a Bash command would read or write (editOutsideFolder, blockedEdit,
-// bashOutsideFolder), the scratch folder, and the texts an agent reads when a call is refused or a guard failed.
+// The folder guards: where an edit would write (editOutsideFolder, blockedEdit), the one text rule for a Bash command
+// (bashOutsideFolder), the scratch folder, and the texts an agent reads when a call is refused or a guard failed.
 import { outOfScope } from './task'
-import { dropTextWords, docOnlyWritten, hasBrace, braceLit, pieceWords, rawWords, reEscape, SHADOW_FUNCTION, SHADOWS, shellPieces, shellWords, unresolvedTarget, type ShellPiece } from './shell-words'
 
 /** The path an edit would write (as the host tells it, see FileTouch in host.ts), trimmed; undefined for none or an empty one. */
 export function editTarget(path: string | undefined): string | undefined {
@@ -127,353 +126,84 @@ export const outsideFolderText = (rel: string, worktree: string, dataDir = '.sym
   return `Refused: ${rel || 'that path'} is in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: edit ${worktree.replace(/\/+$/, '')}/${rel || '...'} instead.`
 }
 
-/**
- * Where a simple command `text` that changes folder (`cd` or `pushd`) goes: a path as written (absolute, or relative to
- * the folder it runs in), `home` (when known) for `cd`, `cd ~` and `~/...`, or null when it can't be followed (a
- * variable, `$(...)`, `cd -`, options, `popd`, odd characters). Undefined when `text` does not change folder.
- */
-function cdTarget(text: string, home: string | undefined): string | null | undefined {
-  const m = /^(cd|pushd|popd)(?:\s+([^]*))?$/.exec(text.trim())
-  if (!m) return undefined
-  if (m[1] === 'popd') return null
-  let arg = (m[2] ?? '').trim()
-  const quoted = /^'([^']*)'$/.exec(arg) ?? /^"([^"$`\\]*)"$/.exec(arg)
-  if (quoted) arg = quoted[1]!
-  const homeOk = home?.startsWith('/') ? home : undefined
-  if (!arg) return m[1] === 'cd' ? (homeOk ?? null) : null
-  // spaces only inside quotes ("cd '/a b'"); a quoted "~" is no home folder
-  if (!(quoted ? /^[\w./+@%, -]+$/ : /^[\w./~+@%,-]+$/).test(arg) || arg.startsWith('-')) return null
-  if (arg === '~' || arg.startsWith('~/')) return homeOk ? resolvePath(homeOk, arg.slice(1).replace(/^\/+/, '') || '.') : null
-  return arg.includes('~') ? null : arg
-}
+/** The shell's folder as the host read it, when it is an absolute path; undefined when it couldn't be read. */
+export const shellCwd = (got: unknown): string | undefined => (typeof got === 'string' && got.startsWith('/') ? got : undefined)
 
-/** The most folders walkBash keeps as the ones a command may be in (T-436). */
-export const BASH_FOLDERS_MAX = 16
+/** What bashOutsideFolder answers, in place of a project path, for a command with a `..` path piece. No real path has a NUL character. */
+export const BASH_DOTDOT = '\u0000..'
+
+/** What bashOutsideFolder answers for a command that changes to a folder above the project (`cd /`, `cd ~`). */
+export const BASH_ABOVE = '\u0000above'
+
+/** Characters that end a path in a command's text. */
+const PATH_END = String.raw`\s;&|<>(){}=:,\``
+
+/** Shell text `s` with each backslash at a line's end joined to the next line, as the shell does. */
+export const joinLines = (s: string) => s.replace(/\\\r?\n/g, '')
+
+/** `s` with its regular expression characters escaped. */
+const reEscape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /**
- * What bashOutsideFolder answers (in place of a project path) for a command it can't judge: past BASH_FOLDERS_MAX
- * folders a relative path follows, or (bashPathsToCheck) more than BASH_PATHS_MAX paths to look up. No real path has a
- * NUL character in it.
+ * T-1062: the one shell path rule for a worker's or checker's Bash `command`. Its text (quotes and backslashes
+ * dropped) may not hold the project folder `root` (any of its names, also as `~/...` or `$HOME/...` from `home`)
+ * unless that place is inside the worker's own folder `worktree` (any of its names): the answer is the named path
+ * relative to the project ('' for the project itself; also when a glob character follows, `<project>*`). A `..` path piece anywhere (`cd ..`, `../x`, `a/../b`)
+ * answers BASH_DOTDOT: "use full paths"; the previous folder (`~-`, $OLDPWD, like `cd -`), zsh's folder stack (`~1`, `cd +1`) and a cd, chdir or pushd to a folder above the project (`cd /`, `cd`, `cd ~`
+ * when home holds the project) answers BASH_ABOVE, as a relative path from there reaches it. Plain text, no shell parsing: a path built at run time ($X, $(...), a
+ * script) is not seen. Letter case is ignored, as macOS folders usually do.
  */
-export const BASH_TOO_MANY = '\u0000too many'
-
-/**
- * The `cwd` walkBash is given when the shell's folder couldn't be read (T-671): relative words start at the worker's
- * top folder and ".." words are also tried from deeper folders. It doesn't start with "/", so the git guard
- * (literalPath) takes it as an unknown folder too.
- */
-export const CWD_LOST = '\u0000lost:'
-
-/**
- * What bashOutsideFolder answers before a project path that a ".." word may reach from a shell folder symcc couldn't
- * read (T-671); bashOutsideText adds a note saying so.
- */
-export const BASH_LOST = '\u0000lost path:'
-
-/**
- * What bashOutsideFolder answers, before the word as written, for a write or cd target built from a variable or
- * command output (unresolvedTarget, T-963): where it lands is only known when the shell runs it, so it can't be checked.
- */
-export const BASH_UNRESOLVED = '\u0000unresolved:'
-
-/** The longest word bashOutsideText shows for BASH_UNRESOLVED; a longer one is cut. */
-const UNRESOLVED_SHOWN = 80
-
-/**
- * The `cwd` to check a worker's shell command with (T-671): `got`, the shell's folder as read, when it is an absolute
- * path; else (it couldn't be read) CWD_LOST alone. No earlier folder is kept: the shell may have moved since (a cd can
- * be written in many ways), so trusting one could make the guard weaker than not knowing the folder at all.
- */
-export const shellCwd = (got: unknown): string => (typeof got === 'string' && got.startsWith('/') ? got : CWD_LOST)
-
-/**
- * Relative word `w` (a leading "/" dropped) cut down by its own parts: how many ".." it climbs at the start (`ups`)
- * and the path left after them (`rest`, '' for none), so `a/../../x/./y` gives 1 and `x/y`. One pass over the word (T-671).
- */
-function climbParts(w: string): { ups: number; rest: string } {
-  const kept: string[] = []
-  let ups = 0
-  for (const part of w.split('/')) {
-    if (part === '' || part === '.') continue
-    if (part !== '..') kept.push(part)
-    else if (kept.length > 0) kept.pop()
-    else ups++
-  }
-  return { ups, rest: kept.join('/') }
-}
-
-/** A word that may be a plain relative path (`src/a.ts`, `lnk`): letters, digits and `._@%+~/-`, not an option. */
-const PLAIN_PATH = /^(?!-)[\w.@%+~/-]+$/
-
-/**
- * The words of piece `p` that may name a file by a plain relative path, for looking up symbolic links (T-436): the
- * shell's words (not the command name unless it has a "/"; a quoted one only when it stands alone in its quotes, not
- * code like `bun -e "..."`), and any word with a "/" in quoted text or a here-document's text (`open('lnk/a')`).
- */
-function plainPathWords(p: { text: string; doc?: boolean }): Set<string> {
-  const out = new Set<string>()
-  if (!p.doc) {
-    const words = shellWords(p.text)
-    words.forEach(({ w, q }, i) => {
-      // a word with a wildcard (`lnk/*.md`, `lnk/R?ADME.md`) is looked up by its folder part before the first
-      // wildcard piece (`lnk`), so a link there is judged by where it leads (T-436)
-      if (i > 0 && GLOB_PATH.test(w)) {
-        const head = globFolder(w)
-        if (head) out.add(head)
-        return
-      }
-      if (!PLAIN_PATH.test(w) || (i === 0 && !w.includes('/'))) return
-      if (!q || w.includes('/') || p.text.includes(`"${w}"`) || p.text.includes(`'${w}'`)) out.add(w)
-    })
-  }
-  for (const w of pieceWords(p).keys()) if (w.includes('/') && PLAIN_PATH.test(w)) out.add(w)
-  return out
-}
-
-/** A word that may be a relative path with a shell wildcard in it (`lnk/*.md`, `lnk/[R]EADME.md`, `./lnk/README*`). */
-const GLOB_PATH = /^(?!-)(?=[^*?[]*[*?[])[\w.@%+~/*?[\]!^-]+$/
-
-/** The folder part of wildcard word `w` before its first piece with a wildcard (`lnk/*.md` gives `lnk`), or '' for none. */
-const globFolder = (w: string) => {
-  const parts = w.split('/')
-  const at = parts.findIndex(part => /[*?[]/.test(part))
-  return parts.slice(0, at).join('/')
-}
-
-/**
- * Walks shell `command` of a worker whose own folder is `wts` (the main name first) and calls `visit` with each clean
- * absolute path a word of it may name, stopping at (and answering) the first answer that is not undefined. A word
- * counts as a path when it starts with "/" or "~/" (`home` is the user's home folder) or has a ".." part, and with
- * `opts.plain` also a plain relative one (plainPathWords). Relative words
- * are taken from the folder the command is in at that point: it starts in `cwd` (the shell's folder, when the caller
- * knows it and it is inside the worker's folder, or outside the project `opts.tops` and not above it) or else the
- * worker's folder, and a plain `cd` or `pushd` earlier in the
- * command moves it ("cd src && cat ../package.json" reads the worker's own file). When it can't be told for sure (a `cd`
- * that may fail before ";" or "||", a group in parentheses), every folder the command may be in is tried, and a `cd`
- * that can't be followed (a variable, `cd -`) goes back to the worker's folder. Words inside quotes (an import path in
- * `bun -e "..."`) and here-document text are checked the same way, from every folder the command may be in, since
- * code passed as text may still read the path; a `cd` in here-document text only adds a folder it may be in, and `<<<` is a
- * here-string, not a here-document (T-417). A ".." word is also tried with its leading "/" dropped, so `$(pwd)/../..` is caught too.
- * At most BASH_FOLDERS_MAX folders are kept; past that a relative word answers BASH_TOO_MANY (T-436).
- */
-function walkBash(command: string, wts: readonly string[], home: string | undefined, cwd: string | undefined, visit: (abs: string) => string | undefined, opts: { tops?: readonly string[]; plain?: boolean } = {}): string | undefined {
-  const wt = wts[0]!
-  const tops = opts.tops ?? []
-  // the shell's folder counts inside the worker's own folder, and outside the project when the project is known and
-  // not inside it (a throwaway copy in /tmp, T-436); anywhere else (the owner's copy, "/") it starts from the worker's folder
-  // the shell's folder couldn't be read (CWD_LOST, T-671): it starts from the worker's folder, and a ".." word is also
-  // tried from deeper folders under it, since the shell may be in one of them
-  const lost = cwd === CWD_LOST
-  const sh = !lost && cwd?.startsWith('/') ? resolvePath('/', cwd) : undefined
-  const away = sh !== undefined && tops.length > 0 && insideAny(sh, tops, false) === undefined && !tops.some(t => inside(t, sh, false) !== undefined)
-  const start = [sh !== undefined && (away || insideAny(sh, wts, true) !== undefined) ? sh : wt]
-  // past BASH_FOLDERS_MAX folders the list stops growing (it doubles with every cd that may fail): from then on a
-  // relative path can't be judged from every folder the command may be in, so it is refused (T-436)
-  let over = false
-  const join = (...lists: string[][]) => {
-    const all = [...new Set(lists.flat())]
-    if (all.length <= BASH_FOLDERS_MAX) return all
-    over = true
-    return all.slice(0, BASH_FOLDERS_MAX)
-  }
-  // every folder a cd so far may have left the command in, for "||": it grows by at most BASH_FOLDERS_MAX + 1 per cd,
-  // and it is not capped, since a command whose folder is certain (`cd a && cd b && ...`) must not count as over
-  const union = (...lists: string[][]) => [...new Set(lists.flat())]
-  // every folder the command may be in at this point
-  let here = start
-  let seen = start
-  const groups: { here: string[] }[] = []
-  const pieces = shellPieces(command)
-  // shell text that may make `cat`, `sed`... run something else: then no word is taken as only text (T-481)
-  const shadowed = SHADOW_FUNCTION.test(command) || pieces.some(p => 'text' in p && !p.doc && SHADOWS.test(p.text))
-  for (let i = 0; i < pieces.length; i++) {
-    const p = pieces[i]!
-    if ('op' in p) {
-      if (p.op === '(') groups.push({ here })
-      else if (p.op === ')') {
-        // a group may be a subshell (its cd stays inside) or not: either folder
-        const g = groups.pop()
-        here = join(g?.here ?? start, here)
-      }
-      // what runs after "||" may follow a failed cd anywhere before it
-      else if (p.op === '||') here = join(here, seen)
-      continue
-    }
-    // a here-document only written to a file (`cat > .scratch/p.ts <<'EOF'`) is text, not shell: its words and any cd
-    // in it are skipped, as with the Write tool (T-481)
-    if (p.doc && p.lit && p.by !== undefined && !shadowed) {
-      const by = pieces[p.by]
-      if (by && 'text' in by && docOnlyWritten(by.text)) continue
-    }
-    // the words that are only text to the command (a sed script, a grep pattern) are checked each as one path (T-481)
-    const { text, whole } = p.doc || shadowed ? { text: p.text, whole: [] } : dropTextWords(p.text)
-    const q = { text, doc: p.doc }
-    const plain = opts.plain ? new Set([...plainPathWords(q), ...whole]) : new Set<string>()
-    for (const w of new Set([...pieceWords(q).keys(), ...whole, ...plain])) {
-      const climbs = w.split('/').includes('..')
-      const homeWord = (w === '~' || w.startsWith('~/')) && home?.startsWith('/')
-      if (!w.startsWith('/') && !homeWord && !climbs && !plain.has(w)) continue
-      const relative = !homeWord && (!w.startsWith('/') || climbs)
-      if (relative && over) return BASH_TOO_MANY
-      const dirs = here
-      const tries = homeWord ? [resolvePath(home!, w.slice(1).replace(/^\/+/, '') || '.')] : dirs.map(d => resolvePath(d, w))
-      if (climbs && w.startsWith('/')) tries.push(...dirs.map(d => resolvePath(d, w.replace(/^\/+/, ''))))
-      for (const abs of tries) {
-        const rel = visit(abs)
-        if (rel !== undefined) return lost && climbs && rel !== BASH_TOO_MANY ? BASH_LOST + rel : rel
-      }
-      // from a folder that couldn't be read, a ".." word may climb from any depth under the folders tried. The word is
-      // cut down once to its leading ".." parts (`ups`) and the rest; from k folders deeper it lands on the folder
-      // ups - k above d plus the rest (k >= ups only reaches inside d). So each folder above d is tried with the rest,
-      // at most as many as d has parts, which keeps a long word cheap (T-671). Not for the paths looked up on disk
-      // (opts.plain): the made-up folders don't exist
-      if (lost && climbs && !opts.plain) {
-        const { ups, rest } = climbParts(w)
-        for (const d of dirs) {
-          const depth = d.split('/').filter(Boolean).length
-          // highest first, as one folder deeper is the likeliest place
-          for (let j = Math.min(ups - 1, depth); j >= 1; j--) {
-            const rel = visit(resolvePath(d, `${'../'.repeat(j)}${rest || '.'}`))
-            if (rel !== undefined) return BASH_LOST + rel
-          }
-        }
-      }
-    }
-    // a command word with expansion braces (`{cd,} /tmp`, `c{d..d} /tmp`) may be a cd: the folder it names is added,
-    // and the worker's folder (as for a cd that can't be followed), and none is dropped (T-436)
-    const first = rawWords(p.text, braceLit).map(x => x.w)[0]
-    if (first !== undefined && hasBrace(first)) {
-      const guess = cdTarget(`cd ${p.text.trim().replace(/^\S+\s*/, '')}`, home)
-      const moved = [wt, ...(guess ? here.map(d => resolvePath(d, guess)) : [])]
-      here = join(here, moved)
-      seen = union(seen, here)
-      continue
-    }
-    const to = cdTarget(p.text, home)
-    if (to === undefined) continue
-    // a "cd" in a here-document's text may run (`bash <<X`) or be only text (`cat > f <<X`): it adds a folder the
-    // command may be in, and never drops the one it was in (T-417)
-    if (p.doc) {
-      if (to !== null) {
-        here = join(here, here.map(d => resolvePath(d, to)))
-        seen = union(seen, here)
-      }
-      continue
-    }
-    const before = pieces[i - 1]
-    const after = pieces[i + 1]
-    const op = (x: ShellPiece | undefined) => (x && 'op' in x ? x.op : undefined)
-    // a cd in a pipe or sent to the background runs in a subshell: the folder stays
-    if (op(before) === '|' || op(after) === '|' || op(after) === '&') continue
-    const moved = to === null ? [wt] : here.map(d => resolvePath(d, to))
-    // only "&&" makes sure the cd worked before what follows runs
-    here = op(after) === '&&' ? moved : join(here, moved)
-    seen = union(seen, moved)
-  }
-  return undefined
-}
-
-/**
- * The first path a worker's Bash `command` names inside the project folder `root` but outside the worker's own folder
- * `worktree` (relative to `root`, '' for the root itself), or undefined when there is none. Which words count as paths,
- * and from which folder relative ones are taken, is told at walkBash. Each folder may be given by several names (as
- * written, and where its links lead), and /tmp, /var and /etc also match their macOS /private names, so the project
- * named through /tmp is refused like through /private/tmp (T-417). Any mention is refused, reading included: telling a
- * safe read from a write in a shell line is not reliable (`cat a > b`, `find -delete`, `git diff --output=`), and a
- * worker has its own copy of every file to read. Like editOutsideFolder, the project check ignores letter case. A best
- * effort, not a sandbox: a write or cd target built from a variable or command output is refused (unresolvedTarget,
- * T-963), and so is a command line run by eval, `sh -c` or a shell reading text, or an unquoted here-document's
- * `$(...)`, when it holds a `$` or a backtick; but a path built at run time elsewhere (base64, a script file, code run
- * by perl or bun) gets through; symbolic links elsewhere on disk
- * are followed by the caller (bashPathsToCheck). It checks paths only: git writes run from the worker's own folder
- * (a commit, `git update-ref refs/heads/main`, a push) are refused by the caller with gitWriteIn. The merge-time scope
- * check only looks at which files the task's commits change, so it catches files written through the shell inside the
- * worker's folder outside the task's files, not a branch the worker moved.
- */
-export function bashOutsideFolder(command: unknown, worktree: Folders, root: Folders, home?: string, cwd?: string): string | undefined {
+export function bashOutsideFolder(command: unknown, worktree: Folders, root: Folders, home?: string): string | undefined {
   const wts = folderList(worktree)
-  const tops = folderList(root)
+  const tops = folderList(root).filter(t => t !== '/')
   if (typeof command !== 'string' || !wts.length || !tops.length) return undefined
-  const check = (abs: string) => (insideAny(abs, wts, true) !== undefined ? undefined : insideAny(abs, tops, false))
-  const found = walkBash(command, wts, home, cwd, check, { tops })
-  if (found !== undefined) return found
-  // backstop: the project folder written out whole anywhere in the text (plain, quoted, with "\ " for spaces, or
-  // from "~/"), up to the next space or operator, even where the words above came out wrong (a quote mid-path)
-  const flat = command.replace(/\\\n/g, '').replace(/["'\\]/g, '')
-  const homeDir = home?.startsWith('/') ? resolvePath('/', home) : undefined
-  const B = String.raw`\s;&|<>(){}$=:,\``
-  for (const top of tops) {
-    if (top === '/') continue
-    const fromHome = homeDir ? inside(top, homeDir, false) : undefined
-    const starts: [string, string][] = [[reEscape(top), '/']]
-    if (fromHome) starts.push([`~/${reEscape(fromHome)}`, homeDir!])
-    for (const [start, base] of starts) {
-      for (const m of flat.matchAll(new RegExp(`(?<=^|[${B}])${start}(?:/[^${B}]*)?(?=$|[${B}])`, 'gi'))) {
-        const rel = check(resolvePath(base, m[0].replace(/^~\/?/, '')))
-        if (rel !== undefined) return rel
-      }
+  // quotes and backslashes only group words: `.''.`, `\..` and `.\./` are `..` to the shell
+  const plain = joinLines(command).replace(/["'\\]/g, '')
+  if (/(?:^|[\s/=:(<>&|;,{])\.\.(?=$|[\s/`;&|)<>,}])/.test(plain)) return BASH_DOTDOT
+  // the previous folder (`~-`, $OLDPWD) and zsh's folder stack (`~1`, `~-2`, `cd +1`) are unknown here: the owner's
+  // copy may be one of them (`rm ~-/README.md`, like `cd -`)
+  if (/(?<![^\s;&|<>(){}=:,`])~(?:-\d*|\+?\d+)(?=$|[\/\s;&|<>(){}:,`])|\$\{?OLDPWD\b|(?<![\w.-])(?:cd|chdir|pushd|popd)[^\S\n]+[+-]\d/.test(plain)) return BASH_ABOVE
+  const h = home?.startsWith('/') ? resolvePath('/', home) : undefined
+  // home written as `~`, `~<user>`, `$HOME` or `${HOME}` is home's full path
+  const user = h ? reEscape(h.split('/').pop() ?? '') : ''
+  const homed = h ? plain.replace(new RegExp(`(?<![^${PATH_END}])(?:~(?:${user})?|\\$HOME|\\$\\{HOME\\})(?=$|[/${PATH_END}])`, 'gi'), h) : plain
+  // `a//b` and `a/./b` name the same place as `a/b`
+  const flat = homed.replace(/\/(?:\.?\/)+/g, '/')
+  // a cd to a folder above the project (`cd /`, or home by `cd` or `cd ~`), from where a relative path reaches it;
+  // option words (`cd -P /`, `cd -- /`) are skipped, so `cd -` (the last folder, unknown here) counts as home
+  for (const m of flat.matchAll(/(?<![\w.-])(?:cd|chdir|pushd)(?=$|[\s;&|)])(?:[^\S\n]+-[^\s;&|()]*)*[^\S\n]*([^\s;&|()]*)/g)) {
+    const w = m[1]!
+    const to = w === '' ? h : w.startsWith('/') ? resolvePath('/', w) : undefined
+    if (to !== undefined && tops.some(t => t.toLowerCase() !== to.toLowerCase() && inside(t, to, false) !== undefined)) return BASH_ABOVE
+  }
+  // a wildcard (`*`, `?`, `[`, `{`) at or above the project's own level may reach it (`/Users/o/*/README.md`)
+  for (const m of flat.matchAll(/\/[^\s;&|<>()`]*/g)) {
+    const parts = m[0].split('/').slice(1)
+    for (const top of tops) {
+      const own = top.split('/').slice(1)
+      const k = Math.min(parts.length, own.length)
+      if (!parts.slice(0, k).some(p => /[*?[{]/.test(p))) continue
+      const like = (p: string, o: string) => new RegExp(`^${reEscape(p).replace(/\\\{[^}]*\\\}|\\\[[^\]]*\\\]/g, '.*').replace(/\\\*/g, '.*').replace(/\\\?/g, '.')}$`, 'i').test(o)
+      if (parts.slice(0, k).every((p, i) => like(p, own[i]!))) return ''
     }
   }
-  // a write or cd target built from $X, ${X}, $(...) or backticks may land anywhere, so it is refused (T-963); checked
-  // last, so that a path named in the owner's copy keeps its own, clearer reason
-  const unresolved = unresolvedTarget(command)
-  if (unresolved !== undefined) return BASH_UNRESOLVED + unresolved
+  // anywhere in the text, also glued to an option (`sort -o<project>/README.md`, `tar -C<project>`)
+  for (const top of tops) {
+    for (const m of flat.matchAll(new RegExp(`${reEscape(top)}(?=$|[/*?[${PATH_END}])(?:/[^${PATH_END}]*)?`, 'gi'))) {
+      const abs = resolvePath('/', top + m[0].slice(top.length))
+      if (insideAny(abs, wts, false) === undefined) return insideAny(abs, tops, false) ?? ''
+    }
+  }
   return undefined
 }
 
-/**
- * The most distinct paths bashPathsToCheck answers, so a long command costs a bounded number of disk lookups; the
- * caller only looks up on disk those that may go through a symbolic link (T-436).
- */
-export const BASH_PATHS_MAX = 2000
-
-/**
- * The absolute paths a worker's Bash `command` may name, for the caller to look up on disk, so a symbolic link is
- * judged by where it leads: elsewhere (`~/link/README.md`, T-417) and inside the worker's own folder `worktree`
- * (`lnk/README.md`, `cd lnk && cat README.md`, T-436). The same walk as bashOutsideFolder (`root`: the project folder,
- * for where the shell starts), plus plain relative words (plainPathWords). `tooMany`: more than BASH_PATHS_MAX paths,
- * or a relative one past BASH_FOLDERS_MAX folders, so the command can't be checked whole and the caller refuses it.
- */
-export function bashPathsToCheck(command: unknown, worktree: Folders, home?: string, cwd?: string, root: Folders = []): { paths: string[]; tooMany: boolean } {
-  const wts = folderList(worktree)
-  if (typeof command !== 'string' || !wts.length) return { paths: [], tooMany: false }
-  const out = new Set<string>()
-  const found = walkBash(
-    command,
-    wts,
-    home,
-    cwd,
-    abs => {
-      out.add(abs)
-      return out.size > BASH_PATHS_MAX ? BASH_TOO_MANY : undefined
-    },
-    { tops: folderList(root), plain: true },
-  )
-  const tooMany = found === BASH_TOO_MANY
-  return { paths: tooMany ? [] : [...out], tooMany }
-}
-
-/** The reason a worker reads when its shell command has too many paths or folder changes to check (BASH_TOO_MANY). */
-export const bashTooManyText = (worktree: string) =>
-  `Refused: this command has too many paths or folder changes (cd) to check where they lead (more than ${BASH_PATHS_MAX} paths, or more than ${BASH_FOLDERS_MAX} folders it may be in). Split it into shorter commands, use absolute paths inside your own folder ${worktree}, or write files with the Write tool.`
-
-/** The reason a worker reads when a write or cd target of its shell command is built from `word` (BASH_UNRESOLVED, T-963). */
-export function unresolvedText(word: string): string {
-  // eslint-disable-next-line no-control-regex
-  const w = word.replace(/[\u0000-\u001f\u007f]+/g, ' ')
-  const shown = w.length > UNRESOLVED_SHOWN ? `${w.slice(0, UNRESOLVED_SHOWN - 1)}…` : w
-  return `Refused: symcc can't check a path built from ${shown}; write the path out in full (a variable or command output in where a command writes, or in cd, may lead outside your own folder).`
-}
-
-/** The reason a worker reads when its shell command naming project path `rel` is refused for being outside its own folder `worktree` (or for BASH_TOO_MANY). */
+/** The reason a worker reads when its shell command naming project path `rel` (or BASH_DOTDOT) is refused. */
 export const bashOutsideText = (rel: string, worktree: string): string =>
-  rel === BASH_TOO_MANY
-    ? bashTooManyText(worktree)
-    : rel.startsWith(BASH_UNRESOLVED)
-      ? unresolvedText(rel.slice(BASH_UNRESOLVED.length))
-    : rel.startsWith(BASH_LOST)
-      ? `${bashOutsideText(rel.slice(BASH_LOST.length), worktree)} symcc couldn't tell the shell's folder; use a full path.`
-      : `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it (relative paths start there), never the owner's copy, even to read.`
+  rel === BASH_DOTDOT
+    ? `Refused: this command has a ".." path piece. Use full paths inside your own folder ${worktree} instead.`
+    : rel === BASH_ABOVE
+      ? `Refused: this command changes to a folder above the project, from where a relative path reaches the owner's copy. Stay in your own folder ${worktree} and use full paths.`
+      : `Refused: this command names ${rel || 'the project folder'} in the owner's copy of the project, outside your own folder. Work only in your own folder ${worktree}: use paths inside it, never the owner's copy, even to read.`
 
 /**
  * Where an edit of `path` would write inside the project folder `root` (any of its names), relative to it; relative

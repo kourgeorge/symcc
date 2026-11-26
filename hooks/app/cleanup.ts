@@ -1,17 +1,18 @@
 // Leftover and overtime cleanup for the regular check: stopping orphan agents after a reload, removing leftover
 // temp files, and a worker that runs over its time limit (ask the owner, wrap up, time out). Split out of
 // workers.ts (T-603); workers.ts's check() imports it, and it never imports workers.ts.
-import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, leftoverTmpFiles, withHistory, tryEntry, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onTask, restartedAgent, workerIdOf, withAgentStart, workerSince } from '../board'
+import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, ownedHere, leftoverTmpFiles, withHistory, tryEntry, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onTask, restartedAgent, workerIdOf, checkerIdOf, withAgentStart, workerSince } from '../board'
 import { worktreeDir, taskBranch } from './git'
 import { alreadyMerged } from './review'
-import { S, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned } from './state'
+import { S, type CheckerEnd, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned, checkerRuns, adoptedCheckers } from './state'
+import { checkerName } from './checker'
 import { debriefs } from './debrief'
 import { type Host, type HostAgent, ENDED_STATUSES, agentState } from '../host'
 import { load, change, now, path, aboutToWait } from './store'
 import { tellLead } from './tell'
 import { PARTS_DIR } from '../core/board-parts'
 import { sayNeedsYou } from './voice'
-import { optionsVia, popupTied } from './questions'
+import { answerTail, optionsVia, popupTied } from './questions'
 
 export const LIVE = new Set(['pending', 'running', 'waiting'])
 
@@ -35,16 +36,35 @@ export async function stopOrphans(host: Host, leadNow?: string | null): Promise<
   const live = liveDriver(lead, Date.now())
   // A board that can't be read (being fixed, or a read failing now) says nothing about whose
   // worker is whose: then no worker is stopped (the next check looks again), only scouts are.
-  const b = agents.some(a => a.kind === 'worker') ? await load(host).catch(() => null) : emptyBoard()
+  const b = adoptedCheckers.size || agents.some(a => a.kind === 'worker' || (a.kind === 'scout' && a.name?.endsWith('-checker') && !ENDED_STATUSES.includes(a.status))) ? await load(host).catch(() => null) : emptyBoard()
+  const onStep = (t: BoardTask | undefined) => t?.status === 'doing' && t.live?.phase === 'checker' && handedBack(t) && ownedHere(t, S.me, live)
   const out: string[] = [...leftovers]
   for (const a of agents) {
     if (a.kind === 'other') continue
+    // T-1068: an adopted checker whose task left its checker step before the step took it over is no longer wanted: forgotten and stopped below
+    const adopted = [...adoptedCheckers].find(([, v]) => v.id === a.id)
+    if (adopted) {
+      if (!b || onStep(find(b, adopted[0]))) continue
+      adoptedCheckers.delete(adopted[0])
+      checkerRuns.delete(a.id)
+    }
     // Already tracked, or already told to stop: not taken back, and not messaged again (a message would wake it up).
     if (isOwnAgent(a.id)) continue
     // T-656: an agent answering its debrief (a follow-up after its hand-back) is no orphan; its time limit stops it
     if (debriefs.has(a.id)) continue
     if (ENDED_STATUSES.includes(a.status)) continue
     if (a.kind === 'worker' && !b) continue
+    // T-1068: a checker still running after a reload is adopted, not stopped: the task's checker step waits for it again
+    // (restartCheckers starts that step; see runChecker). A checker with no such task, or one symcc ended, is stopped as before.
+    // Only the checker the board recorded for the current try (checkerIdOf) is adopted; an older same-name one is stopped.
+    const chk = a.kind === 'scout' && b ? b.tasks.find(t => checkerName(S.N.name, t.id) === a.name && checkerIdOf(t) === a.id) : undefined
+    if (onStep(chk) && ![...checkerRuns.values()].some(r => r.task === chk!.id) && !adoptedCheckers.has(chk!.id)) {
+      // known to symcc from now on (so its hand-back is kept even before the step waits for it: runChecker takes it over)
+      const mark: { id: string; early?: CheckerEnd } = { id: a.id }
+      adoptedCheckers.set(chk!.id, mark)
+      checkerRuns.set(a.id, { task: chk!.id, worktree: worktreeDir(chk!.id), end: e => { mark.early = e } })
+      continue
+    }
     if (a.kind === 'worker' && b) {
       // A worker of this session that was running when the plugin reloaded keeps working:
       // track it again instead of stopping it (see orphanMove for when).
@@ -152,7 +172,7 @@ export async function timedOut(host: Host, id: string, t: BoardTask | undefined,
 
 /** What the lead is told when task `id`'s worker runs over its limit of `limit` minutes and the owner is asked. */
 export const overtimeLeadText = (id: string, title: string, limit: number) =>
-  `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(' | ')}. Ask the owner in the chat now, plain and short, offering these ${optionsVia(OVERTIME_OPTIONS.length)}, plus "or answer on the board"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.${popupTied(id)}`
+  `${overtimeQuestion(id, limit)} ("${title}": its worker ran past its time limit; it keeps working while the owner decides.) Options: ${OVERTIME_OPTIONS.join(' | ')}. Ask the owner in the chat now, plain and short, offering these ${optionsVia(OVERTIME_OPTIONS.length)}, plus "${answerTail()}"; put their answer into the task with ${S.N.name} change ${id} and answer: their choice (e.g. "+30 min" or "Stop it"). With no answer by ${S.N.name}'s hard cap (the limit plus max_minutes again) the worker is told to wrap up and hand back, then stopped, and the task fails with its work kept. If they answer on the board first (a "Meanwhile" line), don't ask again.${popupTied(id)}`
 
 /** Task `id`'s worker runs over its limit: the task keeps "doing" with the question, the owner hears "needs you", the lead is told. */
 export async function askOvertime(host: Host, b: Board, id: string, limit: number) {

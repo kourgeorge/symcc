@@ -2,7 +2,7 @@
 import { drawNow } from './now'
 import type { MatchedHook } from 'claude-code'
 import type { SymccMode } from '../../../types'
-import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows, showsHeader, gitNotice, type BoardPage } from '../../board'
+import { STATUS_WORD, sortScouts, modeOf, nextMode, emptyBoard, type BannerTone, bannerLines, modeLabel, modeButton, bannerRule, footerRule, type KeyHint, hintLines, packRows, showsHeader, gitNotice, type BoardPage, DRIVE_HERE_LABEL, showsDriveButton } from '../../board'
 import { setupGit, recheckGit } from '../../app/git'
 import { logoNow, noteLogoWidth } from '../../app/logo'
 import { type PaneView, S } from '../../app/state'
@@ -84,6 +84,7 @@ export async function paneParts($: $, e: PaneEvent) {
     // T-973: the notice row's /<name>-drive does what the command does
     if (vscode) return vsBanner(vs, v, mode, gitRow(), act(async () => $.ui.toast(S.N.toast(await driveHere(claudeHost($))))))
     const d = emptyBoard()
+    const drivingNow = v.driving ?? S.driving
     const facts = { ...v, max_parallel: v.max_parallel ?? d.max_parallel, max_minutes: v.max_minutes ?? d.max_minutes, auto_retries: v.auto_retries ?? d.auto_retries }
     // the text is in the same color as the tabs that aren't selected (a bit less bright, still readable in dark mode); warnings stand out
     const tone: Record<BannerTone, string> = { accent: 'ide', plain: 'inactive', dim: 'subtle', warning: 'warning' }
@@ -96,6 +97,8 @@ export async function paneParts($: $, e: PaneEvent) {
           ))}
         </Text>
       )),
+      // T-1052: another session drives: a button that does what /<name>-drive does
+      ...(showsDriveButton(v, drivingNow) ? [<Box key="banner-drive" flexDirection="row"><Button key="drive-here" label={DRIVE_HERE_LABEL} hotkey="d" dimColor onPress={act(async () => $.ui.toast(S.N.toast(await driveHere(claudeHost($)))))} /></Box>] : []),
       ...gitRow(),
     ]
   }
@@ -148,11 +151,11 @@ export async function paneParts($: $, e: PaneEvent) {
     )
   }
   /** The board header for page `p`, only where core's showsHeader says (the list pages; T-704): banner, then the tab
-   *  row, then the rule under them; in VS Code the banner and tabs in one "vs-header" box (no rule). Nothing on an
+   *  row, then the rule under them; in VS Code the banner and tabs in one "vs-header" box (no rule, T-1002). Nothing on an
    *  opened page (a task, a question, a scout, a role, a kind, org-mem...), which starts with its own title. */
   const header = (p: BoardPage) =>
     !showsHeader(p) ? [] :
-    vscode ? [<Box key="vs-header" flexDirection="column">{[...banner(), tabs(), <Box key="tabs-rule" flexDirection="row" height={1} overflow="hidden"><Text wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text></Box>]}</Box>] :
+    vscode ? [<Box key="vs-header" flexDirection="column">{[...banner(), tabs()]}</Box>] :
     [...banner(), tabs(), <Text key="header-rule" wrap="truncate" color={C('ide')}>{bannerRule(width)}</Text>]
   /** Key hints over as many lines as the width needs, broken only between hints: keys bold, words in the inactive color (readable on dark themes too). */
   const keyLines = (hints: KeyHint[], name: string) =>
@@ -173,7 +176,7 @@ export async function paneParts($: $, e: PaneEvent) {
    *  no [m] button, so m does nothing there. */
   const footer = (hints: KeyHint[], name: string, withMode = false, extra: unknown = null) => (
     (arrows.move = !vscode && saysArrowsMove(hints)),
-    vscode ? vsFooter(vs, name, withMode ? { mode, onSwitch: switchMode, extra: extra as never } : {}) :
+    vscode ? vsFooter(vs, name, withMode ? { extra: extra as never } : {}) :
     <Box key={`${name}-footer`} flexDirection="column">
       <Text key={`${name}-footer-rule`} wrap="truncate" color={C('subtle')}>{footerRule(width)}</Text>
       {withMode ? (

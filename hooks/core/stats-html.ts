@@ -4,7 +4,8 @@
 
 import type { SymccTokens } from '../../types'
 import { fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, billedTokens, tokenCount } from './runs'
-import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, durOr, failedCountsNote, failedShown, pctText, plural, rangeText, scoutResultsText, statsTitle, tokOr, unlinkedText, unreadText, type Spread, type SpreadRow, type StatsData, type StatsGroup, type StatsTop } from './stats'
+import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, durOr, failedCountsNote, failedShown, pctText, rangeText, scoutResultsText, statsTitle, tokOr, unlinkedText, unreadText, type Spread, type SpreadRow, type StatsData, type StatsGroup, type StatsTop } from './stats'
+import { plural } from './text'
 
 /** `s` safe inside HTML text and attribute values. */
 export const escapeHtml = (s: unknown): string =>
@@ -213,6 +214,7 @@ export function statsHtml(d: StatsData, project: string): string {
     ['tokens', v.tokKnown ? `${fmtTokens(tokenCount(v.tokens))} in all · avg ${tokOr(v.avgTok)}` : '-'],
     ['tries', v.withData ? `${v.tries} in all · avg ${(v.avgTries ?? 0).toFixed(1)}` : '-'],
   ]) : '<p class="muted">None.</p>')
+  const errands = d.errandsDone ? section('Errands', kv([['errand done', String(d.errandsDone)]])) : ''
 
   const topTok = section('Most tokens', topTable(d.topTokens, fmtTokens, 'var(--purple)'))
   const topTime = section('Most time', topTable(d.topTime, fmtDuration, 'var(--teal)'))
@@ -234,7 +236,7 @@ export function statsHtml(d: StatsData, project: string): string {
       ]), true)
   }
 
-  return `${head}${cards}<div class="grid">${states}${ended}${failedTests}${failedTries}${team}${days}${stages}${perDone}${perTry}${inv}${roles}${origins}${topTok}${topTime}</div>${end}`
+  return `${head}${cards}<div class="grid">${states}${ended}${failedTests}${failedTries}${team}${days}${stages}${perDone}${perTry}${inv}${errands}${roles}${origins}${topTok}${topTime}</div>${end}`
 }
 
 /** The command that opens `file` in the browser on `platform` (process.platform's words), or every one to try when not known. */

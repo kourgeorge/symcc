@@ -1,6 +1,6 @@
 // The Tasks view of the board panel: sections, rows and key hints; and the workers and scouts of the line above the prompt.
 import type { SymccMode, SymccScout, SymccStatus, SymccTask } from '../../types'
-import { asBlockers, byRunOrder, type BoardTask, type CheckStep, type TurnStep, emptyBoard, OPEN, intoOf, isFinished, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
+import { asBlockers, byRunOrder, type BoardTask, type CheckStep, type TurnStep, emptyBoard, OPEN, intoOf, isFinished, hasMergedChanges, isInvestigation, kindOf, STATUS_WORD, waitsForFiles } from './board-file'
 import { asksMoreTime, needsYou, needsYouFirst } from './commands'
 import { boardSections, type DayGroup, dayLabel, dayOf, localOffset, taskDay } from './days'
 import { approveRunning, checkStepNow, finishingNow, shownStatus } from './lead'
@@ -685,7 +685,7 @@ export function taskActions(t: BoardTask, ctx: TaskActionCtx = {}): TaskAction[]
       : [inReview && a('approve', 'Approve', 'approve', 'a', { main: true }), inReview && a('reject', 'Reject', 'reject', 'x', { group: 'danger' })]
   out.push(
     // the changes stay open to look at while the merge runs
-    inReview && !isAnswered(t) && a('show-changes', 'Show changes', 'show changes', 'd'),
+    ((inReview && !isAnswered(t)) || hasMergedChanges(t)) && a('show-changes', 'Show changes', 'show changes', 'd'),
     !!ctx.worker && a('watch', 'Watch worker', 'watch worker', 'w'),
     // pausing is the next step of a running or waiting-to-run task (T-751)
     (s === 'doing' || s === 'todo') && a('pause', 'Pause', 'pause', 'p', { main: true }),
@@ -715,13 +715,15 @@ export const actionButtonLabel = (x: TaskAction): string => x.label
 /** The keys at the bottom of a task's page: one hint per action button with a key (taskActions), in the buttons'
  *  order; then, when more than one try has a saved report (`reports`, their try numbers), "1-3 a try's report"
  *  (unless the answer buttons take the number keys, `answering`: the dim line under them tells those keys,
- *  choiceKeysHint); "y copy", `nav` (T-751: "k j prev/next" when the page has others in its list, see
+ *  choiceKeysHint); `runsReport` (T-1104): "Enter on a Runs line: its report"; "y copy", `nav` (T-751: "k j prev/next" when the page has others in its list, see
  *  core/page-header.ts navHint), "↑↓ scroll" and "b back" always come last. */
-export function taskKeys(actions: readonly TaskAction[], reports: readonly number[] = [], answering = false, nav: KeyHint | null = null): KeyHint[] {
+export function taskKeys(actions: readonly TaskAction[], reports: readonly number[] = [], answering = false, nav: KeyHint | null = null, runsReport = false): KeyHint[] {
   const k = (key: string, word: string): KeyHint => ({ key, word })
   const keys: KeyHint[] = actions.filter(x => x.key && x.id !== 'copy').map(x => k(x.key!, x.word))
   const keyed = answering ? [] : reports.filter(n => n >= 1 && n <= 9)
   if (reports.length > 1 && keyed.length) keys.push(k(keyed.length > 1 ? `${keyed[0]}-${keyed[keyed.length - 1]}` : `${keyed[0]}`, "a try's report"))
+  // T-1104: Enter on an agent line of the Runs part shows its report
+  if (runsReport) keys.push(k('Enter', 'on a Runs line: its report'))
   return [...keys, k('y', 'copy'), ...(nav ? [nav] : []), k('↑↓', 'scroll'), k('b', 'back')]
 }
 

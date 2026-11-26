@@ -95,11 +95,12 @@ test('Settings has a Task types row next to Roles; its page lists the task types
   stateOf(on, VIEW)
   fakeKinds(on, { 'bug.md': '---\ndescription: a defect\noff: true\n---\n', 'chore.md': '---\ndescription: small upkeep\n---\n' })
   const ui = await settingsOnly($)
-  expect((await ui.find({ key: 'settings-kinds' }))?.props.label).toBe('Task types: 7 task types · 1 off')
+  expect((await ui.find({ key: 'settings-kinds' }))?.props.label).toBe('Task types: 8 task types · 1 off')
   expect(await ui.find({ key: 'kindRow:change' })).toBeUndefined()
   await ui.press({ key: 'settings-kinds' })
   // T-918: the heading with its count, the column heads, one line per kind (NAME, FROM, WHAT IT'S FOR), the cursor's ❯
-  expect((await ui.find({ type: 'Text', text: /^▍Task types/ }))?.text).toBe('▍Task types  7 task types · 2 changed by you · 1 off')
+  expect((await ui.find({ type: 'Text', text: 'Task types' }))?.text).toBe('Task types')
+  expect((await ui.find({ type: 'Text', text: /^8 task types/ }))?.text).toBe('8 task types · 2 changed by you · 1 off')
   expect((await ui.find({ type: 'Text', text: /^  NAME/ }))?.text).toBe("  NAME           FROM          WHAT IT'S FOR")
   const label = async (name: string) => (await ui.find({ key: `kindRow:${name}` }))?.props.label
   expect(await label('change')).toBe('change: built-in')
@@ -114,6 +115,9 @@ test('Settings has a Task types row next to Roles; its page lists the task types
   expect(await ui.find({ type: 'Text', text: /Enter open · n new type · ↑↓ move · l t s c views · b back/ })).toBeDefined()
   await ui.press({ key: 'kindRow:chore' })
   await ui.press({ key: 'kind-back' })
+  // T-1067: the Task types page draws the shared header's Back button, and b is its hidden key
+  expect((await ui.find({ key: 'kinds-back' }))?.props.label).toBe('Settings')
+  expect((await ui.find({ key: 'kinds-back-key' }))?.props.hotkey).toBe('b')
   await ui.press({ key: 'kinds-back' })
   expect(await ui.find({ key: 'setting:mode' })).toBeDefined()
   await ui.unmount()

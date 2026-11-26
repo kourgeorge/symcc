@@ -137,3 +137,41 @@ test('the after list changing writes a "waits on changed" history line', () => {
   expect(afterChangedLine(['T-1'], ['T-2', 'T-3'])).toBe('waits on changed: T-1 → T-2, T-3')
   expect(changeLines({ attempts: 0, files: [], after: ['T-1'] }, { after: [] }, false)).toEqual([['waits-changed', 'waits on changed: T-1 → nothing']])
 })
+
+test('health: the text opens with the health check label', () => {
+  const b = board([task('T-5', { status: 'dropped' }), task('T-7', { after: ['T-5'] })])
+  expect(healthText(boardHealth(b, NOW)).startsWith('[symcc health check]')).toBe(true)
+})
+
+test('health: a task moved from the backlog to todo is not flagged for its backlog time', () => {
+  const full = { max_parallel: 1 }
+  const newer = [task('T-5', { status: 'doing' }), task('T-6', { status: 'review' })]
+  const waiting = (history: BoardTask['history']) => task('T-1', { created_at: iso(300), updated_at: iso(10), after: ['T-4'], history })
+  const blocker = task('T-4', { status: 'doing' })
+  // made 5 hours ago, but moved to todo 10 minutes ago
+  const moved = waiting([{ at: iso(10), kind: 'moved-backlog', text: 'moved from the backlog' }])
+  expect(reasons(board([moved, blocker, ...newer], full))).toEqual([])
+  // never in the backlog: waited 5 hours, told
+  expect(reasons(board([waiting([]), blocker, ...newer], full))).toEqual(['starving:T-1'])
+})
+
+test('health: a told pushed-back problem is told again only when the after list or status changes', () => {
+  const full = { max_parallel: 1 }
+  const newer = [task('T-5', { status: 'doing' }), task('T-6', { status: 'review' })]
+  const t = task('T-1', { created_at: iso(300), updated_at: iso(300), after: ['T-4'] })
+  const first = newFindings(boardHealth(board([t, task('T-4', { status: 'doing', updated_at: iso(200) }), ...newer], full), NOW), new Set())
+  expect(first.fresh.length).toBe(1)
+  // the task it waits for got a new try (updated_at changed): not told again
+  const retry = newFindings(boardHealth(board([{ ...t, updated_at: iso(5) }, task('T-4', { status: 'doing', updated_at: iso(1), attempts: 2 }), ...newer], full), NOW), first.told)
+  expect(retry.fresh).toEqual([])
+  // its after list changed: told again
+  const changed = newFindings(boardHealth(board([{ ...t, after: ['T-4', 'T-5'] }, task('T-4', { status: 'doing' }), ...newer], full), NOW), retry.told)
+  expect(changed.fresh.length).toBe(1)
+})
+
+test('health: a task retried after a failure counts its wait from the retry', () => {
+  const full = { max_parallel: 1 }
+  const newer = [task('T-5', { status: 'doing' }), task('T-6', { status: 'review' })]
+  const retried = task('T-1', { created_at: iso(600), updated_at: iso(1), after: ['T-4'], runs: [{ started: iso(500), ended: iso(400) }] as BoardTask['runs'] })
+  expect(reasons(board([retried, task('T-4', { status: 'doing' }), ...newer], full))).toEqual([])
+})

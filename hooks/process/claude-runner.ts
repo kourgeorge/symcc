@@ -4,41 +4,12 @@
 import type { HostAgentStart } from '../host'
 import { cleanTokens } from '../core/runs'
 import { SCRATCH_DIR } from '../core/path-guard'
+import { gitDeniedRules, gitAliases } from '../core/git-guard'
 import type { AgentRunner, ProcessOutput, RunnerEnd } from './agents'
 import type { ProcessSystem } from './system'
 
-/**
- * git subcommands a `claude -p` agent may not run (T-496): every one that writes a commit, a ref, the index, the
- * config, the stash or the worktree's files, or that makes or fetches a repository. symcc commits and merges itself.
- * Read-only use (status, diff, log, show, blame, grep, ls-files, rev-parse ...) stays allowed.
- */
-export const GIT_DENIED_SUBCOMMANDS = [
-  'commit', 'merge', 'init', 'clone', 'push', 'pull', 'fetch', 'reset', 'checkout', 'switch', 'restore', 'branch',
-  'tag', 'stash', 'rebase', 'cherry-pick', 'revert', 'am', 'apply', 'add', 'rm', 'mv', 'clean', 'update-ref',
-  'symbolic-ref', 'update-index', 'read-tree', 'write-tree', 'commit-tree', 'hash-object', 'mktag', 'mktree',
-  'fast-import', 'worktree', 'config', 'remote', 'submodule', 'notes', 'replace', 'reflog', 'gc', 'prune', 'repack',
-  'pack-refs', 'maintenance', 'filter-branch', 'bisect', 'sparse-checkout', 'merge-file', 'merge-tree', 'lfs',
-]
-
-/**
- * Claude Code's Bash rules match the start of a command, not the folder it acts on, so `git -C <dir> commit` or
- * `git --git-dir=x commit` slip past `git commit`. Node-host agents have no symcc hook guard, so instead every git
- * call that starts with an option is refused (`git -*`; the named ones are listed too, for prefix-only matching),
- * as are the usual wrappers in front of git. With no scratch-git allowance, there are no git writes at all.
- */
-export const GIT_DENIED_OPTIONS = ['-C', '-c', '--git-dir', '--work-tree', '--namespace', '--exec-path', '--config-env', '--bare', '--no-pager', '-P', '-p', '--paginate']
-export const GIT_WRAPPERS = ['env', 'command', 'exec', 'xargs', 'nohup', 'time']
-
-/** The deny rules for git writes, given to every `claude -p` agent (a deny rule beats any allow rule). */
-export function gitDeniedRules(): string[] {
-  return [
-    ...GIT_DENIED_SUBCOMMANDS.map(c => `Bash(git ${c}:*)`),
-    'Bash(git -*)',
-    ...GIT_DENIED_OPTIONS.map(o => `Bash(git ${o}:*)`),
-    'Bash(git --git-dir=*)', 'Bash(git --work-tree=*)', 'Bash(git --namespace=*)', 'Bash(git --exec-path=*)', 'Bash(git --config-env=*)',
-    ...GIT_WRAPPERS.map(w => `Bash(${w} git:*)`),
-  ]
-}
+// the git deny rules come from the hook guard's own list (T-1062, core/git-guard.ts)
+export { gitDeniedRules }
 
 /** The `--allowedTools` rule that lets the agent edit `file` (relative to its folder; a folder ends with "/" or is "."). */
 export function editRule(file: string): string[] {
@@ -53,16 +24,17 @@ export function editRule(file: string): string[] {
 /**
  * Claude Code's permission flags for agent `a` (claude -p has no symcc tool hook, so its own rules are the edit
  * guard; the merge-time scope check stays the backstop): every tool not allowed is refused (--permission-mode dontAsk).
- * A worker may read, search and run commands (no git writes), and edit its task's files only (a.files; none given:
+ * A worker may read, search and run commands (git writes on its own branch only, see gitDeniedRules), and edit its task's files only (a.files; none given:
  * anywhere in its folder); a role's `web` adds WebSearch and WebFetch. A scout or checker only reads and runs commands
  * (a checker, T-551: it never runs the project's full tests itself, those run in the merge line after it).
  * `scratch` (T-456): the folder uses its throwaway SCRATCH_DIR (the project keeps no file there in git, see
- * scratchInUse); then a worker and a checker may also write there (a checker only there).
+ * scratchInUse); then a worker and a checker may also write there (a checker only there). `aliases`: the git alias
+ * names in the agent's folder (gitAliases), denied by name.
  */
-export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'tools'>, scratch = false): { allowed: string[]; denied: string[] } {
+export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'tools'>, scratch = false, aliases: readonly string[] = []): { allowed: string[]; denied: string[] } {
   const read = ['Read', 'Glob', 'Grep', 'Bash']
   const web = a.tools?.includes('web') ? ['WebSearch', 'WebFetch'] : []
-  const denied = gitDeniedRules()
+  const denied = gitDeniedRules(a.kind === 'worker', aliases)
   const scratchRules = scratch && a.kind !== 'scout' ? editRule(`${SCRATCH_DIR}/`) : []
   if (a.kind !== 'worker') {
     // a deny rule beats an allow rule, so a checker with scratch rules gets no blanket Edit/Write deny (dontAsk still refuses every other edit)
@@ -76,7 +48,7 @@ export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'to
  * Whether the folder `cwd` uses its SCRATCH_DIR: the project keeps no file there in git (`git ls-files -- .scratch`
  * prints nothing). A git failure counts as kept, so nothing is let through on a guess (like scratchTracked in hooks/app/git).
  */
-export function scratchInUse(sys: Pick<ProcessSystem, 'run'>, cwd: string | undefined): boolean {
+function scratchInUse(sys: Pick<ProcessSystem, 'run'>, cwd: string | undefined): boolean {
   const r = sys.run(['git', 'ls-files', '--', SCRATCH_DIR], cwd)
   return r.status === 0 && r.stdout.trim() === ''
 }
@@ -152,7 +124,8 @@ export function claudeRunner(sys: Pick<ProcessSystem, 'run' | 'env'>, o: ClaudeR
   return {
     name: 'claude',
     command(a) {
-      const { allowed, denied } = claudePermissions(a, a.kind !== 'scout' && scratchInUse(sys, a.cwd))
+      const aliases = gitAliases(sys.run(['git', 'config', '--get-regexp', '^alias\\.'], a.cwd).stdout)
+      const { allowed, denied } = claudePermissions(a, a.kind !== 'scout' && scratchInUse(sys, a.cwd), aliases)
       const model = a.model ?? o.model
       // --allowedTools and --disallowedTools take a list each, so the prompt goes on stdin (not as a word after them)
       const argv = [o.bin ?? sys.env('SYMCC_CLAUDE') ?? 'claude', '-p', '--output-format', 'stream-json', '--verbose', '--permission-mode', 'dontAsk', ...(model ? ['--model', model] : []), '--allowedTools', ...allowed, '--disallowedTools', ...denied]

@@ -90,7 +90,7 @@
       </details>
       <details class="card">
         <summary><span class="icon">◉</span><b>The Live tab</b><span>See each task's way to main, as it happens.</span></summary>
-        <p>Every running task is a lane on the path that task really takes: work, check, queue, tests, merged (an investigation only work and answer; a task that needs your review has a "you" station before merged; a docs-only change shows check as skipped). You see the time at each station, the tokens of the whole task so far (every try) and how many times the usual (median) task that is, the task's own working time, how its tokens split between the worker and the checker, and how often the checker sent it back. While something waits for you (a question, a task to review), a NEEDS YOU section at the top lists it, one warning row each. TODAY starts with a <code>Now:</code> row: the board mode, the agents busy, the scouts running and the next one due. When nothing runs, TASKS says why and what to do next, in one dim line or two, for example <code>Nothing running · 2 waiting: T-5 needs you, T-7 waits for T-6</code> or <code>All done · last merged T-891, 12m ago</code> (then the next 3 backlog items, so you can pick one to move to todo).</p>
+        <p>Every running task is a lane on the path that task really takes: work, check, queue, tests, done (an investigation only work and done; a task that needs your review has a "you" station before done; a docs-only change shows check as skipped). You see the time at each station, the tokens of the whole task so far (every try) and how many times the usual (median) task that is, the task's own working time, how its tokens split between the worker and the checker, and how often the checker sent it back. While something waits for you (a question, a task to review), a NEEDS YOU section at the top lists it, one warning row each. TODAY starts with a <code>Now:</code> row: the board mode, the agents busy, the scouts running and the next one due. When nothing runs, TASKS says why and what to do next, in one dim line or two, for example <code>Nothing running · 2 waiting: T-5 needs you, T-7 waits for T-6</code> or <code>All done · last merged T-891, 12m ago</code> (then the next 3 backlog items, so you can pick one to move to todo).</p>
         <pre>─── ❯ NEEDS YOU ────────────────────────
 
  ⚠ Q-12  Which look should the Live tab sections have?
@@ -98,9 +98,9 @@
 ─── ❯ TASKS ────────────────────────────
 
 ▶ T-747  ●━━━━━━●━━━━━━◉──────○──────○
-  change try 1/3 · ⏱ 12m · ⌀ 5.7M (1.2× median) · &lt;worker 4.1M · checker 1.6M&gt;
+  try 1/3 · ⏱ 12m · ⌀ 5.7M (1.2×median) · worker 4.1M · checker 1.6M  change
 ▶ T-740  ◉──────○──────○──────○──────○
-  bug try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8× median) · &lt;worker 2.6M · checker 1.4M&gt; · ⌕ × 1
+  try 2/3 · ⏱ 22m · ⌀ 4.0M + … (0.8×median) · worker 2.6M · checker 1.4M · ⌕ × 1  bug
 …
 ─── ❯ TODAY ────────────────────────────
 
@@ -120,12 +120,13 @@
       <details class="card">
         <summary><span class="icon">↺</span><b>A checker</b><span>A second agent tries to break each change.</span></summary>
         <p>Before the tests run, the checker reads the change and the task. If it finds problems, the task goes back to a worker with the checker's words, and a new try starts. You see each try on the task page.</p>
-        <pre>try 1 → the checker found problems
-try 2: worker started</pre>
+        <pre>worker symcc-T-3: try 1: made the change → the checker found problems
+checker symcc-T-3-checker: found problems: the empty input still throws
+worker symcc-T-3: try 2: worker started</pre>
       </details>
       <details class="card">
         <summary><span class="icon">✓</span><b>A merge queue</b><span>The code that was tested is the code that merges.</span></summary>
-        <p>Finished changes take turns. Each one is brought up to date with main, your test commands run on it, and only then does it merge. In approve merge mode you look at the diff first.</p>
+        <p>Finished changes take turns. Each one is brought up to date with main, your test commands run on it, and only then does it merge. In approve merge mode you look at the diff first. After the merge the task page keeps its Changes: the files, their +/− counts and each diff, read from the repository history.</p>
         <pre>T-747 try 1 → checks passed
 T-747 try 1 → merged into main
 ♪ symcc: T-747 done</pre>

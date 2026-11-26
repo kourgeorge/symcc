@@ -190,13 +190,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -316,6 +309,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
           }
         ]
       },
@@ -413,15 +413,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -430,23 +431,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -455,7 +457,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -645,20 +647,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -676,8 +664,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -734,6 +732,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
@@ -989,10 +1001,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
-          },
-          {
-            "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["worker"]}
@@ -1107,6 +1115,10 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -1204,15 +1216,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -1221,23 +1234,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -1246,7 +1260,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -1436,30 +1450,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -1473,8 +1463,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -1527,6 +1527,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
@@ -1662,26 +1676,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-1","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
             "type": "Box",
             "props": {"key":"hdr-buttons-2","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"hdr-buttons-3","flexDirection":"row"},
-            "children": [
               {"type":"Button","props":{"key":"needs-review","label":"☐ Needs review","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -1695,7 +1702,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
@@ -1765,13 +1771,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {
@@ -1896,6 +1895,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
           }
         ]
       },
@@ -1979,15 +1985,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -1996,23 +2003,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -2021,7 +2029,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -2211,20 +2219,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -2242,8 +2236,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -2262,14 +2266,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["r"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" retry"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
                 ]
               },
               {
@@ -2331,6 +2327,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
@@ -2338,14 +2348,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
               }
             ]
@@ -2358,6 +2360,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -2487,13 +2497,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Button",
-                "props": {"key":"run-now","label":"Run now","plain":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Run now]"]}]
-              },
-              {"type":"Text","children":[" "]},
-              {
-                "type": "Button",
                 "props": {"key":"stash","label":"Stash to backlog","plain":true},
                 "press": {"plugin":"symcc"},
                 "children": [{"type":"Text","props":{"color":"text"},"children":["[Stash to backlog]"]}]
@@ -2504,6 +2507,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "props": {"key":"role","label":"Role","plain":true},
                 "press": {"plugin":"symcc"},
                 "children": [{"type":"Text","props":{"color":"text"},"children":["[Role]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"already-merged","label":"Already merged","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Already merged]"]}]
               }
             ]
           },
@@ -2513,23 +2523,11 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Button",
-                "props": {"key":"already-merged","label":"Already merged","plain":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Already merged]"]}]
-              },
-              {"type":"Text","children":["   "]},
-              {
-                "type": "Button",
                 "props": {"key":"drop","label":"Drop","plain":true},
                 "press": {"plugin":"symcc"},
                 "children": [{"type":"Text","props":{"color":"text"},"children":["[Drop]"]}]
-              }
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"hdr-buttons-3","flexDirection":"row"},
-            "children": [
+              },
+              {"type":"Text","children":["   "]},
               {
                 "type": "Button",
                 "props": {"key":"needs-review","label":"☐ Needs review","plain":true},
@@ -2553,7 +2551,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
@@ -2624,10 +2621,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           },
           {
             "type": "Text",
@@ -2745,6 +2738,10 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -2828,15 +2825,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -2845,23 +2843,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -2870,7 +2869,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -3060,30 +3059,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -3097,8 +3072,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -3114,14 +3099,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["r"]},{"type":"Text","props":{"color":"inactive"},"children":[" retry"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
-                ]
               },
               {
                 "type": "Text",
@@ -3174,18 +3151,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
-                ]
               }
             ]
           },
@@ -3195,7 +3160,37 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -3354,13 +3349,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -3479,6 +3467,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -3611,15 +3606,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -3628,23 +3624,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -3653,7 +3650,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -3840,20 +3837,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"text"},"children":["  "]},
               {"type":"Text","props":{"color":"text"},"children":["Tests: claude plugin test . passed."]}
             ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
           }
         ]
       },
@@ -3866,8 +3849,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -3914,14 +3907,28 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -4119,10 +4126,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
-          },
-          {
-            "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["worker"]}
@@ -4237,6 +4240,10 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -4390,15 +4397,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -4407,23 +4415,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -4432,7 +4441,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -4619,30 +4628,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"text"},"children":["  "]},
               {"type":"Text","props":{"color":"text"},"children":["Tests: claude plugin test . passed."]}
             ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
           }
         ]
       },
@@ -4651,8 +4636,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -4693,12 +4688,26 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
                 "children": [
-                  " · ",
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -4880,13 +4889,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -5006,6 +5008,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
           }
         ]
       },
@@ -5089,15 +5098,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -5106,23 +5116,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -5131,7 +5142,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 1)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 1 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-1.md"]},
           {
             "type": "Text",
@@ -5148,7 +5159,12 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 25m · 4.6k tokens (0.4× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  ● try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
           {"type":"Text","props":{"color":"success"},"children":["  try 2: 5m (running)"]},
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 25m · 4.6k tokens in all · ~$0.42"]}
         ]
@@ -5184,6 +5200,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
@@ -5413,10 +5443,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
-          },
-          {
-            "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["worker"]}
@@ -5528,6 +5554,10 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},{"type":"Text","props":{"color":"inactive"},"children":["tokens"]}]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -5611,15 +5641,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -5628,23 +5659,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -5653,7 +5685,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 1)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 1 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-1.md"]},
           {
             "type": "Text",
@@ -5666,7 +5698,12 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 25m · 4.6k tokens (0.4× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  ● try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
           {"type":"Text","props":{"color":"success"},"children":["  try 2: 5m (running)"]},
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 25m · 4.6k tokens in all · ~$0.42"]}
         ]
@@ -5694,6 +5731,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["n"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
@@ -5828,26 +5879,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Box",
             "props": {"key":"hdr-buttons-1","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"stash","label":"Stash to backlog","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}}
+              {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Text","children":[" "]},
+              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}}
             ]
           },
           {
             "type": "Box",
             "props": {"key":"hdr-buttons-2","flexDirection":"row"},
             "children": [
-              {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}},
+              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"hdr-buttons-3","flexDirection":"row"},
-            "children": [
               {"type":"Button","props":{"key":"needs-review","label":"☐ Needs review","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -5861,7 +5905,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"resume-key","label":"u","hotkey":"u"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
@@ -5895,13 +5938,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {
@@ -6026,6 +6062,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
           }
         ]
       },
@@ -6109,15 +6152,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -6126,23 +6170,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -6151,7 +6196,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -6341,20 +6386,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -6372,8 +6403,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -6392,14 +6433,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["u"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" resume"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
                 ]
               },
               {
@@ -6461,6 +6494,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
@@ -6468,14 +6515,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
               }
             ]
@@ -6488,6 +6527,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -6616,13 +6663,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Button",
-                "props": {"key":"run-now","label":"Run now","plain":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Run now]"]}]
-              },
-              {"type":"Text","children":[" "]},
-              {
-                "type": "Button",
                 "props": {"key":"stash","label":"Stash to backlog","plain":true},
                 "press": {"plugin":"symcc"},
                 "children": [{"type":"Text","props":{"color":"text"},"children":["[Stash to backlog]"]}]
@@ -6633,6 +6673,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "props": {"key":"role","label":"Role","plain":true},
                 "press": {"plugin":"symcc"},
                 "children": [{"type":"Text","props":{"color":"text"},"children":["[Role]"]}]
+              },
+              {"type":"Text","children":[" "]},
+              {
+                "type": "Button",
+                "props": {"key":"already-merged","label":"Already merged","plain":true},
+                "press": {"plugin":"symcc"},
+                "children": [{"type":"Text","props":{"color":"text"},"children":["[Already merged]"]}]
               }
             ]
           },
@@ -6642,23 +6689,11 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Button",
-                "props": {"key":"already-merged","label":"Already merged","plain":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Already merged]"]}]
-              },
-              {"type":"Text","children":["   "]},
-              {
-                "type": "Button",
                 "props": {"key":"drop","label":"Drop","plain":true},
                 "press": {"plugin":"symcc"},
                 "children": [{"type":"Text","props":{"color":"text"},"children":["[Drop]"]}]
-              }
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"hdr-buttons-3","flexDirection":"row"},
-            "children": [
+              },
+              {"type":"Text","children":["   "]},
               {
                 "type": "Button",
                 "props": {"key":"needs-review","label":"☐ Needs review","plain":true},
@@ -6682,7 +6717,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"resume-key","label":"u","hotkey":"u"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"stash-key","label":"z","hotkey":"z"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
@@ -6717,10 +6751,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           },
           {
             "type": "Text",
@@ -6838,6 +6868,10 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -6921,15 +6955,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -6938,23 +6973,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -6963,7 +6999,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -7153,30 +7189,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -7190,8 +7202,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -7207,14 +7229,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {
                 "type": "Text",
                 "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["u"]},{"type":"Text","props":{"color":"inactive"},"children":[" resume"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
-                ]
               },
               {
                 "type": "Text",
@@ -7267,18 +7281,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
-                ]
               }
             ]
           },
@@ -7288,7 +7290,37 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -7455,14 +7487,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · waits on T-498 first"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -7573,6 +7597,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · waits on T-498 first"]}
             ]
           }
         ]
@@ -7950,14 +7982,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]},
-              {"type":"Text","props":{"color":"inactive"},"children":[" · waits on T-498 first"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["worker"]}
             ]
@@ -8062,6 +8086,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]},
+              {"type":"Text","props":{"color":"inactive"},"children":[" · waits on T-498 first"]}
             ]
           }
         ]
@@ -8311,8 +8343,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Button","props":{"key":"to-todo","label":"Move to todo","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
-              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"role","label":"Role","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"drop","label":"Drop","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -8335,7 +8365,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"to-todo-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
@@ -8367,13 +8396,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {
@@ -8490,6 +8512,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
           }
         ]
       },
@@ -8585,14 +8614,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["l"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" role"]}
                 ]
@@ -8604,6 +8625,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["x"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" drop"]}
                 ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
+                ]
               }
             ]
           },
@@ -8615,14 +8644,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["n"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
                 ]
@@ -8634,17 +8655,11 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
+              },
               {
                 "type": "Text",
                 "children": [
-                  "",
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -8766,13 +8781,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","children":["   "]},
               {
                 "type": "Button",
-                "props": {"key":"run-now","label":"Run now","plain":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Run now]"]}]
-              },
-              {"type":"Text","children":[" "]},
-              {
-                "type": "Button",
                 "props": {"key":"role","label":"Role","plain":true},
                 "press": {"plugin":"symcc"},
                 "children": [{"type":"Text","props":{"color":"text"},"children":["[Role]"]}]
@@ -8813,7 +8821,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"to-todo-key","label":"o","hotkey":"o"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"role-key","label":"l","hotkey":"l"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"drop-key","label":"x","hotkey":"x"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"needs-review-key","label":"n","hotkey":"n"},"press":{"plugin":"symcc"}},
@@ -8846,10 +8853,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           },
           {
             "type": "Text",
@@ -8959,6 +8962,10 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Tries:    "]},
               {"type":"Text","props":{"bold":false,"color":"text"},"children":["0"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -9052,19 +9059,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
               },
               {
                 "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
-                ]
-              },
-              {
-                "type": "Text",
                 "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["l"]},{"type":"Text","props":{"color":"inactive"},"children":[" role"]}]
               },
               {
                 "type": "Text",
                 "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["x"]},{"type":"Text","props":{"color":"inactive"},"children":[" drop"]}]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["n"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
+                ]
               }
             ]
           },
@@ -9074,15 +9081,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": [
-                  "",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["n"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" needs review"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
               },
               {
                 "type": "Text",
@@ -9091,16 +9090,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
-              }
-            ]
-          },
-          {
-            "type": "Text",
-            "props": {"color":"subtle"},
-            "children": [
+              },
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -9265,13 +9262,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -9391,6 +9381,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
           }
         ]
       },
@@ -9474,15 +9471,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -9491,23 +9489,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -9516,7 +9515,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -9706,20 +9705,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -9737,8 +9722,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -9758,6 +9753,20 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
@@ -9765,14 +9774,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
-                ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
               }
             ]
@@ -9785,6 +9786,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -9964,10 +9973,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
-          },
-          {
-            "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["worker"]}
@@ -10082,6 +10087,10 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -10165,15 +10174,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -10182,23 +10192,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -10207,7 +10218,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -10397,30 +10408,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -10434,8 +10421,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -10455,18 +10452,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["1-2"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
-              },
-              {
-                "type": "Text",
-                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
-                ]
               }
             ]
           },
@@ -10476,7 +10461,37 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -10581,8 +10596,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Button","props":{"key":"retry","label":"Retry","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":[" "]},
-              {"type":"Button","props":{"key":"run-now","label":"Run now","variant":"secondary"},"press":{"plugin":"symcc"}},
-              {"type":"Text","children":[" "]},
               {"type":"Button","props":{"key":"already-merged","label":"Already merged","variant":"secondary"},"press":{"plugin":"symcc"}},
               {"type":"Text","children":["   "]},
               {"type":"Button","props":{"key":"copy","label":"Copy","variant":"secondary"},"press":{"plugin":"symcc"}}
@@ -10596,7 +10609,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
             ]
@@ -10626,13 +10638,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           },
           {
@@ -10757,6 +10762,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
           }
         ]
       },
@@ -10840,15 +10852,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -10857,23 +10870,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -10882,7 +10896,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -11072,20 +11086,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -11103,8 +11103,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -11129,16 +11139,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["h"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" already merged"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["h"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" already merged"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
               }
             ]
@@ -11151,8 +11161,8 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["1-2"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
@@ -11162,14 +11172,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
                 ]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
-                ]
               }
             ]
           },
@@ -11181,6 +11183,14 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["↑↓"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
                 ]
@@ -11304,13 +11314,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","children":[" "]},
               {
                 "type": "Button",
-                "props": {"key":"run-now","label":"Run now","plain":true},
-                "press": {"plugin":"symcc"},
-                "children": [{"type":"Text","props":{"color":"text"},"children":["[Run now]"]}]
-              },
-              {"type":"Text","children":[" "]},
-              {
-                "type": "Button",
                 "props": {"key":"already-merged","label":"Already merged","plain":true},
                 "press": {"plugin":"symcc"},
                 "children": [{"type":"Text","props":{"color":"text"},"children":["[Already merged]"]}]
@@ -11332,7 +11335,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Button","props":{"key":"prev-key","label":"k","hotkey":"k"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"next-key","label":"j","hotkey":"j"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"retry-key","label":"r","hotkey":"r"},"press":{"plugin":"symcc"}},
-              {"type":"Button","props":{"key":"run-now-key","label":"e","hotkey":"e"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"already-merged-key","label":"h","hotkey":"h"},"press":{"plugin":"symcc"}},
               {"type":"Button","props":{"key":"copy-key","label":"y","hotkey":"y"},"press":{"plugin":"symcc"}}
             ]
@@ -11363,10 +11365,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["01:59 PM"]}
             ]
-          },
-          {
-            "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           },
           {
             "type": "Text",
@@ -11484,6 +11482,10 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -11567,15 +11569,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -11584,23 +11587,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -11609,7 +11613,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -11799,30 +11803,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -11836,8 +11816,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -11858,16 +11848,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["e"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" run now"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["h"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" already merged"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["h"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" already merged"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["1-2"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
                 ]
               }
             ]
@@ -11880,21 +11870,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["1-2"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" a try's report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
-              },
-              {
-                "type": "Text",
-                "children": [
-                  " · ",
-                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
-                ]
               }
             ]
           },
@@ -11904,7 +11886,19 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},{"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
+                ]
+              },
+              {
+                "type": "Text",
+                "children": [
+                  " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["↑↓"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" scroll"]}
+                ]
               },
               {
                 "type": "Text",
@@ -12261,13 +12255,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -12395,6 +12382,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
+            ]
           }
         ]
       },
@@ -12478,15 +12472,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -12495,23 +12490,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -12520,7 +12516,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -12710,20 +12706,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -12741,8 +12723,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -12789,14 +12781,28 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -13202,10 +13208,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
-          },
-          {
-            "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["worker"]}
@@ -13328,6 +13330,10 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -13411,15 +13417,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -13428,23 +13435,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -13453,7 +13461,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -13643,30 +13651,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "type": "Box",
             "props": {"key":"report-try-keys","display":"none"},
             "children": [
               {"type":"Button","props":{"key":"report-try-1-key","label":"1","hotkey":"1"},"press":{"plugin":"symcc"}},
@@ -13680,8 +13664,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -13722,12 +13716,26 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
                 "children": [
-                  " · ",
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -13897,13 +13905,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           {
             "type": "Text",
             "children": [
-              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
-              {"type":"Text","props":{"color":"text"},"children":["0"]}
-            ]
-          },
-          {
-            "type": "Text",
-            "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide","weight":"semibold"},"children":["worker"]}
             ]
@@ -14022,6 +14023,13 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
+            ]
+          },
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Priority: "]},
+              {"type":"Text","props":{"color":"text"},"children":["0"]}
             ]
           }
         ]
@@ -14150,15 +14158,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success","weight":"semibold"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -14167,23 +14176,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error","weight":"semibold"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -14192,7 +14202,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -14379,20 +14389,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"text"},"children":["  "]},
               {"type":"Text","props":{"color":"text"},"children":["Tests: claude plugin test . passed."]}
             ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {"type":"Button","props":{"key":"report-try-1","label":"Try 1","variant":"secondary"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"report-try-2","label":"● Try 2","variant":"secondary"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
           }
         ]
       },
@@ -14405,8 +14401,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "props": {"bold":true,"color":"suggestion","weight":"semibold"},
             "children": ["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]
           },
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -14453,14 +14459,28 @@ export const TASK_BEFORE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   "",
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
-                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
                 ]
               },
               {
                 "type": "Text",
                 "children": [
                   " · ",
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["y"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" copy"]}
+                ]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
+                "children": [
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]
@@ -14658,10 +14678,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
           },
           {
             "type": "Text",
-            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
-          },
-          {
-            "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["Role:     "]},
               {"type":"Text","props":{"bold":true,"color":"ide"},"children":["worker"]}
@@ -14776,6 +14792,10 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["          "]},
               {"type":"Text","props":{"color":"inactive"},"children":["11.6k tokens"]}
             ]
+          },
+          {
+            "type": "Text",
+            "children": [{"type":"Text","props":{"bold":true,"color":"text"},"children":["Priority: "]},{"type":"Text","props":{"color":"text"},"children":["0"]}]
           }
         ]
       },
@@ -14927,15 +14947,16 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"success"},"children":["✓ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 2: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped every line"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["fixed the headings and wrapped"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["│ "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["to the panel width"]},
+              {"type":"Text","props":{"color":"inactive"},"children":["every line to the panel width"]},
               {"type":"Text","props":{"color":"success"},"children":[" → merged into main"]}
             ]
           },
@@ -14944,23 +14965,24 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"bold":true,"color":"error"},"children":["✗ "]},
+              {"type":"Text","props":{"color":"inactive"},"children":["worker: "]},
               {"type":"Text","props":{"bold":true,"color":"text"},"children":["try 1: "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task page in"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["started the change of the task"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"inactive"},"children":["the editor side panel"]},
-              {"type":"Text","props":{"color":"error"},"children":[" → tests failed: two tests"]}
+              {"type":"Text","props":{"color":"inactive"},"children":["page in the editor side panel"]},
+              {"type":"Text","props":{"color":"error"},"children":[" → tests failed:"]}
             ]
           },
           {
             "type": "Text",
             "children": [
               {"type":"Text","props":{"color":"inactive"},"children":["  "]},
-              {"type":"Text","props":{"color":"error"},"children":["did not find the new section headings"]}
+              {"type":"Text","props":{"color":"error"},"children":["two tests did not find the new section headings"]}
             ]
           }
         ]
@@ -14969,7 +14991,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report (try 2, 2 of 2)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Report · try 2 · worker"]},
           {"type":"Text","props":{"color":"inactive"},"children":["  ",".symcc/reports/T-501-try-2.md"]},
           {
             "type": "Text",
@@ -15156,30 +15178,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
               {"type":"Text","props":{"color":"text"},"children":["  "]},
               {"type":"Text","props":{"color":"text"},"children":["Tests: claude plugin test . passed."]}
             ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"report-buttons","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"report-buttons-0","flexDirection":"row","gap":1},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-1","label":"Try 1","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[Try 1]"]}]
-                  },
-                  {
-                    "type": "Button",
-                    "props": {"key":"report-try-2","label":"● Try 2","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["[● Try 2]"]}]
-                  }
-                ]
-              }
-            ]
           }
         ]
       },
@@ -15188,8 +15186,18 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Runs   2 tries · 40m · 11.6k tokens (1× the usual task)"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]},
-          {"type":"Text","props":{"color":"inactive"},"children":["  try 2: 20m · 7k tokens in all · ~$0.80"]},
+          {
+            "type": "Button",
+            "props": {"key":"run-0","label":"  try 1: 20m · 4.6k tokens in all · ~$0.42","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  try 1: 20m · 4.6k tokens in all · ~$0.42"]}]
+          },
+          {
+            "type": "Button",
+            "props": {"key":"run-1","label":"  ● try 2: 20m · 7k tokens in all · ~$0.80","plain":true},
+            "press": {"plugin":"symcc"},
+            "children": [{"type":"Text","props":{"color":"inactive"},"children":["  ● try 2: 20m · 7k tokens in all · ~$0.80"]}]
+          },
           {"type":"Text","props":{"bold":true,"color":"text"},"children":["  total: 40m · 11.6k tokens in all · ~$1.22"]}
         ]
       },
@@ -15230,12 +15238,26 @@ export const TASK_BEFORE: Record<string, unknown> = {
             "children": [
               {
                 "type": "Text",
-                "children": ["",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+                "children": [
+                  "",
+                  {"type":"Text","props":{"bold":true,"color":"text"},"children":["Enter"]},
+                  {"type":"Text","props":{"color":"inactive"},"children":[" on a Runs line: its report"]}
+                ]
               },
               {
                 "type": "Text",
+                "children": [" · ",{"type":"Text","props":{"bold":true,"color":"text"},"children":["y"]},{"type":"Text","props":{"color":"inactive"},"children":[" copy"]}]
+              }
+            ]
+          },
+          {
+            "type": "Text",
+            "props": {"color":"subtle"},
+            "children": [
+              {
+                "type": "Text",
                 "children": [
-                  " · ",
+                  "",
                   {"type":"Text","props":{"bold":true,"color":"text"},"children":["k j"]},
                   {"type":"Text","props":{"color":"inactive"},"children":[" prev/next"]}
                 ]

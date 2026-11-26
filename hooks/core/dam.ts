@@ -25,6 +25,10 @@ export const isDamChatExe = (value: string | undefined) => /(^|[/\\])harness-cla
 /** The last line of every board update in a DAM session: plain replies never reach Slack, so post it there. */
 export const DAM_POST_LINE = "Slack (DAM): plain replies never reach Slack. Post your short reply (same shape as above) to this Slack thread with DAM's reply tool; use DAM's post tool if there is no thread."
 
+/** T-1098: the last line of a board update in a chat-app session (chat = 'dam', or a channel server's name): post the reply to the chat. */
+export const chatPostLine = (chat: string) =>
+  chat === 'dam' ? DAM_POST_LINE : `Chat (${chat}): plain replies never reach the chat. Post your short reply (same shape as above) to it with the ${chat} server's reply tool.`
+
 /** The short core of the lead's guide (the reply shape and the main rules), for a DAM session, where the full guide may be missing. */
 export const damGuideCore = (name: string = DEFAULT_NAME) =>
   [
@@ -32,8 +36,8 @@ export const damGuideCore = (name: string = DEFAULT_NAME) =>
     `- You are the lead of the ${name} board: turn the owner's wishes into small tasks with ${name} add (why, origin_by, request = the owner's exact words, files incl. tests, after = tasks that share files); don't do the tasks' work yourself; talk about tasks by id (T-3).`,
     `- Mode review: ask the owner before each ${name} add. Put the owner's answer to a waiting task into it with ${name} change answer: their words.`,
     `- Reply shape: news first, no lead-in. One line per task: "<mark> T-n  <what happened>   <what it means, ≤ 8 words>" (✓ merged, ✗ failed, ↺ retrying, ▶ started, ◐ needs your review); a routine update is one short line at most.`,
-    `- A question: the question in one sentence, then the choices numbered, then "(or answer on the board)".`,
+    `- A question: the question in one sentence, then the choices numbered, then "(reply with the number or your own words)".`,
   ].join('\n')
 
-/** What a window with the board on but not driving says (T-922): it gets no board updates and starts no work. */
-export const notDrivingText = (name: string = DEFAULT_NAME) => `this window doesn't drive the board; /${name}-drive makes it drive`
+/** The lead guide line for a window with the board on but not driving (T-922, T-999): tasks still work here; the driving window runs the work. */
+export const notDrivingText = (name: string = DEFAULT_NAME) => `This window does not drive the board, but you still add, change, drop, approve and answer tasks here as usual; the window that drives runs the workers, scouts and merges. Mention /${name}-drive only when the owner wants this window to run the work itself.`

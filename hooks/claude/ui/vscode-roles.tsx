@@ -5,7 +5,7 @@
 // the name a link that opens it; here the description is never cut, it wraps under itself.
 // One role's or kind's page: a "← Roles" link back, the name and its badges, the description, the actions as one line of
 // links that wraps (Edit · See the prompt · Turn off · Reset to built-in · Remove), then its parts under headings.
-// Removing asks first in a box with one "Yes, remove" Button and a Cancel link. The edit pages have one Save Button and a
+// Removing asks first, inline with no box, with one "Yes, remove" Button and a Cancel link. The edit pages have one Save Button and a
 // Cancel link. No key hints.
 import { ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, isCheckerRole, type RoleDef, type KindDef, type RolePromptKind } from '../../board'
 import { type DefSource, type BrokenDef, brokenLabel } from '../../core/def-files'
@@ -17,15 +17,13 @@ import type { PaneParts } from './parts'
 import { row } from './arrows'
 import { vsRowRoom } from './vscode-list'
 import { claudeHost } from '../host'
-import { vsBadge, vsCallout, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
+import { vsBadge, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
 import { type PageHeader, vsPageHeader } from './page-header'
 import { defActions } from '../../core/page-header'
 import { type RolePageFacts, CHANGED_HEADING, changeLines } from '../../core/role-changes'
 import { type DefRow, type DefCol, type DefCell, type CodePick, DEF_COL_HEADS, ROLE_COLS, KIND_COLS, TABLE_GAP, CODE_PICKS, CODE_PICK_LABEL, CODE_PICK_HINT, defsCountText, defWord, defLayout, defCells, defCellTone, roleWritesLine, codePickOf } from '../../core/def-table'
 import { type CodeDraft, roleRows, kindRows, saveRoleEdit } from './role-table'
 
-/** The color of a "where it comes from" badge. */
-const SOURCE_TONE: Record<DefSource, string> = { 'built-in': 'inactive', replaced: 'suggestion', added: 'success' }
 
 /** A link that does something on the page (vsHref('do', ...)): its words, its id in the href, what a press does. */
 type Action = [label: string, id: string, onPress: () => void]
@@ -50,22 +48,25 @@ function kit($: $, pane: PaneParts) {
     const href = vsHref('page', `back/${key}`)
     return vsLink(vs, key, mdLink(`← ${to}`, href), [[href, onPress]])
   }
-  /** Where it comes from as small badges: " replaced " " off ", or " can't be read " for a broken file; `said`: the source
-   *  badge's words when they say more ("replaced · model", T-871). */
+  /** Where it comes from as plain dim words (T-1008, no pills): "replaced", "off", or "can't be read" (red) for a broken file;
+   *  `said`: the source's words when they say more ("replaced · model", T-871). */
   const badges = (key: string, source: DefSource | undefined, off: boolean, broken = false, said?: string) => (
     <Box key={key} flexDirection="row" flexWrap="wrap" columnGap={1} alignItems="center">
-      {broken ? vsBadge(vs, `${key}-broken`, "can't be read", 'error') : source ? vsBadge(vs, `${key}-source`, said ?? source, SOURCE_TONE[source]) : null}
-      {off ? vsBadge(vs, `${key}-off`, 'off', 'warning') : null}
+      {broken ? vsBadge(vs, `${key}-broken`, "can't be read", 'error') : source ? vsBadge(vs, `${key}-source`, said ?? source, 'inactive') : null}
+      {off ? vsBadge(vs, `${key}-off`, 'off', 'inactive') : null}
     </Box>
   )
-  /** The confirm step of Remove (or Reset): a box in the warning color, the one "Yes, remove" Button, and a Cancel link. */
-  const confirm = (key: string, what: string, yes: () => void, no: () => void, yesLabel = 'Yes, remove') =>
-    vsCallout(vs, key, '⚠', what, 'warning', [
-      <Box key={`${key}-yes-row`} flexDirection="row">
+  /** The confirm step of Remove (or Reset), inline with no box (T-1008): the question, then the one "Yes, remove" Button
+   *  and a Cancel link on one row. */
+  const confirm = (key: string, what: string, yes: () => void, no: () => void, yesLabel = 'Yes, remove') => (
+    <Box key={key} flexDirection="column">
+      {plain(`${key}-what`, what, 'text')}
+      <Box key={`${key}-yes-row`} flexDirection="row" flexWrap="wrap" columnGap={2} alignItems="center">
         <pane.Button key={`${key.replace(/-box$/, '')}-yes`} label={yesLabel} variant="primary" autoFocus onPress={yes} />
-      </Box>,
-      links(`${key.replace(/-box$/, '')}-cancel`, [['Cancel', 'cancel', no]]),
-    ])
+        {links(`${key.replace(/-box$/, '')}-cancel`, [['Cancel', 'cancel', no]])}
+      </Box>
+    </Box>
+  )
   /** A part of a page under its heading. */
   const section = (key: string, label: string, body: unknown[]) => (
     <Box key={`vs-sec-${key}`} flexDirection="column">
@@ -111,7 +112,7 @@ function listTop(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'Roles' | 'Ta
     <Box key={`vs-${slug}-top`} flexDirection="column">
       {k.back(`${slug}-back`, 'Settings', onBack)}
       <Text key={`vs-${slug}-head`} wrap="wrap">
-        <Text bold color={C('suggestion')}>{noun}</Text>
+        <Text bold color={C('text')}>{noun}</Text>
         <Text color={C('inactive')}>{`  ${count}`}</Text>
       </Text>
     </Box>,
@@ -141,7 +142,7 @@ function vsTable(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'role' | 'kin
           const href = vsHref(noun, r.name)
           return cell(`${key}-name`, 'name', last, vsLink(vs, row(`${noun}Row:${r.name}`), r.off || r.broken ? mdLink(r.name, href) : `**${mdLink(r.name, href)}**`, [[href, open(r.name)]], r.off || !!r.broken))
         }
-        const tone = defCellTone(r, p.col)
+        const tone = p.col === 'from' && !r.broken ? { color: 'inactive', bold: undefined } : defCellTone(r, p.col)
         const warn = last && 'warning' in r && r.warning ? ' ⚠' : ''
         return cell(`${key}-${p.col}`, p.col, last, <Text key="t" wrap="wrap" bold={tone.bold} color={C(tone.color)}>{text}{warn}</Text>)
       })}
@@ -192,7 +193,12 @@ export function rolePageVs($: $, pane: PaneParts, r: RoleDef, source: DefSource,
   const cancel = set(() => ((roleView.confirmRemove = false), (roleView.confirmReset = false)))
   return (
     <Box key="vs-role-page" flexDirection="column" gap={1}>
-      {vsPageHeader(pane, header)}
+      {vsPageHeader(pane, {
+        ...header,
+        color: header.color === 'inactive' ? 'inactive' : 'text',
+        // T-1008: the source and "off" are plain dim words, not colored marks
+        state: header.state.map(g => g.map(x => ({ ...x, color: 'inactive' as const, bold: false }))),
+      })}
       <Box key="vs-role-notes" flexDirection="column">
         {/* T-918: always says what the role writes */}
         {k.plain('role-writes', roleWritesLine(r), 'text')}
@@ -268,7 +274,7 @@ export function rolePromptPageVs($: $, pane: PaneParts, r: RoleDef, kind: RolePr
       <Box key="vs-role-prompt-top" flexDirection="column">
         {k.back('role-prompt-back', r.name, show(''))}
         <Box key="vs-prompt-title" flexDirection="row" flexWrap="wrap" columnGap={2}>
-          <Text key="name" wrap="wrap" bold color={C('claude')}>{`${kind} prompt`}</Text>
+          <Text key="name" wrap="wrap" bold color={C('text')}>{`${kind} prompt`}</Text>
           {vsBadge(k.vs, 'vs-prompt-badge', 'built-in, view only', 'inactive')}
         </Box>
         {k.plain('vs-prompt-about', `${kind === 'checker' ? 'What a checker is told' : `What a worker on a ${kind} task is told`}; role ${r.name}'s checklist goes where ${ROLE_SLOT} is.`)}
@@ -297,8 +303,8 @@ function editTop(pane: PaneParts, k: ReturnType<typeof kit>, noun: 'role' | 'kin
   return [
     <Box key={`vs-${noun}-edit-top`} flexDirection="column">
       <Box key="vs-edit-title" flexDirection="row" flexWrap="wrap" columnGap={2}>
-        <Text key="name" wrap="wrap" bold color={C('claude')}>{name}</Text>
-        {vsBadge(k.vs, 'vs-edit-badge', 'editing', 'warning')}
+        <Text key="name" wrap="wrap" bold color={C('text')}>{name}</Text>
+        {vsBadge(k.vs, 'vs-edit-badge', 'editing', 'inactive')}
       </Box>
       {notes.map((n, i) => k.plain(`vs-edit-note-${i}`, n))}
     </Box>,
@@ -389,7 +395,7 @@ export function kindPageVs($: $, pane: PaneParts, x: KindDef | undefined, source
       <Box key="vs-kind-top" flexDirection="column">
         {k.back('kind-back', 'Task types', set(() => ((kindView.open = ''), (kindView.confirmRemove = false))))}
         <Box key="vs-kind-title" flexDirection="row" flexWrap="wrap" columnGap={2}>
-          <Text key="name" wrap="wrap" bold color={C(broken || off ? 'inactive' : 'claude')}>{name}</Text>
+          <Text key="name" wrap="wrap" bold color={C(broken || off ? 'inactive' : 'text')}>{name}</Text>
           {k.badges('vs-kind-badges', source, off, !!broken)}
         </Box>
         {broken ? k.plain('vs-kind-why', brokenLabel(broken), 'error') : null}

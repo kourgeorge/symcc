@@ -2,7 +2,7 @@
 // other modules change. They all use these (S, the maps and sets) directly, never a copy, so a change made in one
 // module is seen by all.
 import type { SymccView, SymccScout, SymccTokens } from '../../types'
-import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type OwnerQuestion, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, useAssistantWord, type OffHere } from '../board'
+import { type RoleDef, type KindDef, type SettingName, type GitState, type Board, type OwnerQuestion, type Heard, type Notify, emptyHeard, type PlanState, emptyPlan, type OffHere } from '../board'
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { DriverFacts } from '../core/driver-notice'
 import type { Players } from './voice'
@@ -103,13 +103,6 @@ export const startS = () => ({
   fresh: false,
   /** T-793: this window only is turned off (/<name>-disable here); never saved, gone when the session ends */
   offHere: false,
-  /** T-793: why: 'off' (/<name>-disable here), 'other' (another window has symcc on), 'gone' (that window closed) */
-  offWhy: 'off' as OffHere,
-  /** T-793: while off here, whether another window was seen driving (so its going away is worth telling) and whether that was told */
-  sawOther: false,
-  takeoverTold: false,
-  /** T-793: when the window with symcc on was first missed (ms), so the take-over line waits out a grace; null while seen */
-  missingSince: null as number | null,
   /** T-952: what lead.json said of the driving window at this window's last look, while another window drives (see seeDriver) */
   driver: undefined as DriverFacts | undefined,
   /** T-952: when the owner last typed a prompt here or the lead's turn last ended (saved in lead.json as `active` while this window drives) */
@@ -126,12 +119,17 @@ export const startS = () => ({
   leadUrgent: false,
   /** a board update whose send failed waits for this timer (or the next update) to try again (see tellLead) */
   leadRetry: null as { cancel(): void } | null,
+  /** the board health findings already told to the lead (their keys; see newFindings); kept per project, and saved in the data folder so a reload keeps them */
+  healthTold: new Set<string>(),
+  /** the read of that saved list (started once per load) */
+  healthLoad: null as Promise<void> | null,
   writing: Promise.resolve() as Promise<unknown>,
   /** this session's id, and whether it drives the board (only the driver starts work; see .<name>/lead.json) */
   me: '',
   driving: false,
-  /** T-922: this session runs under DAM (from Slack): board updates carry the guide's core and a post-to-Slack line (see app/dam.ts) */
-  dam: false,
+  /** T-1098: the owner writes from a chat app: '' = no; 'dam' = DAM's Slack (board updates carry the guide's core and a post line, see app/dam.ts);
+   *  else the channel server's name (e.g. "telegram"). Questions go as numbered text and replies are posted to the chat. */
+  chat: '',
   /** set by guardStart: this copy runs in a worker's folder and only guards tool calls (no lead, no timers, no board writes) */
   guardOnly: false,
   /** board.json's mtime (ms) of the state this session last drew (publish) or saved; null = not known yet. A session that
@@ -180,8 +178,8 @@ export const startS = () => ({
   rolePick: null as { task: string; options: string[] } | null,
   /** the task whose "Your answer" box is open after Answer… was pressed (a waiting task with answer buttons); null = not open */
   answering: null as string | null,
-  /** which try's report the open task shows (its try number); null = the latest */
-  reportTry: null as { task: string; try: number } | null,
+  /** which agent's report the open task shows (try, worker or checker, agent id); null = the latest worker report */
+  reportTry: null as { task: string; try: number; kind: 'worker' | 'checker'; id?: string } | null,
   /** the task whose report is shown whole on VS Code's task page (else only its first part); null = none */
   reportAll: null as string | null,
   /** the folds opened on VS Code's task page (Time and cost: closed by default), for the task shown; null = all closed */
@@ -219,7 +217,6 @@ export function useName(host: Pick<Host, 'plugin' | 'words'>) {
   if (S.named) return
   S.named = true
   S.W = wordsOf(host.words)
-  useAssistantWord(S.W.assistant)
   const name = cleanName(host.plugin.name)
   if (name === S.N.name) return
   S.N = namesFor(name)
@@ -266,6 +263,9 @@ export type CheckerEnd = { answer: string | null; why?: string; tokens?: SymccTo
 export const checkerRuns = new Map<string, { task: string; worktree: string; end: (e: CheckerEnd) => void; held?: { answer: string; tokens?: SymccTokens } }>()
 /** agents this plugin has stopped: every tool they try is refused, so they can't change anything and end soon */
 export const stopped = new Set<string>()
+
+/** Tasks whose running checker the lead stopped to move the task to another stage: its result is dropped with no line and no message. */
+export const movedAway = new Set<string>()
 /** Why a session stops its runs when the owner moves driving the board to another session (/<name>-drive there, see stepDown). */
 export const MOVED_WHY = 'the owner moved driving to another session'
 /** Why a session stops its runs when another session took the board over (this one stopped answering for too long). */
@@ -331,8 +331,6 @@ export async function halt(host: Host, agentId: string, why: string) {
 }
 /** failed tasks the lead has already been reminded about (task id → its updated_at then) */
 export const reminded = new Map<string, string>()
-/** the board health findings already told to the lead (their keys; see newFindings) */
-export const healthTold = new Set<string>()
 /** T-675: the data files close to the 4 MB read limit (their name as the owner knows it → the warning), shown on the board */
 export const sizeNotes = new Map<string, string>()
 export const scoutState = new Map<string, SymccScout>()
@@ -342,6 +340,8 @@ export const leadQueue: string[] = []
 export const meanwhile: string[] = []
 /** task id → spawns in a row that failed only because the plugin wasn't ready yet (see notReadyYet in host.ts) */
 export const notReady = new Map<string, number>()
+/** task id → the id of its checker agent that survived a plugin reload: the next checker step waits for it instead of starting a new one (T-1068) */
+export const adoptedCheckers = new Map<string, { id: string; early?: CheckerEnd }>()
 /** task id → checker starts in a row, after a reload (see checkAgain in workers.ts), that failed only because the agent type wasn't loaded yet */
 export const checkerNotReady = new Map<string, number>()
 /** the older days ("YYYY-MM-DD") the owner has opened in the board panel; kept only while the panel is open */

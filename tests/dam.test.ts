@@ -71,7 +71,7 @@ test("T-929: the DAM check needs PLATFORM_HARNESS and DAM's chat program (harnes
 
 test('T-922: in a DAM Slack session (harness-claude), a board update and a "needs you" carry the guide core and end with the post-to-Slack line', async () => {
   const { w, merged, needs, start } = await updates({ PLATFORM_HARNESS: 'claude-code', CLAUDE_CODE_EXECUTABLE: CHAT_EXE })
-  expect(S.dam).toBe(true)
+  expect(S.chat).toBe("dam")
   for (const u of [merged, needs]) {
     expect(u.startsWith('[symcc] Board update:')).toBe(true)
     expect(u.endsWith(DAM_POST_LINE)).toBe(true)
@@ -96,7 +96,7 @@ const quiet: [string, Record<string, string>, boolean][] = [
 for (const [name, env, sdk] of quiet) {
   test(`T-922: ${name}, board updates have no Slack line and no guide core`, async () => {
     const { w, merged, needs } = await updates(env, sdk)
-    expect(S.dam).toBe(false)
+    expect(S.chat).toBe("")
     for (const u of [merged, needs]) {
       expect(u.startsWith('[symcc] Board update:')).toBe(true)
       expect(u.includes('Slack')).toBe(false)
@@ -115,7 +115,7 @@ test('T-929: with PLATFORM_HARNESS, an sdk-origin owner prompt turns the Slack l
   const before = w.toLead.shift() ?? takeBoardUpdate() ?? ''
   expect(before.includes(DAM_POST_LINE)).toBe(false)
   damOwnerPrompt()
-  expect(S.dam).toBe(true)
+  expect(S.chat).toBe("dam")
   tellLead(w.host, 'T-6 "Fix logout" merged.')
   const after = w.toLead.shift() ?? takeBoardUpdate() ?? ''
   expect(after.endsWith(DAM_POST_LINE)).toBe(true)
@@ -131,6 +131,9 @@ test("T-922: a window with symcc on that doesn't drive says /symcc-drive makes i
   expect(S.driving).toBe(true)
   expect(await leadGuideText(w.host)).not.toContain(notDrivingText('symcc'))
   S.driving = false
-  expect(notDrivingText('symcc')).toBe("this window doesn't drive the board; /symcc-drive makes it drive")
-  expect(await leadGuideText(w.host)).toContain(notDrivingText('symcc'))
+  const guide = await leadGuideText(w.host)
+  expect(guide).toContain(notDrivingText('symcc'))
+  expect(notDrivingText('symcc')).toContain('still add, change, drop, approve and answer tasks here')
+  expect(notDrivingText('symcc')).toContain('/symcc-drive')
+  expect(guide).not.toContain('tell them plainly')
 })

@@ -4,6 +4,7 @@
 // task still fits (and to ask the owner when it doesn't). The git log itself is run by hooks/app/workers.ts (changedSince);
 // everything here is pure.
 import type { SymccTask } from '../../types'
+import { plural } from './text'
 
 // No import of ./days here: days -> settings -> board-file pulled the prompt code into a loop (events.test.ts failed to
 // load with "Cannot access 'DEFAULT_TEST_MINUTES' before initialization"). This is the same text as days.ts's when().
@@ -80,9 +81,9 @@ export function realPaths(named: readonly string[], tracked: readonly string[]):
 const ago = (ms: number): string => {
   const h = Math.floor(ms / 3_600_000)
   if (h < 1) return 'less than an hour ago'
-  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`
+  if (h < 24) return `${plural(h, 'hour')} ago`
   const d = Math.floor(h / 24)
-  return `${d} day${d === 1 ? '' : 's'} ago`
+  return `${plural(d, 'day')} ago`
 }
 
 /** The section's "ask the owner" sentence end, for a worker whose ask tool is called `tool`. */
@@ -95,7 +96,7 @@ export function changedSinceText(s: ChangedSince | null | undefined, tool = 'ask
   if (!s || s.total <= 0) return null
   const made = Date.parse(s.created)
   const written = `This task was written ${when(s.created)}${Number.isFinite(made) ? ` (${ago(s.nowMs - made)})` : ''}.`
-  const n = `${s.total} commit${s.total === 1 ? '' : 's'}`
+  const n = plural(s.total, 'commit')
   let changed: string
   if (s.scope === 'none' || !s.commits.length) changed = `${written} Since then ${n} landed on the branch it merges into.`
   else {

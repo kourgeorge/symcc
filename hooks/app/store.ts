@@ -5,6 +5,7 @@ import { publish } from './lead'
 import { tellLead } from './tell'
 import { migrateIfOld } from './migrate-data'
 import { S, onHere, sizeNotes } from './state'
+import { timed } from './slow-log'
 import { boardEvents, withStageHistory } from '../core/events'
 import { emitTaskEvents, logTaskEvents, type TaskEvent } from './events'
 import type { Host } from '../host'
@@ -342,7 +343,13 @@ export async function saveMigrated(host: Host): Promise<void> {
 }
 
 /** The parts files last read or written (path → their text and tasks), so a save writes only the ones that changed. */
-const partsSeen = new Map<string, { text: string; tasks: Record<string, Record<string, unknown>> }>()
+const partsSeen = new Map<string, { text: string; tasks: Record<string, Record<string, unknown>>; stamp?: string }>()
+
+/** A file's mtime and size as one text (T-1029): a parts file with the same stamp as when last read or written is not read again. */
+async function stampOf(host: Host, file: string): Promise<string | undefined> {
+  const st = await host.fs.stat(file).catch(() => null)
+  return st ? `${st.mtimeMs}|${st.size}` : undefined
+}
 
 /**
  * The finished tasks the last read loaded as stubs, their parts missing (T-681): a save leaves them out of their parts
@@ -414,11 +421,18 @@ async function readJoined(host: Host, again = true): Promise<{ text: string; raw
       missingNow.add(rel)
       continue
     }
+    const stamp = await stampOf(host, file)
+    const had = partsSeen.get(file)
+    if (had && stamp !== undefined && had.stamp === stamp) {
+      noteRead(host, file, had.text)
+      files.set(rel, had.tasks)
+      continue
+    }
     const t = await readWhole(host, file)
     const p = readParts(t)
     if (p.broken) return { text, read: { ...readBoard(null), broken: `its parts file ${S.N.dir}/${rel} can't be read (${p.broken})` }, whole: false, missing: [], missingFiles: new Set<string>() }
     files.set(rel, p.tasks)
-    partsSeen.set(file, { text: t, tasks: p.tasks })
+    partsSeen.set(file, { text: t, tasks: p.tasks, stamp })
   }
   const j = joinParts(raw, files)
   if (j.missing.length && again) return readJoined(host, false)
@@ -518,6 +532,30 @@ export async function dropIfSame(host: Host, file: string, text: string) {
   if ((await host.fs.read(file).catch(() => null)) === text) await host.run(['rm', '-f', file]).catch(() => undefined)
 }
 
+/** The parts folders known to exist this session (a failed write forgets it, see safeWriteIn). */
+const partsDirsMade = new WeakMap<Host, Set<string>>()
+
+/** Makes the parts folder when it is missing; asks the disk only once per session. */
+async function ensurePartsDir(host: Host) {
+  const dir = path(`${S.N.dir}/${PARTS_DIR}`)
+  const made = partsDirsMade.get(host) ?? new Set<string>()
+  partsDirsMade.set(host, made)
+  if (made.has(dir)) return
+  if (!(await host.fs.exists(dir).catch(() => false))) await host.run(['mkdir', '-p', dir]).catch(() => undefined)
+  made.add(dir)
+}
+
+/** safeWrite into the parts folder; when it fails the folder may have been deleted, so make it again and try once more. */
+async function safeWriteIn(host: Host, file: string, text: string, what: string) {
+  try {
+    await safeWrite(host, file, text, what)
+  } catch (e) {
+    partsDirsMade.delete(host)
+    await ensurePartsDir(host)
+    await safeWrite(host, file, text, what).catch(() => { throw e })
+  }
+}
+
 /**
  * Write to a temp file, then rename it over board.json, so a crash mid-write never leaves a broken board. Done and
  * dropped tasks keep only a stub in board.json; the rest goes to their parts files (T-675, see core/board-parts.ts),
@@ -541,19 +579,19 @@ export async function saveBoard(host: Host, b: Board) {
     const tasks = Object.fromEntries(Object.entries(all).filter(([id]) => !gone || !stubbed.has(id) || id in seen))
     if (Object.keys(tasks).length) want.set(file, tasks)
   }
-  if (want.size) await host.run(['mkdir', '-p', path(`${S.N.dir}/${PARTS_DIR}`)]).catch(() => undefined)
+  if (want.size) await ensurePartsDir(host)
   const first = new Map<string, string>()
   for (const [file, tasks] of want) {
     const seen = partsSeen.get(file)
     const text = partsText({ ...(seen?.tasks ?? {}), ...tasks })
-    if (text !== seen?.text) await safeWrite(host, file, text, `the board's ${fileName(file)}`)
+    if (text !== seen?.text) await safeWriteIn(host, file, text, `the board's ${fileName(file)}`)
     first.set(file, text)
   }
   await safeWrite(host, path(S.N.boardFile), JSON.stringify(slim, null, 2) + '\n', 'the board')
   for (const [file, tasks] of want) {
     const text = partsText(tasks)
-    if (text !== first.get(file)) await safeWrite(host, file, text, `the board's ${fileName(file)}`)
-    partsSeen.set(file, { text, tasks })
+    if (text !== first.get(file)) await safeWriteIn(host, file, text, `the board's ${fileName(file)}`)
+    partsSeen.set(file, { text, tasks, stamp: await stampOf(host, file) })
   }
   const dir = path(`${S.N.dir}/${PARTS_DIR}/`)
   for (const file of [...partsSeen.keys()]) {
@@ -607,7 +645,11 @@ async function migratedBoard(host: Host) {
  * Every change goes through here, one at a time, so two workers finishing together
  * never lose an update; the lock file does the same between sessions.
  */
-export async function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
+export function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
+  return timed(host, 'change', () => changeBoard(host, fn))
+}
+
+async function changeBoard<T>(host: Host, fn: (b: Board) => [Board, T] | Board): Promise<T> {
   await migratedBoard(host)
   return locked(host, async () => {
     const before = await load(host)
@@ -620,10 +662,38 @@ export async function change<T>(host: Host, fn: (b: Board) => [Board, T] | Board
     await emitTaskEvents(host, events)
     // a guard-only copy (guardStart, in a worker's folder) saves the board but never shows it: no panel, no status line
     if (S.guardOnly) return value
+    // T-1029: held (see holdPublish): the view is drawn once, at the end
+    if (heldViews > 0) {
+      heldBoard = after
+      return value
+    }
     await publish(host, after)
     checkHealth(host, after)
     return value
   })
+}
+
+let heldViews = 0
+let heldBoard: Board | null = null
+
+/**
+ * T-1029: from now on, board changes do not draw the view; the last one is drawn once when the answered function is
+ * called (a hand-back makes several changes back to back; drawing after each one kept the hooks worker busy).
+ * Calling it again does nothing.
+ */
+export function holdPublish(host: Host): () => Promise<void> {
+  heldViews++
+  let done = false
+  return async () => {
+    if (done) return
+    done = true
+    heldViews--
+    if (heldViews > 0 || !heldBoard) return
+    const b = heldBoard
+    heldBoard = null
+    await publish(host, b)
+    checkHealth(host, b)
+  }
 }
 
 /** Runs fn while holding the board lock, one at a time within this session too. */

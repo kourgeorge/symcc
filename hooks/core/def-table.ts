@@ -9,6 +9,7 @@ import { type RoleDef, isCheckerRole, isProseRole } from './roles'
 import type { KindDef } from './kinds'
 import { type DefSource, type BrokenDef, brokenLabel } from './def-files'
 import { textWidth, padWidth, cutTitle } from './width'
+import { plural } from './text'
 
 /** A column of the table. */
 export type DefCol = 'name' | 'from' | 'model' | 'web' | 'writes' | 'about'
@@ -95,7 +96,7 @@ export const defWord = (noun: 'role' | 'kind'): string => (noun === 'kind' ? 'ta
 export function defsCountText(noun: 'role' | 'kind', rows: readonly DefRow[]): string {
   const changed = rows.filter(r => r.mine).length
   const off = rows.filter(r => r.off).length
-  return `${rows.length} ${defWord(noun)}${rows.length === 1 ? '' : 's'}${changed ? ` · ${changed} changed by you` : ''}${off ? ` · ${off} off` : ''}`
+  return `${plural(rows.length, defWord(noun))}${changed ? ` · ${changed} changed by you` : ''}${off ? ` · ${off} off` : ''}`
 }
 
 /** The columns that fit in `width` and each one's width (the description's is what is left). */

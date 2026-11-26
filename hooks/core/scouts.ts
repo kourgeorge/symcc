@@ -6,7 +6,7 @@ import { fmtDuration } from './runs'
 import { offAnswer } from './settings'
 import { isFinished, isScoutFindings, type ScoutFindings } from './board-file'
 import { planScoutText } from './plan'
-import { frontMatterLine, isObj, splitFrontMatter } from './text'
+import { frontMatterLine, isObj, splitFrontMatter, plural } from './text'
 
 /**
  * The symcc tools a scout (and a checker, which runs as the scout type) may call, in symcc's own words: both only read
@@ -25,6 +25,8 @@ const scoutsAction = (input: Record<string, unknown>): string => (typeof input.a
  * stats for both; for a scout (`who` 'scout') also scouts with action list (T-895). Any other action is refused.
  */
 export function scoutToolRefusal(tool: string, name: string = DEFAULT_NAME, input: Record<string, unknown> = {}, who: 'scout' | 'checker' = 'scout'): string | null {
+  // T-1110: the board's html view writes a file, so it is only for the lead
+  if (tool === 'board' && input.view === 'html') return `Refused: ${name} scouts and checkers can only read the board; board view html writes a file and is only for the lead.`
   if (SCOUT_BOARD_TOOLS.includes(tool)) return null
   if (tool === SCOUT_LIST_TOOL && who === 'scout' && scoutsAction(input) === 'list') return null
   const what = tool === SCOUT_LIST_TOOL && who === 'scout' ? `scouts with action "${scoutsAction(input)}"` : `"${tool}"`
@@ -744,7 +746,7 @@ export const scoutOutcomeTone = (o: ScoutRunOutcome): string => (o === 'found' ?
 /** One run as a line: "8m ago · found · 2 findings · tasks T-3, T-4" (time · outcome · findings · tasks made). */
 export function scoutRunLine(r: ScoutRunRecord, tasks: string[], nowMs: number): string {
   const when = fromNow(r.ended, nowMs) || r.ended
-  const n = `${r.findings} finding${r.findings === 1 ? '' : 's'}`
+  const n = plural(r.findings, 'finding')
   const made = tasks.length ? `task${tasks.length > 1 ? 's' : ''} ${tasks.join(', ')}` : 'no tasks'
   return `${when} · ${scoutOutcomeText(r.outcome)} · ${n} · ${made}`
 }

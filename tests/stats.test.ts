@@ -6,7 +6,8 @@ import { tryTokens } from '../hooks/board'
 import { oldFailReason as failReason, upgradeArchiveTask, upgradeScoutUsage } from '../hooks/core/old-data'
 import { addScoutRun, bar, cutTitle, textWidth, parseStatsArgs, wrapLine, billedTokens, billedText, readArchive, archiveText, tokenCount, fmtTokenKinds, inRange, keepScoutUsage, leadTotals, mean, median, mergedHow, originKey, parseScoutMemory, parseScoutUsage, parseStatsRange, rangeSpan, scoutMemoryText, scoutTotals, statsReport, statsData, scoutResultsLine, taskFigures, readBoard, boardTotal } from '../hooks/board'
 import { statsHtml } from '../hooks/core/stats-html'
-import { FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, durOr, failedShown, plural, tokOr } from '../hooks/core/stats'
+import { FAILED_TESTS_SHORT, FAILED_TRIES_SHORT, durOr, failedShown, tokOr } from '../hooks/core/stats'
+import { plural } from '../hooks/core/text'
 import { leadCalls, leadUsage, projectFolderName } from '../hooks/claude/lead-usage'
 import type { LeadUsage } from '../hooks/host'
 import { fakeHost } from './fake-host'
@@ -504,6 +505,23 @@ test('stats: investigations end "answered", are counted on their own, and stay o
   expect(none.split('\n')[2]).toBe('4 done · 1h 45m of work · 15k tokens · 75% right first try')
 })
 
+test('stats: a done errand is counted as its own outcome, not as an investigation read by you', () => {
+  const mk = (id: string, kind: string) => task(id, { kind, status: 'done', history: hist('try 1: done') } as Partial<SymccTask>, [[10, 1000]])
+  const tasks = [mk('T-1', 'investigation'), mk('T-2', 'errand')]
+  expect(mergedHow({ kind: 'errand', history: [] })).toBe('errand')
+  const d = statsData({ tasks, nowMs: NOW, range: { kind: 'all' } })
+  expect(d.invCount).toBe(1)
+  expect(d.inv.readByOwner).toBe(1)
+  expect(d.errandsDone).toBe(1)
+  expect(d.done).toBe(0)
+  const text = statsReport({ tasks, nowMs: NOW })
+  expect(text).toContain('(1 read by you, 0 waiting to be read)')
+  expect(text).toContain('errand done')
+  const html = statsHtml(d, 'p')
+  expect(html).toContain('1 read by you')
+  expect(html).toContain('errand done')
+})
+
 /** T-622: two scouts: bugs (one merged, one dropped, two open incl. backlog) and secrets (one open, none merged). */
 function scoutTasks(): SymccTask[] {
   const scout = (s: string) => ({ origin: { by: 'scout' as const, scout: s, why: '', at: '' } })
@@ -623,6 +641,9 @@ test('T-739: failedShown gives the text and html reports the same short cut: the
   expect(all.tests).toEqual(tests)
   expect(plural(1, 'try', 'tries')).toBe('1 try')
   expect(plural(2, 'task')).toBe('2 tasks')
+  expect(plural(0, 'commit')).toBe('0 commits')
+  expect(plural(1, 'merged task branch', 'merged task branches')).toBe('1 merged task branch')
+  expect(plural(3, 'merged task branch', 'merged task branches')).toBe('3 merged task branches')
   expect(durOr(undefined)).toBe('-')
   expect(tokOr(undefined)).toBe('-')
 })

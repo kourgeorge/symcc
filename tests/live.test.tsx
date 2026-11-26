@@ -2,7 +2,7 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveTaskLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, pastDays, pastLines } from '../hooks/core/live'
+import { liveLanes, liveTaskLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, liveTodayRows, pastDays, pastLines } from '../hooks/core/live'
 import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from './live-past-fixture'
 import { textWidth } from '../hooks/core/width'
 import { FINISH_STALE_MS } from '../hooks/core/lead'
@@ -40,10 +40,10 @@ const view = (checker: boolean) => ({ tasks: TASKS as never[], checker, mode: 'a
 test('T-690: liveLanes puts each doing task at its station, and leaves check out when the checker is off', () => {
   const at = (checker: boolean) => Object.fromEntries(liveLanes(view(checker), T0).map(l => [l.id, l.station]))
   expect(at(true)).toEqual({ 'T-687': 'work', 'T-688': 'check', 'T-686': 'check', 'T-685': 'tests', 'T-684': 'queue' })
-  expect(liveLanes(view(true), T0)[0]!.stations).toEqual(['work', 'check', 'queue', 'tests', 'merged'])
+  expect(liveLanes(view(true), T0)[0]!.stations).toEqual(['work', 'check', 'queue', 'tests', 'done'])
   // checker off: no check station; prep counts at work
   const off = liveLanes(view(false), T0)
-  expect(off[0]!.stations).toEqual(['work', 'queue', 'tests', 'merged'])
+  expect(off[0]!.stations).toEqual(['work', 'queue', 'tests', 'done'])
   expect(at(false)['T-688']).toBe('work')
   // only tasks in doing get a lane
   expect(off.map(l => l.id).sort()).toEqual(['T-684', 'T-685', 'T-686', 'T-687', 'T-688'])
@@ -66,15 +66,15 @@ test('T-709: an approved task in review, or a waiting one whose merge runs, gets
   const lanes = (...tasks: unknown[]) => liveLanes({ tasks: tasks as never[], checker: true, mode: 'auto', max_parallel: 3 }, T0)
   // (1) a review task whose approve is in its tests, then in the merge queue at place 2
   const testing = lanes(task('T-1', 'Approved', { status: 'review', ...tried, live: { checking: { step: 'testing', at: sec(5) } }, }))
-  expect(testing.map(l => [l.id, l.station])).toEqual([['T-1', 'merged']]) // T-846: approved, so past "you"
+  expect(testing.map(l => [l.id, l.station])).toEqual([['T-1', 'done']]) // T-846: approved, so past "you"
   const queued = lanes(task('T-1', 'Approved', { status: 'review', ...tried, live: { checking: { step: 'queue', at: sec(5), place: 2 } }, }))
-  expect(queued.map(l => [l.station, l.place])).toEqual([['merged', 2]])
+  expect(queued.map(l => [l.station, l.place])).toEqual([['done', 2]])
   // (2) a stale check step, or none: the task only waits for the owner, so its lane (T-846) sits at "you"
   expect(lanes(task('T-1', 'Approved', { status: 'review', ...tried, live: { checking: { step: 'testing', at: new Date(T0 - FINISH_STALE_MS - 1000).toISOString() } }, })).map(l => l.station)).toEqual(['you'])
   expect(lanes(task('T-1', 'Approved', { status: 'review', ...tried })).map(l => l.station)).toEqual(['you'])
   // (3) a waiting task whose merge runs once its files are clear
   const merging = lanes(task('T-2', 'Files cleared', { status: 'waiting', ...tried, live: { checking: { step: 'merging', at: sec(5) } }, }))
-  expect(merging.map(l => [l.id, l.station])).toEqual([['T-2', 'merged']])
+  expect(merging.map(l => [l.id, l.station])).toEqual([['T-2', 'done']])
   // order: an approve by when it started (its prep line), next to the doing tasks by when their try started
   const order = lanes(
     task('T-3', 'Worker', { runs: [{ started: iso(10) }] }),
@@ -158,6 +158,15 @@ test('T-715: train rows: "└─◇" indented by level, "waits" and "+ also"; no
     '     └─◇ T-717 Waits for a todo and a …  waits  + also T-690',
     '  └─◇ T-716 Live deps drawn as trai…  waits  + also T-690',
   ])
+  // T-1074: a waiting child row shows no task type, at any width
+  for (const w of [100, 60, 50, 40]) for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, /change|feature|bug|docs/.test(segText(r.segs))]).toEqual([w, false])
+  const long = [{ id: 'T-690', title: 'Waiting one with a long title here', kind: 'investigation', also: ['T-700'], trains: [] }] as never
+  for (const w of [30, 40]) {
+    const text = segText(trainRows(long, w)[0]!.segs)
+    expect([w, text.includes('waits') || text.includes('+1'), textWidth(text) <= w, text.includes('investigation')]).toEqual([w, true, true, false])
+  }
+  const second = [{ id: 'T-1', title: 'First', kind: 'bug', also: [], trains: [{ id: 'T-714', title: 'Help: /symcc-help shows all', kind: 'change', also: [], trains: [] }] }] as never
+  expect(textWidth(segText(trainRows(second, 30)[1]!.segs)) <= 30).toBe(true)
   expect(rows.map(r => r.id)).toEqual(['T-713', 'T-714', 'T-717', 'T-716'])
   for (const w of [100, 60, 40, 32, 24])
     for (const r of trainRows(t.lanes['T-712']!, w)) expect([w, segText(r.segs), textWidth(segText(r.segs)) <= w]).toEqual([w, segText(r.segs), true])
@@ -202,13 +211,42 @@ test('T-690: lane lines fit the width with nothing cut, and the current station 
   const [b] = laneLines(q, l, { nowMs: T0, frame: 1 })
   expect(segText(a)).toContain('●━━━━━━━━●━━━━━━━━◉────────○────────○')
   expect(segText(b)).toContain('●━━━━━━━━●━━━━━━━━◎────────○────────○')
-  expect(segText(a).trimEnd().endsWith('#2')).toBe(true)
+  expect(segText(a).trimEnd().endsWith('○')).toBe(true)
   expect(segText(a)).toContain('T-684 /symcc-doctor')
   expect(liveBlink(1, true)).toBe('◉')
-  // T-867: the tokens against the median per merged task: from twice it, "(n× median)" in the warning tone
+  // T-1074: a running row's first line has no task type and no time at its end; the second line ends with the task type when it
+  // fits and leaves it out when it does not; nothing is wider than the panel
+  for (const kind of ['change', 'investigation'])
+    for (const width of [100, 60, 40, 32, 28, 24, 20]) {
+      const ks = liveLanes(view(true), T0).map(x => ({ ...x, kind }))
+      const lk = liveLayout(ks, liveStations(true), width)
+      for (const lane of ks) {
+        const [first, second] = laneLines(lane, lk, { nowMs: T0, frame: 0 })
+        expect([kind, width, textWidth(segText(first)) <= width, textWidth(segText(second)) <= width]).toEqual([kind, width, true, true])
+        expect([kind, width, segText(first).includes(kind), /\d+m$/.test(segText(first))]).toEqual([kind, width, false, false])
+        if (segText(second).includes(kind)) expect(segText(second).endsWith(`  ${kind}`) && second.at(-1)!.tone === 'dim').toBe(true)
+      }
+    }
+  {
+    const ks = liveLanes(view(true), T0).map(x => ({ ...x, kind: 'change' }))
+    const wide = laneLines(ks[0]!, liveLayout(ks, liveStations(true), 120), { nowMs: T0, frame: 0 })[1]
+    expect(segText(wide).endsWith('  change')).toBe(true)
+    const tight = laneLines(ks[0]!, liveLayout(ks, liveStations(true), 40), { nowMs: T0, frame: 0 })[1]
+    expect(segText(tight).includes('change')).toBe(false)
+  }
+  // the freed right column goes to the title: wider than the 12 it had room beside the minutes for at 80 columns
+  {
+    const one = [{ ...liveLanes(view(true), T0)[0]!, id: 'T-99', title: 'A rather long title that fills the room', kind: 'bug' }]
+    expect(liveLayout(one, liveStations(true), 95).rightW).toBe(0)
+    // main (before T-1074) gave titleW 12 / gap 6 at 60 columns and titleW 26 at 80; the gap stays, the title grows
+    const at60 = liveLayout(one, liveStations(true), 60)
+    expect([at60.gap, at60.titleW > 12]).toEqual([6, true])
+    expect(liveLayout(one, liveStations(true), 80).titleW).toBeGreaterThan(26)
+  }
+  // T-867: the tokens against the median per merged task: from twice it, "(n×median)" in the warning tone
   const over = laneLines(lanes.find(x => x.id === 'T-685')!, l, { nowMs: T0, frame: 0 })[1]
-  expect(segText(over)).toContain('⌀ 3.4M (4.3× median)')
-  expect(over.filter(s => s.tone === 'warning').map(s => s.text)).toEqual([' (4.3× median)'])
+  expect(segText(over)).toContain('⌀ 3.4M (4.3×median)')
+  expect(over.filter(s => s.tone === 'warning').map(s => s.text)).toEqual([' (4.3×median)'])
   expect(segText(laneLines(lanes.find(x => x.id === 'T-687')!, l, { nowMs: T0, frame: 0 })[1])).toContain('⌀ at hand-back')
 })
 
@@ -230,28 +268,25 @@ const t757Check = (sub: (id: string) => string, warn: (id: string) => boolean) =
   // T-867: no bar any more
   for (const id of ['T-801', 'T-802', 'T-803', 'T-804', 'T-805', 'T-806']) expect([id, /[▕▏█░]/.test(sub(id))]).toEqual([id, false])
   // (a) try 2 running: try 1's 4M with "+ …", 1× the median 4M
-  expect(sub('T-801')).toContain('⌀ 4M + … (1× median)')
+  expect(sub('T-801')).toContain('⌀ 4M + … (1×median)')
   // (b) handed back: the whole sum, no "+ …"; worker and checker split (the checker has no tokens yet: left out)
   // T-931: the clock first, then ⌀, then the per-agent tokens in < > (no ⌀ inside)
-  expect(sub('T-802')).toMatch(/try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3× median\) · <worker 5M>$/)
-  expect(sub('T-802')).not.toMatch(/<[^>]*⌀/)
+  expect(sub('T-802')).toMatch(/try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3×median\) · worker 5M( +\w+)?$/)
   expect(sub('T-802')).not.toContain('+ …')
   expect(sub('T-802')).not.toContain('checker')
   // (c) try 1 running
-  expect(sub('T-803')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back$/)
+  expect(sub('T-803')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back( +\w+)?$/)
   // no breakdown: no < > part
-  expect(sub('T-803')).not.toContain('<')
   // (d) at the median and at half
-  expect(sub('T-804')).toContain('⌀ 4M (1× median)')
-  expect(sub('T-805')).toContain('⌀ 2M (0.5× median)')
+  expect(sub('T-804')).toContain('⌀ 4M (1×median)')
+  expect(sub('T-805')).toContain('⌀ 2M (0.5×median)')
   expect(warn('T-804')).toBe(false)
   // (e) past twice the median: the warning tone, no ⚠
-  expect(sub('T-806')).toContain('⌀ 9M (2.3× median)')
+  expect(sub('T-806')).toContain('⌀ 9M (2.3×median)')
   expect(sub('T-806')).not.toContain('⚠')
   expect(warn('T-806')).toBe(true)
   // (f) T-931: merged with worker and checker: both in one < >, no ⌀ inside
-  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ 37m · ⌀ 4M \(1× median\) · <worker 3M · checker 1M>$/)
-  expect(sub('T-807')).not.toMatch(/<[^>]*⌀/)
+  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ 37m · ⌀ 4M \(1×median\) · worker 3M · checker 1M( +\w+)?$/)
 }
 
 test('T-760: the agent stations end in ✧ (accent color), each name still starts over its mark, and the legend says what ✧ means', () => {
@@ -289,7 +324,7 @@ test('T-757, T-867: lanes show the whole task\'s tokens, × the median per task 
   const second = (id: string) => laneLines(lane(id), l, { nowMs: T0, frame: 0 })[1]
   t757Check(id => segText(second(id)), id => second(id).some(s => s.tone === 'warning'))
   // T-855: the count has the token sign in front
-  expect(segText(second('T-801'))).toMatch(/^  change try 2\/\d+ · ⏱ \d+m · ⌀ 4M/)
+  expect(segText(second('T-801'))).toMatch(/^  try 2\/\d+ · ⏱ \d+m · ⌀ 4M/)
   expect(LANE_WARN_TIMES).toBe(2)
   // T-867: the tone is decided on the number as shown, so 1.96× reads "2" and warns; a tiny task reads "<0.1", never "0"
   expect([laneTimes(1.96), laneTimes(1.94), laneTimes(7.6), laneTimes(1), laneTimes(0.03)]).toEqual([
@@ -307,27 +342,35 @@ const T867 = [
   task('T-901', 'Board times count only real work', { attempts: 2, history: [{ kind: 'checker-problems', at: iso(40), text: 'sent back' }, { kind: 'checker-problems', at: iso(35), text: 'sent back' }], runs: [{ started: iso(60), ended: iso(30), agents: [{ kind: 'worker' as const, started: iso(60), ended: iso(35), tokens: { input: 5_400_000 } }, { kind: 'checker' as const, started: iso(35), ended: iso(30), tokens: { input: 1_900_000 } }] }, { started: iso(11) }] }),
 ]
 
-test('T-867, T-931: a lane\'s second line has no bar: ⏱, ⌀, × median, <worker/checker split> and ↺; narrow panels drop the split first, the clock last', () => {
+test('T-867, T-931: a lane\'s second line has no bar: ⏱, ⌀, ×median, <worker/checker split> and ↺; narrow panels drop the split first, the clock last', () => {
   const lanes = liveLanes({ tasks: T867 as never[], checker: true }, T0)
   const lane = lanes.find(x => x.id === 'T-901')!
   expect([lane.activeMs, lane.workerTokens, lane.checkerTokens]).toEqual([41 * 60_000, 5_400_000, 1_900_000])
   const l = liveLayout(lanes, liveStations(true), 120)
   const at = (width: number) => segText(laneLines(lane, { ...l, width }, { nowMs: T0, frame: 0 })[1])
-  const full = '  change try 2/'
-  expect(at(120)).toMatch(/^  change try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3× median\) · <worker 5\.4M · checker 1\.9M> · ⌕ × 2$/)
-  const w = textWidth(at(120))
-  // first the < > split goes, then "(× median)", then the kind, then ⌀, then ⏱ (never before ⌀); the try stays
-  expect(at(w - 1)).toMatch(/^  change try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3× median\) · ⌕ × 2$/)
-  const noSplit = textWidth(at(w - 1))
-  expect(at(noSplit - 1)).toMatch(/^  change try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … · ⌕ × 2$/)
-  const noMedian = textWidth(at(noSplit - 1))
-  expect(at(noMedian - 1)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … · ⌕ × 2$/)
-  const noKind = textWidth(at(noMedian - 1))
-  expect(at(noKind - 1)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌕ × 2$/)
-  const noTokens = textWidth(at(noKind - 1))
-  expect(at(noTokens - 1)).toMatch(/^  try 2\/\d+ · ⌕ × 2$/)
-  // 7.3× the median: the warning tone on "(× median)" only
-  expect(laneLines(lane, l, { nowMs: T0, frame: 0 })[1].filter(s => s.tone === 'warning').map(s => s.text)).toEqual([' (7.3× median)'])
+  // T-1074: the kind ends the second line, two spaces after the meta text (dim); never on the first line
+  const bare = (width: number) => at(width).replace(/ +change$/, '')
+  const full = bare(120)
+  const wFull = textWidth(full)
+  expect(at(120)).toBe(full + '  change')
+  // too narrow for both: the kind is dropped (never wrapped), the meta text stays whole
+  expect(at(wFull + 7)).toBe(full)
+  expect(at(wFull)).toBe(full)
+  expect(full).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) · worker 5\.4M · checker 1\.9M · ⌕ × 2$/)
+  // a shorter meta text: the kind still follows after 2 spaces, dim
+  const short = laneLines({ ...lane, workerTokens: 0, checkerTokens: 0, sentBack: 0 }, { ...l, width: 120 }, { nowMs: T0, frame: 0 })[1]
+  expect(segText(short)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\)  change$/)
+  expect([short.at(-1)?.text, short.at(-1)?.tone]).toEqual(['  change', 'dim'])
+  // narrower: the parts go in order (the kind returns at the right when the shorter text leaves room)
+  expect(bare(wFull - 1)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … \(7\.3×median\) · ⌕ × 2$/)
+  const noSplit = textWidth(bare(wFull - 1))
+  expect(bare(noSplit - 1)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌀ 7\.3M \+ … · ⌕ × 2$/)
+  const noMedian = textWidth(bare(noSplit - 1))
+  expect(bare(noMedian - 1)).toMatch(/^  try 2\/\d+ · ⏱ 41m · ⌕ × 2$/)
+  const noTokens = textWidth(bare(noMedian - 1))
+  expect(bare(noTokens - 1)).toMatch(/^  try 2\/\d+ · ⌕ × 2$/)
+  // 7.3× the median: the warning tone on "(×median)" only
+  expect(laneLines(lane, l, { nowMs: T0, frame: 0 })[1].filter(s => s.tone === 'warning').map(s => s.text)).toEqual([' (7.3×median)'])
 })
 
 test('T-757: the terminal and VS Code Live tabs show the whole task\'s tokens × the median, and the key line without the bar', async ($, on) => {
@@ -361,19 +404,22 @@ test('T-757: the terminal and VS Code Live tabs show the whole task\'s tokens ×
 
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 100 }, surface: 'vscode' })
   await ui.press({ key: 'tab-live' })
-  // T-867: no bar Svg; the lane's second line is the terminal's words
+  // T-1003: one line per lane in VS Code: no bar Svg, no second line, no legend
   expect((await ui.findAll({ type: 'Svg' })).some(x => /[▕█░]/.test(String(x.props.alt ?? '')))).toBe(false)
-  const vs: Record<string, string> = {}
-  const vsWarn: Record<string, boolean> = {}
-  for (const x of T757.slice(1)) {
-    const n = await ui.find({ key: `live-sub:${x.id}` })
-    vs[x.id] = n?.text ?? ''
-    vsWarn[x.id] = JSON.stringify(n).includes(C_WARNING)
-  }
-  t757Check(id => vs[id]!, id => vsWarn[id]!)
-  expect((await ui.find({ key: 'live-legend' }))?.text).toBe(LIVE_LEGEND)
+  for (const x of T757.slice(1)) expect(await ui.find({ key: `live-sub:${x.id}` })).toBeUndefined()
+  expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
+
+  // T-1003: on a narrow panel the full-word header still has room (at least 40px between stations)
+  const narrow = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'vscode' })
+  await narrow.press({ key: 'tab-live' })
+  const head = (await narrow.findAll({ type: 'Svg' })).find(x => String(x.props.alt ?? '').startsWith('work check'))
+  const xs = [...String(head?.props.source ?? '').matchAll(/<text x="(\d+)"/g)].map(m => Number(m[1]))
+  expect(xs.length).toBeGreaterThan(2)
+  expect(xs[2]! - xs[1]!).toBeGreaterThanOrEqual(40)
+  await narrow.press({ key: 'tab-tasks' })
+  await narrow.unmount()
 })
 
 test('T-690: the tab row has a Live tab with key l, and the views hint says "l t s c"', () => {
@@ -435,7 +481,7 @@ test('T-690: the Live tab draws at a normal and a narrow width with nothing cut,
     expect(lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 1]!.trim()).toBe('')
     expect(lines.some(l => l.includes('▍'))).toBe(false)
     for (const id of ['T-684', 'T-685', 'T-686', 'T-687', 'T-688']) expect(lines.some(l => l.startsWith(`${LIVE_INDENT}▶ ${id} `))).toBe(true)
-    expect(lines.filter(l => /^ {3}change try \d\/\d/.test(l)).length).toBe(5)
+    expect(lines.filter(l => /^ {3}try \d\/\d/.test(l)).length).toBe(5)
     // T-758: ▍Today holds the Now row (T-938), then the figures line (no "next up" line, no "today" label)
     expect(lines[lines.findIndex(l => l.startsWith('─── ❯ TODAY ─')) + 3]?.startsWith(`${LIVE_INDENT}✓ 1 merged`)).toBe(true)
     expect(lines.some(l => l.trimStart().startsWith('next up') || l.trimStart().startsWith('today'))).toBe(false)
@@ -553,29 +599,31 @@ for (const checker of [true, false])
     expect(String(links[0]!.props.text)).toContain('T-684')
     // each lane's track: an Svg whose alt is the terminal's track; the station names under the dots (no check when the checker is off)
     const svgs = await ui.findAll({ type: 'Svg' })
-    for (const [i, id] of ids.entries()) {
+    for (const id of ids) {
       const svg = svgs.find(x => String(x.props.alt).startsWith(`${id} at `))
       expect(svg?.type, id).toBe('Svg')
-      expect(String(svg?.props.alt).endsWith(`: ${tracks[i]}`), id).toBe(true)
       const source = String(svg?.props.source)
-      // T-760: the agent stations end in ✧, drawn in the accent color
-      expect(/>(check|chk|c)<tspan fill="#[0-9a-f]+">✧<\/tspan></.test(source), id).toBe(checker)
-      expect(/>(work|wrk|w)<tspan fill="#[0-9a-f]+">✧<\/tspan></.test(source), id).toBe(true)
-      expect(source.includes('·'), id).toBe(false)
+      // T-1003: the lane's own drawing has no station names (one shared header has them)
+      expect(source.includes('<text'), id).toBe(false)
       // the current station blinks, steady with reduced motion
       expect(source.includes(BLINK_CSS) && source.includes('class="cur"'), id).toBe(true)
     }
     expect(BLINK_CSS).toContain('prefers-reduced-motion: reduce')
     // the queue place, and the tokens × the median (T-867: no bar Svg)
-    expect((await ui.find({ key: 'live-right:T-684' }))?.text).toBe('#2')
+    expect((await ui.find({ key: 'live-right:T-684' }))?.text).toBe('try 2 · #2')
     expect(svgs.filter(x => String(x.props.alt).startsWith('▕')).length).toBe(0)
-    expect((await ui.find({ key: 'live-sub:T-685' }))?.text).toContain('⌀ 3.4M (4.3× median)')
-    expect((await ui.find({ key: 'live-sub:T-687' }))?.text).toContain('⌀ at hand-back')
+    expect(await ui.find({ key: 'live-sub:T-685' })).toBeUndefined()
+    // T-1003: the full title in its cell, one shared header with the station names in full words, no legend
+    expect((await ui.find({ key: 'live-title:T-684' }))?.text).toBe('/symcc-doctor checks the hooks')
+    const header = svgs.find(x => String(x.props.source).includes('<text'))
+    expect(String(header?.props.source)).toContain('>work<')
+    expect(String(header?.props.source)).toContain('>done<')
+    expect((await ui.findAll({ type: 'Svg' })).filter(x => String(x.props.source).includes('<text')).length).toBe(1)
     // today: the terminal's words; no next up line (T-758)
     expect(await ui.find({ key: 'live-next' })).toBeUndefined()
     expect(today).toMatch(/^✓ \d+ merged/)
     expect((await ui.find({ key: 'live-today-rows-results-value' }))?.text).toMatch(/^✓ \d+ merged · ↺ \d+ sent back · ✗ \d+ failed$/)
-    expect((await ui.find({ key: 'live-legend' }))?.text).toBe(LIVE_LEGEND)
+    expect(await ui.find({ key: 'live-legend' })).toBeUndefined()
     await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
   })
@@ -622,8 +670,8 @@ test('T-930, T-933: the legend is the very last lines of the page, below the foo
   await vs.press({ key: 'tab-live' })
   const drawnVs = nodes(await vs.drawn())
   const section = drawnVs.find(n => keyOf(n) === 'live-tasks')!
-  expect(kidsOf(section).map(keyOf).slice(-2)).toEqual(['live-lanes', 'live-key'])
-  expect(nodes(kidsOf(section).at(-1)).filter(n => n.type === 'Text').map(textOf)).toEqual([LIVE_LEGEND])
+  expect(kidsOf(section).map(keyOf).at(-1)).toBe('live-lanes')
+  expect(drawnVs.some(n => keyOf(n) === 'live-key')).toBe(false)
   const page = drawnVs.find(n => kidsOf(n).some(k => keyOf(k) === 'live-foot'))!
   expect(page.props?.flexGrow).toBe(1)
   const last = kidsOf(page).at(-1)
@@ -702,6 +750,75 @@ for (const bodyColumns of [100, 40])
     await ui.unmount()
   })
 
+// T-1003: a VS Code lane is two lines (mark, id, full title; then the track and the time); nothing is wider than the panel
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1003: VS Code lanes are two lines, the full title shows when it fits, a 6-character waiting id fits its cell (${bodyColumns} columns)`, async ($, on) => {
+    const long = JSON.parse(JSON.stringify(TRAINS).split('T-713').join('T-7130')) as typeof TRAINS
+    seedBoard(on, { view: liveView(long) })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.press({ key: 'tab-live' })
+    const inner = liveInner(bodyColumns)
+    const title = await ui.find({ key: 'live-title:T-712' })
+    expect(title?.props.wrap ?? 'truncate').toBeDefined()
+    if (bodyColumns >= 64) expect(title?.text).toBe(String(long.find(t => t.id === 'T-712')!.title).replace(/\s+/g, ' ').trim())
+    // line 2: the track cell and the svg fit the panel, the header's svg is as wide as the track's
+    const track = await ui.find({ key: 'live-bottom:T-712-track' })
+    const svg = (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.alt).startsWith('T-712 at '))!
+    const head = (await ui.findAll({ type: 'Svg' })).find(x => String(x.props.source).includes('<text'))!
+    expect(Number(track?.props.width) + 2 + 1 + 14).toBeLessThanOrEqual(inner)
+    expect(Number(svg.props.width)).toBeLessThanOrEqual(Number(track?.props.width) * 8)
+    expect(head.props.width).toBe(svg.props.width)
+    // the waiting train's id cell holds its 6 characters
+    const cell = await ui.find({ key: 'live-train:T-7130-row-id' })
+    expect(Number(cell?.props.width)).toBeGreaterThanOrEqual(6)
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  })
+
+// T-1017: a running VS Code lane has a third dim line, core's numbers line with the task type at the right end
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1017: VS Code lanes have a third line with the tokens and the task type, never wider than the panel (${bodyColumns} columns)`, async ($, on) => {
+    seedBoard(on, { view: liveView(TRAINS.map(x => (x.id === 'T-712' ? { ...x, kind: 'bug' } : x.id === 'T-690' ? { ...x, kind: 'feature' } : x))) })
+    on('ui.toast', () => ({ value: undefined }))
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    await ui.press({ key: 'tab-live' })
+    const inner = liveInner(bodyColumns)
+    // T-690 has real tokens (worker 1.4M); the type word is its own right-hand cell (the numbers text has no kind, no time)
+    for (const [id, word] of [['T-712', 'bug'], ['T-690', 'feature']] as const) {
+      const text = String((await ui.find({ key: `live-numbers-text:${id}` }))?.text ?? '')
+      const kind = await ui.find({ key: `live-kind:${id}` })
+      // at 40 columns T-690's tokens take the room, so its type goes first (like core)
+      const dropped = bodyColumns === 40 && id === 'T-690'
+      expect([bodyColumns, id, String(kind?.text)]).toEqual([bodyColumns, id, dropped ? 'undefined' : word])
+      expect(textWidth(text) + (dropped ? 0 : 2 + textWidth(word))).toBeLessThanOrEqual(inner)
+      expect(text).not.toContain('⏱')
+      expect(text).not.toContain(word)
+      expect(text).toContain('try ')
+      if (id === 'T-690') {
+        expect(text).toContain('1.4M')
+        if (bodyColumns >= 64) expect(text).toContain('worker 1.4M')
+      }
+    }
+    const pieces = (await ui.findAll({ type: 'Text' })).filter(t => String(t.text ?? '').length > 0 && !String(t.text).trim())
+    expect(pieces).toEqual([])
+    await ui.press({ key: 'tab-tasks' })
+    await ui.unmount()
+  })
+
+// T-1017: the task type goes before any numbers part (like core): a long type is dropped, the tokens stay
+test('T-1017: VS Code third line drops the task type before the tokens at 40 columns', async ($, on) => {
+  seedBoard(on, { view: liveView(TRAINS.map(x => (x.id === 'T-690' ? { ...x, kind: 'investigation-of-a-long-kind' } : x))) })
+  on('ui.toast', () => ({ value: undefined }))
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 40 }, surface: 'vscode' })
+  await ui.press({ key: 'tab-live' })
+  const text = String((await ui.find({ key: 'live-numbers-text:T-690' }))?.text ?? '')
+  expect(text).toContain('⌀ 1.4M')
+  expect(await ui.find({ key: 'live-kind:T-690' })).toBeUndefined()
+  await ui.press({ key: 'tab-tasks' })
+  await ui.unmount()
+})
+
 // T-767: a running lane starts "▶ ", its mark, id and title bold in the accent color; a waiting train's row is all dim.
 for (const surface of ['terminal', 'desktop', 'mobile'] as const)
   test(`T-767: on the ${surface} Live tab a running lane is "▶ " with its id and title bold in the accent color, and a waiting train is dim`, async ($, on) => {
@@ -748,7 +865,7 @@ test('T-767: in VS Code a running lane starts with "▶" in the accent color and
   seedBoard(on, { view: liveView(TRAINS) })
   const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 80 }, surface: 'vscode' })
   await ui.press({ key: 'tab-live' })
-  expect((await ui.find({ key: 'live-run-mark:T-712' }))?.text).toBe('▶ T-712')
+  expect((await ui.find({ key: 'live-run-mark:T-712' }))?.text).toBe('▶')
   const lane = await ui.find({ key: 'live:T-712' })
   expect(String(lane?.props.text).startsWith('[')).toBe(true)
   expect(String(lane?.props.text)).not.toContain('**')
@@ -759,7 +876,7 @@ test('T-767: in VS Code a running lane starts with "▶" in the accent color and
   expect(trainId?.text).toBe('T-713')
   const texts = await ui.findAll({ type: 'Text' })
   const idText = texts.find(t => (t.children ?? []).join('') === 'T-713')
-  const markText = texts.find(t => (t.children ?? []).join('') === '▶ T-712')
+  const markText = texts.find(t => (t.children ?? []).join('') === '▶')
   expect(typeof markText?.props.color).toBe('string')
   expect([idText?.props.color, idText?.props.bold]).toEqual([markText?.props.color, true])
   await ui.press({ key: 'tab-tasks' })
@@ -876,15 +993,17 @@ for (const [runs, w, want, more] of [
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: w }, surface: 'vscode' })
     await ui.press({ key: 'tab-live' })
     const wide = segText(liveHeaderSegs(scoutView([...runs], [...(more ?? [])]).value as never, liveLanes(scoutView([...runs]).value as never, T0), T0, Infinity))
-    expect((await ui.find({ key: 'live-head' }))?.text).toBe(wide)
+    const base = wide.split(' · ⌕')[0]!
+    expect((await ui.find({ key: 'live-head' }))?.text).toBe(base)
     expect((await ui.find({ key: 'live-status-rows-mode-label' }))?.text).toBe('Mode')
+    expect((await ui.find({ key: 'live-status-rows-scouts-label' }))?.text).toBe('Scouts')
     expect(await ui.find({ key: 'live-status' }).then(b => !!b && JSON.stringify(b).includes('live-head'))).toBe(true)
-    // the scout names a quiet plain Button that opens the Scouts tab
+    // T-1003: the scouts are a link that opens the Scouts tab (a dim "none running" without any)
     const link = await ui.find({ key: 'live-scouts' })
-    expect(link ? [link.type, link.props.plain, link.props.dimColor] : undefined).toEqual(wide.includes('⌕') ? ['Button', true, true] : undefined)
+    expect(link?.type).toBe(wide.includes('⌕') ? 'Markdown' : undefined)
     if (wide.includes('⌕')) {
-      await ui.press({ key: 'live-scouts' })
-      expect((await tabBar(ui)).find(x => !x.dim)?.which).toBe('scouts')
+      await ui.press({ key: 'live-scouts', link: { href: vsHref('tab', 'scouts') } })
+      expect((await tabBar(ui)).text).toContain('**Scouts')
     }
     await ui.press({ key: 'tab-tasks' })
     await ui.unmount()
@@ -931,7 +1050,12 @@ test('T-889: Today ends with dim yesterday and last 7 days lines, without today\
   const lines = liveTodayLines({ tasks, today_team: undefined }, now, 140)
   const texts = lines.map(l => segText(l))
   // the section's last two lines, dim; today's T-3 (5M) and the 9-day-old T-4 are in neither
-  expect(texts.slice(-2)).toEqual([PAST_YESTERDAY, PAST_WEEK])
+  expect(texts.slice(-3)).toEqual(['', PAST_YESTERDAY, PAST_WEEK])
+  // T-1043: VS Code rows get one blank row between today's rows and the past rows, and none without past rows
+  expect(liveTodayRows({ tasks, today_team: undefined }, now).map(r => r.key).slice(-3)).toEqual(['gap', 'yesterday', 'week'])
+  expect(liveTodayRows({ tasks: [], today_team: undefined }, now).some(r => r.key === 'gap')).toBe(false)
+  // T-1043: one blank line before them, and none when no past line shows
+  expect(segText(liveTodayLines({ tasks: [], today_team: undefined }, now, 140).at(-1) ?? [])).not.toBe('')
   expect(lines.slice(-2).every(l => l.every(s => s.tone === 'dim'))).toBe(true)
   expect(texts[0]!.startsWith('✓ 1 merged')).toBe(true)
   // narrow: ⏱ goes first, then ⌀

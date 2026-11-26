@@ -8,7 +8,8 @@ import { PANE, T0, seedBoard } from './board-fixture'
 import { historyEntry, historyEvent, HISTORY_COLOR } from '../hooks/core/history'
 import { detailRows, type DetailRow } from '../hooks/core/details'
 import { when } from '../hooks/core/days'
-import { HISTORY_FIRST, VS_LABEL_WIDTH, vsRowKeys } from '../hooks/claude/ui/vscode-task'
+import { HISTORY_FIRST, vsRowKeys } from '../hooks/claude/ui/vscode-task'
+import { VS_LABEL_W } from '../hooks/claude/ui/vscode'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { RICH_TASKS, seedRich } from './task-page-fixture'
 
@@ -78,7 +79,7 @@ for (const [name, t] of [['a bug in doing with a role, tries and a checker step'
     // the same labels in the same order, each in a fixed label column
     expect(drawn.map(r => r.label)).toEqual(expected.map(r => r.label))
     expect(drawn.map(r => r.key)).toEqual(expected.map(r => r.key))
-    expect(new Set(drawn.map(r => r.labelWidth))).toEqual(new Set([VS_LABEL_WIDTH]))
+    expect(new Set(drawn.map(r => r.labelWidth))).toEqual(new Set([VS_LABEL_W]))
     for (const [i, r] of drawn.entries()) {
       const e = expected[i]!
       // the Role and Type rows: the page knows their descriptions (the roles and task types folders), the rows here don't
@@ -92,7 +93,7 @@ for (const [name, t] of [['a bug in doing with a role, tries and a checker step'
     expect(drawn[0]!.label).toBe(t.status === 'doing' ? 'Steps' : 'Added')
     expect((await ui.find({ key: 'vs-state-status' }))?.text).toMatch(t.status === 'doing' ? /^▶ doing · checker · ⏱ \d+m$/ : /^○ to do$/)
     if (t === BUG) {
-      expect(drawn.map(r => r.label)).toEqual(['Steps', 'Added', 'Priority', 'Role', 'Type', 'From', 'Why', 'Request', 'Files', 'Into', 'After', 'Branch', 'Tries'])
+      expect(drawn.map(r => r.label)).toEqual(['Steps', 'Added', 'Role', 'Type', 'From', 'Why', 'Request', 'Files', 'Into', 'After', 'Branch', 'Tries', 'Priority'])
       expect(drawn.find(r => r.label === 'Steps')!.text).toContain('● checker')
       // T-966: a doing task's Priority row is only its number
       expect(drawn.find(r => r.label === 'Priority')!.text).toBe('0')
@@ -175,9 +176,9 @@ for (const id of ['T-504', 'T-502', 'T-508'])
       const tree = await ui.drawn()
       const all = elements(tree)
       const at = `${id} ${bodyColumns}`
-      // no "…" and no Text that cuts (only the rules, drawn to the width: the page header's heavy one, T-751, and the footer's)
+      // no "…" and no Text that cuts (T-1002: no rules are left)
       expect(all.filter(n => n.type === 'Text' && /…/.test(textOf(n))).length, at).toBe(0)
-      expect(all.filter(n => n.type === 'Text' && n.props?.wrap === 'truncate').map(n => textOf(n).replace(/(.)\1*/, '$1')), at).toEqual(['─', '─'])
+      expect(all.filter(n => n.type === 'Text' && n.props?.wrap === 'truncate').map(n => textOf(n).replace(/(.)\1*/, '$1')), at).toEqual([])
       // the title whole; every Details value Text wraps
       expect(textOf(tree), at).toContain(RICH_TASKS.find(t => t.id === id)!.title)
       const grid = (await ui.find({ key: 'vs-details-grid' })) as Node

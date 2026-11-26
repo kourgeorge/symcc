@@ -11,7 +11,7 @@ import { slimView } from '../hooks/core/view-slim'
 import type { SymccView } from '../types'
 
 const DETAILS_WORDS = 'Group the details under clear headings'
-const HISTORY_WORDS = 'fixed the headings and wrapped every line'
+const HISTORY_WORDS = 'fixed the headings'
 
 /** The task updated a minute before the real now (T-891: before it, the view kept such a finished task whole). */
 const JUST = new Date(Date.now() - 60_000).toISOString()

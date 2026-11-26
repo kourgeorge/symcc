@@ -10,11 +10,11 @@ import { ROLES_KINDS_BEFORE } from './roles-kinds-snapshot'
 import { SCOUTS, SCOUTS_VIEW, seedScouts, seedRolesKinds } from './scouts-settings-fixture'
 import { ran, readText } from './fakes'
 import type { On } from 'claude-code'
-import { SETTINGS, SETTING_GROUPS } from '../hooks/board'
-import { CLICK_HINT } from '../hooks/claude/ui/surface'
+import { SETTINGS, SETTING_GROUPS, settingShown } from '../hooks/board'
+import { settingAbout, choiceNote } from '../hooks/core/setting-notes'
 import { reportStart, scoutRowEnd } from '../hooks/claude/ui/vscode-scouts'
 import { vsRowRoom } from '../hooks/claude/ui/vscode-list'
-import { scoutListRows } from '../hooks/board'
+import { scoutListRows, scoutRunsText } from '../hooks/board'
 import { mdLink, vsHref } from '../hooks/claude/ui/vscode'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -134,7 +134,7 @@ test('T-697 the Scouts list in VS Code at width 50: one line per scout, the term
   seedScouts(on, 'scouts')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const tree = await ui.drawn()
-  expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Click a button, or Tab to it and press Enter.' })).toBeUndefined()
   for (const re of KEY_HINTS) expect(texts(tree).filter(s => re.test(s)), `scouts list ${re}`).toEqual([])
   const room = vsRowRoom(50)
   const rows = scoutListRows(SCOUTS as never, T0, room, 2, 'backlog')
@@ -208,8 +208,8 @@ test('the Scouts list in VS Code with no scouts: the how-to text without termina
   expect(all).toContain('Or press "New scout" to write one right here.')
   expect(all).not.toContain('(n)')
   expect((await ui.find({ key: 'scout-new' }))?.type).toBe('Button')
-  // T-444: the how-to in a box, and "+ New scout" as the one primary button
-  expect((await ui.find({ key: 'vs-scouts-howto' }))?.props.borderStyle).toBe('round')
+  // T-444: "+ New scout" as the one primary button; T-1007: the how-to has no box
+  expect((await ui.find({ key: 'vs-scouts-howto' }))?.props.borderStyle).toBeUndefined()
   expect((await ui.find({ key: 'scout-new' }))?.props.variant).toBe('primary')
   expect(elements(tree).filter(n => n.type === 'Button' && n.props?.variant === 'primary').length).toBe(1)
   await ui.unmount()
@@ -221,7 +221,7 @@ for (const s of SCOUTS) {
     const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
     const tree = await ui.drawn()
     readable(tree, s.name)
-    expect(await ui.find({ type: 'Text', text: CLICK_HINT })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: 'Click a button, or Tab to it and press Enter.' })).toBeUndefined()
     // T-751: the page header: ‹ Scouts and its place in the list, the name, the facts as chips, the buttons in groups
     expect((await ui.find({ key: 'scout-back' }))?.props.label).toBe('Scouts')
     const facts = texts(await ui.find({ key: 'vs-state' })).join(' ')
@@ -259,7 +259,9 @@ test('Settings in VS Code at width 50: groups as headings, a Select for each cho
   for (const name of CHOICES) {
     const el = await ui.find({ key: `setting:${name}` })
     expect(el?.type, name).toBe('Select')
-    expect(el?.props.label, name).toBe(name)
+    // T-1008: the name sits in the shared label column, not in the Select's own label
+    expect(el?.props.label, name).toBeUndefined()
+    expect(texts(await ui.find({ key: `vs-setting-${name}-row-label` })), name).toEqual([SETTINGS.find(s => s.name === name)!.label])
   }
   expect((await ui.find({ key: 'setting:mode' }))?.props.value).toBe('auto')
   expect((await ui.find({ key: 'setting:mode' }))?.props.options).toEqual([{ value: 'paused' }, { value: 'review', label: 'approve merge' }, { value: 'auto', label: 'auto merge' }])
@@ -322,7 +324,7 @@ test('in VS Code a pick in a Select saves the setting, and a number box saves on
   expect(board().mode).toBe('review')
   // a number box: a wrong value says why and saves nothing; a good one saves
   await ui.input({ key: 'setting:max_parallel', text: 'lots' })
-  expect((await ui.find({ key: 'vs-setting-max_parallel' }))?.text).toMatch(/max_parallel must be a whole number, 1-8/)
+  expect((await ui.find({ key: 'vs-setting-max_parallel' }))?.text).toMatch(/Workers at once must be a whole number, 1-8/)
   expect(board().max_parallel).toBe(2)
   await ui.input({ key: 'setting:max_parallel', text: '5' })
   expect((await ui.find({ key: 'vs-setting-max_parallel' }))?.text).not.toMatch(/must be/)
@@ -521,7 +523,7 @@ test("T-460 a scout's edit page in VS Code: one Save Button and a Cancel link, n
 // (T-651: now one numbered link line per answer)
 const QUESTION = { id: 'Q-3', text: 'Should the board open by itself?', options: ['Yes', 'No'], asked_at: new Date(T0 - 5 * 60_000).toISOString() }
 for (const bodyColumns of [40, 80]) {
-  test(`T-460 a question's page in VS Code at width ${bodyColumns}: answers as numbered link lines, "← Tasks" a link`, async ($, on) => {
+  test(`T-460 a question's page in VS Code at width ${bodyColumns}: answers as numbered link lines, "‹ Tasks" a link`, async ($, on) => {
     seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, questions: [QUESTION] } } })
     on('ui.toast', () => ({ value: undefined }))
     const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
@@ -537,6 +539,11 @@ for (const bodyColumns of [40, 80]) {
       expect((await ui.find({ key: `choice-${i + 1}` }))?.props.text).toBe(mdLink(`${i + 1}. ${c}`, vsHref('choice', String(i + 1))))
     expect(elements(tree).filter(n => n.type === 'Button').map(n => [n.props?.label, n.props?.hotkey])).toEqual([['Yes', '1'], ['No', '2']])
     expect((await ui.find({ key: 'answer' }))?.type).toBe('Input')
+    // T-1009: no border, no callout, no hint; the id is dim
+    expect(elements(tree).filter(n => n.props?.borderStyle)).toEqual([])
+    expect(await ui.find({ key: 'vs-sec-question' })).toBeUndefined()
+    expect(elements(tree).find(n => n.type === 'Text' && n.children?.join?.('') === 'Q-3')?.props?.color).toBe('inactive')
+    expect((await ui.find({ key: 'question-back' }))?.props.text).toContain('‹ Tasks')
     expect((await ui.find({ key: 'question-back' }))?.props.pressableLinks).toEqual([vsHref('page', 'back/question-back')])
     await follow(ui, 'question-back', vsHref('page', 'back/question-back'))
     expect(await ui.find({ key: 'vs-answers' })).toBeUndefined()
@@ -544,3 +551,120 @@ for (const bodyColumns of [40, 80]) {
     await ui.unmount()
   })
 }
+
+const RUN_ENDS = [new Date(T0 - 3 * 3600_000).toISOString(), new Date(T0 - 26 * 3600_000).toISOString()]
+
+// T-1007: the Scouts list and a scout's page in the shared plain style, at three widths
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1007: the Scouts list and a scout's page have no borders, pills, "← Tasks" or hint (${bodyColumns} columns)`, async ($, on) => {
+    const plain = async (ui: { drawn: () => Promise<unknown> }, page: string) => {
+      const tree = await ui.drawn()
+      const all = elements(tree)
+      expect(all.filter(n => n.props?.borderStyle || n.props?.backgroundColor).map(n => n.props?.key), page).toEqual([])
+      expect(all.filter(n => n.props?.color === 'claude' || n.props?.color === 'orange').length, page).toBe(0)
+      expect(texts(tree).filter(t => /^Click a/.test(t) || t === '← Tasks'), page).toEqual([])
+      expect(all.filter(n => n.props?.key === 'scouts-back').length, page).toBe(0)
+      return tree
+    }
+    seedScouts(on, 'scouts')
+    on('fs.read', (_, e, next) => (String(e.path).endsWith(`/${SCOUTS[1]!.name}.runs.json`) ? { value: scoutRunsText(RUN_ENDS.map(ended => ({ started: null, ended, outcome: 'found' as const, findings: 2 }))) } : next(e)))
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    // list: one row per scout
+    const list = await plain(ui, 'list')
+    const rows = elements(list).filter(n => SCOUTS.some(x => n.props?.key === `vs-scout-${x.name}`))
+    expect(rows.length).toBe(SCOUTS.length)
+    for (const r of rows) expect(vsRowText(r).length, String(r.props?.key)).toBeLessThanOrEqual(vsRowRoom(bodyColumns))
+    // a scout's page (not running, with two runs): Run now primary, Edit and Pause secondary, one line per run
+    const name = SCOUTS[1]!.name
+    await ui.press({ key: `scout:${name}`, link: { href: vsHref('scout', name) } })
+    const page = await plain(ui, 'page')
+    const variants = Object.fromEntries((await ui.findAll({ type: 'Button' })).filter(b => String(b.key).startsWith('scout-')).map(b => [String(b.key), b.props.variant]))
+    expect(variants['scout-edit']).toBe('secondary')
+    expect(variants['scout-pause']).toBe('secondary')
+    expect(variants['scout-run']).toBe('primary')
+    // the title in full at 64 columns and up
+    if (bodyColumns >= 64) expect(texts(page).join('\n')).toContain(name)
+    // each run: one row, its time a link, nothing wider than the panel (box widths are cells)
+    const runRows = elements(page).filter(n => /^vs-run-[^-]+-[^-]+-.*[^e]$/.test(String(n.props?.key)) && !String(n.props?.key).endsWith('-time') && !String(n.props?.key).endsWith('-info'))
+    expect(runRows.length).toBe(RUN_ENDS.length)
+    for (const r of runRows) {
+      const time = (r.children as Node[]).find(c => String(c.props?.key).endsWith('-time'))!
+      expect(Number(time.props?.minWidth) + 1, String(r.props?.key)).toBeLessThanOrEqual(bodyColumns)
+      expect(texts(time).join(''), String(r.props?.key)).toMatch(/^run \S/)
+    }
+    for (const n of elements(page)) if (typeof n.props?.width === 'number') expect(n.props.width / 8, String(n.props?.key)).toBeLessThanOrEqual(bodyColumns)
+    await ui.unmount()
+  })
+
+// T-1008: Settings and the Roles and Task types pages in the shared plain style, at three widths
+for (const bodyColumns of [40, 64, 100])
+  test(`T-1008: Settings, Roles and Task types have no pills, borders or hint (${bodyColumns} columns)`, async ($, on) => {
+    const plain = async (ui: { drawn: () => Promise<unknown> }, page: string) => {
+      const tree = await ui.drawn()
+      const all = elements(tree)
+      expect(all.filter(n => n.props?.borderStyle || n.props?.backgroundColor).map(n => n.props?.key), page).toEqual([])
+      expect(texts(tree).filter(t => /^Click a/.test(t) || /A pick or Save/.test(t) || /^default /.test(t)), page).toEqual([])
+      // box widths are cells: nothing wider than the panel
+      for (const n of all) if (typeof n.props?.width === 'number') expect(n.props.width / (n.type === 'Svg' ? 8 : 1), String(n.props?.key)).toBeLessThanOrEqual(bodyColumns)
+      return tree
+    }
+    seedRolesKinds(on)
+    const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns }, surface: 'vscode' })
+    const settings = await plain(ui, 'settings')
+    const all = texts(settings)
+    // one label column: every setting's label in a label Box of the same width; the meaning alone under it, no "default · range"
+    const widths = new Set(elements(settings).filter(n => /^vs-setting-.*-label$/.test(String(n.props?.key))).map(n => n.props?.width))
+    expect([...widths].length).toBe(1)
+    for (const x of SETTINGS.filter(x => x.name !== 'enabled')) {
+      // T-1105: the one shared sentence (core's settingAbout), above the choices
+      expect(all, x.name).toContain(settingAbout(x.name))
+    }
+    // the setting's name to type, one dim line under the description
+    expect(all).toContain('/symcc-settings max_parallel')
+    expect(all.join(' ')).toContain('max_parallel')
+    // T-1105: the Mode's choices have their dim note under them, the sentence above comes first
+    expect(all.indexOf(settingAbout('mode'))).toBeLessThan(all.indexOf(`paused  ${choiceNote('mode', 'paused')}`))
+    for (const m of ['paused', 'review', 'auto'])
+      expect(all).toContain(`${settingShown('mode', m)}  ${choiceNote('mode', m)}`)
+    expect(all.filter(t => t.includes('· ' + SETTINGS[0]!.range) || /^default /.test(t))).toEqual([])
+    // headings are plain words (no fold, no border: the borders check above)
+    for (const g of SETTING_GROUPS) expect(all, g.title).toContain(g.title)
+    // Roles and Task types are link rows in the label column
+    expect((await ui.find({ key: 'settings-roles' }))?.props.pressableLinks).toEqual([vsHref('page', 'roles')])
+    // Roles: the title is not blue, the source and "off" are plain dim words
+    await follow(ui, 'settings-roles', vsHref('page', 'roles'))
+    const list = await plain(ui, 'roles')
+    const title = elements(list).find(n => n.type === 'Text' && n.props?.bold && texts(n).join('') === 'Roles')
+    expect(title?.props?.color).not.toBe('suggestion')
+    // the FROM column is plain dim words (changed, added by you), not blue or green
+    const froms = elements(list).filter(n => /^vs-role-.+-from$/.test(String(n.props?.key)))
+    expect(froms.length).toBeGreaterThan(0)
+    for (const f of froms) for (const t of elements(f).filter(e => e.type === 'Text')) expect(t.props?.color, String(f.props?.key)).toBe('inactive')
+    await ui.unmount()
+  })
+
+test('T-1008: removing asks inline: a "Yes, remove" Button and a Cancel link, no bordered box', async ($, on) => {
+  seedRolesKinds(on)
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 64 }, surface: 'vscode' })
+  await follow(ui, 'settings-roles', vsHref('page', 'roles'))
+  const name = 'mobile-apps-and-tablets-everywhere'
+  await follow(ui, `roleRow:${name}`, vsHref('role', name))
+  const page = await ui.drawn()
+  // a role's own page title is the plain text color, and nothing on it is a pill
+  const roleTitle = elements(page).find(n => n.type === 'Text' && n.props?.bold && texts(n).join('') === name)
+  expect(roleTitle?.props?.color).toBe('text')
+  expect(elements(page).filter(n => n.props?.borderStyle || n.props?.backgroundColor).map(n => n.props?.key)).toEqual([])
+  // the source ("added") is a plain dim word, not a colored bold mark
+  const state = elements(page).find(n => n.props?.key === 'vs-state')
+  const stateTexts = elements(state).filter(n => n.type === 'Text' && n.props?.color)
+  expect(stateTexts.length).toBeGreaterThan(0)
+  expect(stateTexts.map(n => n.props?.color)).toEqual(stateTexts.map(() => 'inactive'))
+  // and not bold
+  expect(stateTexts.filter(n => n.props?.bold).map(n => n.props?.key)).toEqual([])
+  await ui.press({ key: 'role-remove' })
+  const tree = await ui.drawn()
+  expect((await ui.find({ key: 'role-remove-yes' }))?.props.variant).toBe('primary')
+  expect((await ui.find({ key: 'role-remove-cancel' }))?.props.pressableLinks).toEqual([act('role-remove-cancel', 'cancel')])
+  expect(elements(tree).filter(n => n.props?.borderStyle).map(n => n.props?.key)).toEqual([])
+  await ui.unmount()
+})

@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTINGS, SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, mergeRoles, roleKeys, roleEditKeys, rolesKeys, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, isCheckerRole, checkerOn } from '../../board'
+import { SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, settingRowValue, settingsHelpOf, settingInfo, settingDots, settingsRuleWidth, groupHint, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, mergeRoles, roleKeys, roleEditKeys, rolesKeys, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
@@ -8,7 +8,7 @@ import { ownerSettings } from '../../app/tools'
 import { roleLists, roleView, roleDraftOf, newRoleFile, changeRole, roleFileDay } from '../../app/roles'
 import { type RolePageFacts, CHANGED_HEADING, changeLines, changesOfRole, roleStateGroups } from '../../core/role-changes'
 import { NAV_KEYS, defActions, placeIn, roleButtons } from '../../core/page-header'
-import { type PageHeader, pageHeader } from './page-header'
+import { type PageHeader, pageHeader, simplePageHeader } from './page-header'
 import { kindLists, kindView, kindDraftOf, saveKindDraft, newKindFile, changeKind } from '../../app/kinds'
 import type { PaneParts } from './parts'
 import { arrows, headingFocused, row } from './arrows'
@@ -17,6 +17,8 @@ import { rolesPageVs, rolePageVs, brokenRolePageVs, rolePromptPageVs, roleEditPa
 import { claudeHost } from '../host'
 import { type DefRow, type DefCol, type CodePick, ROLE_COLS, KIND_COLS, CURSOR_MARK, TABLE_INDENT, CODE_PICKS, CODE_PICK_LABEL, CODE_PICK_HINT, defsCountText, defWord, defLayout, defCells, defCellTone, defLineText, newDefText, roleWritesLine, codePickOf } from '../../core/def-table'
 import { type CodeDraft, roleRows, kindRows, saveRoleEdit } from './role-table'
+import { plural } from '../../core/text'
+import { pickBoxParts, settingAbout, wrapWords } from '../../core/setting-notes'
 
 /** A role's file as the panel names it: .<name>/roles/<role>.md. */
 const roleFileOf = (name: string) => `${S.N.dir}/roles/${name}.md`
@@ -294,10 +296,7 @@ function defTable($: $, pane: PaneParts, o: { noun: 'role' | 'kind'; rows: (DefR
   return (
     <Box flexDirection="column">
       {header(page)}
-      <Text key={`${page}-heading`} wrap="truncate">
-        <Text bold color={C('suggestion')}>{`▍${noun === 'role' ? 'Roles' : 'Task types'}`}</Text>
-        <Text color={C('inactive')}>{`  ${defsCountText(noun, rows)}`}</Text>
-      </Text>
+      {simplePageHeader(pane, { from: 'settings', right: '', title: noun === 'role' ? 'Roles' : 'Task types', subtitle: defsCountText(noun, rows), buttons: [], onBack: o.back, backKey: `${page}-back` })}
       <Text key={`${page}-cols`} wrap="truncate" color={C('inactive')}>{defLineText(layout, 'head')}</Text>
       {rows.map((r, i) => (
         <Button key={row(keys[i]!)} plain label={r.broken ? `${r.name} — ${r.broken}` : `${r.name}: ${r.cells.from ?? ''}${r.warning ? ' ⚠' : ''}`} autoFocus={i === 0 && !o.naming ? true : undefined} onPress={o.open(r.name)}>
@@ -313,7 +312,6 @@ function defTable($: $, pane: PaneParts, o: { noun: 'role' | 'kind'; rows: (DefR
       {o.newBox as never}
       <Box key={`${page}-hidden-keys`} display="none">
         {o.naming ? null : <Button key={`${noun}-new-key`} label="n" hotkey="n" onPress={o.startNew} />}
-        <Button key={`${page}-back`} label="Back" hotkey="b" onPress={o.back} />
       </Box>
       {footer(o.keys, `${page}-keys`)}
     </Box>
@@ -511,11 +509,10 @@ export async function settingsPage($: $, pane: PaneParts) {
   if (openedKind && kindView.draft && !openedBrokenKind) return kindEditPage($, pane, defSource(openedKind.name, kl.builtIn, kl.project))
   if (openedKind || openedBrokenKind) return kindPage($, pane, openedBrokenKind ? undefined : openedKind, openedKind ? defSource(openedKind.name, kl.builtIn, kl.project) : undefined, openedBrokenKind, kl.builtIn)
   if (kindView.list) return kindsPage($, pane, kinds, kl.builtIn, kl.project, kl.broken)
-  const nameWidth = Math.max(...SETTINGS.map(x => x.name.length))
   const offCount = roles.filter(r => r.off && !isCheckerRole(r.name)).length
-  const rolesCount = `${roles.length} role${roles.length === 1 ? '' : 's'}${offCount ? ` · ${offCount} off` : ''}`
+  const rolesCount = `${plural(roles.length, 'role')}${offCount ? ` · ${offCount} off` : ''}`
   const kindsOff = kinds.filter(k => k.off).length
-  const kindsCount = `${kinds.length} task type${kinds.length === 1 ? '' : 's'}${kindsOff ? ` · ${kindsOff} off` : ''}`
+  const kindsCount = `${plural(kinds.length, 'task type')}${kindsOff ? ` · ${kindsOff} off` : ''}`
   const cancel = () => ((S.settingEdit = null), (S.settingPick = null), $.ui.invalidate('ui.render'))
   const cancelButton = <Button key="setting-cancel" label="Cancel (x)" hotkey="x" onPress={cancel} />
   const saveIt = (input: SettingsInput) => act(async () => {
@@ -527,7 +524,7 @@ export async function settingsPage($: $, pane: PaneParts) {
   })
   /** Enter on a row: on/off flips, mode, notify, scout_findings and tests_with_changes open a pick list, the rest an edit box. */
   const pressRow = (name: SettingName) => act(async () => {
-    const info = SETTINGS.find(x => x.name === name)!
+    const info = settingInfo(name)!
     const now = settingValue(viewAsBoard(v), name)
     if (info.kind === 'onoff') return saveIt({ [name]: now !== 'on' })()
     S.settingEdit = null
@@ -537,12 +534,18 @@ export async function settingsPage($: $, pane: PaneParts) {
     else S.settingEdit = { name, value: now === 'none' && info.kind === 'commands' ? '' : now, error: '' }
     $.ui.invalidate('ui.render')
   })
+  /** The setting's description in dim text, one Text per wrapped line, then an empty line (T-1105). */
+  const aboutLines = (name: string, lines: string[]) => [
+    ...lines.map((t, i) => <Text key={`about-${name}-${i}`} color={C('inactive')}>{t}</Text>),
+    <Text key={`about-gap-${name}`}> </Text>,
+  ]
   const editBox = (name: SettingName) => {
     if (S.settingEdit?.name !== name) return null
     const ed = S.settingEdit
-    const info = SETTINGS.find(x => x.name === name)!
+    const info = settingInfo(name)!
     return (
       <Box key={`setting-box-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
+        {aboutLines(name, wrapWords(settingAbout(name), pane.width - 4))}
         <Input
           key="setting-edit"
           label={name}
@@ -567,13 +570,25 @@ export async function settingsPage($: $, pane: PaneParts) {
   const pickBox = (name: SettingName) => {
     if (S.settingPick?.name !== name) return null
     const now = settingValue(viewAsBoard(v), name)
+    const parts = pickBoxParts(name, S.settingPick.options, pane.width - 4)
     return (
       <Box key={`setting-pick-${name}`} flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
-        {S.settingPick.options.map(o => (
-          <Button key={`pick:${o}`} autoFocus={o === now ? true : undefined} onPress={saveIt({ [name]: o })}>
-            <Text bold={o === now} color={C(o === now ? 'ide' : 'text')}>{o === now ? `● ${settingShown(name, o)}` : `○ ${settingShown(name, o)}`}</Text>
-          </Button>
-        ))}
+        {aboutLines(name, parts.about)}
+        {S.settingPick.options.map((o, i) => {
+          const r = parts.rows[i]!
+          const button = (
+            <Button key={`pick:${o}`} autoFocus={o === now ? true : undefined} onPress={saveIt({ [name]: o })}>
+              <Text bold={o === now} color={C(o === now ? 'ide' : 'text')}>{o === now ? `● ${settingShown(name, o)}` : `○ ${settingShown(name, o)}`}</Text>
+            </Button>
+          )
+          if (!r.note.length) return button
+          const rest = r.note.map((t, j) => <Text key={`note-${o}-${j}`} color={C('inactive')}>{`${j === 0 ? r.pad : '  '}${t}`}</Text>)
+          return r.inline ? (
+            <Box key={`pick-row:${o}`} flexDirection="row">{button}{rest}</Box>
+          ) : (
+            <Box key={`pick-row:${o}`} flexDirection="column">{button}{rest}</Box>
+          )
+        })}
         {cancelButton}
         <Text color={C('inactive')}>{pickHint('x')}</Text>
       </Box>
@@ -588,14 +603,18 @@ export async function settingsPage($: $, pane: PaneParts) {
     if (open && (inIt(S.settingEdit?.name) || inIt(S.settingPick?.name))) ((S.settingEdit = null), (S.settingPick = null))
     $.ui.invalidate('ui.render')
   }
+  // T-1042: the row's label, dot leaders, then the value in one column; the focused row's help is under the list
+  const focusedKey = arrows.focused
+  const mark = (key: string) => (focusedKey === key ? '› ' : '  ')
   const settingRow = (name: SettingName) => {
-    const x = SETTINGS.find(s => s.name === name)!
+    const x = settingInfo(name)!
+    const key = row(`setting:${x.name}`)
     return [
-      <Button key={row(`setting:${x.name}`)} plain onPress={pressRow(x.name)}>
-        <Text bold color={C('claude')}>{x.name.padEnd(nameWidth)}</Text>
-        <Text bold color={C('text')}> {settingShown(x.name, settingValue(viewAsBoard(v), x.name))}</Text>
+      <Button key={key} plain label={`${x.label}: ${settingRowValue(x.name, settingValue(viewAsBoard(v), x.name))}`} onPress={pressRow(x.name)}>
+        <Text color={C('text')}>{`${mark(key)}${x.label}`}</Text>
+        <Text color={C('inactive')}>{settingDots(x.label)}</Text>
+        <Text bold color={C('claude')}>{settingRowValue(x.name, settingValue(viewAsBoard(v), x.name))}</Text>
         {x.name === 'notify' && cantPlayNotify(v) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
-        <Text color={C('inactive')}> · default {x.default} · {x.range} · {x.meaning}</Text>
       </Button>,
       ...[editBox(x.name), pickBox(x.name)].filter(Boolean),
     ]
@@ -604,38 +623,60 @@ export async function settingsPage($: $, pane: PaneParts) {
   const openKinds = () => ((S.settingEdit = null), (S.settingPick = null), (kindView.list = true), $.ui.invalidate('ui.render'))
   // VS Code's side panel: groups as headings, a Select or a box per setting, no key hints (see vscode-settings.tsx)
   if (pane.vscode) return settingsPageVs($, pane, { rolesCount, kindsCount, save: saveIt, openRoles, openKinds })
-  const pageRow = (page: SettingPage) =>
-    page === 'roles' ? (
-      <Button key={row('settings-roles')} plain label={`Roles: ${rolesCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (roleView.list = true), $.ui.invalidate('ui.render'))}>
-        <Text bold color={C('claude')}>{'Roles'.padEnd(nameWidth)}</Text>
-        <Text bold color={C('text')}> {rolesCount}</Text>
-        <Text color={C('inactive')}> · Enter opens the Roles page: the worker roles, to open, edit, turn off or add</Text>
-      </Button>
-    ) : (
-      <Button key={row('settings-kinds')} plain label={`Task types: ${kindsCount}`} onPress={() => ((S.settingEdit = null), (S.settingPick = null), (kindView.list = true), $.ui.invalidate('ui.render'))}>
-        <Text bold color={C('claude')}>{'Task types'.padEnd(nameWidth)}</Text>
-        <Text bold color={C('text')}> {kindsCount}</Text>
-        <Text color={C('inactive')}> · Enter opens the Task types page: to open, edit, turn off or add</Text>
+  const pageRow = (page: SettingPage) => {
+    const isRoles = page === 'roles'
+    const label = isRoles ? 'Roles' : 'Task types'
+    const count = isRoles ? rolesCount : kindsCount
+    const key = row(isRoles ? 'settings-roles' : 'settings-kinds')
+    return (
+      <Button key={key} plain label={`${label}: ${count}`} onPress={isRoles ? openRoles : openKinds}>
+        <Text color={C('text')}>{`${mark(key)}${label}`}</Text>
+        <Text color={C('inactive')}>{settingDots(label)}</Text>
+        <Text bold color={C('claude')}>{count}</Text>
       </Button>
     )
+  }
+  // a closed group's title is padded to one column; on a narrow panel there is no room for that, so it falls back to "▸ Work · summary"
+  const padWidth = Math.max(...SETTING_GROUPS.map(g => g.title.length)) + 3
+  const stacked = pane.width - 4 - padWidth < 12
+  // the help for the focused row: a setting's meaning, then its name, default and range; a heading's hint; the first heading before any focus
+  const helpOf = (): { lines: string[]; name: string } => {
+    const editing = S.settingEdit?.name ?? S.settingPick?.name
+    const k = focusedKey === 'setting-edit' || focusedKey?.startsWith('pick:') || focusedKey === 'setting-cancel' ? (editing ? row(`setting:${editing}`) : undefined) : focusedKey
+    const first = row(`group:${SETTING_GROUPS[0]!.title}`)
+    return helpFor(k && (k.startsWith('setting:') || k.startsWith('group:') || k.startsWith('settings-r') || k.startsWith('settings-k')) ? k : first)
+  }
+  const helpFor = (k: string): { lines: string[]; name: string } => {
+    if (k.startsWith('setting:')) return settingsHelpOf({ setting: k.slice(8) })
+    if (k === 'settings-roles') return settingsHelpOf({ page: 'roles' })
+    if (k === 'settings-kinds') return settingsHelpOf({ page: 'kinds' })
+    return settingsHelpOf({ group: SETTING_GROUPS.find(x => `group:${x.title}` === k)?.title ?? '' })
+  }
+  const help = helpOf()
   return (
     <Box flexDirection="column">
       {header('settings')}
       {SETTING_GROUPS.flatMap((g, gi) => {
         const open = S.settingsOpen.includes(g.title)
-        const sum = groupSummaryParts(g, viewAsBoard(v), Math.max(20, pane.width - 4), { roles: rolesCount, kinds: kindsCount })
+        const sum = groupSummaryParts(g, viewAsBoard(v), stacked ? pane.width - 4 : pane.width - 4 - padWidth + g.title.length + 3, { roles: rolesCount, kinds: kindsCount })
+        const gKey = `group:${g.title}`
+        const shortSum = stacked ? '' : sum.values.replace(/^ · /, '')
         const label = open ? `▾ ${g.title}` : `▸ ${sum.title}${sum.values}`
         return [
           ...(gi ? [<Text key={`group-blank:${g.title}`}> </Text>] : []),
           <Button key={row(`group:${g.title}`)} plain label={label} autoFocus={gi === 0 && !S.settingEdit && !S.settingPick ? true : undefined} onPress={toggleGroup(g.title)}>
-            <Text bold color={C('text')}>{open ? `▾ ${g.title}` : `▸ ${sum.title}`}</Text>
-            {open || !sum.values ? null : <Text color={C('inactive')}>{sum.values}</Text>}
+            <Text bold color={C('text')}>{open ? `▾ ${g.title}` : `▸ ${stacked ? sum.title + sum.values : sum.title.padEnd(padWidth)}`}</Text>
+            {open || !shortSum ? null : <Text color={C('inactive')}>{shortSum}</Text>}
           </Button>,
           ...(open ? g.items.flatMap(item => (isSettingPage(item) ? [pageRow(item)] : settingRow(item))) : []),
         ]
       })}
       <Text key="settings-blank"> </Text>
-      <Text color={C('inactive')}>Enter on a heading opens or closes its group · Enter changes a setting (on/off flips) or opens a page · /{S.N.name}-settings NAME VALUE · or tell the lead</Text>
+      <Text key="settings-rule" color={C('inactive')}>{'─'.repeat(settingsRuleWidth(pane.width))}</Text>
+      {help.name ? <Text key="settings-help-name" bold color={C('text')}>{help.name}</Text> : null}
+      {help.lines.map((l, i) => (
+        <Text key={`settings-help-${i}`} wrap="wrap" color={C('inactive')}>{l}</Text>
+      ))}
       <Text key="settings-back-blank"> </Text>
       <Button key="settings-back" label="Back (b)" hotkey="b" onPress={act(() => resetPane(claudeHost($), 'tasks'))} />
       {footer(settingsKeys(headingFocused(arrows.focused)), 'settings-keys')}

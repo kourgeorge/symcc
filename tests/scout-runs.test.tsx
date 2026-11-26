@@ -415,7 +415,7 @@ test("the scout's page in VS Code lists its runs as links (no Buttons), opens on
   // T-516: no "Last report" section and no report text on the page itself; a hint says how to see a run's report
   expect(await ui.find({ key: 'vs-sec-report' })).toBeUndefined()
   expect((await ui.findAll({ type: 'Markdown' })).filter(m => /Old crash|The parser crashes/.test(String(m.props.text)))).toEqual([])
-  expect(await ui.find({ type: 'Text', text: /^Click a run to see its report$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^Click a run/ })).toBeUndefined() // T-1007: no hint
   expect((await ui.findAll({ type: 'Button' })).filter(b => String(b.props.key).startsWith('scout-run:'))).toEqual([])
   const rows = (await ui.findAll({ type: 'Markdown' })).filter(b => String(b.props.key).startsWith('scout-run:'))
   expect(rows.map(b => String(b.props.key))).toEqual([`scout-run:${LAST_RUN}`, 'scout-run:2026-11-12T00:00:00.000Z'])

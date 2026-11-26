@@ -23,20 +23,21 @@ test("a scout's git writes in Bash are refused with the scout's reason, wherever
     ['git checkout main', 'git checkout'],
     ['git reset --hard', 'git reset'],
     ['git commit -am x', 'git commit'],
-    ['cd /tmp && git -C /repo push', 'git push'],
+    ['cd /tmp && git -C /repo push', 'git -C'],
     ['sh -c "git merge main"', 'git merge'],
-    ['GIT_DIR=/repo/.git git log', 'GIT_DIR'],
-    ['git diff --output=/repo/x', 'git diff --output'],
+    ['GIT_DIR=/repo/.git git log', 'a GIT_ setting'],
+    // T-1062: a scratch repository under /tmp too: a scout's git only reads
+    ['cd /tmp/x && git commit -m m', 'git commit'],
   ] as const) {
     expect(await checkEdit($, 's1', { command })).toBe(scoutGitWriteText(what))
     expect(await checkEdit($, 's1', { command }, ROOT)).toBe(scoutGitWriteText(what))
   }
-  expect(scoutGitWriteText('git stash')).toMatch(/^Refused: git stash may change the repository or run another program, and a scout may only read with git/)
+  expect(scoutGitWriteText('git stash')).toMatch(/^Refused: git stash may change the repository, and a scout may only read with git/)
 })
 
 test("a scout's read-only git, its tests and its /tmp probes are allowed", async () => {
   const $ = setup()
-  for (const command of ['git status', 'git diff', 'git log -3', 'git log --oneline -5', 'git stash list', 'git branch --list', 'claude plugin test .', 'sh scripts/typecheck.sh', 'npm test', 'echo probe > /tmp/x && cat /tmp/x', `cat ${ROOT}/README.md`])
+  for (const command of ['git status', 'git diff', 'git log -3', 'git log --oneline -5', 'git branch --list', 'claude plugin test .', 'sh scripts/typecheck.sh', 'npm test', 'echo probe > /tmp/x && cat /tmp/x', `cat ${ROOT}/README.md`])
     expect(await checkEdit($, 's1', { command }, ROOT)).toBeUndefined()
 })
 

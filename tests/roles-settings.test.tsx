@@ -138,7 +138,7 @@ test('Settings lists every role: built-in, replaced, added and off, each with it
   stateOf(on, VIEW)
   fakeRoles(on, { 'tester.md': '---\ndescription: my own tests\n---\n- mine\n', 'mobile.md': '---\ndescription: phone apps\n---\n', 'docs.md': '---\ndescription: writes the docs\noff: true\n---\n' })
   const ui = await settings($)
-  expect(await ui.find({ type: 'Text', text: /▍Roles/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'Roles' })).toBeDefined()
   const label = async (name: string) => (await ui.find({ key: `roleRow:${name}` }))?.props.label
   expect(await label('general')).toBe('general: built-in')
   expect(await label('security')).toBe('security: built-in')
@@ -362,7 +362,7 @@ test('a role page lists the placeholders its checklist can use, and shows the bu
   expect(await ui.find({ type: 'Text', text: /role tester's checklist goes here/ })).toBeDefined()
   expect(await ui.find({ key: 'role-edit' })).toBeUndefined()
   await ui.press({ key: 'role-prompt-investigation' })
-  expect(await ui.find({ type: 'Text', text: /This task is an investigation/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /Do exactly this one \{\{kind_name\}\}/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /role tester's checklist goes here/ })).toBeDefined()
   await ui.press({ key: 'role-prompt-back' })
   expect(await ui.find({ key: 'role-edit' })).toBeDefined()
@@ -438,7 +438,8 @@ test('T-918: the Roles page is a table: the heading with its count, the column h
   fakeRoles(on, { ...T918_ROLES })
   const ui = await settings($)
   const line = async (name: string) => (await ui.find({ key: `roleRow:${name}` }))?.text
-  expect((await ui.find({ type: 'Text', text: /^▍Roles/ }))?.text).toBe('▍Roles  6 roles · 5 changed by you · 1 off')
+  expect((await ui.find({ type: 'Text', text: 'Roles' }))?.text).toBe('Roles')
+  expect((await ui.find({ type: 'Text', text: /^6 roles/ }))?.text).toBe('6 roles · 5 changed by you · 1 off')
   expect((await ui.find({ type: 'Text', text: /^  NAME/ }))?.text).toBe("  NAME        FROM          MODEL  WEB  WRITES  WHAT IT'S FOR")
   expect(await line('general')).toBe('❯ general     built-in      —      —    code    a plain worker')
   expect(await line('tester')).toBe('  tester      changed       —      —    code    my own tests')
@@ -457,7 +458,9 @@ test('T-918: the Roles page is a table: the heading with its count, the column h
   expect(await ui.find({ type: 'Text', text: /Enter open · n new role · ↑↓ move · l t s c views · b back/ })).toBeDefined()
   // n and b still work, through hidden Buttons
   expect((await ui.find({ key: 'role-new-key' }))?.props.hotkey).toBe('n')
-  expect((await ui.find({ key: 'roles-back' }))?.props.hotkey).toBe('b')
+  expect((await ui.find({ key: 'roles-back-key' }))?.props.hotkey).toBe('b')
+  // T-1067: the shared page header draws the [Settings] Back button at the top
+  expect((await ui.find({ key: 'roles-back' }))?.props.label).toBe('Settings')
   await ui.press({ key: 'role-new-key' })
   expect(await ui.find({ key: 'role-new-name' })).toBeDefined()
   await ui.unmount()

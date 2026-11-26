@@ -3,6 +3,7 @@
 import type { SymccView } from '../../types'
 import { viewTask, viewStubFilled } from './board-parts'
 import { isFinished } from './board-file'
+import { plural } from './text'
 
 /** Claude Code refuses a plugin value over this many characters (4 MB). */
 export const VIEW_MAX_CHARS = 4 * 1024 * 1024
@@ -25,7 +26,7 @@ function cutTexts(x: unknown): unknown {
 export type SlimStep = 0 | 1 | 2 | 3
 /** The warning text when trimming went past slimming finished tasks (step 1 or more), else ''. */
 export const trimNote = (step: SlimStep, left: number) =>
-  step < 1 ? '' : step === 1 ?'the board view was trimmed to fit the 4 MB limit: archive totals left out of the panel' : `the board view was trimmed to fit the 4 MB limit: ${left} old task${left === 1 ? '' : 's'} left out of the panel`
+  step < 1 ? '' : step === 1 ?'the board view was trimmed to fit the 4 MB limit: archive totals left out of the panel' : `the board view was trimmed to fit the 4 MB limit: ${plural(left, 'old task')} left out of the panel`
 
 /**
  * The view as the panel keeps it, under Claude Code's 4 MB limit on one value. Every done or dropped task is always

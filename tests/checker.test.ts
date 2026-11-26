@@ -4,9 +4,11 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
-import { notProse } from '../hooks/core/checker'
-import { S, leadQueue, meanwhile, workers, checkerRuns, stopped } from '../hooks/app/state'
-import { workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
+import { notProse, checkerProblems, problemsBlockLines, parseCheckerAnswer } from '../hooks/core/checker'
+import { makeAsk } from '../hooks/board'
+import { historyEvent, historyLineWords, workerStartedEntry, withHistory, noteAddedLine } from '../hooks/core/history'
+import { S, leadQueue, meanwhile, workers, checkerRuns, stopped, adoptedCheckers } from '../hooks/app/state'
+import { pump, workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
 import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
 import { stopOrphans } from '../hooks/app/cleanup'
 import { checkerFinished } from '../hooks/app/checker'
@@ -48,7 +50,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   // tree: what `rev-parse <commit>^{tree}` gives (T-526); empty: git can't tell, so no passed tree is recorded
   // moves: each commit main was moved to, in order
   // slowStatus: `git status` waits this many promise turns before it answers, as a real git takes a moment (T-740)
-  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '', moves: [] as string[], slowStatus: 0 }
+  const git = { main: M1, head: H0, dirty: true, detached: false, checkoutFails: false, gone: false, tree: '', moves: [] as string[], slowStatus: 0, edits: false }
   // the project's test commands (T-565): fails makes each one exit 1 with output; hold: a run in folder `cwd` waits for `until`
   const tests = { fails: false, output: '(fail) src/a.test.ts > doIt handles empty input\n 0 pass\n 1 fail', hold: null as { cwd: string; until: Promise<void> } | null }
   const files = new Map<string, string>()
@@ -56,6 +58,7 @@ function world(changed: string[] = ['src/a.ts', 'src/a.test.ts']) {
   function runGit(a0: string[]): Res {
     const a = a0.filter((x, i) => x !== '-c' && a0[i - 1] !== '-c')
     const s = a.join(' ')
+    if (a[0] === 'status' && git.edits && git.dirty) return ok(' M src/owner-fix.ts')
     if (a[0] === 'commit') {
       if (!git.dirty) return fail('nothing to commit')
       git.dirty = false
@@ -576,11 +579,48 @@ test("failing tests sent back to the worker come under a heading that says what 
 test('when its retries are used up, a checker report fails the task with the report', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true, {}, { auto_retries: 0 }))
-  const t = await finish(w, async id => checkerFinished(id, 'src/a.ts:1 the old behavior is gone'))
+  const t = await finish(w, async id => checkerFinished(id, 'I looked around.\nProblems:\n- src/a.ts:1 the old behavior is gone\n- src/b.ts:2 it crashes'))
   expect(t.status).toBe('failed')
-  expect(t.note).toBe('the checker found problems: src/a.ts:1 the old behavior is gone')
-  expect(leadQueue.join('\n')).toContain("The checker's report:\nsrc/a.ts:1 the old behavior is gone")
+  const said = leadQueue.join('\n')
+  expect(said).toContain("not merged. Its checker (symcc-T-1-checker) — an agent that tries to break each change before it merges — found 2 problems. No automatic tries left (0 of 0 automatic tries used).")
+  expect(said).toContain("Checker symcc-T-1-checker's report (try 1):\nProblems:\n- src/a.ts:1 the old behavior is gone\n- src/b.ts:2 it crashes")
+  expect(said).not.toContain('…')
+  expect(said).not.toContain('I looked around')
   expect(w.git.main).toBe(M1)
+})
+
+test('checkerProblems counts every item after a blank line, and a "## Problems" heading (problemsBlockLines) and indented follow-on lines', () => {
+  expect(checkerProblems('Problems:\n\n- a\n- b', Infinity)).toEqual(['a', 'b'])
+  expect(problemsBlockLines('## Problems\n- a\n- b', Infinity)).toEqual(['a', 'b'])
+  expect(checkerProblems('Problems:\n- a\n  more\n- b', Infinity)).toEqual(['a more', 'b'])
+  expect(checkerProblems('Intro.\nProblems:\n- a\n\n- b', Infinity)).toEqual(['a', 'b'])
+  expect(checkerProblems('Problems:\n- a\n\nDone text', Infinity)).toEqual(['a'])
+})
+
+test('a Problems block with "* " bullets is quoted as it is, never the first prose line', async () => {
+  expect(problemsBlockLines('I checked it.\nProblems:\n* src/a.ts:1 x\n* src/b.ts:2 y')).toEqual(['src/a.ts:1 x', 'src/b.ts:2 y'])
+  const w = world()
+  await saveBoard(w.$, boardWith(true, {}, { auto_retries: 0 }))
+  await finish(w, async id => checkerFinished(id, 'I checked T-1 with probes and found two things.\nProblems:\n* src/a.ts:1 x\n* src/b.ts:2 y'))
+  const said = leadQueue.join('\n')
+  expect(said).toContain('found 2 problems')
+  expect(said).toContain("report (try 1):\nProblems:\n- src/a.ts:1 x\n- src/b.ts:2 y")
+  expect(said).not.toContain('I checked T-1')
+})
+
+test('the checker update counts every problem and never starts with an ellipsis', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true, {}, { auto_retries: 0 }))
+  await finish(w, async id => checkerFinished(id, 'Problems:\n' + [1, 2, 3, 4, 5, 6, 7].map(i => `- p${i}`).join('\n')))
+  const said = leadQueue.join('\n')
+  expect(said).toContain('found 7 problems')
+  expect(said).toContain('- p5\n- … and 2 more')
+  expect(said).not.toContain('- p6')
+  leadQueue.length = 0
+  const w2 = world()
+  await saveBoard(w2.$, boardWith(true, {}, { auto_retries: 0 }))
+  await finish(w2, async id => checkerFinished(id, 'x'.repeat(5000) + '\nsrc/a.ts broke'))
+  expect(leadQueue.join('\n')).not.toContain('- …')
 })
 
 test('in review mode an OK from the checker sends the task to review, not merged', async () => {
@@ -868,70 +908,36 @@ test("a checker's git commands that change anything are refused, read-only ones 
   await saveBoard(w.$, boardWith(true))
   await finish(w, async id => {
     const bash = (command: string) => checkEdit(w.$, id, { command })
+    // T-1062: every git write of GIT_WRITES, wherever it is in the text, and git's own options or GIT_ settings
     for (const [command, what] of [
       ['git commit -am x', 'git commit'],
       ['git checkout main', 'git checkout'],
       ['git switch main', 'git switch'],
       ['git stash', 'git stash'],
-      ['git stash push -m x', 'git stash'],
       ['cd /x && git reset --hard', 'git reset'],
-      ['git -C /x branch -f main HEAD', 'git branch'],
+      ['git -C /x branch -f main HEAD', 'git -C'],
       ['git branch -D symcc/T-2', 'git branch'],
-      ['git branch new-one', 'git branch'],
       ['git status; git tag v1', 'git tag'],
       ['git log | git update-ref refs/heads/main HEAD', 'git update-ref'],
       ['echo $(git rebase main)', 'git rebase'],
       ['sh -c "git merge main"', 'git merge'],
       ['git --no-pager cherry-pick abc', 'git cherry-pick'],
       ['/usr/bin/git push', 'git push'],
-      ['git worktree add /tmp/x', 'git worktree'],
       ['git restore --staged a.ts', 'git restore'],
-      ['git clean -fd', 'git clean'],
-      ['git apply --index p.diff', 'git apply'],
-      // read-only commands with options that write a file or run a program (the try-1 checker's three probes first)
-      ['git log -1 --format=%H --output=$(git rev-parse --git-common-dir)/refs/heads/main feat', 'git log --output'],
-      ['git grep -O"git stash;:" x', 'git grep -O'],
-      ["GIT_EXTERNAL_DIFF='git stash;:' git diff", 'git stash'],
-      ['git diff --output=/tmp/x', 'git diff --output'],
-      ['git diff --outp /tmp/x', 'git diff --outp'],
-      ['git show -o /tmp/x HEAD', 'git show -o'],
-      ['git diff -o x', 'git diff -o'],
-      ['git log -po x', 'git log -o'],
-      ['git log -pofile', 'git log -o'],
-      ['git shortlog -no x', 'git shortlog -o'],
-      ['git grep -nOvim foo', 'git grep -O'],
-      ['git grep --open-files-in-pager=vim foo', 'git grep --open-files-in-pager'],
-      ['git diff --ext-diff', 'git diff --ext-diff'],
-      ['git log -p --textconv', 'git log --textconv'],
       ['git -c core.pager=x log', 'git -c'],
-      ['git -c diff.external=x diff', 'git -c'],
-      ['git -c alias.st=!x status', 'git -c'],
-      ['git --config-env=core.pager=X log', 'git --config-env'],
       ['git --exec-path=/tmp diff', 'git --exec-path'],
-      // settings that make git run a program or use another repository, when git runs
-      ['GIT_EXTERNAL_DIFF=/tmp/x git diff', 'GIT_EXTERNAL_DIFF'],
-      ['GIT_PAGER=x git -p log', 'GIT_PAGER'],
-      ['PAGER=x git log', 'PAGER'],
-      ['env GIT_SSH_COMMAND=x git log', 'GIT_SSH_COMMAND'],
-      ['export EDITOR=x; git log', 'EDITOR'],
-      ['GIT_DIR=/x git log', 'GIT_DIR'],
-      ['GIT_CONFIG_GLOBAL=/tmp/c git diff', 'GIT_CONFIG_GLOBAL'],
-      ["GIT_PAGER=x sh -c 'git log'", 'GIT_PAGER'],
-      // git inside a VAR= value, an option value, or in capitals (macOS finds GIT too)
-      ["X='git stash;:' true", 'git stash'],
-      ['echo -X"git reset --hard"', 'git reset'],
+      ['GIT_EXTERNAL_DIFF=/tmp/x git diff', 'a GIT_ setting'],
       ['GIT stash', 'git stash'],
       ['/usr/libexec/git-core/git-stash', 'git stash'],
-      ['git-core/git-log --output=/tmp/x', 'git log --output'],
-    ] as const) expect(await bash(command)).toBe(gitWriteText(what))
-    expect(gitWriteText('git stash')).toMatch(/^Refused: git stash may change the repository or run another program, and the checker may only read with git/)
-    for (const command of ['git diff', 'git log -3', 'git status', 'git log --oneline -5', 'git diff --text --stat', 'git diff --no-ext-diff', 'git ls-files -o', 'git grep -n foo', '/usr/libexec/git-core/git-diff', 'echo "use git diff"', 'export GIT_PAGER=cat', 'grep -rn "gitWriteIn(" hooks', 'git -C src show HEAD:src/a.ts', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git branch -a', 'git branch', 'git stash list', 'git stash show -p', 'git rev-parse HEAD | cat', 'git ls-files src', 'npm test', 'git log -Sfoo', 'git log -p -G"checkout" -- hooks', "git log -L'/function gitScan/,+5:hooks/core/ask.ts'", 'git diff -Sfoo', 'git log -n3o', 'git grep -e-O foo'])
-      expect(await bash(command)).toBeUndefined()
+      ['git log -1 --format=%H --output=$(git rev-parse --git-common-dir)/refs/heads/main feat', "git's own folder"],
+    ] as const) expect([command, await bash(command)]).toEqual([command, gitWriteText(what)])
+    for (const command of ['git diff', 'git log -3', 'git status', 'git log --oneline -5', 'git ls-files -o', 'git grep -n foo', 'echo "use git diff"', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git branch -a', 'git branch', 'git rev-parse HEAD | cat', 'npm test'])
+      expect([command, await bash(command)]).toEqual([command, undefined])
     checkerFinished(id, 'OK')
   })
-  // a worker's git writes in its folder are refused as well (with the worker's own reason), its reads are not
+  // a worker's git writes are refused with the worker's own reason (with no shell folder known, even a commit), its reads are not
   workers.set('ag2', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
-  for (const [command, what] of [['git commit -am x', 'git commit'], ['git stash', 'git stash'], ['git reset --hard', 'git reset'], ['git checkout -b x', 'git checkout']] as const)
+  for (const [command, what] of [['git commit -am x', 'git in another folder'], ['git stash', 'git stash'], ['git reset --hard', 'git in another folder'], ['git checkout -b x', 'git checkout <branch>']] as const)
     expect(await checkEdit(w.$, 'ag2', { command })).toBe(workerGitWriteText(what))
   for (const command of ['git diff', 'git log -3', 'git status'])
     expect(await checkEdit(w.$, 'ag2', { command })).toBeUndefined()
@@ -958,23 +964,110 @@ async function reloadDuringChecker(w: ReturnType<typeof world>, status: string) 
   return agents
 }
 
-test('T-386: a reload stops the running checker; at the next check the task gets a new checker on the same work, no retry counted, and the lead is told once', async () => {
+test('T-1068: a checker still running after a reload is adopted, not stopped; its OK is used, nothing new starts, no retry counted', async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
   const sha = w.git.head
   await check(w.$)
-  // the old checker (unknown to this copy) was told to stop, and a new one started at once
-  expect(w.sends.map(m => m.to)).toEqual(['chk1'])
-  await until(() => checkerRuns.size > 0)
-  expect(w.spawns.length).toBe(2)
-  expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
+  // the checker (unknown to this copy) is not told to stop and no new one starts; this copy waits for it
+  for (let i = 0; i < 200; i++) await turn()
+  expect(checkerRuns.has('chk1')).toBe(true)
+  expect(w.sends).toEqual([])
+  expect(w.spawns.length).toBe(1)
   const mid = find(await load(w.$), 'T-1')!
   expect(mid.status).toBe('doing')
   expect(mid.live?.checking?.step).toBe('checker')
   expect(w.git.head).toBe(sha)
-  const told = meanwhile.filter(m => m.includes('its checker stopped when the plugin reloaded'))
-  expect(told.length).toBe(1)
-  // a check meanwhile does not start a third one
+  expect(meanwhile.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(0)
+  // a check meanwhile does not start another
+  await check(w.$)
+  expect(w.spawns.length).toBe(1)
+  checkerFinished('chk1', 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(t.attempts).toBe(1)
+  expect(t.test_tries ?? 0).toBe(0)
+  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  expect(w.spawns.length).toBe(1)
+})
+
+test('T-1068: an older same-name checker listed first is stopped; the board\'s current checker is adopted', async () => {
+  const w = world()
+  const agents = await reloadDuringChecker(w, 'running')
+  agents.unshift({ id: 'chkOld', name: 'symcc-T-1-checker', kind: 'scout', status: 'running' })
+  await stopOrphans(w.$)
+  expect(adoptedCheckers.get('T-1')?.id).toBe('chk1')
+  expect(w.sends.map(s => s.to)).toEqual(['chkOld'])
+})
+
+test('T-1068: while an adopted checker works, a look for orphans leaves it, and no folder commit runs before its verdict', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  const before = w.calls.length
+  await check(w.$)
+  await until(() => checkerRuns.has('chk1'))
+  await stopOrphans(w.$)
+  await check(w.$)
+  for (let i = 0; i < 100; i++) await turn()
+  expect(w.sends).toEqual([])
+  expect(find(await load(w.$), 'T-1')!.live?.phase).toBe('checker')
+  expect(w.calls.slice(before).filter(c => /^git (add|commit)\b/.test(c))).toEqual([])
+  checkerFinished('chk1', 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  expect(w.spawns.length).toBe(1)
+})
+
+test('T-1068: an adopted checker that finds problems: its verdict is used (the task goes back to its worker)', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await check(w.$)
+  await until(() => checkerRuns.has('chk1'))
+  checkerFinished('chk1', 'PROBLEMS: src/a.ts breaks on empty input')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.history.some(h => h.text.includes('the checker found problems') || h.text.includes('checker: problems') || h.text.includes('PROBLEMS'))).toBe(true)
+  expect(t.status).not.toBe('done')
+  expect(w.spawns.length).toBe(1)
+})
+
+test('T-1068: an adopted checker that hands back before the step waits for it: its verdict is kept and used, no new checker', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await stopOrphans(w.$)
+  expect(checkerRuns.has('chk1')).toBe(true)
+  checkerFinished('chk1', 'PROBLEMS: src/a.ts breaks on empty input')
+  await check(w.$)
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.history.some(h => h.text.includes('PROBLEMS') || h.text.includes('found problems'))).toBe(true)
+  expect(t.status).not.toBe('done')
+  expect(w.spawns.length).toBe(1)
+  expect(w.sends).toEqual([])
+})
+
+test('T-1068: an adopted checker whose task left the checker step is stopped at the next look, and forgotten', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await stopOrphans(w.$)
+  expect(w.sends).toEqual([])
+  const b = await load(w.$)
+  await saveBoard(w.$, patchTask(b, 'T-1', { status: 'todo' }, '2026-01-01T00:00:00Z'))
+  await stopOrphans(w.$)
+  expect(w.sends.map(m => m.to)).toEqual(['chk1'])
+  expect(adoptedCheckers.size).toBe(0)
+  expect(checkerRuns.has('chk1')).toBe(false)
+})
+
+test('T-386: a checker symcc stopped over the reload (its agent is in stopped) gets a new checker at the next check, no retry counted, the lead told once', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
+  await check(w.$)
+  await until(() => checkerRuns.size > 0)
+  expect(w.spawns.length).toBe(2)
+  expect(w.spawns[1]!.name).toBe('symcc-T-1-checker')
+  expect(meanwhile.filter(m => m.includes('its checker stopped when the plugin reloaded')).length).toBe(1)
   await check(w.$)
   expect(w.spawns.length).toBe(2)
   checkerFinished([...checkerRuns.keys()][0]!, 'OK')
@@ -982,13 +1075,12 @@ test('T-386: a reload stops the running checker; at the next check the task gets
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
   expect(t.attempts).toBe(1)
-  expect(t.test_tries ?? 0).toBe(0)
-  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
 })
 
 test("T-386: a checker that ended over the reload, or whose stopped hand-back arrives, gets a new run without waiting for a check", async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
   // the reload's own look for orphans (session start) stops the old checker; its "stopped" answer then comes in
   await stopOrphans(w.$)
   expect(w.spawns.length).toBe(1)
@@ -1061,6 +1153,7 @@ function scoutNotLoaded(w: ReturnType<typeof world>, n: number) {
 test("T-386: a restarted checker whose agent type isn't loaded yet: the task stays doing, and the next check starts a checker", async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
   scoutNotLoaded(w, 1)
   await stopOrphans(w.$)
   await stoppedHandBack(w.$, 'chk1')
@@ -1085,6 +1178,7 @@ test("T-386: a restarted checker whose agent type isn't loaded yet: the task sta
 test("T-386: a restarted checker whose agent type is still not loaded after 3 starts: the task goes to review with no verdict", async () => {
   const w = world()
   await reloadDuringChecker(w, 'running')
+  stopped.add('chk1')
   scoutNotLoaded(w, 99)
   await stopOrphans(w.$)
   await stoppedHandBack(w.$, 'chk1')
@@ -1514,4 +1608,430 @@ test('T-632, T-804: org-mem lines lose their task ids at start; an old field-gui
   await w.$.fs.write(GUIDE, '- T-611 2026-11-20: a note\n- 2026-11-20: a new one\n')
   await moveOldOrgMem(w.$)
   expect(await w.$.fs.read(GUIDE)).toBe('- 2026-11-20: a note\n- 2026-11-20: a new one\n')
+})
+
+test('T-1068: an adopted checker that moves HEAD and then says OK: the branch is put back and only the tested commit merges', async () => {
+  const w = world()
+  await reloadDuringChecker(w, 'running')
+  await check(w.$)
+  await until(() => checkerRuns.has('chk1'))
+  w.git.head = C9
+  checkerFinished('chk1', 'OK')
+  await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
+  const t = find(await load(w.$), 'T-1')!
+  expect(w.calls).toContain(`git checkout -q -f -B symcc/T-1 ${H1}`)
+  expect(w.git.main).toBe(H1)
+  expect(t.status).toBe('done')
+  expect(t.history.map(h => h.text)).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
+})
+
+// ---------------- the lead moves a task to a stage (T-1072) ----------------
+
+/** The fake repo answers the probe like a real repo with commits, so the merge step is allowed to run. */
+function inRepo(w: ReturnType<typeof world>) {
+  const run = w.$.run
+  w.$.run = async (argv, o) => (argv[0] === 'git' && argv.includes('--is-inside-work-tree') ? ok('true\n') : run(argv, o))
+}
+
+test('T-1072: stage tests while the checker runs stops it, and the task merges after its tests, with no checker', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(true))
+  let said = ''
+  await finish(w, async () => {
+    said = await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
+  })
+  expect(said).toContain('T-1')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('done')
+  expect(w.git.moves.length).toBe(1)
+  expect(w.spawns.length).toBe(1)
+  expect(t.history.map(h => h.text)).toContain('moved to tests by the lead')
+})
+
+test('T-1072: stage tests on a failed task runs its tests and merges it, with no checker', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(true, { status: 'failed', note: 'x' }))
+  const said = await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(said).toContain('merged')
+  expect(t.status).toBe('done')
+  expect(w.spawns.length).toBe(0)
+  expect(w.calls.some(c => c.includes('npm test'))).toBe(true)
+})
+
+test('T-1084: stage ignores host fields (tool, tool_use_id) but still refuses add_details', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(true, { status: 'failed', note: 'x' }))
+  await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'tests', add_details: 'n' })).rejects.toThrow('stage moves a task on its own')
+  const said = await runTool(w.$, 'change', { task: 'T-1', stage: 'tests', tool: 'change', tool_use_id: 'x' })
+  expect(said).toContain('merged')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+})
+
+test('T-1072: stage check on a failed task starts a checker on the kept branch, with no new worker try', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'check' })
+  await until(() => checkerRuns.size > 0)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('doing')
+  expect(t.attempts).toBe(1)
+  expect(t.history.map(h => h.text)).toContain('moved to check by the lead')
+  await runTool(w.$, 'drop', { task: 'T-1' })
+})
+
+test('T-1072: stage work from a running checker queues a new worker try; stage review waits for the owner', async () => {
+  for (const [stage, status] of [['work', 'todo'], ['review', 'review']] as const) {
+    const w = world()
+    inRepo(w)
+    await saveBoard(w.$, boardWith(true))
+    await finish(w, async () => {
+      await runTool(w.$, 'change', { task: 'T-1', stage })
+    })
+    const t = find(await load(w.$), 'T-1')!
+    expect(t.status === status || (stage === 'work' && t.status === 'doing')).toBe(true)
+    expect(w.git.moves.length).toBe(0)
+    expect(t.history.map(h => h.text)).toContain(`moved to ${stage} by the lead`)
+  }
+})
+
+test('T-1072: a move refuses a done task and a bad stage', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(false, { status: 'done', note: 'x' }))
+  await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'work' })).rejects.toThrow('done')
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
+  await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'soon' })).rejects.toThrow('stage must be one of')
+})
+
+test('T-1072: stage work on a failed task starts a worker try (doing, a new try)', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  w.$.features = { ...w.$.features, startQueue: false }
+  w.$.plugin = { name: 'symcc', root: '/plugin' }
+  w.$.fs.list = async () => []
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'work' })
+  await pump(w.$)
+  await until(() => w.spawns.length > 0)
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('doing')
+  expect(t.attempts).toBe(2)
+  expect(t.history.filter(h => h.text === 'moved to work by the lead').length).toBe(1)
+  expect(w.spawns.length).toBe(1)
+})
+
+test('T-1072: failed → review → work: the next worker prompt has no "Last failure in full"', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  w.$.features = { ...w.$.features, startQueue: false }
+  w.$.plugin = { name: 'symcc', root: '/plugin' }
+  w.$.fs.list = async () => []
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'review' })
+  expect(find(await load(w.$), 'T-1')!.test_output).toBe('not tested yet: moved to review by the lead')
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'work' })
+  expect(find(await load(w.$), 'T-1')!.test_output).toBe(undefined)
+  await pump(w.$)
+  await until(() => w.spawns.length > 0)
+  expect(w.spawns[0]!.prompt).not.toContain('Last failure in full')
+})
+
+test('T-1072: a move from a running checker writes one history line, no "review meanwhile" line, and leaves other tasks alone', async () => {
+  for (const stage of ['tests', 'review', 'work']) {
+    const w = world()
+    inRepo(w)
+    const b = boardWith(true)
+    const [b2] = addTask(b, { origin: { why: 'a test' }, title: 'Other', details: 'Make other.\nDone when: a test.', files: ['lib/'] }, ISO)
+    await saveBoard(w.$, patchTask(b2, 'T-2', { status: 'waiting', note: 'asked' }, ISO))
+    await finish(w, async () => {
+      await runTool(w.$, 'change', { task: 'T-1', stage })
+    })
+    const board = await load(w.$)
+    const t = find(board, 'T-1')!
+    const texts = t.history.map(h => h.text)
+    expect(texts.filter(x => x === `moved to ${stage} by the lead`).length).toBe(1)
+    expect(texts.filter(x => x.includes('review meanwhile') || x.includes('not merged') || x.includes('no verdict'))).toEqual([])
+    expect(leadQueue.filter(x => x.includes('was stopped'))).toEqual([])
+    const o = find(board, 'T-2')!
+    expect(o.status).toBe('waiting')
+    expect(o.note).toBe('asked')
+  }
+})
+
+test('T-1072: stage check from a running checker starts a fresh checker with one history line', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(true))
+  let first = ''
+  await finish(w, async (id) => {
+    first = id
+    await runTool(w.$, 'change', { task: 'T-1', stage: 'check' })
+    await until(() => [...checkerRuns.keys()].some(k => k !== first))
+    const t = find(await load(w.$), 'T-1')!
+    expect(t.attempts).toBe(1)
+    expect(t.history.map(h => h.text).filter(x => x === 'moved to check by the lead').length).toBe(1)
+    expect(t.history.some(h => h.text.includes('review meanwhile'))).toBe(false)
+    await runTool(w.$, 'drop', { task: 'T-1' })
+  })
+})
+
+test('T-1072: in board mode review a move to tests runs the tests and ends in review, not done', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }, { mode: 'review' }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(w.calls.some(c => c.includes('npm test'))).toBe(true)
+  expect(w.git.moves.length).toBe(0)
+})
+
+test('T-1081: a move to tests that stops at review writes a finished try: history line, untested flag, secrets text', async () => {
+  const w = world(['src/a.ts', 'src/.env'])
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }, { mode: 'review' }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('review')
+  expect(t.history.map(h => h.text).join('\n')).toMatch(/checks passed/)
+  expect(t.note).toContain('ready for review')
+  const told = leadQueue.join('\n')
+  expect(told).toContain('changed code but no test')
+  expect(told).toContain('.env')
+})
+
+test('T-1072: in mode auto a failed task with needs_review moved to tests ends in review, nothing merged', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x', needs_review: true }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
+  expect(find(await load(w.$), 'T-1')!.status).toBe('review')
+  expect(w.git.moves.length).toBe(0)
+})
+
+test('T-1072: stage with other fields is refused, and stage tests without git leaves the task alone', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
+  await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'work', add_details: 'FIX' })).rejects.toThrow('separate change call')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('failed')
+  await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })).rejects.toThrow("can't be moved")
+  expect(find(await load(w.$), 'T-1')!.status).toBe('failed')
+})
+
+test('T-1072: stage review then approve runs the tests; stage check tells the lead nothing about a reload', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'review' })
+  expect(w.calls.some(c => c.includes('npm test'))).toBe(false)
+  const said = await runTool(w.$, 'approve', { task: 'T-1' })
+  expect(said).toContain('merged')
+  expect(w.calls.some(c => c.includes('npm test'))).toBe(true)
+  const w2 = world()
+  inRepo(w2)
+  await saveBoard(w2.$, boardWith(false, { status: 'failed', note: 'x' }))
+  await runTool(w2.$, 'change', { task: 'T-1', stage: 'check' })
+  await until(() => checkerRuns.size > 0)
+  expect(leadQueue.some(m => String(m).includes('plugin reloaded'))).toBe(false)
+  await runTool(w2.$, 'drop', { task: 'T-1' })
+})
+
+test('T-1072: a move to check from review keeps and commits the owner\'s uncommitted edits (no reset, no clean)', async () => {
+  const w = world()
+  inRepo(w)
+  w.git.edits = true
+  await saveBoard(w.$, boardWith(false, { status: 'review', note: 'x', test_output: 'tests failed' }))
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'check' })
+  await until(() => checkerRuns.size > 0)
+  expect(w.calls.some(c => /git (reset|clean)/.test(c))).toBe(false)
+  expect(w.calls.some(c => c.includes('git add -A -- .'))).toBe(true)
+  expect(w.calls.some(c => /commit/.test(c))).toBe(true)
+  await runTool(w.$, 'drop', { task: 'T-1' })
+})
+
+test('T-1072: while a worker runs, a move to check, tests or review is refused with no git write; work is allowed', async () => {
+  for (const stage of ['check', 'tests', 'review', 'work']) {
+    const w = world()
+    inRepo(w)
+    await saveBoard(w.$, boardWith(false))
+    workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: 0 })
+    const before = w.calls.length
+    const go = runTool(w.$, 'change', { task: 'T-1', stage })
+    if (stage === 'work') {
+      await go
+    } else {
+      await expect(go).rejects.toThrow('worker is still running')
+      expect(find(await load(w.$), 'T-1')!.status).toBe('doing')
+      expect(w.calls.slice(before).some(c => /git (add|commit|reset|clean)/.test(c))).toBe(false)
+    }
+    workers.clear()
+  }
+})
+
+test('T-1072: a doing task whose worker belongs to another session (not in workers) is refused for check, tests and review', async () => {
+  for (const stage of ['check', 'tests', 'review']) {
+    const w = world()
+    inRepo(w)
+    await saveBoard(w.$, boardWith(false, { live: { session: 'other-session', phase: 'worker' } } as Partial<SymccTask>))
+    const before = w.calls.length
+    await expect(runTool(w.$, 'change', { task: 'T-1', stage })).rejects.toThrow('worker is still running')
+    expect(w.calls.slice(before).some(c => /git (add|commit|reset|clean)/.test(c))).toBe(false)
+  }
+})
+
+// ---------------- T-1079: who said what on the task page ----------------
+
+/** The checker's full report with a "Problems:" list, as the checker prompt asks for it. */
+const PROBLEMS_REPORT = 'I checked T-1 by importing /tmp/probe.ts and running it from /tmp with an empty input.\n\nProblems:\n- src/a.ts:12 doIt("") throws instead of returning ""\n- the docs name no example'
+
+test('T-1079: a worker hand-back line is the worker\'s alone, and the checker\'s send-back is its own single line with its first problem', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => checkerFinished(id, PROBLEMS_REPORT))
+  const events = t.history.map(h => historyEvent(h))
+  // (a) the worker's result line: "worker symcc-T-1", its report, "→ the checker found problems", none of the checker's words
+  const worker = events.filter(e => e.who === 'worker' && e.result)
+  expect(worker.length).toBe(1)
+  expect(worker[0]!.by).toBe('worker symcc-T-1')
+  expect(worker[0]!.said).toBe('made the change')
+  expect(worker[0]!.result).toBe('the checker found problems')
+  expect(historyLineWords(t.history.find(h => h.result)!)).toBe('worker symcc-T-1: try 1: made the change → the checker found problems')
+  expect(t.history.filter(h => h.result).every(h => !h.text.includes('doIt'))).toBe(true)
+  // (b) the checker's verdict: one line, its first problem (not the report's first sentence), with its agent name
+  const lines = t.history.filter(h => h.kind === 'checker-problems')
+  expect(lines.length).toBe(1)
+  expect(historyLineWords(lines[0]!)).toBe('checker symcc-T-1-checker: found problems: src/a.ts:12 doIt("") throws instead of returning ""')
+  expect(historyLineWords(lines[0]!)).not.toContain('I checked')
+  // (c) no second line for the same verdict
+  expect(t.history.filter(h => h.text.includes('found problems')).length).toBe(2) // the checker's line and the worker's outcome only
+  expect(t.history.filter(h => h.text.includes('src/a.ts:12')).length).toBe(1)
+  // the full report is saved, and the verdict line names the file
+  expect((lines[0] as { report?: string }).report).toBe('.symcc/reports/T-1-try-1-checker.md')
+  expect(await w.$.fs.read(`${ROOT}/.symcc/reports/T-1-try-1-checker.md`)).toContain('I checked T-1 by importing')
+})
+
+test('T-1079: a checker OK is "checker symcc-T-1-checker: OK"; an old entry with no saved agent shows "checker:" with no id', async () => {
+  const w = world()
+  await saveBoard(w.$, boardWith(true))
+  const t = await finish(w, async id => checkerFinished(id, 'Everything held.\nOK'))
+  const ok = t.history.find(h => h.kind === 'checker-ok')!
+  expect(historyLineWords(ok)).toBe('checker symcc-T-1-checker: OK')
+  const { agent: _gone, ...old } = ok as typeof ok & { agent?: string }
+  expect(historyLineWords(old)).toBe('checker: OK')
+  expect(historyEvent(old)).toMatchObject({ who: 'checker', agent: '', by: 'checker' })
+})
+
+test('T-1079: one try read top to bottom: each history line has one actor, in order (worker, checker, worker, lead, worker again)', async () => {
+  const w = world()
+  const start = patchTask(boardWith(true), 'T-1', { history: withHistory([], ISO, workerStartedEntry({ role: 'general', attempts: 1, history: [] }, false, 'symcc-T-1')) }, ISO)
+  await saveBoard(w.$, start)
+  const t = await finish(w, async id => checkerFinished(id, PROBLEMS_REPORT))
+  // the lead adds a note, and the next try's worker starts
+  const next = { ...t, attempts: 2, history: withHistory(t.history, ISO, ['note', noteAddedLine('use the other fix')], workerStartedEntry({ role: 'general', attempts: 2, history: t.history }, false, 'symcc-T-1')) }
+  const story = next.history.map(h => historyEvent(h)).filter(e => e.by).map(e => `${e.by}: ${e.said}${e.result ? ` → ${e.result}` : ''}`)
+  expect(story).toEqual([
+    'worker symcc-T-1: worker started (role general)',
+    'worker symcc-T-1: worker handed back',
+    'checker symcc-T-1-checker: found problems: src/a.ts:12 doIt("") throws instead of returning ""',
+    'worker symcc-T-1: made the change → the checker found problems',
+    'lead: the lead added a note: “use the other fix”',
+    'worker symcc-T-1: worker started (role general)',
+  ])
+  // symcc's own steps (prep, checker started, ...) have no actor, and no line mixes two
+  expect(next.history.map(h => historyEvent(h)).filter(e => !e.by).every(e => e.who === '')).toBe(true)
+})
+
+test('T-996: a report whose only findings say "worse than main: none" is OK, and a follow-ups section before OK is OK', () => {
+  expect(checkerVerdict('Problems:\n- worse than main: none')).toEqual({ ok: true })
+  const mixed = 'Problems:\n- worse than main: none, but src/a.ts:3 opens a new hole'
+  expect(checkerVerdict(mixed)).toEqual({ ok: false, report: mixed })
+  expect(checkerVerdict('Follow-ups (not blocking):\n- src/a.ts:3 main already lacks a check\n\nOK')).toEqual({ ok: true })
+  const six = 'Problems:\n' + Array(5).fill('- worse than main: none').join('\n') + '\n- src/a.ts:3 new hole'
+  expect(checkerVerdict(six)).toEqual({ ok: false, report: six })
+  expect(checkerVerdict('Problems:\n- worse than main: none\n- src/a.ts:3 new hole: run x')).toEqual({ ok: false, report: 'Problems:\n- worse than main: none\n- src/a.ts:3 new hole: run x' })
+})
+
+test('T-996: the 2nd checker send-back makes the task wait for the owner with Merge as is / Keep fixing / Drop; Keep fixing starts one more try with the report', async () => {
+  const w = world()
+  const prior = { at: ISO, kind: 'checker-problems' as const, text: 'try 1: checker found problems: src/a.ts:1 old', try: 1 }
+  await saveBoard(w.$, boardWith(true, { attempts: 2, test_tries: 1, history: [prior] }))
+  const t = await finish(w, async id => checkerFinished(id, 'Problems:\n- src/a.ts:12 new hole: run x'))
+  expect(t.status).toBe('waiting')
+  expect(t.ask!.text).toBe('T-1 was sent back twice by the checker: src/a.ts:12 new hole: run x. Merge as is / Keep fixing / Drop')
+  expect(t.ask!.options).toEqual(['Merge as is', 'Keep fixing', 'Drop'])
+  expect(t.test_tries).toBe(1)
+  expect(w.git.main).toBe(M1)
+  expect(leadQueue.join('\n')).not.toContain('retrying on its own')
+  await runTool(w.$, 'change', { task: 'T-1', answer: 'Keep fixing' })
+  const k = find(await load(w.$), 'T-1')!
+  expect(k.status).toBe('todo')
+  expect(isCheckerOutput(k.test_output)).toBe(true)
+})
+
+test('T-996: answering Drop to that question drops the task', async () => {
+  const w = world()
+  const prior = { at: ISO, kind: 'checker-problems' as const, text: 'try 1: checker found problems: src/a.ts:1 old', try: 1 }
+  await saveBoard(w.$, boardWith(true, { attempts: 2, history: [prior] }))
+  await finish(w, async id => checkerFinished(id, 'Problems:\n- src/a.ts:12 new hole: run x'))
+  await runTool(w.$, 'change', { task: 'T-1', answer: 'Drop' })
+  expect(find(await load(w.$), 'T-1')!.status).toBe('dropped')
+})
+
+test('T-996: answering Merge as is runs the tests with no checker and merges', async () => {
+  const w = world()
+  inRepo(w)
+  const ask = 'T-1 was sent back twice by the checker: src/a.ts:12 new hole. Merge as is / Keep fixing / Drop'
+  await saveBoard(w.$, boardWith(true, { status: 'waiting', ask: makeAsk('symcc', ask, ISO, { options: ['Merge as is', 'Keep fixing', 'Drop'] }) }))
+  const said = await runTool(w.$, 'change', { task: 'T-1', answer: 'Merge as is' })
+  expect(said).toContain('merged')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('done')
+  expect(w.spawns.length).toBe(0)
+  expect(w.calls.some(c => c.includes('npm test'))).toBe(true)
+})
+
+test('T-1095: an answer naming two choices, or none, names no choice; a clear one still does', () => {
+  for (const a of ['merge later, keep fixing for now', 'Merged? no. Drop', 'Drop? no, keep fixing', 'dropdown', 'not sure']) expect(parseCheckerAnswer(a)).toBeUndefined()
+  const right: [string, 'merge' | 'fix' | 'drop'][] = [['Merge as is', 'merge'], ['Merge', 'merge'], ['merge it', 'merge'], ['keep fixing', 'fix'], ['fix it please', 'fix'], ['drop.', 'drop'], ['DROP', 'drop']]
+  for (const [a, pick] of right) expect(parseCheckerAnswer(a)).toBe(pick)
+})
+
+test('T-1109: a negated answer names no choice', () => {
+  for (const a of ["don't merge", 'do not merge', 'never merge this', "don't drop it", 'no drop']) expect(parseCheckerAnswer(a)).toBeUndefined()
+  expect(parseCheckerAnswer('merge it')).toBe('merge')
+  expect(parseCheckerAnswer('drop.')).toBe('drop')
+})
+
+test('T-1109: the change tool refuses "don\'t drop it"; the task keeps waiting', async () => {
+  const w = world()
+  const ask = 'T-1 was sent back twice by the checker: src/a.ts:12 new hole. Merge as is / Keep fixing / Drop'
+  await saveBoard(w.$, boardWith(true, { status: 'waiting', ask: makeAsk('symcc', ask, ISO, { options: ['Merge as is', 'Keep fixing', 'Drop'] }) }))
+  let err = ''
+  try { await runTool(w.$, 'change', { task: 'T-1', answer: "don't drop it" }) } catch (e) { err = String((e as Error).message) }
+  expect(err).toContain('Nothing changed: T-1 waits for one of Merge as is, Keep fixing, Drop')
+  expect(find(await load(w.$), 'T-1')!.status).toBe('waiting')
+})
+
+test('T-1095: the change tool refuses an answer naming two choices; the task keeps waiting, not dropped, no new try', async () => {
+  const w = world()
+  const ask = 'T-1 was sent back twice by the checker: src/a.ts:12 new hole. Merge as is / Keep fixing / Drop'
+  await saveBoard(w.$, boardWith(true, { status: 'waiting', ask: makeAsk('symcc', ask, ISO, { options: ['Merge as is', 'Keep fixing', 'Drop'] }) }))
+  const before = find(await load(w.$), 'T-1')!
+  let err = ''
+  try { await runTool(w.$, 'change', { task: 'T-1', answer: 'Drop? no, keep fixing' }) } catch (e) { err = String((e as Error).message) }
+  expect(err).toContain('Nothing changed: T-1 waits for one of Merge as is, Keep fixing, Drop')
+  const t = find(await load(w.$), 'T-1')!
+  expect(t.status).toBe('waiting')
+  expect(t.ask!.text).toBe(ask)
+  expect(t.attempts).toBe(before.attempts)
+  expect(w.spawns.length).toBe(0)
 })

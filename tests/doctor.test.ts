@@ -6,8 +6,8 @@ import { type BoardTask, emptyBoard, leadText } from '../hooks/board'
 import { oldBackups, parseDoctorArgs, backupIds } from '../hooks/core/doctor'
 import { doctor } from '../hooks/app/doctor'
 import { runCommand, COMMANDS } from '../hooks/app/symcc'
-import { runTool, TOOLS } from '../hooks/app/tools'
-import { S, finishing } from '../hooks/app/state'
+import { runTool, TOOLS, manual } from '../hooks/app/tools'
+import { S, finishing, workers, starting } from '../hooks/app/state'
 import type { HostFileEntry, HostRunResult } from '../hooks/host'
 import { test } from './reset'
 import { fakeHost, done } from './fake-host'
@@ -50,6 +50,7 @@ function world(over: { tasks?: BoardTask[]; folders?: string[] } = {}) {
   }
   const dirty = new Set([`${D}/worktrees/T-6`, `${D}/worktrees/T-7`])
   const branches = new Map([['symcc/T-2', sha('a')], ['symcc/T-3', sha('b')], ['symcc/T-5', sha('c')], ['symcc/T-6', sha('d')], ['symcc/T-494', sha('e')], ['symcc/T-7', sha('f')]])
+  const statusOf = new Map<string, string>()
   const inMain = new Set([sha('a'), sha('b'), sha('c'), sha('d')])
   /** HEAD commits of folders that are not on their task's branch (a detached HEAD) */
   const heads = new Map<string, string>()
@@ -85,14 +86,13 @@ function world(over: { tasks?: BoardTask[]; folders?: string[] } = {}) {
       return h ? done({ stdout: `${h}\n` }) : done({ exitCode: 1 })
     }
     if (g[0] === 'branch' && g[1] === '--contains') return done({ stdout: [...branches].filter(([, h]) => h === g[2]).map(([b]) => `${b}\n`).join('') })
-    if (s === 'status --porcelain') return done({ stdout: dirty.has(init?.cwd ?? '') ? ' M a.txt\n' : '' })
+    if (s === 'status --porcelain --untracked-files=all') return done({ stdout: statusOf.get(init?.cwd ?? '') ?? (dirty.has(init?.cwd ?? '') ? ' M a.txt\n' : '') })
     if (s === 'worktree prune --dry-run -v') return done({ stderr: stale ? 'Removing worktrees/T-9: gitdir file points to non-existent location\n' : '' })
     if (s === 'worktree prune') return (writes.push(j), (stale = 0), done())
     if (g[0] === 'worktree' && g[1] === 'remove') {
       writes.push(j)
-      const dir = g[2]!
-      if (g.includes('--force')) return done({ exitCode: 1, stderr: 'no --force here' })
-      if (dirty.has(dir)) return done({ exitCode: 128, stderr: 'contains modified files' })
+      const dir = g.at(-1)!
+      if (dirty.has(dir) && !g.includes('--force')) return done({ exitCode: 128, stderr: 'contains modified files' })
       dirs.delete(dir)
       for (const f of [...files.keys()]) if (f.startsWith(`${dir}/`)) files.delete(f)
       return done()
@@ -104,6 +104,11 @@ function world(over: { tasks?: BoardTask[]; folders?: string[] } = {}) {
     if (g[0] === 'rev-parse' && g[1] === '--verify' && g[2] === '-q') {
       const h = branches.get(String(g[3]).replace('refs/heads/', ''))
       return h ? done({ stdout: `${h}\n` }) : done({ exitCode: 1 })
+    }
+    if (g[0] === 'branch' && g[1] === '-D') {
+      writes.push(j)
+      branches.delete(g[2]!)
+      return done()
     }
     if (g[0] === 'update-ref' && g[1] === '-d') {
       writes.push(j)
@@ -133,7 +138,7 @@ function world(over: { tasks?: BoardTask[]; folders?: string[] } = {}) {
   S.root = ROOT
   S.me = 'me'
   S.writing = Promise.resolve()
-  return { ...w, files, dirs, branches, writes, heads, later, setMerging: (on: boolean) => void (merging = on) }
+  return { ...w, files, dirs, branches, writes, heads, later, statusOf, setMerging: (on: boolean) => void (merging = on) }
 }
 
 test('T-676: the doctor lists each case it finds, with sizes, and changes nothing without fix', async () => {
@@ -152,18 +157,18 @@ test('T-676: the doctor lists each case it finds, with sizes, and changes nothin
   expect(text).toContain('b-T-2  branch symcc/T-2 (T-2 is done; all of it is already in main)')
   expect(text).toContain('b-T-5  branch symcc/T-5 (T-5 is done; all of it is already in main) (goes after its folder, w-T-5)')
   // merged, but checked out in a folder kept for its uncommitted changes: git can't delete it, so it is only listed
-  expect(text).toContain('- branch symcc/T-6 (T-6 is dropped; all of it is already in main): kept: checked out in a folder with uncommitted changes')
-  expect(text).not.toContain('b-T-6')
+  // T-1031: a dropped task's folder with changes and branch with unmerged commits are offered, saying what is lost
+  expect(text).toContain('w-T-6  folder .symcc/worktrees/T-6/ (T-6 is dropped): deletes 1 uncommitted changed file  (2.0 MB)')
+  expect(text).toContain('b-T-6  branch symcc/T-6 (T-6 is dropped; all of it is already in main) (goes after its folder, w-T-6)')
   expect(text).toContain('b-T-3  branch symcc/T-3 (T-3 is dropped; all of it is already in main)')
-  expect(text).toContain('branch symcc/T-494 (T-494 is dropped) holds unmerged work (3 commits not in main); never deleted')
-  expect(text).toContain('folder .symcc/worktrees/T-6/ (T-6 is dropped) has uncommitted changes, kept')
+  expect(text).toContain('b-T-494  branch symcc/T-494 (T-494 is dropped): deletes 3 commits not in main')
   expect(text).toContain('.symcc/view.json is close to the 4.0 MB limit')
   expect(text).toContain('stray file .symcc/.DS_Store')
   expect(text).toContain('empty folder .symcc/scratch/')
   expect(text).toContain('.symcc/lead.json names a session that stopped 60 min ago')
   expect(text).toContain('/symcc-drive')
   expect(text).toContain('T-7 is running but has no live worker (for 30 min): /symcc-task T-7 retry')
-  expect(text).toContain('To clean up all 7: /symcc-doctor fix · only some: /symcc-doctor fix m-1101-1000 m-1102-1000')
+  expect(text).toContain('To clean up all 10: /symcc-doctor fix · only some: /symcc-doctor fix m-1101-1000 m-1102-1000')
   // a running task's folder and branch are not offered
   expect(text).not.toContain('worktrees/T-7/ (')
   expect(text).not.toContain('symcc/T-7 (')
@@ -173,31 +178,32 @@ test('T-676: the doctor lists each case it finds, with sizes, and changes nothin
   expect(w.branches.size).toBe(6)
 })
 
-test('T-676: fix cleans up every listed item, and never an unmerged branch, a folder with changes, reports or org-mem', async () => {
+test('T-676: fix cleans up every listed item, and never reports, org-mem, or a running tasks folder or branch', async () => {
   const w = world()
   const said = await doctor(w.host, 'fix')
-  expect(said).toContain('cleaned up 7 of 7')
+  expect(said).toContain('cleaned up 10 of 10')
   expect(said).toContain('Freed about')
   // backups: the newest one of each file is kept
   expect(w.files.has(`${D}/board.json.before-migrate-2026-11-01T10-00-00-000Z`)).toBe(false)
   expect(w.files.has(`${D}/board.json.before-migrate-2026-11-02T10-00-00-000Z`)).toBe(false)
   expect(w.files.has(`${D}/board.json.before-migrate-2026-11-03T10-00-00-000Z`)).toBe(true)
   expect(w.files.has(`${D}/archive.json.before-migrate-2026-11-02T10-00-00-000Z`)).toBe(true)
-  // folders: the done task's is gone (without --force), the dropped one with changes and the running one stay
+  // folders: the done task's is gone (without --force), the dropped one with changes goes with --force, the running one stays
   expect(w.dirs.has(`${D}/worktrees/T-5`)).toBe(false)
-  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(false)
   expect(w.dirs.has(`${D}/worktrees/T-7`)).toBe(true)
-  expect(w.writes.some(x => x.includes('--force'))).toBe(false)
+  expect(w.writes).toContain(`git worktree remove ${D}/worktrees/T-5`)
+  expect(w.writes).toContain(`git worktree remove --force ${D}/worktrees/T-6`)
+  expect(w.writes).toContain('git branch -D symcc/T-494')
   expect(w.writes).toContain('git worktree prune')
-  // branches: the merged ones of done and dropped tasks are gone (T-5's after its folder went); unmerged and running stay
-  expect([...w.branches.keys()].sort()).toEqual(['symcc/T-494', 'symcc/T-6', 'symcc/T-7'])
+  // branches: those of done and dropped tasks are gone (T-5's and T-6's after their folders went); the running one stays
+  expect([...w.branches.keys()]).toEqual(['symcc/T-7'])
   expect(said).not.toContain('✗')
   // never touched
   for (const f of ['org-mem.md', 'reports/T-2-try-1.md', 'board.json', 'lead.json', 'view.json', '.DS_Store']) expect(w.files.has(`${D}/${f}`)).toBe(true)
   // checked again: only the listed items are left
   const again = await doctor(w.host, '')
   expect(again).not.toContain('Can be cleaned up')
-  expect(again).toContain('holds unmerged work')
 })
 
 test('T-676: fix with ids cleans up only those; an id no longer offered is skipped, never matched to another item', async () => {
@@ -264,7 +270,7 @@ test('T-684: during a merge, fix changes nothing and says which merge runs (the 
   expect(g.branches.size).toBe(6)
   // once the merge is done, the same fix works as before
   g.setMerging(false)
-  expect(await doctor(g.host, 'fix')).toContain('cleaned up 7 of 7')
+  expect(await doctor(g.host, 'fix')).toContain('cleaned up 10 of 10')
   expect(g.dirs.has(`${D}/worktrees/T-5`)).toBe(false)
 })
 
@@ -337,4 +343,141 @@ test('T-676: a clean folder whose HEAD holds commits on no branch is kept, also 
   expect(said).toContain('holds commits on no branch now')
   expect(r.dirs.has(`${D}/worktrees/T-5`)).toBe(true)
   expect(r.writes.some(x => x.startsWith('git worktree remove'))).toBe(false)
+})
+
+test('T-1031: a failed or paused task keeps its folder with changes and its branch with unmerged commits, never offered or deleted', async () => {
+  const tasks = [task('T-6', 'failed'), task('T-494', 'paused'), task('T-3', 'dropped')]
+  const w = world({ tasks })
+  const text = await doctor(w.host, '')
+  expect(text).not.toContain('w-T-6')
+  expect(text).not.toContain('b-T-6')
+  expect(text).not.toContain('b-T-494')
+  expect(text).toContain('b-T-3  branch symcc/T-3')
+  await doctor(w.host, 'fix all')
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
+  expect(w.branches.has('symcc/T-6')).toBe(true)
+  expect(w.branches.has('symcc/T-494')).toBe(true)
+  expect(w.writes.some(x => x.includes('--force') || x.includes('branch -D symcc/T-494'))).toBe(false)
+})
+
+test('T-1031: fix with ids removes a dropped tasks folder with changes and its unmerged branch', async () => {
+  const w = world()
+  const said = await doctor(w.host, 'fix w-T-6 b-T-494')
+  expect(said).toContain('cleaned up 2 of 2')
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(false)
+  expect(w.branches.has('symcc/T-494')).toBe(false)
+  expect(w.branches.has('symcc/T-6')).toBe(true)
+  // the task is brought back between the list and the fix: nothing goes
+  const v = world()
+  await doctor(v.host, '')
+  const b = JSON.parse(v.files.get(`${D}/board.json`)!.text!)
+  for (const t of b.tasks) if (t.id === 'T-494' || t.id === 'T-6') t.status = 'todo'
+  v.files.set(`${D}/board.json`, { size: 2000, text: JSON.stringify(b) })
+  expect(await doctor(v.host, 'fix w-T-6 b-T-494')).toContain('Not offered any more')
+  expect(v.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
+  expect(v.branches.has('symcc/T-494')).toBe(true)
+})
+
+test('T-1031: an archived dropped task is offered and removed too; an untracked folder counts every file in it', async () => {
+  const w = world({ tasks: [task('T-2', 'done'), task('T-7', 'doing', { runs: [{ started: iso(30) }] })] })
+  const arch = [task('T-6', 'dropped'), task('T-494', 'dropped')]
+  w.files.set(`${D}/archive.json`, { size: 500, text: JSON.stringify({ version: 1, tasks: arch }) })
+  w.statusOf.set(`${D}/worktrees/T-6`, '?? d/a\n?? d/b\n?? d/c\n?? d/d\n?? d/e\n')
+  const text = await doctor(w.host, '')
+  expect(text).toContain('deletes 5 uncommitted changed files')
+  const said = await doctor(w.host, 'fix w-T-6 b-T-6 b-T-494')
+  expect(said).toContain('cleaned up 3 of 3')
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(false)
+  expect(w.branches.has('symcc/T-6')).toBe(false)
+  expect(w.branches.has('symcc/T-494')).toBe(false)
+})
+
+test('T-1032: a live worker of a dropped task keeps its dirty folder, never removed with --force; other dropped items still go', async () => {
+  const w = world()
+  w.host.agents.list = async () => [{ id: 'ag-6', kind: 'worker', status: 'running', description: 'T-6 fix the thing' }]
+  const text = await doctor(w.host, '')
+  expect(text).toContain('- folder .symcc/worktrees/T-6/ (T-6 is dropped): an agent may still use it, kept')
+  expect(text).not.toContain('w-T-6')
+  expect(text).toContain('b-T-494  branch symcc/T-494 (T-494 is dropped): deletes 3 commits not in main')
+  await doctor(w.host, 'fix all')
+  expect(w.writes).not.toContain(`git worktree remove --force ${D}/worktrees/T-6`)
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
+  expect(w.branches.has('symcc/T-494')).toBe(false)
+})
+
+test('T-1032: when the agent list fails, no task folder or dropped branch is offered or deleted, and nothing is forced', async () => {
+  const w = world()
+  w.host.agents.list = async () => {
+    throw new Error('agents unknown')
+  }
+  const text = await doctor(w.host, '')
+  expect(text).not.toContain('w-T-')
+  expect(text).not.toContain('b-T-494')
+  expect(text).not.toContain('b-T-6')
+  expect(text).not.toContain('b-T-3')
+  expect(text).toContain('- branch symcc/T-494 (T-494 is dropped): an agent may still use it, kept')
+  await doctor(w.host, 'fix all')
+  for (const id of ['T-5', 'T-6']) expect(w.dirs.has(`${D}/worktrees/${id}`)).toBe(true)
+  for (const id of ['T-3', 'T-6', 'T-494']) expect(w.branches.has(`symcc/${id}`)).toBe(true)
+  expect(w.writes.some(x => x.includes('--force') || x.includes('branch -D') || x.includes('worktree remove'))).toBe(false)
+})
+
+test('T-1032: a worker of this window started between the list and the fix keeps a dropped branch', async () => {
+  const w = world()
+  // the doctor asks for the agents once for the list and again right before the fix: this window's worker starts in between
+  let asked = 0
+  w.host.agents.list = async () => {
+    if (++asked === 2) workers.set('ag-494', { task: 'T-494', worktree: `${D}/worktrees/T-494`, branch: 'symcc/T-494', since: 0 })
+    return []
+  }
+  const said = await doctor(w.host, 'fix b-T-494')
+  expect(said).toContain('cleaned up 0 of 1')
+  expect(said).toContain('✗ b-T-494')
+  expect(said).toContain('kept, an agent may still use it')
+  expect(w.branches.has('symcc/T-494')).toBe(true)
+  expect(w.writes.some(x => x.includes('branch -D'))).toBe(false)
+})
+
+test('T-1035: a worker of this window started between the list and the fix keeps a dropped task folder', async () => {
+  const w = world()
+  // the second agents.list call is the folder fix's last-moment check: this window's worker for T-6 starts in between
+  let asked = 0
+  w.host.agents.list = async () => {
+    if (++asked === 2) workers.set('ag-6', { task: 'T-6', worktree: `${D}/worktrees/T-6`, branch: 'symcc/T-6', since: 0 })
+    return []
+  }
+  const said = await doctor(w.host, 'fix w-T-6')
+  expect(asked).toBe(2)
+  expect(said).toContain('cleaned up 0 of 1')
+  expect(said).toContain('✗ w-T-6')
+  expect(said).toContain('kept, an agent may still use it')
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
+  expect(w.writes.some(x => x.includes('worktree remove'))).toBe(false)
+})
+
+test('T-1032: a worker of this window keeps its dropped task folder and branch out of the list', async () => {
+  const w = world()
+  workers.set('ag-6', { task: 'T-6', worktree: `${D}/worktrees/T-6`, branch: 'symcc/T-6', since: 0 })
+  starting.add('T-494')
+  const text = await doctor(w.host, '')
+  expect(text).toContain('- folder .symcc/worktrees/T-6/ (T-6 is dropped): an agent may still use it, kept')
+  expect(text).not.toContain('w-T-6')
+  expect(text).not.toContain('b-T-494')
+  expect(text).toContain('b-T-3  branch symcc/T-3')
+  await doctor(w.host, 'fix all')
+  expect(w.dirs.has(`${D}/worktrees/T-6`)).toBe(true)
+  expect(w.branches.has('symcc/T-494')).toBe(true)
+  expect(w.branches.has('symcc/T-3')).toBe(false)
+})
+
+test('T-1033: the manual and the command say fix deletes a dropped task\'s unsaved folder and unmerged branch', async () => {
+  const text = manual('')
+  const line = text.slice(text.indexOf('/symcc-doctor [fix'))
+  const doctorLine = line.slice(0, line.indexOf('/symcc-help'))
+  expect(doctorLine).toContain('For a dropped')
+  expect(doctorLine).toContain('unmerged')
+  expect(doctorLine).toContain('for other tasks such work is only listed')
+  expect(doctorLine).not.toContain('Unmerged\n')
+  const cmd = COMMANDS().find(c => c.name === 'symcc-doctor')!
+  expect(cmd.description).toContain('for a dropped task, fix also deletes its folder with unsaved changes and its unmerged branch')
 })

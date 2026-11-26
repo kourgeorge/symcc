@@ -92,7 +92,11 @@ export function checkerVerdict(answer: string): CheckerVerdict | null {
   const text = splitLearned(String(answer ?? '')).body.trim()
   if (!text) return null
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-  return OK_LINE.test(lines.at(-1) ?? '') ? { ok: true } : { ok: false, report: text }
+  if (OK_LINE.test(lines.at(-1) ?? '')) return { ok: true }
+  // T-996: a Problems block whose only items say "worse than main: none" is no problem (gaps main already has are follow-ups)
+  const items = checkerProblems(text, Infinity)
+  if (items.length && items.every(i => /^[-*_`\s]*worse than main:\s*none[.*_`\s]*$/i.test(i.trim()))) return { ok: true }
+  return { ok: false, report: text }
 }
 
 
@@ -148,9 +152,28 @@ export const checkerPrompt = (v: CheckerValues, task?: SymccTask): string => {
   return buildPrompt({ kind: 'checker', values: all, ...(task ? { task } : {}) })
 }
 
-/** The history line of a checker's verdict. */
+/** The history line of a checker's verdict: with problems, only the first problem (see firstProblemOf). */
 export const checkerLine = (tryLabel: string, v: CheckerVerdict | null, why = ''): string =>
-  !v ? `${tryLabel}: checker gave no verdict${why ? ` (${why})` : ''}` : 'report' in v ? `${tryLabel}: checker found problems: ${oneLine(v.report, 300)}` : `${tryLabel}: checker: OK`
+  !v ? `${tryLabel}: checker gave no verdict${why ? ` (${why})` : ''}` : 'report' in v ? `${tryLabel}: checker found problems: ${firstProblemOf(v.report)}` : `${tryLabel}: checker: OK`
+
+/**
+ * T-1079: the first problem of a checker's report, on one line: the first "- " item under its "Problems:" line, else the
+ * text after "Problems:" on that line, else the report's first line.
+ */
+export function firstProblemOf(report: string): string {
+  const first = checkerProblems(report)[0]
+  if (first) return first
+  const raw = String(report ?? '').split('\n').map(l => l.trim())
+  const h = raw.findLastIndex(l => /^(#{1,6}\s*)?(\*\*|__|\*|_)?Problems:?(\*\*|__|\*|_)?:?$/.test(l))
+  if (h >= 0) {
+    const item = raw.slice(h + 1).find(Boolean)
+    if (item?.startsWith('- ') && item.slice(2).trim()) return oneLine(item.slice(2).trim(), 300)
+  }
+  const lines = raw.filter(Boolean)
+  const inline = lines.findLast(l => /^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?\s*\S/.test(l))
+  const after = inline?.replace(/^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?\s*/, '').replace(/^[-*]\s+/, '')
+  return oneLine(after || lines.find(l => l !== CHECKER_MARK) || '', 300)
+}
 
 /** The most problem lines saved on a checker's history entry. */
 export const CHECKER_PROBLEMS_MAX = 5
@@ -160,27 +183,79 @@ export const CHECKER_PROBLEMS_MAX = 5
  * "Problems:" and then one "- " line per problem (the checker prompt asks for it). Reads only the last such block: the
  * "- " lines right under the last "Problems:" line, up to CHECKER_PROBLEMS_MAX, with the "- " removed. [] when there is no block.
  */
-export function checkerProblems(report: string): string[] {
+export function checkerProblems(report: string, max = CHECKER_PROBLEMS_MAX): string[] {
   const lines = String(report ?? '').split('\n').map(l => l.trimEnd())
   const h = lines.findLastIndex(l => /^(\*\*|__|\*|_)?Problems:(\*\*|__|\*|_)?$/.test(l))
   if (h < 0) return []
   const out: string[] = []
+  let cur: string | null = null
+  const flush = () => { if (cur !== null && cur.trim()) out.push(oneLine(cur, 300)); cur = null }
   for (const l of lines.slice(h + 1)) {
-    if (!/^- ?$/.test(l) && !l.startsWith('- ')) break
-    if (out.length >= CHECKER_PROBLEMS_MAX) break
-    const t = l.slice(2).trim()
-    if (t) out.push(oneLine(t, 300))
+    if (/^[-*] ?$/.test(l) || /^[-*] /.test(l)) {
+      flush()
+      cur = l.slice(2)
+    } else if (!l.trim()) continue // blank lines under the heading or between items
+    else if (cur !== null && /^\s+\S/.test(l)) cur += ` ${l.trim()}` // an item running onto an indented line
+    else break
   }
-  return out
+  flush()
+  return out.slice(0, max)
+}
+
+/**
+ * T-1085: the lines of the Problems block itself (after the last "Problems:" heading, up to a markdown heading), one line each,
+ * "- "/"* " bullets removed. For a block with no "- " items, so the update never quotes the report's prose. [] when there is none.
+ */
+export function problemsBlockLines(report: string, max = CHECKER_PROBLEMS_MAX): string[] {
+  const lines = String(report ?? '').split('\n').map(l => l.trim())
+  const h = lines.findLastIndex(l => /^(#{1,6}\s*)?(\*\*|__|\*|_)?Problems:?(\*\*|__|\*|_)?:?$/.test(l))
+  if (h < 0) return []
+  const out: string[] = []
+  for (const l of lines.slice(h + 1)) {
+    if (/^#{1,6}\s/.test(l)) break
+    if (l) out.push(oneLine(l.replace(/^[-*+]\s+/, ''), 300))
+  }
+  return out.filter(Boolean).slice(0, max)
 }
 
 /** checkerLine as a history entry to add: "checker-ok", "checker-problems" (with its `problems` fact), or "checker" with no verdict. */
-export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = '', tryNo = 0): HistoryAdd => {
+export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = '', tryNo = 0, who: { agent?: string; report?: string } = {}): HistoryAdd => {
   const problems = v && 'report' in v ? checkerProblems(v.report) : []
-  return [!v ? 'checker' : 'report' in v ? 'checker-problems' : 'checker-ok', checkerLine(tryLabel, v, why), { try: tryNo, ...(problems.length ? { problems } : {}) }]
+  return [!v ? 'checker' : 'report' in v ? 'checker-problems' : 'checker-ok', checkerLine(tryLabel, v, why), { try: tryNo, ...(problems.length ? { problems } : {}), ...(who.agent ? { agent: who.agent } : {}), ...(who.report ? { report: who.report } : {}) }]
 }
 
 const oneLine = (s: string, max: number) => {
   const t = s.replace(/\s+/g, ' ').trim()
   return t.length > max ? `${t.slice(0, max - 1)}…` : t
+}
+
+/** T-996: the checker sends a task back this many times; the next send-back stops and asks the owner. */
+export const CHECKER_SEND_BACKS = 2
+
+/** How many times the checker sent task `t` back (its "checker found problems" history lines, all tries). */
+export const checkerSendBacks = (t: Pick<SymccTask, 'history'>): number => (t.history ?? []).filter(h => h.kind === 'checker-problems').length
+
+/** T-996: the choices of the question a task waits with after the checker sent it back twice. */
+export const CHECKER_ASK_OPTIONS = ['Merge as is', 'Keep fixing', 'Drop'] as const
+
+/** T-996: that question for task `id` sent back `n` times, with the last finding (one line). */
+export const checkerAskText = (id: string, n: number, finding: string): string =>
+  `${id} was sent back ${n === 2 ? 'twice' : `${n} times`} by the checker: ${oneLine(finding, 300).replace(/[.\s]+$/, '')}. Merge as is / Keep fixing / Drop`
+
+/** Whether `q` is that question. */
+export const isCheckerAsk = (q: string | null | undefined): boolean => /^T-\d+ was sent back (twice|\d+ times) by the checker: [\s\S]*\. Merge as is \/ Keep fixing \/ Drop$/.test(String(q ?? '').trim())
+
+/** The owner's answer to that question: which choice it names (its words at the start, any case), or undefined. */
+export function parseCheckerAnswer(answer: string): 'merge' | 'fix' | 'drop' | undefined {
+  const a = String(answer ?? '').trim().toLowerCase()
+  const words = a.match(/[a-z]+/g) ?? []
+  // a "no" word (or "don't") with a choice is unclear: refuse it rather than do the opposite
+  if (/\b(not|no|never|dont|don['’]t|didnt|wont|won['’]t|cannot|can['’]t|cant)\b/.test(a)) return undefined
+  const picks = new Set<'merge' | 'fix' | 'drop'>()
+  for (const w of words) {
+    if (w === 'merge' || w === 'merged') picks.add('merge')
+    else if (w === 'keep' || w === 'fix') picks.add('fix')
+    else if (w === 'drop' || w === 'dropped') picks.add('drop')
+  }
+  return picks.size === 1 ? [...picks][0] : undefined
 }

@@ -1,6 +1,6 @@
 // Adding and changing tasks, which ones may start, and the backlog.
 import type { SymccTask } from '../../types'
-import { BACKLOG_FROM, byRunOrder, isPriority, type Board, type BoardTask, cleanFiles, cleanLive, type Live, DEFAULT_KIND, INVESTIGATION, isInvestigation, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, isFinished, normId, STATUS_WORD, waitsForFiles } from './board-file'
+import { BACKLOG_FROM, byRunOrder, isPriority, type Board, type BoardTask, cleanFiles, cleanLive, type Live, DEFAULT_KIND, INVESTIGATION, isInvestigation, isErrand, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, isFinished, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
 import { historyEntry, withHistory } from './history'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
@@ -8,7 +8,7 @@ import { endRun, keepAgentIds } from './runs'
 import { clean, num, shownPath } from './text'
 
 /** The most a task's details may hold (addTask and patchTask cut the rest). */
-const DETAILS_MAX = 8000
+export const DETAILS_MAX = 8000
 
 /** Whether `id` may stand in a task's `after`: on the board, or archived as done (it then counts as done). */
 const knownDep = (b: Board, id: string) => !!find(b, id) || (b.archived_done ?? []).includes(id)
@@ -63,7 +63,7 @@ function liveFor(t: BoardTask, patch: TaskPatch, next: BoardTask): Live | undefi
   const sameTry = next.status === t.status && next.attempts === t.attempts
   const kept: Live = patch.live === null ? {} : { ...(t.live ?? {}) }
   // the over-time marks, the hand-back record and the check step belong to one try, and to the status it was in
-  if (!sameTry) for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'ask', 'refused', 'checking'] as const) delete kept[k]
+  if (!sameTry) for (const k of ['extra_minutes', 'time_ask', 'wrap_up', 'ask', 'refused', 'checking', 'tested'] as const) delete kept[k]
   // waiting only for the owner's files to merge: kept while the task stays where it is (or the patch sets it again)
   if (next.status !== t.status) delete kept.merge_wait
   const set = patch.live ? patch.live : {}
@@ -333,8 +333,9 @@ function answeredTask(b: Board, id: string, what: string): BoardTask {
  */
 export function investigationDone(b: Board, id: string, now: string, kept?: string): Board {
   const t = answeredTask(b, id, 'marked done')
-  const line = `try ${t.attempts}: the owner read the answer → done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}`
-  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : 'answered', merge_main: undefined, test_output: undefined, history: withHistory(t.history, now, ['done', line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}` }]) }, now)
+  const errand = isErrand(t)
+  const line = `try ${t.attempts}: ${errand ? 'the errand is finished' : 'the owner read the answer'} → done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}`
+  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : errand ? 'done' : 'answered', merge_main: undefined, test_output: undefined, history: withHistory(t.history, now, ['done', line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}` }]) }, now)
 }
 
 /** `s` in lower case with every run of other characters turned into one "-", and no "-" at either end. */

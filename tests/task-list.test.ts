@@ -64,7 +64,7 @@ test('T-901: /symcc-board opens the panel where there is one, and says so plainl
 test('T-901: the command list has /symcc-tasks (a list in the chat) and, with a panel, /symcc-board', () => {
   const panel = COMMANDS(ALL_FEATURES)
   expect(panel.find(c => c.name === `${S.N.name}-tasks`)?.description).toBe(`List the open ${S.N.name} tasks in the chat, grouped as on the board (what needs you, running, in review, failed, to do), with the backlog and today's counts`)
-  expect(panel.find(c => c.name === `${S.N.name}-board`)?.description).toBe(`Open the ${S.N.name} board panel (on Live)`)
+  expect(panel.find(c => c.name === `${S.N.name}-board`)?.description).toBe(`Open the ${S.N.name} board panel (on Live); html writes the board as a web page and opens it`)
   // OpenCode's TUI part registers its own /symcc-board, so a host with no panel doesn't list it
   expect(COMMANDS(BARE).some(c => c.name === `${S.N.name}-board`)).toBe(false)
   expect(COMMANDS(BARE).some(c => c.name === `${S.N.name}-tasks`)).toBe(true)

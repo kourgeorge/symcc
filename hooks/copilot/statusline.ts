@@ -41,7 +41,7 @@ export function bandStatusText(f: BandFiles, o: BandOptions): string | undefined
   const fresh = !!lead && o.nowMs - lead.heartbeat < LEAD_STALE_MS
   const driving = !fresh || !o.session || lead!.session === o.session
   const driver = driving ? undefined : driverFacts(lead)
-  if (b.enabled === false) return offStatusLine(name, false, false, driver, o.nowMs, width)
+  if (b.enabled === false) return offStatusLine(name, false, false)
   const facts = { tasks: b.tasks, questions: b.questions, home_branch: headBranch(f.head), mode: modeOf(b) }
   return statusLine(facts, driving, { nowMs: o.nowMs, width, ...(driver ? { driver } : {}) })
 }

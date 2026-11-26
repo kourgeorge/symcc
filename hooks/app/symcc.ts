@@ -34,7 +34,7 @@ import { TOOLS, leadGuide, runTool, type In } from './tools'
 import { debriefFinished } from './debrief'
 import { pump, workerFinished, lateHandBack, agentOnBoard, stoppedHandBack, type TurnEnd } from './workers'
 import { isStarter } from './starts'
-import { DAM_POST_LINE, notDrivingText } from '../core/dam'
+import { chatPostLine, notDrivingText } from '../core/dam'
 import { logRefusal, type Who } from './evidence'
 import { guardOnlyText } from './session-start'
 
@@ -53,8 +53,8 @@ export async function leadGuideText(host: Host): Promise<string | undefined> {
   // Read on every call, so /<name>-disable and /<name>-enable count from the next message.
   if (!(await isOn(host))) return undefined
   // T-922: a window that doesn't drive gets no board updates and starts no work; the lead says so plainly
-  const notDriving = S.driving ? '' : `\n\nThis window does not drive the board now. When the owner asks about board work here, tell them plainly: "${notDrivingText(S.N.name)}".`
-  const dam = S.dam ? `\n\n${DAM_POST_LINE}` : ''
+  const notDriving = S.driving ? '' : `\n\n${notDrivingText(S.N.name)}`
+  const dam = S.chat ? `\n\n${chatPostLine(S.chat)}` : ''
   return `${leadGuide(host.features)}${notDriving}${dam}`
 }
 
@@ -137,7 +137,7 @@ export async function toolCall(host: Host, tool: string, agentId: string | undef
   // session; if it still isn't known, answer and write nothing (never a board or lock path from "/").
   if (!(await findRoot(host))) return { result: startingText() }
   if (S.guardOnly) return { result: guardOnlyText() }
-  if (!(await isOn(host))) return { result: S.fresh ? notSetUpAnswer(S.N.name) : S.offHere ? offHereAnswer(S.N.name, S.offWhy, S.driver) : offAnswer(S.N.name) }
+  if (!(await isOn(host))) return { result: S.fresh ? notSetUpAnswer(S.N.name) : S.offHere ? offHereAnswer(S.N.name) : offAnswer(S.N.name) }
   try {
     return { result: await runTool(host, name, input as In) }
   } catch (err) {

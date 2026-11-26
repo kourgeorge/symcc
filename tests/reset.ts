@@ -3,14 +3,14 @@
 // `stopped`, a task in `finishing`, S.me, ...) changes what a later test sees. resetPlugin() empties them all
 // and puts S back to its start values, as a plugin reload does, so a test starts the same whatever ran before it.
 import { test as plainTest, type TestBody, type TestOptions, type TestRest } from 'claude-code/testing'
-import { emptyHeard, useAssistantWord } from '../hooks/board'
-import { SYMCC_WORDS } from '../hooks/host'
-import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRuns, checkerRuns, stopped, movedAgents, movedRefused, haltedAnywhere, boardAgents, reminded, healthTold, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, openDays, heard, sayQueue, keptDirty, changesCache, scratchUse, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/app/state'
+import { emptyHeard } from '../hooks/board'
+import { S, startS, timers, workers, starting, queuedWorkers, finishing, scoutRuns, checkerRuns, stopped, movedAgents, movedRefused, haltedAnywhere, boardAgents, reminded, scoutState, leadQueue, meanwhile, notReady, checkerNotReady, adoptedCheckers, openDays, heard, sayQueue, keptDirty, changesCache, scratchUse, approving, tmpWarned, skippedRoles, skippedKinds } from '../hooks/app/state'
 import { resetScoutRuns } from '../hooks/app/scouts'
 import { resetStarts } from '../hooks/app/starts'
 import { resetStore } from '../hooks/app/store'
 import { resetMergeLine } from '../hooks/app/merge-line'
 import { resetLogo } from '../hooks/app/logo'
+import { resetMergedChanges } from '../hooks/app/review'
 import { stopAsked, offAsked, seenEnded, onPurpose } from '../hooks/app/workers'
 import { saidNeedsYou } from '../hooks/app/voice'
 import { guardLogged } from '../hooks/app/ask'
@@ -19,7 +19,6 @@ import { resetClaudeSelf } from '../hooks/claude/host'
 import { resetDebriefs } from '../hooks/app/debrief'
 import { resetEvidence } from '../hooks/app/evidence'
 import { live, stopLiveTick } from '../hooks/claude/ui/live'
-import { resetLiveFolds } from '../hooks/claude/ui/vscode-live'
 import { resetBranches } from '../hooks/app/branches'
 import { resetTodayTeam } from '../hooks/app/lead'
 import { forgetSearchParts } from '../hooks/app/search-parts'
@@ -37,15 +36,14 @@ export function resetPlugin() {
   timers.length = 0
   for (const k of Object.keys(S)) delete (S as Record<string, unknown>)[k]
   Object.assign(S, startS())
-  useAssistantWord(SYMCC_WORDS.assistant)
   resetScoutRuns()
   resetStarts()
   resetStore()
   resetMergeLine()
   resetLogo()
+  resetMergedChanges()
   stopLiveTick()
   live.frame = 0
-  resetLiveFolds()
   resetBackground()
   resetClaudeSelf()
   resetDebriefs()
@@ -53,8 +51,8 @@ export function resetPlugin() {
   resetBranches()
   resetTodayTeam()
   forgetSearchParts()
-  for (const m of [workers, queuedWorkers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, checkerNotReady, changesCache, scratchUse, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
-  for (const s of [starting, finishing, stopped, movedAgents, boardAgents, healthTold, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou, guardLogged]) s.clear()
+  for (const m of [workers, queuedWorkers, onPurpose, scoutRuns, checkerRuns, reminded, scoutState, notReady, checkerNotReady, adoptedCheckers, changesCache, scratchUse, skippedRoles, skippedKinds, stopAsked, offAsked]) m.clear()
+  for (const s of [starting, finishing, stopped, movedAgents, boardAgents, openDays, keptDirty, approving, tmpWarned, seenEnded, saidNeedsYou, guardLogged]) s.clear()
   movedRefused().clear()
   haltedAnywhere().clear()
   for (const q of [leadQueue, meanwhile, sayQueue]) q.length = 0

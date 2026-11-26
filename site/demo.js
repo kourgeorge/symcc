@@ -54,7 +54,6 @@
   }
   // the scouts' tokens on top of the tries, so Σ is everyone's total (the bar's 530.1M at the end)
   const OTHERS_TOKENS = 530.1e6 - END_TODAY.tokens
-  const WHO_CELL = { workers: '█', scouts: '▒' }
 
   // ---------- the state ----------
   function start() {
@@ -76,7 +75,7 @@
       branches: [{ id: 'T-740', col: 2, ahead: 0, behind: 0 }],
       merged747: false,
       t740: [
-        ['16:28', 'try 1: worker started (from the lead)'],
+        ['16:28', 'worker symcc-T-740: try 1: worker started (from the lead)'],
       ],
       t740runs: [{ from: '16:28', start: at(16, 28), to: null, tokens: null }],
       t736: 'none',
@@ -88,7 +87,7 @@
   const ID_W = 5
   const TITLE_W = 12
   const GAP = 6
-  const LABELS = ['work✧', 'check✧', 'queue', 'tests', 'merged']
+  const LABELS = ['work✧', 'check✧', 'queue', 'tests', 'done']
   // T-767: the lines under a ▍heading start with 1 space; a running lane then "▶ " and its id in the accent ('run' tone), its title normal text
   const LEAD_W = 1 + 2 + ID_W + 1 + TITLE_W + 2
 
@@ -113,11 +112,11 @@
     const right = l.done ? `merged ${dur(s.now - l.done)} ago` : l.place ? `#${l.place}` : dur(s.now - l.since)
     // T-771: a just-merged lane: "✓ " (dim), its id in the accent, title and second line dim
     const title = ' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W)
-    const one = ' ' + (l.done ? sp('✓ ', 'dim') + sp(pad(l.id, ID_W), 'run') + sp(title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track + sp('  ' + right.padStart(6), 'dim')
+    const one = ' ' + (l.done ? sp('✓ ', 'dim') + sp(pad(l.id, ID_W), 'run') + sp(title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track + (l.done ? sp('  ' + right.padStart(6), 'dim') : '')
     // T-867: no bar: the whole task's tokens (every try; the running try's are known only at its hand-back), how many
     // times the median per task (the warning tone from twice it), its time so far, who spent them, the send-backs.
-    // T-931: the clock first, then the tokens, then the worker/checker split in < > (no ⌀ inside). When the line is too
-    // wide, parts go: the < > split, then "(× median)", then the task type, then ⌀, then ⏱
+    // T-931: the clock first, then the tokens, then the worker/checker split (no ⌀ inside), the task type at the end of the line. When the line is too
+    // wide, parts go: the < > split, then "(×median)", then ⌀, then ⏱
     const total = (l.prior || 0) + (l.tokens || 0)
     // rounded as shown, and the tone decided on the rounded number (so "(2× median)" is always the warning tone)
     const times = Math.round((total / USUAL) * 10) / 10
@@ -127,16 +126,19 @@
     const tokens = withMedian =>
       !total
         ? [['⌀ at hand-back', 'dim']]
-        : [['⌀ ' + tok(total), tone('text')], ...(l.tokens === null ? [[' + …', 'dim']] : []), ...(withMedian ? [[` (${timesText}× median)`, tone(times >= 2 ? 'warning' : 'dim')]] : [])]
+        : [['⌀ ' + tok(total), tone('text')], ...(l.tokens === null ? [[' + …', 'dim']] : []), ...(withMedian ? [[` (${timesText}×median)`, tone(times >= 2 ? 'warning' : 'dim')]] : [])]
     const agents = [l.worker && `worker ${tok(l.worker)}`, l.checker && `checker ${tok(l.checker)}`].filter(Boolean)
-    const split = agents.length ? [[[`<${agents.join(' · ')}>`, 'dim']]] : []
+    const split = agents.length ? [[[agents.join(' · '), 'dim']]] : []
     // (T-982) the send-backs "⌕ × 1", spaces around ×
-    const line = (level, withKind) => {
-      const parts = [...(level >= 1 ? [[[`⏱ ${dur(mins)}`, 'dim']]] : []), ...(level >= 2 ? [tokens(level >= 3)] : []), ...(level >= 4 ? split : []), ...(l.back ? [[[`⌕ × ${l.back}`, 'dim']]] : [])]
-      return [[`  ${withKind ? l.kind + ' ' : ''}try ${l.tryNo}/${l.tries}`, 'dim'], ...parts.flatMap(x => [[' · ', 'dim'], ...x])]
+    // (T-1080) a finished lane ends with its change size ("+212 −48"); it is the first part dropped
+    const line = (level, withSize = false) => {
+      const parts = [...(level >= 1 ? [[[`⏱ ${dur(mins)}`, 'dim']]] : []), ...(level >= 2 ? [tokens(level >= 3)] : []), ...(level >= 4 ? split : []), ...(l.back ? [[[`⌕ × ${l.back}`, 'dim']]] : []), ...(withSize && l.size ? [[[l.size, 'dim']]] : [])]
+      return [[`  try ${l.tryNo}/${l.tries}`, 'dim'], ...parts.flatMap(x => [[' · ', 'dim'], ...x])]
     }
-    const tries = [line(4, true), line(3, true), line(2, true), line(2, false), line(1, false), line(0, false)]
     const width = xs => 1 + xs.reduce((n, [t]) => n + t.length, 0)
+    // (T-1074) the task type ends the second line (dim, two spaces after); dropped when it does not fit
+    const withKind = xs => [...xs, ['  ' + l.kind, 'dim']]
+    const tries = [...(l.size ? [withKind(line(4, true))] : []), ...[4, 3, 2, 1, 0].flatMap(n => [withKind(line(n)), line(n)])]
     const pick = tries.find(xs => width(xs) <= PANEL_W) || tries[tries.length - 1]
     const two = ' ' + pick.map(([t, k]) => sp(t, k)).join('')
     return [one, two]
@@ -199,25 +201,26 @@
     // (T-809) line 2: the bar alone (16 cells in the board colors) with the scouts' share; line 3: the medians per merged task, first try,
     // tries and the checker's send-backs; line 4: the agent work time, then the tokens per hour over the whole day, 00 to 24, at the very end (hours to come are dim dots)
     const cells = Math.round((TODAY_MORE.scoutsPct / 100) * 16)
-    const bar = sp(WHO_CELL.workers.repeat(16 - cells), 'who-workers') + sp(WHO_CELL.scouts.repeat(cells), 'who-scouts')
+    const bar = sp('█'.repeat(16 - cells), 'who-workers') + sp('█'.repeat(cells), 'who-scouts')
     const shares = ' ' + sp(`workers and checkers ${100 - TODAY_MORE.scoutsPct}%`, 'who-workers') + sp(' · ', 'dim') + sp(`scouts ${TODAY_MORE.scoutsPct}%`, 'who-scouts') + sp(` (⌀ ${TODAY_MORE.scoutsTokens})`, 'dim')
     L.push(' ' + sp('⌀ ', 'dim') + bar + shares)
     L.push(' ' + sp('avg ', 'dim') + sp(`⌀ ${TODAY_MORE.perTask.replace(' · ', '/task · ')}`, 'text') + sp(`   first try ${TODAY_MORE.firstTry}% · avg ${TODAY_MORE.avgTries} tries/task   ⌕ ${d.back} sent back by the checker`, 'dim'))
     L.push(' ' + sp('⏱ ', 'dim') + sp(`${TODAY_MORE.work} agent work`, 'text') + sp('   ⌀/h 00', 'dim') + sp('▕', 'dim') + sp('▁'.repeat(8), 'dim') + sp(TODAY_MORE.spark.slice(0, -1), 'bar') + sp(TODAY_MORE.spark.slice(-1), 'now') + sp('·'.repeat(24 - 8 - TODAY_MORE.spark.length) + '▏24', 'dim'))
     // (T-889) then the dim yesterday and last 7 days lines (today left out)
+    L.push('')
     L.push(' ' + sp('yesterday:   ✓ 77 merged · ⌀ 355M · ⏱ 34h', 'dim'))
     L.push(' ' + sp('last 7 days: ✓ 176 merged · ⌀ 854M · ⏱ 53h', 'dim'))
     if (!s.lanes.length) L.push(' ' + sp('⌀ = tokens', 'dim'))
     if (wide) {
       L.push('')
       L.push(liveHead('Organizational memory', '   ' + sp('60 / 60', 'dim'), '   60 / 60'), '')
-      L.push(sp('   newest ', 'dim') + '[all]')
-      L.push('    ' + sp('11-21', 'dim') + '  ' + sp('ui · surfaces', 'topic') + '  ' + cut('VS Code board pages space their children with the page Box\'s gap={1}', 42))
-      L.push('    ' + sp('11-21', 'dim') + '  ' + sp('probes       ', 'topic') + '  ' + cut('Draw the OpenCode panel from /tmp with bun: panelLines(view, …)', 42))
-      L.push('    ' + sp('11-21', 'dim') + '  ' + sp('tests        ', 'topic') + '  ' + cut('In tests, put dates relative to now, never a fixed date', 42))
-      L.push(sp('   topics', 'dim'))
-      L.push('    ' + sp('tests', 'topic') + ' ' + sp('14', 'dim') + '   ' + sp('shell · guard', 'topic') + ' ' + sp('11', 'dim') + '   ' + sp('ui · surfaces', 'topic') + ' ' + sp('11', 'dim') + '   ' + sp('probes', 'topic') + ' ' + sp('8', 'dim'))
-      L.push('    ' + sp('engine · hosts', 'topic') + ' ' + sp('5', 'dim') + '   ' + sp('snapshots', 'topic') + ' ' + sp('5', 'dim') + '   ' + sp('board data', 'topic') + ' ' + sp('3', 'dim') + '   ' + sp('site', 'topic') + ' ' + sp('3', 'dim'))
+      L.push(sp(' newest ', 'dim') + '[all]')
+      L.push('   ' + sp('11-21', 'dim') + '  ' + sp('ui · surfaces', 'topic') + '  ' + cut('VS Code board pages space their children with the page Box\'s gap={1}', 42))
+      L.push('   ' + sp('11-21', 'dim') + '  ' + sp('probes       ', 'topic') + '  ' + cut('Draw the OpenCode panel from /tmp with bun: panelLines(view, …)', 42))
+      L.push('   ' + sp('11-21', 'dim') + '  ' + sp('tests        ', 'topic') + '  ' + cut('In tests, put dates relative to now, never a fixed date', 42))
+      L.push(sp(' topics', 'dim'))
+      L.push('   ' + sp('tests', 'topic') + ' ' + sp('14', 'dim') + '   ' + sp('shell · guard', 'topic') + ' ' + sp('11', 'dim') + '   ' + sp('ui · surfaces', 'topic') + ' ' + sp('11', 'dim') + '   ' + sp('probes', 'topic') + ' ' + sp('8', 'dim'))
+      L.push('   ' + sp('engine · hosts', 'topic') + ' ' + sp('5', 'dim') + '   ' + sp('snapshots', 'topic') + ' ' + sp('5', 'dim') + '   ' + sp('board data', 'topic') + ' ' + sp('3', 'dim') + '   ' + sp('site', 'topic') + ' ' + sp('3', 'dim'))
     }
     L.push('')
     L.push(sp('↑↓ move · Enter open task · w watch worker · Esc close', 'dim'))
@@ -258,7 +261,7 @@
   // ---------- the task page (T-740) ----------
   function taskPage(s) {
     const L = []
-    L.push(sp('‹ [Tasks]', 'dim') + '  ' + s.t740runs.map((_, k) => (k === s.t740runs.length - 1 ? '[● Try ' : '[Try ') + (k + 1) + ']').join(' '))
+    L.push(sp('‹ [Tasks]', 'dim'))
     L.push('')
     L.push(sp('T-740', 'id') + ' ' + `<b>${esc(TITLES['T-740'])}</b>`)
     L.push('')
@@ -378,7 +381,7 @@
       Object.assign(lane(s, 'T-740'), { at: 0, since: s.now, tryNo: 2, prior: T740_TRY1_TOKENS, tokens: null, back: 1, ...T740_TRY1_SPLIT })
       s.today.back += 1
       s.today.tokens += T740_TRY1_TOKENS
-      s.t740.push(['16:50', 'try 1 → the checker found problems'], ['16:50', 'try 2: worker started'])
+      s.t740.push(['16:50', 'worker symcc-T-740: try 1: made the change → the checker found problems'], ['16:50', 'checker symcc-T-740-checker: found problems: a stopped checker\'s "stopped" answer still counts'], ['16:50', 'worker symcc-T-740: try 2: worker started'])
       Object.assign(s.t740runs[0], { to: '16:50', mins: 22, tokens: T740_TRY1_TOKENS, end: 'the checker found problems', agents: ['▸ worker 12m', '⌕ checker 10m'] })
       s.t740runs.push({ from: '16:50', start: s.now, to: null, tokens: null })
       say(s, { k: 'event', mark: '↺', tone: 'warning', text: 'T-740 try 1 → the checker found problems · try 2/3 started' })
@@ -393,7 +396,7 @@
     [2600, at(16, 53, 0), s => { Object.assign(lane(s, 'T-747'), { at: 4, since: s.now }) }],
     [900, at(16, 53, 10), s => {
       // T-771: T-747 keeps its lane for a while, drawn finished (dim, ✓ at merged, "merged 0s ago")
-      Object.assign(lane(s, 'T-747'), { done: s.now, agent: false })
+      Object.assign(lane(s, 'T-747'), { done: s.now, agent: false, size: '+212 −48', worker: 0, checker: 0 })
       s.today.merged += 1
       s.today.tokens += T747_TOKENS
       s.commits += 1

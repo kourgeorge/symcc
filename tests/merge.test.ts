@@ -6,7 +6,7 @@ import { notProseText } from '../hooks/core/checker'
 import { YOUR_EDITS } from '../hooks/core/review'
 import { inMergeLine, MERGE_LINE_POLL_MS, resetMergeLine } from '../hooks/app/merge-line'
 import { joinedText } from '../hooks/core/board-parts'
-import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, DEFAULT_TEST_MINUTES, BASH_PATHS_MAX, bashTooManyText, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
+import { mergeLineText, parseMergeLine, inLineNote, MERGE_LINE_STALE_MS, mergeLineStaleMs, type LineEntry, testMinutesOf, testTimeoutMs, lineEntryStale, readBoard, DEFAULT_TEST_MINUTES, failedTestNames, FAILED_TESTS_KEPT, FAILED_TEST_CHARS } from '../hooks/board'
 import { PREP_NOTE, STEP_NOTE, shownNote, type Board, type Notify, soundSetFor, type BoardTask, workerGitWriteText, addTask, emptyBoard, patchTask, lockText, parseBoard, outOfScopeText, blockedText, mergeBlockers, find, readArchive, spokenLine, statText, REPORT_MAX_CHARS, startRun, withEnd, fmtRun, backToTodo, finishedNote, leadText, resetDoing, commitMessage, finishLimitMs, mergeTestCount, TEST_TIMEOUT_MS, statusCell, WRAP_UP_TEXT, parseOvertimeAnswer, ANSWER_MAX_CHARS, kindOf, askMoreTask, rowExtra, taskKeys, keepNoteTask, noteFilesInUse, untestedChange, isTestFile, isPlainRelPath, parseSettingValue, type WorkerQuestion, isAnswered, boardText, taskMatches, withAgentStart, workerIdOf, tryTokens, tryCost, onTask, namedReports, latestReportOf } from '../hooks/board'
 import { usedRun, runBy } from './agent-fixture'
 import { removeWorktree, cleanupMerged, deleteMergedBranch } from '../hooks/app/git'
@@ -25,7 +25,6 @@ import { taskPhase, taskAsks, FINISH_STALE_MS, needsYou, waitsForYou, answeredLe
 import { keysFor } from './task-keys'
 import { ranOutOfTime } from'../hooks/core/test-timeout'
 import { claimLead } from '../hooks/app/lead'
-import { SPEED_CAP_MS, bestMsOfAsync } from './timing'
 import { finishing as finishingSet } from '../hooks/app/state'
 import { CLAUDE_WORDS } from '../hooks/claude/host'
 import { SYMCC_WORDS } from '../hooks/host'
@@ -1044,7 +1043,7 @@ function secretWorld(changed: string[], committed = false, deleted: string[] = [
   w.git.answer = (args, cwd) => {
     if (cwd === WT && args[0] === 'diff' && args.includes('--cached')) return ok(committed ? '' : listed(args).join('\0'))
     // `history`: files any of the branch's commits added or changed, even ones a later commit deleted again
-    if (args[0] === 'log' && args.includes('--name-only')) return ok(history.join('\0'))
+    if (args[0] === 'log' && args.includes('--name-only')) return ok((args.includes('--diff-filter=d') ? history.filter(f => !deleted.includes(f)) : history).join('\0'))
     if (args[0] === 'diff' && args.includes('--name-only')) return ok(listed(args).join('\0'))
     if (cwd === WT && args[0] === 'restore' && args.includes('--staged') && !args.includes('--worktree')) {
       const files = args.slice(args.indexOf('--') + 1).map(a => a.replace(/^:\(literal\)/, ''))
@@ -1170,6 +1169,14 @@ test('deleting a tracked secret-looking file is allowed: the deletion is committ
   expect(w.git.main).toBe(H1)
   expect(told).not.toContain('left out')
   expect(t.history.at(-1)?.text).not.toContain('left out')
+})
+
+test('a task that only deletes a tracked .env in its own commit merges with its commits kept (no squash)', async () => {
+  const { w, restored, t } = await finishedWithSecrets(['src/a.ts', 'tests/.env'], true, { deleted: ['tests/.env'], history: ['src/a.ts', 'tests/.env'] })
+  expect(t.status).toBe('done')
+  expect(restored).toEqual([])
+  expect(w.calls.some(c => c.includes(' reset '))).toBe(false)
+  expect(w.git.main).toBe(w.git.head)
 })
 
 test('a deletion of a secret-looking file the worker committed is not put back by taking secrets out of the branch', async () => {
@@ -1369,6 +1376,7 @@ test('tests_with_changes off: a code change with no test file merges with nothin
   expect(t.status).toBe('done')
   expect(w.git.main).toBe(H1)
   expect(told).not.toContain('no test')
+  expect(meanwhile.join('\n')).not.toContain('no test')
 })
 
 test('a docs-only change is never flagged, whatever tests_with_changes says', async () => {
@@ -1701,7 +1709,7 @@ test('reject sends a task in review back to "todo" with the reason, and merges n
   expect(t.note).toBe('rejected: the name is wrong')
   expect(t.history.at(-1)?.text).toBe('try 1: rejected by the owner: the name is wrong')
   // only looking: nothing committed, merged or moved
-  expect(w.calls.filter(c => / git /.test(c))).toEqual(['root: git symbolic-ref --short -q refs/remotes/origin/HEAD', 'root: git symbolic-ref --short -q HEAD', 'root: git for-each-ref --format=%(refname:short) refs/heads'])
+  expect(w.calls.filter(c => / git /.test(c))).toEqual(['root: git symbolic-ref --short -q HEAD'])
   expect(w.git.main).toBe(M1)
 })
 
@@ -2779,7 +2787,8 @@ test('T-967: add and change set a priority (a whole number from -20 to 19) and r
   const w = world()
   const [b] = boardWith('review')
   await saveBoard(w.$, b)
-  const add = (x: Record<string, unknown>) => runTool(w.$, 'add', { title: 'New', details: 'd', why: 'a test', origin_by: 'lead', ...x })
+  let n = 0
+  const add = (x: Record<string, unknown>) => runTool(w.$, 'add', { title: `New ${++n}`, details: 'd', why: 'a test', origin_by: 'lead', ...x })
   expect(String(await add({}))).toContain('added T-2')
   expect(find(await load(w.$), 'T-2')!.priority).toBe(0)
   expect(String(await add({ priority: -2 }))).toContain('added T-3')
@@ -3880,94 +3889,6 @@ test("a worker's edit through a symbolic link into the owner's copy is refused; 
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/src/new/b.ts` })).toBeUndefined()
   expect(await checkEdit(f.$, 'ag1', { path: `${wt5}/README.md` })).toMatch(/README\.md is outside this task's files/)
   expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toEqual(['README.md'])
-  // the same links in Bash: a read through a link inside the worker's folder is refused like the edit (T-436)
-  const bash = (command: string, cwd?: string) => checkEdit(f.$, 'ag1', { command }, cwd)
-  expect(await bash(`cat ${wt5}/link/README.md`)).toMatch(/^Refused: this command names README\.md in the owner's copy/)
-  expect(await bash('cat link/README.md')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
-  expect(await bash('cat "link/README.md"')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
-  expect(await bash('cd link && cat README.md')).toMatch(/^Refused: this command names the project folder in the owner's copy/)
-  expect(await bash('cd src && cat ../link/.symcc/worktrees/T-6/a.ts')).toMatch(/names \.symcc\/worktrees\/T-6\/a\.ts/)
-  expect(await bash('cat README.md', `${wt5}/link`)).toMatch(/names README\.md in the owner's copy/)
-  expect(await bash(`python3 - <<'EOF'\nprint(open('link/README.md').read())\nEOF`)).toMatch(/names README\.md in the owner's copy/)
-  // wildcards: the folder part before the first wildcard piece is looked up, so a link there is followed too
-  for (const glob of ['cat link/*.md', 'cat link/R?ADME.md', 'cat link/[R]EADME.md', 'cat ./link/README*', 'head -n1 link/READM*', 'cat "link"/*.md'])
-    expect(await bash(glob), glob).toMatch(/^Refused: this command names the project folder in the owner's copy/)
-  expect(await bash('cat src/*.ts scratch/*.txt *.md')).toBeUndefined()
-  // links that lead elsewhere, a link that leads nowhere, and the worker's own files: allowed
-  expect(await bash('cat scratch/notes.txt broken src/a.ts && ls src')).toBeUndefined()
-  expect(await bash(`cat ${wt5}/src/a.ts`)).toBeUndefined()
-  // too many paths to look up: refused, not cut short
-  expect(await bash(`cat ${Array.from({ length: BASH_PATHS_MAX }, (_, i) => `f${i}`).join(' ')} link/README.md`)).toBe(bashTooManyText(wt5))
-  // ordinary long commands main allowed are still allowed, and only paths that may go through a link are looked up
-  // the slow way: one folder listing each, not a lookup per path (T-436)
-  let slow = 0
-  const realStat = fs.stat as (p: string, o?: { resolve?: boolean }) => Promise<unknown>
-  fs.stat = async (p: string, o?: { resolve?: boolean }) => (o?.resolve && slow++, realStat(p, o))
-  const files = (n: number, f: (i: number) => string) => Array.from({ length: n }, (_, i) => f(i)).join(' ')
-  expect(await bash(`rm ${files(129, i => `f${i}.txt`)}`)).toBeUndefined()
-  expect(await bash(`cat ${files(130, i => `src/f${i}.ts`)}`)).toBeUndefined()
-  expect(await bash(`cat > notes.md <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `- see docs/x${i}.md`).join('\n')}\nEOF`)).toBeUndefined()
-  expect(await bash(`cat > src/m.ts <<'EOF'\n${Array.from({ length: 130 }, (_, i) => `import m${i} from './hooks/m${i}'`).join('\n')}\nEOF`)).toBeUndefined()
-  expect(await bash(`cd src; cd a; cd b; cd c; cat ${files(9, i => `f${i}`)}`)).toBeUndefined()
-  expect(await bash(`${Array.from({ length: 17 }, (_, i) => `cd d${i}`).join(' && ')} && cat x`)).toBeUndefined()
-  expect(await bash(`cat ${files(1999, i => `src/f${i}.ts`)}`)).toBeUndefined()
-  const looked = slow
-  // the folder lookups of the worker's own folder and the project, not one per path (counted before the timed call).
-  // This count is what catches the old slow way (a lookup per path), so no tight time limit is needed (T-478)
-  expect(looked).toBeLessThan(30)
-  // and a generous time cap only: the work is not linear in the paths (4 times the paths took about 20 times as long
-  // under load), so a growth ratio would flake; the fastest of 3 runs keeps one busy moment from counting
-  const big = await bestMsOfAsync(() => bash(`cat ${files(1999, i => `src/f${i}.ts`)}`))
-  expect(big).toBeLessThan(SPEED_CAP_MS)
-  // a link among many plain paths is still followed
-  expect(await bash(`cat ${files(500, i => `src/f${i}.ts`)} link/README.md`)).toMatch(/names README\.md in the owner's copy/)
-  fs.stat = realStat
-  workers.clear()
-})
-
-test("a worker's Bash naming the owner's copy through a symbolic link elsewhere is refused; a link into its own folder or elsewhere is not (T-417)", async () => {
-  S.me = 'me'
-  const f = world()
-  const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
-  await saveBoard(f.$, b)
-  const wt5 = `${ROOT}/.symcc/worktrees/T-5`
-  const disk = fakeDisk({
-    [ROOT]: 'dir',
-    [`${ROOT}/README.md`]: 'file',
-    [`${ROOT}/.symcc`]: 'dir',
-    [`${ROOT}/.symcc/worktrees`]: 'dir',
-    [wt5]: 'dir',
-    [`${wt5}/src`]: 'dir',
-    '/home': 'dir',
-    '/home/me': 'dir',
-    '/home/me/link': `-> ${ROOT}`,
-    '/home/me/mine': `-> ${wt5}`,
-    '/home/me/out': '-> /tmp/x2',
-    '/tmp': 'dir',
-    '/tmp/x2': 'dir',
-  })
-  const fs = (f.$ as unknown as { fs: Record<string, unknown> }).fs
-  const plainStat = fs.stat as (p: string) => Promise<unknown>
-  fs.stat = async (p: string, o?: { resolve?: boolean }) => {
-    if (!o?.resolve) return plainStat(p)
-    const realPath = await disk.real(p)
-    if (realPath === undefined) throw new Error(`ENOENT ${p}`)
-    return { kind: 'file', size: 0, mtimeMs: 0, isLink: false, realPath }
-  }
-  fs.list = async (d: string) => disk.list(d).map(e => ({ ...e, kind: e.isLink ? 'other' : 'file', size: 0, mtimeMs: 0 }))
-  workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
-  const bash = (command: string) => checkEdit(f.$, 'ag1', { command })
-  expect(await bash('cat /home/me/link/README.md')).toMatch(/^Refused: this command names README\.md in the owner's copy/)
-  expect(await bash('test -e /home/me/link/.symcc/worktrees/T-6/a.ts')).toMatch(/names \.symcc\/worktrees\/T-6\/a\.ts/)
-  expect(await bash('cat /home/me/link/.symcc/worktrees/T-5/src/a.ts')).toBeUndefined()
-  expect(await bash('cat /home/me/mine/src/a.ts && ls /home/me/out/notes')).toBeUndefined()
-  expect(await bash('cd tests && cat ../hooks/claude/tools.ts')).toBeUndefined()
-  // a disk that can't be read changes nothing: the paths are judged as written
-  fs.stat = async () => {
-    throw new Error('no disk')
-  }
-  expect(await bash('cat /home/me/link/README.md')).toBeUndefined()
-  expect(await bash(`cat ${ROOT}/README.md`)).toMatch(/^Refused: this command names README\.md/)
   workers.clear()
 })
 
@@ -3980,7 +3901,7 @@ test("a worker's Bash command reaching the owner's copy is refused; its own fold
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
   const bash = (agent: string | undefined, command: string) => checkEdit(f.$, agent, { command })
   for (const c of [`echo x > ${ROOT}/README.md`, `cp a ${ROOT}/.symcc/board.json`, `cd ${ROOT} && git commit -m x`, 'echo x > ../../README.md'])
-    expect(await bash('ag1', c)).toMatch(/^Refused: this command names .* outside your own folder/)
+    expect(await bash('ag1', c)).toMatch(/^Refused: this command (names .* outside your own folder|has a "\.\." path piece)/)
   for (const c of ['echo x > /tmp/a', 'echo x > src/a.ts', 'bun test', `cat ${wt5}/src/a.ts`]) expect(await bash('ag1', c)).toBeUndefined()
   // no file request was recorded for any of them
   expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toBeUndefined()
@@ -3990,54 +3911,101 @@ test("a worker's Bash command reaching the owner's copy is refused; its own fold
   workers.clear()
 })
 
-test("a worker's git writes in its own folder are refused like a checker's; read-only git and the merge-it-in step still work (T-432)", async () => {
+test("T-1053, T-1062: a worker may change git in its own folder on its own branch; the deny list, other branches and other folders stay refused", async () => {
   S.me = 'me'
   const f = world()
   const [b] = boardWith('auto', ['npm test'], { agent: 'ag1', live: { session: 'me' }, runs: [{ started: ISO }] } as Partial<BoardTask>)
   await saveBoard(f.$, b)
   const wt5 = `${ROOT}/.symcc/worktrees/T-5`
   workers.set('ag1', { task: 'T-1', worktree: wt5, branch: 'symcc/T-1', since: T0 })
-  const bash = (command: string) => checkEdit(f.$, 'ag1', { command })
+  // the shell is in the worker's own folder (as Claude Code tells it), or a folder inside it
+  const bash = (command: string, cwd: string | undefined = wt5) => checkEdit(f.$, 'ag1', { command }, cwd)
+  for (const command of [
+    'git commit -am x', 'git add -A && git commit -m "x: why"', 'git merge main', 'git merge --no-edit symcc/T-7', 'git merge --abort',
+    'git merge --no-edit main 2>&1 | tail -20', 'git cherry-pick abc123', 'git revert --no-edit HEAD', 'git restore src/a.ts', 'git restore --staged .',
+    'git checkout -- src/a.ts', 'git checkout main -- src/a.ts', 'git reset --hard HEAD~1', 'git merge -s ort -X theirs main', 'git merge --no-autostash main',
+    'git rebase main', 'git rebase --continue', 'git rebase --root', 'git rebase --onto main HEAD~2', 'git rebase -i HEAD~3', 'git rebase --abort',
+    'git bisect start', 'git bisect reset', 'git bisect good', 'git commit -s -m x', 'git merge -m "uses -s evil" main',
+    `cd ${wt5} && git commit -am x`, 'cd src && git add a.ts', 'git rm -q old.ts', 'git clean -fd',
+    // a scratch repository under /tmp
+    'git init /tmp/x', 'cd /tmp/x && git add . && git commit -m m',
+  ]) expect([command, await bash(command)]).toEqual([command, undefined])
+  expect(await bash('git commit -am x', `${wt5}/src`)).toBeUndefined()
+  expect(await bash('git commit -m m', '/tmp/x')).toBeUndefined()
+  // the shell starts in the owner's folder, but the command first goes to the worker's own one
+  expect(await bash(`cd ${wt5} && git commit -am x`, ROOT)).toBeUndefined()
   for (const [command, what] of [
-    ['git commit -am x', 'git commit'],
-    ['git update-ref refs/heads/main HEAD', 'git update-ref'],
+    ['git push', 'git push'],
     ['git push . HEAD:main', 'git push'],
-    ['git merge main', 'git merge'],
-    ['git add -A && git commit -m x', 'git add'],
-    ['git reset --hard HEAD~1', 'git reset'],
-    ['git checkout main', 'git checkout'],
-    ['git switch -c x', 'git switch'],
+    ['git remote add x https://example.com/x.git', 'git remote'],
+    ['git branch -D symcc/T-7', 'git branch'],
+    ['git branch -m other', 'git branch'],
+    ['git branch new', 'git branch'],
     ['git branch -f main HEAD', 'git branch'],
-    ['git tag v1', 'git tag'],
-    ['git stash', 'git stash'],
-    ['git rebase main', 'git rebase'],
+    ['git checkout main', 'git checkout <branch>'],
+    ['git checkout main --', 'git checkout <branch>'],
+    ['git checkout -b x', 'git checkout <branch>'],
+    ['git checkout -B x -- a.ts', 'git checkout <branch>'],
+    ['git checkout --detach -- a.ts', 'git checkout <branch>'],
+    ['git switch main', 'git switch'],
     ['git worktree add /tmp/x main', 'git worktree'],
-    ['git merge --abort', 'git merge'],
+    ['git config user.name x', 'git config'],
+    ['git tag v1', 'git tag'],
+    ['git update-ref refs/heads/main HEAD', 'git update-ref'],
+    ['git symbolic-ref HEAD refs/heads/main', 'git symbolic-ref'],
+    ['git rebase main symcc/T-7', 'git rebase <other branch>'],
+    ['git rebase --root other', 'git rebase <other branch>'],
+    ['git rebase --root --onto main other', 'git rebase <other branch>'],
+    ['git rebase --update-refs main', 'git rebase --update-refs'],
+    ['git rebase --autostash main', 'git rebase --autostash'],
+    ['git rebase --quit', 'git rebase --quit'],
+    ['git bisect reset other', 'git bisect reset <commit>'],
+    ['git merge --autostash main', 'git merge --autostash'],
+    ['git merge --autost main', 'git merge --autostash'],
+    ['git fetch origin', 'git fetch'],
+    ['git pull origin main', 'git pull'],
+    ['git stash', 'git stash'],
+    ['git stash pop', 'git stash'],
+    ['git lfs push origin', 'git lfs'],
+    ['git -c user.name=x commit -m x', 'git -c'],
+    ['git -c core.hooksPath=x commit -m x', 'core.hooksPath'],
+    ['GIT_DIR=/elsewhere/.git git commit -m x', 'a GIT_ setting'],
+    ['git --git-dir=/elsewhere/.git commit -m x', "git's own folder"],
+    ['git --work-tree=/elsewhere commit -m x', 'git --work-tree'],
+    ['git -C /tmp/x commit -m x', 'git -C'],
+    [`git -C ${wt5} commit -m x`, 'git -C'],
     ['sh -c "git update-ref refs/heads/main HEAD"', 'git update-ref'],
     ['/usr/libexec/git-core/git-update-ref refs/heads/main HEAD', 'git update-ref'],
-  ] as const) expect(await bash(command)).toBe(workerGitWriteText(what))
-  expect(workerGitWriteText('git commit')).toMatch(/^Refused: git commit may change the repository .*a worker may only read with git/)
-  expect(workerGitWriteText('git commit')).not.toMatch(/In this try you may/)
-  for (const command of ['git status', 'git diff', 'git log --oneline -5', 'git show HEAD', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'git stash list', 'bun test', 'echo "use git diff"'])
-    expect(await bash(command)).toBeUndefined()
-  // a path in the owner's copy is still refused for that first
+    // T-1053's last checker: a program git runs is checked too (rebase -x / --exec and bisect run are refused)
+    ["git rebase -x 'git push origin main' HEAD~1", 'git rebase -x'],
+    ['git rebase --exec="git branch -f main HEAD" HEAD~1', 'git rebase --exec'],
+    ['git bisect run git push', 'git bisect run'],
+    // a git write in any folder but its own or /tmp (lead's note, T-1053's checker)
+    ['cd /Users/me/other && git commit -m x', 'git in another folder'],
+    ['cd $D && git commit -m x', 'git in another folder'],
+    ['cd && git commit -m x', 'git in another folder'],
+  ] as const) expect([command, await bash(command)]).toEqual([command, workerGitWriteText(what)])
+  // the shell's folder elsewhere, or unknown
+  expect(await bash('git commit -am x', '/Users/me/other')).toBe(workerGitWriteText('git in another folder'))
+  expect(await checkEdit(f.$, 'ag1', { command: 'git commit -am x' })).toBe(workerGitWriteText('git in another folder'))
+  for (const command of ['git status', 'git diff', 'git log --oneline -5', 'git show HEAD', 'git diff main...HEAD && git blame src/a.ts', 'git branch --list', 'bun test', 'echo "use git diff"', 'cd "$(git rev-parse --show-toplevel)"', 'tee -a "$LOG"'])
+    expect([command, await checkEdit(f.$, 'ag1', { command })]).toEqual([command, undefined])
+  // a path in the owner's copy, or another task's folder, is refused for that first
   expect(await bash(`cd ${ROOT} && git commit -m x`)).toMatch(/^Refused: this command names .* outside your own folder/)
-  // the merge-it-in try (its task conflicted with main): git merge main and --abort pass, nothing else does
-  await saveBoard(f.$, patchTask(b, 'T-1', { merge_main: true }, ISO))
-  for (const command of ['git merge main', 'git merge --no-edit main 2>&1 | tail -20', 'git merge --abort', 'git status && git diff'])
-    expect(await bash(command)).toBeUndefined()
-  for (const [command, what] of [
-    ['git merge other', 'git merge'],
-    ['git merge -m x main', 'git merge'],
-    ['git merge main && git commit -am x', 'git commit'],
-    ['git update-ref refs/heads/main HEAD', 'git update-ref'],
-    ['git add -A', 'git add'],
-  ] as const) expect(await bash(command)).toBe(workerGitWriteText(what, 'main'))
-  expect(workerGitWriteText('git commit', 'main')).toMatch(/In this try you may also run `git merge main`/)
-  // a task that merges into another branch may merge only that one
-  await saveBoard(f.$, patchTask(b, 'T-1', { merge_main: true, merge_into: 'dev' } as Partial<BoardTask>, ISO))
-  expect(await bash('git merge dev')).toBeUndefined()
-  expect(await bash('git merge main')).toBe(workerGitWriteText('git merge', 'dev'))
+  expect(await bash(`git -C ${ROOT}/.symcc/worktrees/T-7 commit -m x`)).toMatch(/^Refused: this command names .* outside your own folder/)
+  // zsh's chdir moves the folder like cd: refused the same way
+  for (const [cd, zsh] of [
+    ['cd ${PWD%/.symcc*} && git commit -am x', 'chdir ${PWD%/.symcc*} && git commit -am x'],
+    ['true | cd /owner; git commit -am x', 'true | chdir /owner; git commit -am x'],
+    [`cd ${ROOT} && git merge main`, `chdir ${ROOT} && git merge main`],
+  ] as const) {
+    const want = await bash(cd)
+    expect([cd, typeof want]).toEqual([cd, 'string'])
+    expect([zsh, await bash(zsh)]).toEqual([zsh, want])
+  }
+  // an investigation's changes are never kept: its worker only reads with git
+  await saveBoard(f.$, patchTask(b, 'T-1', { kind: 'investigation' } as Partial<BoardTask>, ISO))
+  expect(await bash('git commit -am x')).toBe(workerGitWriteText('git commit'))
   // no file request was recorded for any of them
   expect((find(await load(f.$), 'T-1') as BoardTask).live?.refused).toBeUndefined()
   // the lead and agents that are not workers are never refused
@@ -5539,6 +5507,28 @@ for (const mode of ['auto', 'review'] as const)
     // its folder stays until the task ends
     expect(w.calls).not.toContain(`root: git worktree remove --force ${WT}`)
     expect(leadQueue.join('\n')).toContain('T-1 "Do it" is answered and waits for the owner to read it')
+  })
+
+for (const mode of ['auto', 'review'] as const)
+  test(`an errand's hand-back ends it done on its own with its report kept, nothing tested, checked or merged (mode ${mode})`, async () => {
+    const w = world()
+    const [b] = boardWith(mode, ['npm test'], { kind: 'errand', history: hist('created by the lead') } as Partial<BoardTask>)
+    await saveBoard(w.$, b)
+    w.put(`${WT}/.git`, 'gitdir: x')
+    workers.set('ag1', { task: 'T-1', worktree: WT, branch: 'symcc/T-1', since: T0 })
+    // the worker that just handed back is still listed as running: its folder goes anyway
+    w.$.agents.list = async () => [{ id: 'ag1', kind: 'worker', status: 'running', description: 'T-1' }] as never
+    await workerFinished(w.$, 'ag1', 'Moved 3 files to ~/Archive.')
+    const t = find(await load(w.$), 'T-1')!
+    expect(t.status).toBe('done')
+    expect(t.note).toBe('done')
+    expect(t.history.at(-1)?.text).toBe('try 1: the errand is finished → done (nothing merged)')
+    expect(t.answer).toBe('Moved 3 files to ~/Archive.')
+    expect(w.files.get(REPORT1)).toContain('Moved 3 files')
+    expect(ranTests(w)).toEqual([])
+    expect(movedMain(w)).toBe(false)
+    expect(w.calls.some(c => / git commit/.test(c))).toBe(false)
+    expect(w.calls).toContain(`root: git worktree remove --force ${WT}`)
   })
 
 test("a long investigation answer is cut on the task; the report keeps it all", async () => {
@@ -7271,4 +7261,43 @@ test('T-805: taking off a fresh try keeps its worker id on the try before, with 
   expect(onTask({ runs: back }, 'wx')).toBe(true)
   expect(workerIdOf({ runs: back })).toBe('w1')
   expect(agentLines(back[0]!).join('|')).not.toContain('wx')
+})
+
+// T-1080: the change size (a shortstat diff) and the worker's "Done:" line are saved on the task
+const SHORTSTAT = (a: string[]) => (a[0] === 'diff' && a.includes('--shortstat') ? ok(' 25 files changed, 539 insertions(+), 3722 deletions(-)\n') : undefined)
+
+test("T-1080: a merged try saves its size and its Done line; the lead's update and the commit message say what was done", async () => {
+  const { w, t } = await finishes('Done: Git is checked against a short list.\n\nI changed src/a.ts.', { answer: SHORTSTAT })
+  expect(t.status).toBe('done')
+  expect(t.size).toEqual({ files: 25, added: 539, removed: 3722 })
+  expect(t.done).toBe('Git is checked against a short list.')
+  expect(meanwhile.join('\n')).toContain('Done: Git is checked against a short list.')
+  expect(w.calls.filter(c => c.includes('commit')).join('@@')).toContain('Git is checked')
+})
+
+test('T-1080: a try that goes to review has its size saved before it merges; approve measures it again', async () => {
+  const { t } = await finishes('Done: It is half done.\nrest', { answer: SHORTSTAT }, { needs_review: true })
+  expect(t.status).toBe('review')
+  expect(t.size).toEqual({ files: 25, added: 539, removed: 3722 })
+  expect(t.done).toBe('It is half done.')
+  const w2 = await inReview({ answer: SHORTSTAT })
+  await runTool(w2.$, 'approve', { task: 'T-1' })
+  const after = find(await load(w2.$), 'T-1')!
+  expect(after.status).toBe('done')
+  expect(after.size).toEqual({ files: 25, added: 539, removed: 3722 })
+})
+
+test("T-1080: the 'bring up to date' merge commit that lands on main carries the Done sentence", async () => {
+  const w = world({ upToDate: false })
+  const [b, t0] = boardWith('auto', ['npm test'])
+  const t = { ...t0, done: 'Git is checked against a short list.' } as typeof t0
+  await checkAndMerge(w.$, t, WT, b, 'finish', [])
+  expect(w.calls.some(c => c.startsWith('wt: git ') && / merge --no-edit --no-verify -m /.test(c) && c.includes('bring up to date with main') && c.includes('Git is checked against a short list.'))).toBe(true)
+})
+
+test('T-1080: a report with no Done line saves none, and the merged update has no Done', async () => {
+  const { t } = await finishes('I changed src/a.ts.')
+  expect(t.done).toBe(undefined)
+  expect(t.size).toBe(undefined)
+  expect(leadQueue.join('\n')).not.toContain('Done:')
 })

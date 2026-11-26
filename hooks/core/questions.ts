@@ -3,7 +3,7 @@
 // "Questions for you" list, in the band and in the status line; an answer (on the board or in the chat) closes one,
 // and it stays in the file as history.
 import type { SymccAsk } from '../../types'
-import { clean, isObj, squash } from './text'
+import { clean, isObj, squash, plural } from './text'
 
 /**
  * One question for the owner: the one Ask record (see SymccAsk in types) with an id. `by` is 'lead'. `answer` and
@@ -79,7 +79,7 @@ export function openQuestions<Q extends Pick<OwnerQuestion, 'answered_at' | 'dro
 }
 
 /** "1 question for you", "2 questions for you"; '' for none. */
-export const questionsForYou = (n: number) => (n > 0 ? `${n} question${n === 1 ? '' : 's'} for you` : '')
+export const questionsForYou = (n: number) => (n > 0 ? `${plural(n, 'question')} for you` : '')
 
 /** The title over the open questions in the board panel: "Questions for you (2)". */
 export const questionsLabel = (n: number) => `Questions for you (${n})`

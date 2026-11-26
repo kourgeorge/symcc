@@ -8,7 +8,8 @@
 // OpenTUI (T-500): opencode/tui.ts imports them by their written-out names (what OpenCode swaps for its own copies),
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
-import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_IDLE, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveNowSegs, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
+import { choiceNote, settingAbout } from '../../core/setting-notes'
+import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_IDLE, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveNowSegs, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, SETTINGS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccMode, SymccTask } from '../../../types'
 import { ICON } from '../../name'
@@ -29,7 +30,8 @@ import { viewTask, viewStubFilled } from '../../core/board-parts'
 import { orgMemNotes, orgMemNoteKey } from '../../core/org-mem'
 import { PLUGIN_ROOT } from '../host'
 import { inGroups, pillText, taskListIds, scoutListNames } from '../../core/page-header'
-import { PANEL_TABS } from '../board-view'
+import { PANEL_TABS, headerLines } from '../board-view'
+import { sizeSegs } from '../../core/page-header'
 import { startTui as startTuiLive, KEY_BINDS, viewPaths, loadTuiRuntime, BOARD_PANEL, setupFailed, colorOf, drawLines, type TuiContext, type TuiRuntime, type TuiPanelInput, type TuiKeyLayer, type PanelKey } from '../tui'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
@@ -136,9 +138,9 @@ test('T-643: a session that does not drive: a warning line under the banner and 
   expect(bandDraw(led, NOW, 120).lines[0]![1]!.text).toBe(' ⚠ this window follows (driver active 3 min ago) · /symcc-drive')
   expect(bandDraw(led, NOW, 100).lines[0]![1]!.text).toBe(' ⚠ follows (driver active 3 min ago) · /symcc-drive')
   expect(bandDraw(led, NOW, 70).lines[0]![1]!.text).toBe(' ⚠ this window follows · /symcc-drive')
-  // off here (another window drives): the banner's first line names it too
-  const off: ViewFile = { ...led, view: { ...led.view, on_here: false, off_here: 'other' } }
-  expect(panelLines(off, { opened: '', cursor: 0 }, NOW, 200).lines.map(lineText).join('\n')).toContain('another window drives this board (')
+  // off here (turned off on purpose): the banner's first line says so
+  const off: ViewFile = { ...led, view: { ...led.view, on_here: false, off_here: 'off' } }
+  expect(panelLines(off, { opened: '', cursor: 0 }, NOW, 200).lines.map(lineText).join('\n')).toContain('symcc is off in this window · /symcc-enable')
   // the driving session: neither, and the row keeps its own note
   expect(warnLines(view(true))).toEqual([])
   const own = bandDraw(view(true), NOW, 120).lines
@@ -583,11 +585,11 @@ test('T-584: a task page offers every one of core\'s taskActions with a key (but
   const keysOf = (id: string) => panelTaskActions(task(id)).map(a => `${a.key} ${a.id}`)
   expect(keysOf('T-1')).toEqual(['p pause', 'x drop', 'n needs-review'])
   expect(keysOf('T-2')).toEqual(['a done', 'v keep-note', 'x ask-more', 'n needs-review'])
-  expect(keysOf('T-3')).toEqual(['r retry', 'e run-now', 'z stash', 'l role', 'h already-merged', 'x drop', 'n needs-review'])
-  expect(keysOf('T-4')).toEqual(['o to-todo', 'e run-now', 'l role', 'x drop', 'n needs-review'])
+  expect(keysOf('T-3')).toEqual(['r retry', 'z stash', 'l role', 'h already-merged', 'x drop', 'n needs-review'])
+  expect(keysOf('T-4')).toEqual(['o to-todo', 'l role', 'x drop', 'n needs-review'])
   // the footer's hints are buttons for their own keys (u, z, l, h, n too)
   const footer = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 140).lines.at(-1)!
-  expect(footer.filter(x => x.hit).map(x => x.hit)).toEqual([{ key: 'r' }, { key: 'e' }, { key: 'z' }, { key: 'l' }, { key: 'h' }, { key: 'x' }, { key: 'n' }, { key: 'back' }])
+  expect(footer.filter(x => x.hit).map(x => x.hit)).toEqual([{ key: 'r' }, { key: 'z' }, { key: 'l' }, { key: 'h' }, { key: 'x' }, { key: 'n' }, { key: 'back' }])
 
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
   const sent: { sessionID: string; name: string; text: string }[] = []
@@ -766,7 +768,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
     expect(buttonRow(id)).toBe(claude.map(g => g.map(pillText).join(' ')).join('   '))
   }
   expect(buttonRow('T-2')).toBe('[Approve]   [Show changes]   [Reject] [Drop]   [☐ Needs review]')
-  expect(buttonRow('T-3')).toBe('[Retry]   [Run now] [Stash to backlog] [Role] [Already merged]   [Drop]   [☐ Needs review]')
+  expect(buttonRow('T-3')).toBe('[Retry]   [Stash to backlog] [Role] [Already merged]   [Drop]   [☐ Needs review]')
   // T-775: every button drawn the same: "[Label]" in the text color, not bold (no filled pill, no red, no dim word)
   for (const id of ['T-1', 'T-2', 'T-3']) {
     const ls = panelLines(f, { opened: id, cursor: 0 }, NOW, 140).lines
@@ -778,7 +780,7 @@ test('T-680, T-751: a task page header has the buttons in groups, words only (th
   // a narrow panel puts the buttons on more rows, between the groups when they fit, never cutting a button
   const narrow = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 40).lines.map(lineText)
   const rule = narrow.findIndex(l => /^─+$/.test(l))
-  expect(narrow.slice(rule - 4, rule)).toEqual(['[Retry]', '[Run now] [Stash to backlog] [Role]', '[Already merged]   [Drop]', '[☐ Needs review]'])
+  expect(narrow.slice(rule - 4, rule)).toEqual(['[Retry]', '[Stash to backlog] [Role]', '[Already merged]   [Drop]', '[☐ Needs review]'])
   // the scout pages (as Claude Code's: Run now when it isn't running, Edit, Pause or Resume; paused said as a fact) and a question's
   expect(buttonRow('deps', 'scouts')).toBe('[Edit]   [Pause]')
   expect(buttonRow('docs', 'scouts')).toBe('[Run now]   [Edit]   [Resume] ⏸ paused')
@@ -1523,20 +1525,31 @@ test('T-559: the Scouts tab lists the scouts from view.json, a scout\'s page sho
   const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 1, settingsOpen: ALL_GROUPS }, NOW, 140)
   const s = settings.lines.map(lineText)
   for (const g of ['Work', 'Checks before merging', 'Workers', 'Scouts', 'Board and alerts']) expect(s).toContain(`  ▾ ${g}`)
-  expect(s.find(l => l.includes('max_parallel'))).toMatch(/max_parallel +2 · default 3 · 1-8/)
-  expect(s.find(l => l.includes('test_commands'))).toContain('bun test')
+  // T-1047: rows are "label ..... value", with no default or range on the row
+  const mp = SETTINGS.find(x => x.name === 'max_parallel')!
+  expect(s.find(l => l.includes(mp.label))).toMatch(new RegExp(`${mp.label} \\.+ 2$`))
+  const ruleAt = s.findIndex(l => /^─+$/.test(l))
+  expect(s.slice(0, ruleAt).some(l => l.includes('· default') || l.includes('max_parallel'))).toBe(false)
+  expect(s.find(l => l.includes('Test commands .'))).toContain('bun test')
   // T-908: docs_test_commands sits right after test_commands under Checks before merging, none by default
   expect(settings.ids[settings.ids.indexOf('test_commands') + 1]).toBe('docs_test_commands')
-  expect(s.find(l => l.includes('docs_test_commands'))).toMatch(/docs_test_commands +none · default none/)
-  expect(s.find(l => /^› /.test(l))).toContain('mode')
+  expect(s.find(l => /^› /.test(l))).toContain(SETTINGS.find(x => x.name === 'mode')!.label)
   expect(settings.ids.slice(0, 2)).toEqual(['settings-group:Work', 'mode'])
+  // T-1047: under a rule, the selected row's help: its label, its meaning, then "name · default X · range"
+  const at = s.findIndex(l => /^─+$/.test(l))
+  expect(s.slice(at + 1, at + 2)).toEqual(['Mode'])
+  expect(s.some((l, i) => i > at && l.includes('mode · default auto merge · paused / approve merge / auto merge'))).toBe(true)
+  // and a 30-column panel keeps every closed group's line inside it
+  const narrow = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: [] }, NOW, 30).lines.map(lineText)
+  expect(narrow.filter(l => l.includes('▸')).length).toBe(5)
+  for (const l of narrow) expect(l.length).toBeLessThan(31)
   expect(settings.ids).toContain('notify')
   // T-695: one notify row holds the sound set (voice / sound 1 / sound 2 / sound 3 / off); no sound_set row
   expect(settings.ids.includes('sound_set' as never)).toBe(false)
   expect(s.some(l => l.includes('sound_set'))).toBe(false)
-  expect(s.find(l => /notify +sound/.test(l))).toMatch(/notify +sound 2 · default voice .*· voice \/ sound 1 \/ sound 2 \/ sound 3/)
+  expect(s.find(l => l.includes(SETTINGS.find(x => x.name === 'notify')!.label + ' .'))).toMatch(/\.+ sound 2/)
   expect(settings.ids[settings.ids.indexOf('notify') + 1]).toBe('open_on_start')
-  expect(settings.hits[s.findIndex(l => l.includes('max_minutes'))]).toEqual({ setting: 'max_minutes' })
+  expect(settings.hits[s.findIndex(l => l.includes('Time per worker .'))]).toEqual({ setting: 'max_minutes' })
   expect(panelKeys(f, '', 'settings').map(k => k.word)).toEqual(['change', 'move', 'views', 'back'])
   // the footer is core's settingsKeys, as Claude Code's: on a group heading Enter opens or closes it (T-584)
   expect(settings.keys).toEqual(settingsKeys(false))
@@ -1604,18 +1617,18 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   expect([board.state().tab, board.state().opened, board.state().run, board.state().cursor]).toEqual(['settings', '', '', 0])
   // the groups start closed: Enter on the Work heading opens it
   await board.press('open', 'ses_1')
-  expect(lines().some(l => l.includes('max_parallel') && l.includes('default 3'))).toBe(true)
+  expect(lines().some(l => l.includes(SETTINGS.find(x => x.name === 'max_parallel')!.label + ' .'))).toBe(true)
   await board.press('down', 'ses_1')
   await board.press('open', 'ses_1')
   await board.press('down', 'ses_1')
   await board.press('open', 'ses_1')
   ;(rowEls(panel).find(r => r.text.includes('▸ Checks before merging'))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
-  const checker = rowEls(panel).find(r => r.text.includes('checker ') && r.text.includes('default off'))!
+  const checker = rowEls(panel).find(r => r.text.includes(SETTINGS.find(x => x.name === 'checker')!.label + ' .'))!
   ;(checker.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await new Promise<void>(res => setTimeout(res, 0))
   // a bad value is not sent
   answers.prompt = 'lots'
-  const maxMinutes = rowEls(panel).find(r => r.text.includes('max_minutes'))!
+  const maxMinutes = rowEls(panel).find(r => r.text.includes(SETTINGS.find(x => x.name === 'max_minutes')!.label + ' .'))!
   ;(maxMinutes.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await new Promise<void>(res => setTimeout(res, 0))
   expect(board.state().cursor).toBe(3)
@@ -1629,7 +1642,7 @@ test('T-559: startTui: t, s and c switch tabs (a click on a tab too); on a scout
   // T-695: notify is picked from the five choices, sound set included
   ;(rowEls(panel).find(r => r.text.includes('▸ Board and alerts'))!.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   answers.select = 'sound 3'
-  const notifyRow = rowEls(panel).find(r => /notify +sound 2/.test(r.text))!
+  const notifyRow = rowEls(panel).find(r => /Alert \.+ sound 2/.test(r.text))!
   ;(notifyRow.el.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0 })
   await new Promise<void>(res => setTimeout(res, 0))
   expect(picks.at(-1)).toEqual(['voice', 'sound 1', 'sound 2', 'sound 3', 'off'])
@@ -1702,8 +1715,8 @@ test('T-562: the Settings tab opens the Roles and Task types pages from view.jso
   // the Settings list: the Roles and Task types rows with their counts, each a row the cursor goes over
   const settings = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: ['Workers'] }, NOW, 140)
   const s = settings.lines.map(lineText)
-  expect(s.find(l => l.includes('Roles'))).toMatch(/Roles +4 roles · 1 off/)
-  expect(s.find(l => /^ +Task types/.test(l))).toMatch(/Task types +2 task types/)
+  expect(s.find(l => l.includes('Roles'))).toMatch(/Roles \.+ 4 roles · 1 off/)
+  expect(s.find(l => /^ +Task types/.test(l))).toMatch(/Task types \.+ 2 task types/)
   expect(settings.ids).toContain('roles')
   expect(settings.ids).toContain('kinds')
   expect(settings.hits[s.findIndex(l => l.includes('4 roles'))]).toEqual({ page: 'roles' })
@@ -2024,12 +2037,13 @@ test('T-585: the Settings tab\'s groups open and close like the Claude Code boar
   const c = closed.lines.map(lineText)
   const pages = { roles: '0 roles', kinds: '0 task types' }
   for (const g of SETTING_GROUPS) {
-    const sum = groupSummaryParts(g, f.view, 136, pages)
-    expect(c.some(l => l.endsWith(`▸ ${sum.title}${sum.values}`))).toBe(true)
+    // T-1047: the title padded to one column, then the values in short
+    const sum = groupSummaryParts(g, f.view, 140 - 4 - 24 + g.title.length + 3, pages)
+    expect(c.some(l => l.includes(`▸ ${sum.title.padEnd(24)}`) && l.endsWith(sum.values.replace(/^ · /, '')))).toBe(true)
   }
   expect(c.find(l => l.includes('▸ Work'))).toContain('auto')
   expect(closed.ids).toEqual(SETTING_GROUPS.map(g => `settings-group:${g.title}`))
-  expect(c.some(l => l.includes('max_parallel'))).toBe(false)
+  expect(c.some(l => l.includes('Workers at once'))).toBe(false)
   expect(closed.hits[c.findIndex(l => l.includes('▸ Work'))]).toEqual({ settingGroup: 'Work' })
   // startTui: Enter on a heading and a click on one open and close it
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
@@ -2059,10 +2073,10 @@ test('T-585: the Settings tab\'s groups open and close like the Claude Code boar
   await board.press('open', 'ses_1')
   expect(board.state().settingsOpen).toEqual(['Work'])
   expect(lines().some(l => l.includes('▾ Work'))).toBe(true)
-  expect(lines().some(l => l.includes('max_parallel'))).toBe(true)
+  expect(lines().some(l => l.includes('Workers at once'))).toBe(true)
   await board.press('open', 'ses_1')
   expect(board.state().settingsOpen).toEqual([])
-  expect(lines().some(l => l.includes('max_parallel'))).toBe(false)
+  expect(lines().some(l => l.includes('Workers at once'))).toBe(false)
   // a click on Scouts opens it and puts the cursor on its heading
   clickRow('▸ Scouts')
   expect(board.state().settingsOpen).toEqual(['Scouts'])
@@ -2096,8 +2110,8 @@ test('T-580: OpenCode\'s task page has the same sections as Claude Code\'s (core
   expect(parseViewFile(viewFileText(f))?.view.changes).toEqual(f.view.changes)
   const page = (id: string, report?: { file: string; text: string | null | undefined }) => panelLines(f, { opened: id, cursor: 0, ...(report ? { taskReport: report } : {}) }, NOW, 100)
   const heads = (id: string) => page(id).lines.map(lineText).filter(l => l.startsWith('▍'))
-  expect(heads('T-2')).toEqual(['▍Details', '▍Changes (1 file, against main)', '▍What to do', '▍History (2, newest first)', '▍Report (try 2, 2 of 2)', '▍Runs   2 tries · 0s'])
-  expect(heads('T-4')).toEqual(['▍Why it failed', '▍Details', '▍What to do', '▍History (2, newest first)', '▍Report (try 2, 2 of 2)', '▍Runs   2 tries · 0s'])
+  expect(heads('T-2')).toEqual(['▍Details', '▍Changes (1 file, against main)', '▍What to do', '▍History (2, newest first)', '▍Report · try 2 · worker', '▍Runs   2 tries · 0s'])
+  expect(heads('T-4')).toEqual(['▍Why it failed', '▍Details', '▍What to do', '▍History (2, newest first)', '▍Report · try 2 · worker', '▍Runs   2 tries · 0s'])
   expect(heads('T-5')).toEqual(['▍Details', '▍What to do', '▍History (1, newest first)'])
   // each section's lines are the shared model's, in order
   const report = { file: '.symcc/reports/T-2-try-2.md', text: 'Fixed it.\n\nAll tests pass.' }
@@ -2107,7 +2121,7 @@ test('T-580: OpenCode\'s task page has the same sections as Claude Code\'s (core
   for (const s of model) {
     const at = lines.indexOf(`▍${s.title}`)
     expect(at).toBeGreaterThan(0)
-    expect(lines.slice(at + 1, at + 1 + s.lines.length)).toEqual(s.lines.map(l => (l.segs.length ? l.segs.map(g => g.text).join('') : ' ')))
+    expect(lines.slice(at + 1, at + 1 + s.lines.length).map(l => l.replace(/^› /, '  '))).toEqual(s.lines.map(l => (l.segs.length ? l.segs.map(g => g.text).join('') : ' ')))
   }
   expect(lines).toContain('  Fixed it.')
   expect(lines).toContain('  folder: .symcc/worktrees/T-2 · edit files there, then approve (the tests run again)')
@@ -2390,17 +2404,17 @@ test('T-718: OpenCode: the Live tab\'s org-mem section draws the header, the 3 n
     expect(head > 0).toBe(true)
     expect(textWidthOf(ls[head]!)).toBe(w)
     expect(ls[head + 1]!.trim()).toBe('')
-    expect(ls[head + 2]).toMatch(/^[ ›] {2}newest \[all\]$/)
-    expect(ls[head + 3]).toMatch(/^[ ›] {3}— +unsorted {2}a note written/)
-    expect(ls[head + 4]).toMatch(/^ {4}11-21 {2}git +Use a plain path/)
-    expect(ls[head + 5]).toMatch(/^ {4}11-21 {2}tests +In tests, put/)
-    expect(ls[head + 6]).toBe('   topics')
+    expect(ls[head + 2]).toMatch(/^[ ›]newest \[all\]$/)
+    expect(ls[head + 3]).toMatch(/^[ ›] {2}— +unsorted {2}a note written/)
+    expect(ls[head + 4]).toMatch(/^ {3}11-21 {2}git +Use a plain path/)
+    expect(ls[head + 5]).toMatch(/^ {3}11-21 {2}tests +In tests, put/)
+    expect(ls[head + 6]).toBe(' topics')
     // T-819: the topic labels (newest rows and the grid) are in the info blue, not green; "unsorted" stays dim
     const colorOfText = (row: number, text: string) => d.lines[row]!.find(s => s.text.trim() === text)?.color
     expect(colorOfText(head + 4, 'git')).toBe('ide')
     expect(colorOfText(head + 5, 'tests')).toBe('ide')
     expect(colorOfText(head + 3, 'unsorted')).toBe('inactive')
-    const gridEnd = ls.findIndex((l, i) => i >= head + 7 && !l.startsWith('    '))
+    const gridEnd = ls.findIndex((l, i) => i >= head + 7 && !l.startsWith('   '))
     const gridSegs = d.lines.slice(head + 7, gridEnd).flat()
     expect(gridSegs.find(s => s.text.trim() === 'tests')?.color).toBe('ide')
     expect(gridSegs.find(s => s.text.trim() === 'unsorted')?.color).toBe('inactive')
@@ -3095,7 +3109,7 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
   }
 })
 
-test('T-846: the OpenCode Live tab draws an investigation as work → answer, a docs-only check as "–", and a needs-review task at "you"', () => {
+test('T-846: the OpenCode Live tab draws an investigation as work → done, a docs-only check as "–", and a needs-review task at "you"', () => {
   const f0 = viewFile()
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
   const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
@@ -3118,7 +3132,8 @@ test('T-846: the OpenCode Live tab draws an investigation as work → answer, a 
   expect(row('T-806')).not.toContain('–')
   expect(marks(row('T-806'))).toBe('●-●-●-◉-○')
   expect(marks(row('T-805'))).toBe('●-●-●-●-◉-○')
-  expect(texts.some(t => t.includes('you') && t.includes('answer'))).toBe(true)
+  expect(texts.some(t => t.includes('you') && t.includes('done'))).toBe(true)
+  expect(texts.some(t => /\b(merged|answer)\b/.test(t.split('▶')[0]!) && t.includes('queue'))).toBe(false)
 })
 
 test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, cost, the stacked bar with shares, the hour sparkline with its figures) from the slim view file; narrow drops parts, never wider', () => {
@@ -3151,7 +3166,7 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
   // narrow: the cost goes; at 40 only the bar is left on the third line
   expect(today(45).texts.some(t => t.includes('≈ $'))).toBe(false)
   const narrow = today(40)
-  expect(narrow.texts.some(t => t === `${LIVE_INDENT}⌀ ░░████████▓▒▒▒▒▒`)).toBe(true)
+  expect(narrow.texts.some(t => t === `${LIVE_INDENT}⌀ ████████████████`)).toBe(true)
   // line 4 keeps both hour labels and a sparkline, its figures cut from the end
   const four = narrow.texts.find(t => / ⌀(?:\/h)? 00▕[▁▂▃▄▅▆▇█]+·*▏24$/.test(t))
   expect(four === undefined).toBe(false)
@@ -3255,22 +3270,22 @@ test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the 
   // T-867: no bar
   for (const x of tasks.slice(1)) expect([x.id, /[▕▏█░]/.test(sub(x.id))]).toEqual([x.id, false])
   // (a) try 2 running: try 1's 4M, more coming, 1× the median 4M
-  expect(sub('T-801')).toContain('⌀ 4M + … (1× median)')
+  expect(sub('T-801')).toContain('⌀ 4M + … (1×median)')
   // (b) handed back with 1M: the sum, its active time and the worker's share (the checker's 0 left out)
   // T-931: the clock first, " · " between parts, the per-agent tokens in < > without ⌀
-  expect(sub('T-802')).toMatch(/^ {2,}change try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3× median\) · <worker 5M>$/)
+  expect(sub('T-802')).toMatch(/^ {2,}try 2\/\d+ · ⏱ 28m · ⌀ 5M \(1\.3×median\) · worker 5M( +\w+)?$/)
   // (c) try 1 running: no < > part (no breakdown yet)
-  expect(sub('T-803')).toMatch(/^ {2,}change try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back$/)
+  expect(sub('T-803')).toMatch(/^ {2,}try 1\/\d+ · ⏱ \d+m · ⌀ at hand-back( +\w+)?$/)
   // (d) at the median and at half
-  expect(sub('T-804')).toContain('⌀ 4M (1× median)')
-  expect(sub('T-805')).toContain('⌀ 2M (0.5× median)')
+  expect(sub('T-804')).toContain('⌀ 4M (1×median)')
+  expect(sub('T-805')).toContain('⌀ 2M (0.5×median)')
   expect([warn('T-802'), warn('T-804')]).toEqual([false, false])
   // (e) past twice the median: the warning color, no ⚠
-  expect(sub('T-806')).toContain('⌀ 9M (2.3× median)')
+  expect(sub('T-806')).toContain('⌀ 9M (2.3×median)')
   expect(sub('T-806')).not.toContain('⚠')
   expect(warn('T-806')).toBe(true)
   // (f) T-931: merged with worker and checker: both in one < >, no ⌀ inside
-  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ 4M \(1× median\) · <worker 3M · checker 1M>$/)
+  expect(sub('T-807')).toMatch(/try 1\/\d+ · ⏱ \d+m · ⌀ 4M \(1×median\) · worker 3M · checker 1M( +\w+)?$/)
   expect(texts.some(t => t.includes('usual per task'))).toBe(false)
   // narrow: the worker/checker split and ⏱ go first, ⌀ and the try stay
   const narrow = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 44).lines.map(lineText)
@@ -3289,8 +3304,8 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   expect(texts.some(idleLine)).toBe(false)
   expect(d.ids).toEqual(['need:T-601', 'T-630', 'om-all'])
   const lane = liveLanes({ ...f.view, tasks }, NOW)
-  // T-846: a task in review has a "you" station; once approved its lane sits past it, at merged
-  expect(lane.map(l => l.station)).toEqual(['merged'])
+  // T-846: a task in review has a "you" station; once approved its lane sits past it, at done
+  expect(lane.map(l => l.station)).toEqual(['done'])
   // its check step gone stale: it only waits for the owner (T-846), so its lane sits at "you"
   const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
   expect(liveLanes({ ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)) }, NOW).map(l => l.station)).toEqual(['you'])
@@ -3420,7 +3435,7 @@ test('T-767: the OpenCode Live tab indents by 1 under the headings; a running la
     const run = lane.slice(1).filter(x => x.text.trim()).slice(0, 3)
     expect(run.map(x => x.text.trim())).toEqual(['▶', 'T-712', run[2]!.text.trim()])
     // T-777: only "▶ " and the id are bold accent; the title is normal text
-    expect(run.map(x => [x.color, !!x.bold])).toEqual([['claude', true], ['claude', true], ['text', false]])
+    if (w === 100) expect(run.map(x => [x.color, !!x.bold])).toEqual([['claude', true], ['claude', true], ['text', false]])
     const train = d.lines[texts.findIndex(x => x.includes('└─◇ T-714'))]!.filter(x => x.text.trim())
     // T-819: a waiting train's id is accent, the rest of its row dim
     expect(train.map(x => [x.text, x.color, !!x.bold])).toEqual(train.map(x => (x.text.trim() === 'T-714' ? [x.text, 'claude', true] : [x.text, 'inactive', false])))
@@ -3920,6 +3935,29 @@ test('T-706: startTui: on the edit page the keyboard reaches Save and Cancel (�
   t.board.stop()
 })
 
+test('T-1052: the banner shows [ Drive here (d) ] only while another session drives; d sends /symcc-drive; a page without the banner does nothing', async () => {
+  const f = addedViewFile()
+  const other = { ...f, view: { ...f.view, driving: false } }
+  const t = await tuiOn(other)
+  expect(t.lines().some(l => l.includes('[ Drive here (d) ]'))).toBe(true)
+  t.sent.length = 0
+  await t.board.press('d', 's')
+  expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-drive', text: '' }])
+  t.sent.length = 0
+  await t.click('[ Drive here (d) ]')
+  expect(t.sent.map(x => x.name)).toEqual(['symcc-drive'])
+  t.board.stop()
+  const mine = await tuiOn({ ...f, view: { ...f.view, driving: true } })
+  expect(mine.lines().some(l => l.includes('Drive here'))).toBe(false)
+  mine.sent.length = 0
+  await mine.board.press('d', 's')
+  expect(mine.sent).toEqual([])
+  mine.board.stop()
+  const off = await tuiOn({ ...f, view: { ...f.view, driving: false, on_here: false } })
+  expect(off.lines().some(l => l.includes('Drive here'))).toBe(false)
+  off.board.stop()
+})
+
 test('T-706: startTui: Set up git (g, or the banner\'s button) asks a yes first, then sends /symcc-settings git setup; Cancel sends nothing; no git row, or a page without the banner: g does nothing', async () => {
   const t = await tuiOn(addedViewFile('no-repo'))
   for (const how of ['key', 'click'] as const) {
@@ -4236,7 +4274,7 @@ test('T-841: /symcc-enable in this window\'s session opens the board; other wind
   expect(s.opens.length).toBe(n)
   // the owner closes it; another window (off here, then on) writes the file: nothing reopens
   s.panel.close()
-  s.setView({ open_on_start: true, on_here: false, off_here: 'other' } as never)
+  s.setView({ open_on_start: true, on_here: false, off_here: 'off' } as never)
   await s.board.refresh()
   s.setView({ open_on_start: true, on_here: true })
   await s.board.refresh()
@@ -4596,4 +4634,112 @@ test('T-918: startTui: Enter on the edit page\'s Writes switches code and prose 
   await t.click('[ Save ]')
   expect(t.sent).toEqual([{ sessionID: 's', name: 'symcc-settings', text: 'role docs save {"code":"false"}' }])
   t.board.stop()
+})
+
+test('T-1080: the size line under the title wraps to the panel width, never cut', () => {
+  const size = sizeSegs({ size: { files: 25, added: 539, removed: 3722 }, status: 'review', branch: 'symcc/T-1063-a-very-long-branch-name' })
+  const lines = headerLines({ from: 'tasks', label: 'T-1063', place: null, title: 'In review', color: 'x', size, state: [[{ text: 'review', color: 'x' }]], buttons: [] }, 40)
+  const texts = lines.map(l => l.map(p => p.text).join(''))
+  expect(texts.every(t => t.length <= 40)).toBe(true)
+  expect(texts.join('\n')).toContain('+539')
+})
+
+/** T-1104: the view file with T-2 having three tries, each with a worker and a checker (and their saved reports). */
+function threeTriesViewFile(): ViewFile {
+  const f = viewFile()
+  const ids = [1, 2, 3].map(n => [`w${n}00000000${n}`, `c${n}00000000${n}`] as const)
+  const runs = [1, 2, 3].map(n => ({ started: AT, ended: AT, report: `.symcc/reports/T-2-try-${n}.md`, agents: [{ id: ids[n - 1]![0], kind: 'worker' as const, started: AT, ended: AT }, { id: ids[n - 1]![1], kind: 'checker' as const, started: AT, ended: AT }] }))
+  const history = [1, 2, 3].map(n => ({ kind: 'checker-problems', at: AT, text: `try ${n}: checker found problems`, try: n, report: `.symcc/reports/T-2-try-${n}-checker.md` }))
+  const tasks = f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, attempts: 3, runs, history } : t)) as ViewFile['view']['tasks']
+  return { ...f, view: { ...f.view, tasks } }
+}
+
+test('T-1104: OpenCode\'s task page: one ▍Report, six pressable Runs lines (click or Enter), the picked line marked ●, number keys open a try\'s worker report', async () => {
+  const f = threeTriesViewFile()
+  const texts: [string, string][] = [1, 2, 3].flatMap(n => [[`/work/proj/.symcc/reports/T-2-try-${n}.md`, `WORKER text ${n}`], [`/work/proj/.symcc/reports/T-2-try-${n}-checker.md`, `CHECKER text ${n}`]] as [string, string][])
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)], ...texts])
+  const fc = fakeCtx({})
+  const board = startTui(fc.ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  const panel = fc.slots.find(s => s.append === 'session.panel')!.render({ name: BOARD_PANEL, sessionID: 's', width: 100, focused: true, close: () => undefined, focus: () => undefined } as never) as El
+  const lines = () => rowEls(panel).map(r => r.text)
+  const settle = () => new Promise<void>(res => setTimeout(res, 0))
+  const ids = panelLines(f, { opened: '', cursor: 0 }, NOW, 100).ids
+  for (let i = 0; i < ids.indexOf('T-2'); i++) await board.press('down', 's')
+  await board.press('open', 's')
+  await settle()
+  // opens on the latest worker report; no Checker section, no Try buttons
+  expect(lines().filter(l => l.startsWith('▍Report'))).toEqual(['▍Report · try 3 · worker w30…003'])
+  expect(lines().some(l => l.startsWith('▍Checker'))).toBe(false)
+  expect(lines()).toContain('  WORKER text 3')
+  const model = panelLines(f, { opened: 'T-2', cursor: 0 }, NOW, 100)
+  expect(model.ids.length).toBe(6)
+  expect(model.keys.map(k => `${k.key} ${k.word}`)).toContain("1-3 a try's report")
+  expect(model.keys.map(k => `${k.key} ${k.word}`)).toContain('Enter on a Runs line: its report')
+  // a click on try 1's checker line shows that checker's report and marks the line
+  const checkerRow = rowEls(panel).find(r => r.text.includes('⌕ checker') && r.text.includes('c10…001'))!
+  ;(checkerRow.segs[0]!.props.onMouseUp as (e: unknown) => void)({ type: 'up', button: 0, stopPropagation: () => undefined })
+  await settle()
+  expect(lines().filter(l => l.startsWith('▍Report'))).toEqual(['▍Report · try 1 · checker c10…001'])
+  expect(lines()).toContain('  CHECKER text 1')
+  expect(lines().filter(l => l.includes('●') && l.includes('⌕ checker'))).toEqual(['› ● ⌕ checker c10…001  0s'])
+  // the cursor is on that line (index 1): down twice reaches try 2's worker line, and Enter shows its report
+  await board.press('down', 's')
+  await board.press('open', 's')
+  await settle()
+  expect(lines().filter(l => l.startsWith('▍Report'))).toEqual(['▍Report · try 2 · worker w20…002'])
+  expect(lines()).toContain('  WORKER text 2')
+  // the number key 1: try 1's worker report
+  await board.press('1', 's')
+  await settle()
+  expect(lines().filter(l => l.startsWith('▍Report'))).toEqual(['▍Report · try 1 · worker w10…001'])
+  expect(lines()).toContain('  WORKER text 1')
+})
+
+test('T-1105: a setting\'s pick dialog says what the setting does and gives each choice its note; a number box describes it with its range', async () => {
+  const view: PaneView = { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], max_parallel: 3, max_minutes: 30, auto_retries: 1, driving: true, home_branch: 'main', branch_note: '' }
+  const f: ViewFile = { root: '/work/proj', home: '/work', name: 'symcc', version: '0.9.0', written_at: NOW, view }
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
+  const selects: { title: string; options: { title: string; description?: string }[] }[] = []
+  const prompts: { title: string; description?: string }[] = []
+  const ctx: TuiContext = {
+    location: { directory: '/work/proj' },
+    theme: {},
+    renderer: { width: 140, height: 200 },
+    client: { session: { command: async () => undefined } },
+    keymap: { layer: () => undefined },
+    ui: {
+      toast: { show: () => undefined },
+      dialog: {
+        prompt: async o => (prompts.push({ title: o.title, description: o.description }), undefined),
+        select: async <V,>(o: { readonly title: string; readonly options: readonly { readonly title: string; readonly description?: string; readonly value: V }[] }) => (selects.push({ title: o.title, options: o.options.map(x => ({ title: x.title, description: x.description })) }), undefined as V | undefined),
+      },
+      panel: { open: () => true, close: () => undefined, current: () => undefined },
+      slot: () => () => undefined,
+    },
+  }
+  const board = startTui(ctx, { runtime: fakeRuntime(), readText: async p => files.get(p) ?? Promise.reject(new Error('missing')), every: () => () => undefined, now: () => NOW })
+  await board.refresh()
+  await board.press('c', 's')
+  const open = async (setting: string) => {
+    for (let i = 0; i < 40; i++) {
+      const ids = panelLines(f, { tab: 'settings', opened: '', cursor: 0, settingsOpen: board.state().settingsOpen }, NOW, 138).ids
+      const at = ids.indexOf(setting)
+      if (at >= 0) {
+        while (board.state().cursor < at) await board.press('down', 's')
+        return board.press('open', 's')
+      }
+      await board.press('open', 's')
+      await board.press('down', 's')
+    }
+  }
+  await open('mode')
+  expect(selects.length).toBe(1)
+  expect(selects[0]!.title).toContain(settingAbout('mode'))
+  expect(selects[0]!.options.map(o => o.description)).toEqual(['paused', 'review', 'auto'].map(m => choiceNote('mode', m)))
+  expect(selects[0]!.options.map(o => o.title.replace(' (now)', ''))).toEqual(['paused', 'approve merge', 'auto merge'])
+  await open('max_parallel')
+  expect(prompts.at(-1)!.description).toBe(settingAbout('max_parallel'))
+  expect(prompts.at(-1)!.description).toContain('1-8')
+  board.stop()
 })

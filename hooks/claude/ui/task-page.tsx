@@ -1,7 +1,7 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
-import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, type TaskActionId, type TaskAction, type KeyHint, failNext, failAsks, answeredLeadLine, sessionNote } from '../../board'
-import { folderDiff, changedFiles } from '../../app/review'
+import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, taskKeys, YOUR_EDITS, intoOf, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, type TaskActionId, type TaskAction, type KeyHint, failNext, failAsks, answeredLeadLine, sessionNote, hasMergedChanges } from '../../board'
+import { folderDiff, changedFiles, mergedChanges, mergedDiff } from '../../app/review'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
 import { type PaneView, S, workers } from '../../app/state'
@@ -15,8 +15,8 @@ import { runTool, allowAskedFiles, refuseAskedFiles } from '../../app/tools'
 import type { PaneParts } from './parts'
 import { answerBox, dropDraft, fieldRows } from './answer-box'
 import { taskPageVs } from './vscode-task'
-import { taskSections, type SectionLine, type TaskSection } from '../../core/task-sections'
-import { NAV_KEYS, navHint, TASK_ID_COLOR, taskPlace, taskStateGroups, type PageFrom } from '../../core/page-header'
+import { taskSections, resolveReport, type ReportPick, type SectionLine, type TaskSection } from '../../core/task-sections'
+import { NAV_KEYS, navHint, TASK_ID_COLOR, sizeSegs, taskPlace, taskStateGroups, type PageFrom } from '../../core/page-header'
 import { pageHeader, type PageHeader } from './page-header'
 import { claudeHost } from '../host'
 import { mergingNow, mergeOutcome } from '../../app/workers'
@@ -150,10 +150,12 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
         <Text color={C('inactive')}>{boxHint('Enter sends to todo', 'cancels')}</Text>
       </Box>
     ) : null
-  if (inReview && !answered && S.diffOpen?.task === t.id) {
+  // T-1086: a done change task keeps its changes: the diff comes from git (what its merge brought into main)
+  const doneDiff = hasMergedChanges(t)
+  if (((inReview && !answered) || doneDiff) && S.diffOpen?.task === t.id) {
     // The changes themselves: the folder as it is now (the owner's edits too) against the merge base, colored line by line.
     const d = S.diffOpen
-    const got = await folderDiff(claudeHost($), target, t, [], d.file).then(
+    const got = await (doneDiff ? mergedDiff(claudeHost($), t, d.file).then(text => ({ text, edits: [] as string[] })) : folderDiff(claudeHost($), target, t, [], d.file)).then(
       x => ({ lines: cutDiff(x.text, t.id, DIFF_LINES, d.file, S.N.name), error: '', mine: x.edits.length > 0 }),
       (err: Error) => ({ lines: [] as string[], error: err.message, mine: false }),
     )
@@ -163,8 +165,8 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
         <Box flexDirection="column">
           <Text>
             <Text bold color={C('claude')}>{t.id}</Text>{' '}
-            <Text bold color={C(color.review!)}>
-              {mark.review} {word.review}
+            <Text bold color={C(color[doneDiff ? t.status : 'review']!)}>
+              {mark[doneDiff ? t.status : 'review']} {word[doneDiff ? t.status : 'review']}
             </Text>
             <Text color={C('inactive')}> · changes in {d.file || 'all files'}</Text>
             {got.mine ? <Text color={C('warning')}> {YOUR_EDITS}</Text> : null}
@@ -243,7 +245,9 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
         files => ({ files, error: '' }),
         (err: Error) => ({ files: [] as DiffFile[], error: err.message }),
       )
-    : null
+    : doneDiff
+      ? await mergedChanges(claudeHost($), t).catch(() => null)
+      : null
   // One line of colored pieces (from detailRowLines / wrapSegs).
   const segLine = (segs: Seg[], key: string) => (
     <Text key={key}>
@@ -261,9 +265,9 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   // The saved worker reports, one per try: the latest shown, unless the owner picked another try (its number key).
   const reports = taskReports(t)
   if (S.reportTry && S.reportTry.task !== t.id) S.reportTry = null
-  const picked = S.reportTry ? reports.findIndex(r => r.try === S.reportTry!.try) : -1
-  const at = picked >= 0 ? picked : reports.length - 1
-  const shown = reports[at]
+  const pick = S.reportTry ? { try: S.reportTry.try, kind: S.reportTry.kind, ...(S.reportTry.id ? { id: S.reportTry.id } : {}) } : undefined
+  // T-1104: the report of the agent picked in the Runs section (the latest worker report until one is picked)
+  const shown = resolveReport(t, pick)
   const reportBody = shown ? await $.fs.read(path(shown.file)).then(x => String(x), () => null) : null
   // An investigation's answer: the full text from its latest report, else the answer saved on the task.
   const answerShown = showsAnswer(t as BoardTask)
@@ -274,7 +278,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   const texts: Record<string, string | null> = shown ? { [shown.file]: reportBody } : {}
   if (latest && !(latest.file in texts) && (answerShown || (failed && latest.try === t.attempts))) texts[latest.file] = await $.fs.read(path(latest.file)).then(x => String(x), () => null)
   const answer = answerShown ? answerText(t as BoardTask, answerFrom ? texts[answerFrom.file] : null).trimEnd() : ''
-  const pickReport = (n: number) => () => ((S.reportTry = { task: t.id, try: n }), $.ui.invalidate('ui.render'))
+  const pickReport = (p: ReportPick) => () => ((S.reportTry = { task: t.id, ...p }), $.ui.invalidate('ui.render'))
   // A waiting task: buttons for a file request (Allow / Don't allow) or the worker's options, each with a number key, plus Answer….
   // Finished work that waits only for the owner's files: nothing to answer; it merges on its own once they are
   // committed or stashed, and r runs just the merge now.
@@ -384,7 +388,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   const from: PageFrom = pane.onLive ? 'live' : 'tasks'
   const place = taskPlace(v, t.id, from, pane.nowMs, S.search?.text ?? '', searchMore)
   const header: PageHeader = {
-    from, label: t.id, place, title: t.title, color: TASK_ID_COLOR,
+    from, label: t.id, place, title: t.title, color: TASK_ID_COLOR, size: sizeSegs(t as BoardTask),
     state: taskStateGroups(t as BoardTask, { nowMs: pane.nowMs, merging: pageMerging, ...(v.auto_retries !== undefined ? { autoRetries: v.auto_retries } : {}), note: sessionNote(t, v.driving ?? S.driving, pane.nowMs) }),
     buttons: actions.map(x => ({ id: x.id, label: x.label, group: x.group, ...(x.key ? { key: x.key } : {}), onPress: press[x.id] })),
     onBack: goBack, onPrev: place ? openTask(place.prev) : () => undefined, onNext: place ? openTask(place.next) : () => undefined,
@@ -398,12 +402,17 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   const sections = taskSections(t, {
     ...(branch ? { branch } : {}),
     width, nowMs: pane.nowMs, detail: { roles: S.roles, kinds: S.kinds, all: v.tasks, when, archivedDone: v.archived_done, board: v, merging: pageMerging, driving: v.driving ?? S.driving }, texts,
-    ...(shown ? { shownTry: shown.try } : {}), changes, target, dataDir: S.N.dir, numberKeysTaken: choices.length > 0,
+    ...(shown ? { shown: { try: shown.try, kind: shown.kind, ...(shown.id ? { id: shown.id } : {}) } } : {}), changes, target, dataDir: S.N.dir, numberKeysTaken: choices.length > 0,
   })
   const section = (id: TaskSection['id']) => sections.find(x => x.id === id)
   /** One line of a section, as the terminal draws it. */
   const lineEl = (l: SectionLine, i: number, name: string) =>
-    l.plain ? (
+    l.pick ? (
+      // T-1104: an agent line with a report file is a button: it shows that agent's report in the Report section
+      <Button key={l.key} plain onPress={pickReport(l.pick)}>
+        <Text bold={l.segs[0]!.bold} color={C(l.segs[0]!.color)}>{l.segs.map(g => g.text)}</Text>
+      </Button>
+    ) : l.plain ? (
       <Text key={l.key} bold={l.segs[0]!.bold} color={C(l.segs[0]!.color)}>{l.segs.map(g => g.text)}</Text>
     ) : !l.segs.length ? (
       <Text key={l.key ?? `${name}-${i}`}> </Text>
@@ -441,25 +450,9 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
       <Box flexDirection="column">
         {heading(sec.title)}
         {body}
-        {sec.tries
-          ? buttonRows(
-              // "[Try 1] [● Try 2]" as the header's buttons (T-775): plain, framed the same, no key in the label; the
-              // keys (1-9, listed in the footer) belong to hidden Buttons below
-              sec.tries.map(r => {
-                const label = `${r.shown ? '● ' : ''}Try ${r.try}`
-                if (!terminal) return <Button key={`report-try-${r.try}`} label={label} variant="secondary" onPress={pickReport(r.try)} />
-                return (
-                  <Button key={`report-try-${r.try}`} plain label={label} onPress={pickReport(r.try)}>
-                    <Text color={C('text')}>{`[${label}]`}</Text>
-                  </Button>
-                )
-              }),
-              'report-buttons',
-            )
-          : null}
         {sec.tries?.some(r => r.key) && !rejectBox ? (
           <Box key="report-try-keys" display="none">
-            {sec.tries.filter(r => r.key).map(r => <Button key={`report-try-${r.try}-key`} label={r.key!} hotkey={r.key!} onPress={pickReport(r.try)} />)}
+            {sec.tries.filter(r => r.key).map(r => <Button key={`report-try-${r.try}-key`} label={r.key!} hotkey={r.key!} onPress={pickReport({ try: r.try, kind: 'worker' })} />)}
           </Box>
         ) : null}
       </Box>
@@ -468,7 +461,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   // VS Code's side panel: its own wide page, with buttons and no key hints (see vscode-task.tsx)
   if (pane.vscode)
     return taskPageVs(pane, t, {
-      header, agentId, inReview, runNowAsk: S.runNowAsk === t.id ? runNowQuestion(t.id, waits) : '', answered, target, merging, result, resultOk, rows, changes, reports, at, shown, reportBody, answerShown, answerFrom, answer, sections, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
+      header, agentId, inReview, runNowAsk: S.runNowAsk === t.id ? runNowQuestion(t.id, waits) : '', answered, target, merging, result, resultOk, rows, changes, reports, shown, reportBody, answerShown, answerFrom, answer, sections, fileWait, overtime, answerable, askedQuestion, choices, why, canPickRole, canMarkMerged, nowRole,
       redraw: () => $.ui.invalidate('ui.render'),
       on: { back: goBack, open: openTask, approve: approveIt, keepNote, askReason, cancelReject, submitReject, showDiff, pause: pauseIt, resume: resumeIt, mergeNow, retry: retryIt, runNow: runNowIt, startAnyway: runNowGo(true), cancelRunNow, toTodo, stash: stashIt, markMerged: markMergedIt, drop: dropIt, watch: watchIt, toggleReview, copy: copyTask, openRolePick, pickRole, cancelRolePick: () => ((S.rolePick = null), $.ui.invalidate('ui.render')), choicePress, sendAnswer, pickReport },
     })
@@ -477,6 +470,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
       {pageHeader(pane, header)}
       {mergeStatus}
 
+      {sectionEl('done')}
       {sectionEl('why')}
 
       {rejectBox}
@@ -502,7 +496,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
       {sectionEl('report')}
       {sectionEl('runs')}
 
-      {footer(boxOpen ? boxKeys : taskKeys(actions, reports.map(r => r.try), choices.length > 0, place && place.of > 1 ? navHint('claude') : null), 'task-keys')}
+      {footer(boxOpen ? boxKeys : taskKeys(actions, reports.map(r => r.try), choices.length > 0, place && place.of > 1 ? navHint('claude') : null, !!section('runs')?.lines.some(l => l.pick)), 'task-keys')}
     </Box>
   )
 }

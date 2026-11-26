@@ -128,8 +128,9 @@ export type ArchivedTotals = { done: number; dropped: number; tries: number; ms:
  * What the running try recorded for its hand-back, kept here (not only in the plugin's memory) so a plugin
  * reload mid-try doesn't lose it; only while "doing" on one try: `ask`: its worker's ask_owner call (an Ask record by 'worker')
  * (the last one wins); `refused`: the paths of its edits refused as outside the task's files.
+ * `tested` (T-1068): the commit the checker was started on (the tested HEAD), so a checker kept over a plugin reload is put back there too.
  */
-export type Live = { session?: string; phase?: Phase; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; ask?: SymccAsk; refused?: string[] }
+export type Live = { session?: string; phase?: Phase; checking?: Checking; merge_wait?: Blockers; extra_minutes?: number; time_ask?: string; wrap_up?: string; ask?: SymccAsk; refused?: string[]; tested?: string }
 /** How far a "doing" try got before its worker handed back (see Live). */
 export type Phase = 'claimed' | 'worker' | 'checker'
 const PHASES: readonly Phase[] = ['claimed', 'worker', 'checker']
@@ -138,7 +139,10 @@ const PHASES: readonly Phase[] = ['claimed', 'worker', 'checker']
  * A task as the board file keeps it: `live`: what only one running try holds (see Live). `failed_on`: why a "failed" task failed, when a later step needs to
  * know (only "clash": its branch conflicts with the one it merges into, so its next try merges that in first).
  */
-export type BoardTask = SymccTask & { live?: Live; failed_on?: 'clash'; answer?: string; suggested?: string[] }
+export type BoardTask = SymccTask & { live?: Live; failed_on?: 'clash'; answer?: string; suggested?: string[]; size?: ChangeSize; done?: string }
+
+/** T-1080: how big a task's change is: files changed, lines added and lines removed (git diff --shortstat); saved at each hand-back and at the merge. */
+export type ChangeSize = { files: number; added: number; removed: number }
 
 /**
  * What a task is for: the name of a kind file (see core/kinds.ts), e.g. "bug" or "docs". Every task type ends in a
@@ -150,6 +154,8 @@ export type TaskKind = string
 export const DEFAULT_KIND = 'change'
 /** The kind whose task hands back an answer and merges nothing. */
 export const INVESTIGATION = 'investigation'
+/** The kind whose task is general work: it runs like an investigation, but ends done on its own with its report kept. */
+export const ERRAND = 'errand'
 /** A kind's name: letters, digits, - and _ only (it is a file name), stored in lowercase. */
 export const KIND_NAME = /^[a-z0-9_-]{1,64}$/
 /** Whether `k` could be a kind's name (whether such a kind file exists is checked where the kinds are loaded). */
@@ -159,9 +165,11 @@ export const kindOf = (t: { kind?: unknown } | undefined): TaskKind => {
   const k = t?.kind
   return isKind(k) ? k.trim().toLowerCase() : DEFAULT_KIND
 }
-/** Whether task `t` (or kind name `t`) is an investigation: it hands back an answer and nothing is merged. Every other kind runs as a change. */
-export const isInvestigation = (t: { kind?: unknown } | string | undefined): boolean =>
-  (typeof t === 'string' ? t.trim().toLowerCase() : kindOf(t)) === INVESTIGATION
+const kindName = (t: { kind?: unknown } | string | undefined): string => (typeof t === 'string' ? t.trim().toLowerCase() : kindOf(t))
+/** Whether task `t` (or kind name `t`) is an errand: it runs like an investigation, but ends done on its own with its report kept. */
+export const isErrand = (t: { kind?: unknown } | string | undefined): boolean => kindName(t) === ERRAND
+/** Whether task `t` (or kind name `t`) hands back a report and nothing is merged: an investigation or an errand. Every other kind runs as a change. */
+export const isInvestigation = (t: { kind?: unknown } | string | undefined): boolean => kindName(t) === INVESTIGATION || isErrand(t)
 /** The most of an investigation's answer kept on the task (the full text stays in its report file). */
 export const ANSWER_MAX_CHARS = 4000
 
@@ -476,6 +484,7 @@ export function cleanLive(v: unknown, status: SymccStatus): Live | undefined {
   const ask = doing ? cleanAsk(v.ask) : undefined
   if (ask) out.ask = ask
   if (doing && strings(v.refused) && v.refused.length) out.refused = v.refused
+  if (doing && typeof v.tested === 'string' && /^[0-9a-f]{7,64}$/.test(v.tested)) out.tested = v.tested
   return Object.keys(out).length ? out : undefined
 }
 
@@ -580,6 +589,9 @@ export const isMode = (m: unknown): m is SymccMode => typeof m === 'string' && (
 export const modeOf = (b: { mode?: unknown } | null | undefined): SymccMode => (isMode(b?.mode) ? b!.mode as SymccMode : 'auto')
 /** A full git commit id: 40 hex characters (SHA-1) or 64 (SHA-256). */
 export const isSha = (x: unknown): x is string => typeof x === 'string' && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(x)
+
+/** T-1086: whether a done task has something merged to show under Changes: a change task (not an investigation or errand) with its merged commit recorded. */
+export const hasMergedChanges = (t: { status?: unknown; kind?: unknown; merged?: unknown }): boolean => t.status === 'done' && !isInvestigation(t) && isSha(t.merged)
 
 /**
  * A task from board.json with its commit fields made safe: `runs[].commits` keeps only full

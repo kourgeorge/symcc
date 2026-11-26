@@ -11,10 +11,12 @@ Use absolute paths under that folder for every {{file_tools}}. Never touch the m
   tests: `{{test_command}}
 Add or update a test that checks your change, unless the change only touches docs (README, docs/, *.md, comments). Say in your report which test covers it.`,
   rules: `Make code changes with the Edit tool; put any throwaway script or note under .scratch/ in your folder (never commit it); /tmp also works.
-Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch/ (or /tmp), then run them in a separate command; don't write them with a here-document in Bash: the guard refuses those when they mention git or paths outside your folder.
-Do not run git commands that change anything (commit, push, merge, reset, checkout or switch of branches, stash, branch, tag, update-ref...); they are refused. Read-only ones like git status, diff, log and show are fine. A throwaway repository under /tmp is fine too, named by a plain path (git init /tmp/x, git -C /tmp/x commit -m m, cd /tmp/x && git add .; no $variables, ~ or ..), where the host allows it. {{name}} commits, tests and merges your work.
+Write throwaway scripts (probes, edit scripts) with the Write tool into .scratch/ (or /tmp), then run them in a separate command; don't write them with a here-document in Bash: the guard reads the whole command text, so one that mentions git commands or the main project folder is refused.
+In Bash, use full paths: a ".." path piece, or a cd above the project, is refused.
+In your folder you may change git on your own branch: commit, merge another branch, cherry-pick, revert, restore, checkout -- <file>, reset, rebase of your branch, bisect. Refused: push, fetch, pull or remotes; switching to, making or deleting branches; worktree; config; tags; stash; rebase -x and bisect run; git options before the command (-C, -c); git in any other folder. A git command counts wherever a command starts (also after &&, ;, | or inside sh -c "..."). Only git init of a new folder under /tmp, with no options. Anything you leave uncommitted is committed for you. A throwaway repository under /tmp is fine too (git init /tmp/x, then cd /tmp/x && git add . && git commit -m m), where the host allows it. {{name}} commits, tests and merges your work.
 Don't run long commands in the background. Run test commands with the Bash tool's longest timeout (timeout: 600000); if one still gets moved to the background, wait for it (read its output until it finishes) before you answer: ending your turn ends your work, so never answer that you will continue later.`,
-  done: `When you are done, answer in one or two plain sentences: what you changed.
+  done: `Start your report with one line beginning "Done:" followed by 1-2 plain sentences on what the WHOLE task has done so far (not only this try). It is kept on the task and shown to the owner.
+When you are done, answer in one or two plain sentences: what you changed.
 {{ask}}
 {{learned}}`,
 }

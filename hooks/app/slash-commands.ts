@@ -1,12 +1,12 @@
 // symcc's slash commands, split out of symcc.ts (T-877): the list a host registers (COMMANDS) and what each one does
 // (runCommand). symcc.ts re-exports them; this file imports session-start.ts, never symcc.ts.
-import { type Command, boardText, shortHome, notSetUpAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
+import { type Command, hasMergedChanges, boardText, shortHome, notSetUpAnswer, commandNames, parseCommand, modeOf, settingsText, notifyOf, find, STATUS_WORD, statText, cutDiff, everyText, intoOf, NEW_ROLE_TEMPLATE, NEW_KIND_TEMPLATE, NEW_SCOUT_EVERY } from '../board'
 import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { findArchived } from './archive'
 import { deleteOrgMem, orgMemNow } from './org-mem'
 import { setupGit, recheckGit } from './git'
-import { publish, statusView, driveHere, disableHere, enableHere } from './lead'
-import { changedFiles, changesText } from './review'
+import { publish, driveHere, disableHere, enableHere } from './lead'
+import { changedFiles, changesText, DIFF_GONE, mergedChanges, mergedDiff } from './review'
 import { changeRole } from './roles'
 import { changeKind } from './kinds'
 import { scheduleScouts, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
@@ -14,10 +14,9 @@ import { S, workers, scoutState } from './state'
 import { load, findRoot, startingText } from './store'
 import { noteForLead, tellLead, brief } from './tell'
 import { playable } from './voice'
-import { runTool, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
+import { chatTaskText } from '../core/chat-text'
+import { runTool, viewText, boardHtmlText, type In, manual, ownerSettings, taskText, latestReport, statsText } from './tools'
 import { openPane } from './open'
-import { tasksListText } from '../core/task-list'
-import { liveStatusText } from '../core/live-text'
 import { setSymcc, setBoardMode } from './board-mode'
 import { doctor } from './doctor'
 import { guardOnlyText, refreshFresh, initProject } from './session-start'
@@ -38,7 +37,7 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-tasks`, description: `List the open ${S.N.name} tasks in the chat, grouped as on the board (what needs you, running, in review, failed, to do), with the backlog and today's counts` },
     { name: `${S.N.name}-status`, description: `Show the ${S.N.name} Live tab as text in the chat: what needs you, the running tasks and what waits for them, the branches, today's numbers and the newest notes` },
     // OpenCode's TUI part has its own /<name>-board (opencode/tui.ts), so a host with no panel doesn't list it here
-    ...(features.panel ? [{ name: `${S.N.name}-board`, description: `Open the ${S.N.name} board panel (on Live)` }] : []),
+    ...(features.panel ? [{ name: `${S.N.name}-board`, description: `Open the ${S.N.name} board panel (on Live); html writes the board as a web page and opens it`, argumentHint: '[html]' }] : []),
     { name: `${S.N.name}-task`, description: `Open one ${S.N.name} task (/${S.N.name}-task T-3), or do one of its page's actions: /${S.N.name}-task T-3 pause, resume, retry, drop [reason], merged (already merged by hand), review on|off, stash (to the backlog), todo (out of the backlog), role <name>, note (an answered investigation: keep it as a note), or run [anyway] (start it now, even over the agent limit or on a paused board; anyway when it waits on unfinished tasks)`, argumentHint: '<T-id> [pause|resume|retry|drop [reason]|merged|review on|off|stash|todo|role <name>|note|run [anyway]]' },
     { name: `${S.N.name}-approve`, description: `Approve a ${S.N.name} task that is ready for review (merge it): /${S.N.name}-approve T-5`, argumentHint: '<T-id>' },
     { name: `${S.N.name}-reject`, description: `Reject a ${S.N.name} task in review, with the reason: /${S.N.name}-reject T-5 <reason>`, argumentHint: '<T-id> <reason>' },
@@ -47,7 +46,7 @@ export function COMMANDS(features: HostFeatures = ALL_FEATURES): { name: string;
     { name: `${S.N.name}-mode`, description: `Set the ${S.N.name} board mode: paused (nothing runs), review = approve merge (finished work waits for you) or auto = auto merge (it merges on its own); no word switches review and auto`, argumentHint: '[paused|review|auto]' },
     { name: `${S.N.name}-settings`, description: `See and change the ${S.N.name} settings: /${S.N.name}-settings opens them; /${S.N.name}-settings max_parallel 5 sets one; /${S.N.name}-settings role tester off (or type, with on, off, reset or remove) changes a role or task type, role <name> add makes one, role <name> edit <field> <value> changes one part of it (save {"field":"value",...} several at once); /${S.N.name}-settings git setup sets up git (as the lead's setup_git)`, argumentHint: '[name value | role|type <name> on|off|reset|remove | role|type <name> add | role|type <name> edit <field> <value> | role|type <name> save {json} | git setup]' },
     { name: `${S.N.name}-stats`, description: `Show ${S.N.name} time and token stats: the whole team (lead, workers, scouts), totals, averages per task and per try, time per stage, outcomes, by role, origin and day, with bar charts; inside (with a day range) counts only the work inside it; html writes them as a web page with charts and opens it: /${S.N.name}-stats [full|html] [7d [inside]|T-100..T-130]`, argumentHint: '[full|html] [7d [inside]|T-1..T-9]' },
-    { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix b-T-5 m-1101-1000 (the items with those ids)`, argumentHint: '[fix [all|id ...]]' },
+    { name: `${S.N.name}-doctor`, description: `Check ${S.N.dir}/ and git: old migration backups, task branches already merged, leftover task folders, files near the 4 MB limit, a stuck board; lists them with sizes and cleans up only with /${S.N.name}-doctor fix (all) or fix b-T-5 m-1101-1000 (the items with those ids); for a dropped task, fix also deletes its folder with unsaved changes and its unmerged branch (they can't be got back); for other tasks such work is only listed`, argumentHint: '[fix [all|id ...]]' },
     { name: `${S.N.name}-disable`, description: `Disable ${S.N.name} for this project: ${S.W.assistant} works as normal, nothing runs; the board is kept; "here" turns it off in this window only`, argumentHint: '[here]' },
     { name: `${S.N.name}-enable`, description: `Turn ${S.N.name} on in this window: the project too if it was disabled, in the mode the board had` },
     { name: `${S.N.name}-init`, description: `Set up ${S.N.name} in this folder, like git init: makes ${S.N.dir}/ here, turns it on and opens the board; with no .git of its own the board shows a "No git repo here" notice with a set-up step, and "git" sets up git here first; where a board exists it changes nothing`, argumentHint: '[git]' },
@@ -150,17 +149,18 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       return say(manual(cmd.topic, host.features))
     case 'tasks':
       // T-901: every client prints the open tasks as a short list in the chat; no panel opens
-      return say(tasksListText(b, Date.now(), S.N.name))
+      return say(await viewText(host, b, 'tasks'))
     case 'status':
       // T-902: the Live tab's picture as text in the chat, in every client; no panel opens
-      return say(liveStatusText(await statusView(host, b), (await orgMemNow(host)).notes, Date.now(), S.N.name))
+      return say(await viewText(host, b, 'status'))
     case 'board':
+      if (cmd.html) return say(!loaded.board ? `${loaded.broken} Then try again.` : await boardHtmlText(host, b, true).catch((err: Error) => `Could not build the board page: ${err.message}`))
       if (!host.features.panel) return say(noPanelText())
       await openPane(host, { tab: 'live' })
       return say(boardOpened())
     case 'open':
       // a host with no panel: the text board, as the board tool answers it (or why the board can't be read)
-      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving }, S.version) : `${loaded.broken} Then try again.`)
+      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving, chat: !!S.chat }, S.version) : `${loaded.broken} Then try again.`)
       await openPane(host, { tab: 'live' })
       return say(boardOpened())
     case 'scouts': {
@@ -235,13 +235,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       if (cmd.kind === 'enable') return say(await enableHere(host, t => tellLead(host, t)))
       return say(cmd.here ? await disableHere(host) : await setSymcc(host, false))
     case 'drive': {
-      // T-952: a window that is off only because another window drives (its notice offers /<name>-drive) turns on here
-      // first, then asks to drive; one turned off on purpose (/<name>-disable here) stays off
-      if (S.offHere && S.offWhy !== 'off') {
-        const on = await enableHere(host, t => tellLead(host, t))
-        if (S.offHere) return say(on)
-        return say(`${on}\n\n${await driveHere(host)}`)
-      }
+      // a window turned off on purpose (/<name>-disable here) stays off
       // T-984: said plainly why /<name>-drive does not turn it on
       if (S.offHere) return say(`${S.N.name} is off in this window because you ran /${S.N.name}-disable here, so /${S.N.name}-drive leaves it off. /${S.N.name}-enable turns it on here; then /${S.N.name}-drive can make this window drive.`)
       return say(await driveHere(host))
@@ -257,9 +251,11 @@ export async function runCommand(host: Host, command: string, args: string): Pro
         // not on the board: it may have been moved to archive.json (read-only, shown as text)
         const old = await findArchived(host, cmd.id)
         if (!old) return say(`${cmd.id} is not on the board.`)
+        if (S.chat) return say(`${old.id} is archived (read-only).\n${chatTaskText(old, undefined, Date.now(), cmd.page)}`)
         return say(`${old.id} is archived (in ${S.N.archiveFile}; read-only).\n${taskText(old, false, b.tasks, undefined, b.archived_done)}`)
       }
       await openPane(host, { tab: 'tasks', task: t.id })
+      if (S.chat) return say(chatTaskText(t, await latestReport(host, t), Date.now(), cmd.page))
       return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport(host, t), b.archived_done))
     }
     case 'task-do': {
@@ -281,6 +277,16 @@ export async function runCommand(host: Host, command: string, args: string): Pro
     case 'diff': {
       const t = find(b, cmd.id)
       if (!t) return say((await findArchived(host, cmd.id)) ? `${cmd.id} is archived.` : `${cmd.id} is not on the board.`)
+      // T-1086: a done change task shows what its merge brought into the branch, from git
+      if (hasMergedChanges(t)) {
+        const got = await mergedChanges(host, t).catch(() => null)
+        if (!got) return say(DIFF_GONE)
+        if (!cmd.file) return say(statText(t.id, got.files, S.N.name))
+        const f = cmd.file.replace(/^\.\//, '')
+        if (!got.files.some(x => x.file === f)) return say(`${t.id} did not change ${f}. Changed: ${got.files.map(x => x.file).join(', ')}`)
+        const text = await mergedDiff(host, t, f)
+        return say(text === DIFF_GONE ? text : cutDiff(text, t.id, 5000, f, S.N.name).join('\n') || `${f}: no text changes (binary?)`)
+      }
       if (t.status !== 'review') return say(`${t.id} is not ready for review (it is ${STATUS_WORD[t.status]}); /${S.N.name}-diff shows the changes of a task in review.`)
       try {
         const files = await changedFiles(host, intoOf(t), t)

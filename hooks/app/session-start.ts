@@ -6,11 +6,12 @@ import type { Host } from '../host'
 import { moveOldOrgMem } from './org-mem'
 import { migrateIfOld } from './migrate-data'
 import { gitReady, initGitIn, recheckGit } from './git'
-import { claimLead, publish, handOver, releaseLead, startOffHere, offHereBeat } from './lead'
+import { claimLead, carryDriver, publish, handOver, releaseLead, startHere, offHereBeat } from './lead'
 import { loadRoles } from './roles'
 import { loadKinds } from './kinds'
 import { scoutOriginsFixed, scheduleScouts, seedExampleScouts } from './scouts'
 import { S, onHere, loadVersion, timers } from './state'
+import { startLagTimer } from './slow-log'
 import { path, load, saveMigrated, startWait, projectRoot, sessionFolder, isWorkerFolder } from './store'
 import { openPane } from './open'
 import { check, pump } from './workers'
@@ -40,7 +41,7 @@ export function watchdogTick(host: Host) {
 
 /** The lead heartbeat's timer went off: the driver refreshes its heartbeat; the others look whether it went stale and take over. */
 export function leadBeat(host: Host) {
-  // T-793: a window off here drives nothing; it only looks whether the window with symcc on is gone
+  // T-793: a window off here drives nothing; it only keeps the driver notice fresh
   if (S.fresh || S.guardOnly) return // guardOnly: a worker folder never claims a lead
   if (S.offHere) return void offHereBeat(host).catch(() => undefined)
   void claimLead(host)
@@ -73,8 +74,11 @@ export async function sessionStart(host: Host) {
     await loadVersion(host)
     S.root = main || own
     S.home = (await host.env('HOME').catch(() => undefined)) ?? ''
+    // T-1016: a window that drove under the old id and now has a new one is still the same window
+    const oldMe = S.me
+    const wasDriving = S.driving && !S.fresh && !S.offHere && !!oldMe
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
-    S.dam = await isDamSession(host)
+    S.chat = (await isDamSession(host)) ? 'dam' : ''
     // T-795: a new project (no board.json) stays off, like plain Claude, until the owner runs /<name>-init (T-844: no .<name> in this folder or above): nothing is
     // written, no lead is claimed, no scouts are seeded and no timer starts; only the band and status line say so.
     S.fresh = !(await host.fs.exists(path(S.N.boardFile)).catch(() => false))
@@ -93,8 +97,9 @@ export async function sessionStart(host: Host) {
       await scoutOriginsFixed(host).catch(() => undefined)
       await moveOldOrgMem(host).catch(() => undefined)
     }
-    // T-793: another live window with symcc on makes this one start off here (plain), before it can claim the lead
-    await startOffHere(host).catch(() => undefined)
+    // T-1041: with another live window driving, this one starts on and follows it (startHere), before it can claim the lead
+    if (wasDriving && oldMe !== S.me) await carryDriver(host, oldMe).catch(() => undefined)
+    await startHere(host).catch(() => undefined)
     // Become the driver if nobody drives the board. As the driver, old workers still running
     // from before a reload are stopped first and their tasks go back to "todo".
     const waits = new Promise<void>(r => (startWait.mark = r))
@@ -151,6 +156,7 @@ function startTimers(host: Host) {
   S.watchdog = host.clock.every(2 * 60_000, () => watchdogTick(host))
   S.beat?.cancel()
   S.beat = host.clock.every(LEAD_BEAT_MS, () => leadBeat(host))
+  startLagTimer(host)
 }
 
 /**
@@ -173,7 +179,7 @@ async function createBoardIn(host: Host, dir: string, setUpGit: boolean): Promis
   return ''
 }
 
-/** A window that started with no board looks again for a board in its own folder; if one is there now, it starts the normal way (off here when another window drives, a lead otherwise). */
+/** A window that started with no board looks again for a board in its own folder; if one is there now, it starts the normal way (a follower when another window drives, a lead otherwise). */
 export async function refreshFresh(host: Host) {
   if (!S.fresh || S.guardOnly) return
   const own = await sessionFolder(host)
@@ -187,12 +193,12 @@ export async function refreshFresh(host: Host) {
  * lead is told it is the lead now. Where a board is found (here or above) it changes nothing. A folder with no .git of its
  * own still gets its board (T-861): the board shows a "no git" notice with a Set up git button (never a parent folder's
  * repo), and no worker starts until git is set up. /<name>-init git sets git up here first, then makes the board.
- * If another window already runs symcc here, this one stays off (see startOffHere).
+ * If another window already runs symcc here, this one follows it (see startHere).
  */
 export async function initProject(host: Host, tell: (text: string) => void, withGit: boolean): Promise<string> {
   const own = (await sessionFolder(host)).replace(/[\\/]+$/, '') || '/'
   // like git init: only a board in this exact folder stops it; one in a folder above does not
-  if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return S.offHere ? (S.offWhy === 'other' ? `${S.N.name} is already set up here. It runs in another window; /${S.N.name}-enable turns it on in this one too.` : `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable turns it back on.`) :`${S.N.name} is already set up here.`
+  if (await host.fs.exists(`${own}/${S.N.boardFile}`).catch(() => false)) return S.offHere ? `${S.N.name} is already set up here, but it is off in this window. /${S.N.name}-enable turns it back on.` : `${S.N.name} is already set up here.`
   const hasGit = await host.fs.exists(`${own}/.git`).catch(() => false)
   // T-861: plain init always makes the board; with no git the board shows a notice and its Set up git button does the git part
   const failed = await createBoardIn(host, own, !hasGit && withGit)
@@ -201,12 +207,7 @@ export async function initProject(host: Host, tell: (text: string) => void, with
   S.root = own
   S.fresh = false
   S.enabledNow = true
-  await startOffHere(host).catch(() => undefined)
-  if (S.offHere) {
-    startTimers(host)
-    await publish(host, await load(host))
-    return `${S.N.name} already runs in another window. /${S.N.name}-enable turns it on in this one too.`
-  }
+  await startHere(host).catch(() => undefined)
   S.startupDone = false
   try {
     await claimLead(host, true).catch(() => (S.driving = false))

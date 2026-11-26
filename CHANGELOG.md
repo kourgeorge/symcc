@@ -2,6 +2,108 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.46 (2026-11-26)
+
+### Added
+- Chat mode: when you write to the lead from a chat app (Telegram, Slack and other Claude Code channels, or DAM), your message counts as your own words, the lead posts its replies to that chat, and it asks questions as numbered text ("reply with the number or your own words") instead of the terminal pop-up. Typing in the terminal again turns it off. See "From a chat app" in the guide.
+- Board updates say who wrote each part and why (the worker, the checker by its id, or symcc).
+- Task page: ▍Changes stays after a task is merged, and `/symcc-diff` works for done tasks too; it counts a worker's own commits and its own merge of main.
+- Website: a blog built by the site script (dated posts, an index, RSS), and nicer doc pages: an "On this page" list (on the side on wide screens, folded on phones), a sticky header marking the current page, Previous/Next links, cleaner tables and code. The home page looks as before.
+
+### Changed
+- The worker guards are slimmer: one git deny list read from a command's text, no shell parser.
+
+### Fixed
+- The git guard sees git after a lone `--` or a non-letter option (`env -- git push`, `xargs -0 git push`, `nice -5 git push`).
+- An answer to "sent back twice by the checker" must name exactly one of Merge as is / Keep fixing / Drop; "drop? no, keep fixing" no longer drops the task.
+- The blog build refuses an impossible date, the post name `index` and two posts with the same name.
+
+## 0.5.45 (2026-11-26)
+
+### Added
+- Task page: every history line says who wrote it, with the agent's id (`worker symcc-T-5:`, `checker symcc-T-5-checker:`, `lead:`, `you:`); the checker's verdict is its own line with its first problem, and a ▍Checker (try n) section shows its full report.
+- Task page and Live: the change size (`25 files · +539 −3,722`) under the title and at the end of a finished Live row, and a ▍Done line with what the whole task did (also in the merge message).
+- The checker sends work back only for what is worse than main; after 2 send-backs symcc asks you once: Merge as is / Keep fixing / Drop.
+
+### Fixed
+- Moving a task to another stage works again (it was refused for every call).
+- A move to tests that stops at review writes the full review (history line, "no test" flag, secrets text).
+
+## 0.5.44 (2026-11-26)
+
+### Added
+- Cursor and VS Code: run symcc inside Cursor, on Cursor's or GitHub Copilot's agents (hosts/cursor, PR #1 by pierrekour).
+- New task type "errand": general work, even outside the project, that ends done when its worker hands back; nothing is merged.
+- The lead can move a task to another stage (work, check, tests or review) with its branch as it is. While a worker runs, only "work" is allowed; your review still applies.
+
+### Changed
+- Live tab: the task type is back at the end of the second line (only when it fits); running rows drop the minutes at the end, and the title gets that room.
+- Stats count finished errands on their own, not as investigations you read.
+
+### Fixed
+- A task that only deletes a secret-looking file (like `.env`) no longer gets its branch squashed into one commit.
+
+## 0.5.43 (2026-11-26)
+
+### Added
+- Workers may change git in their own folder and on their own branch: commit, merge, cherry-pick, restore, reset and rebase of their own branch. Push, fetch, pull, other branches, worktree, config, tags and stash stay refused. At merge, symcc checks the files of every commit of a try, cancels a merge left stuck on a conflict, and commits one the worker resolved.
+- Roles and Task types pages: a [Settings] Back button at the top.
+- Live tab: each task row and waiting row ends with its task type, in a dim color; the type takes only spare title room.
+
+### Changed
+- After a plugin restart, a checker that is still running is kept and its verdict used, instead of being stopped and started again.
+- A board update that only carries the health check opens with "[symcc health check]"; fewer false "pushed back" warnings.
+- Faster board changes: fewer git and mkdir runs per change.
+
+## 0.5.42 (2026-11-25)
+
+### Added
+- Board header: a "Drive here (d)" button while another session drives the board.
+- A "speed" scout: once a day it looks for measured ways to make symcc more responsive.
+- Moving a task from the backlog to to do names the open tasks that share its files and shows its priority.
+
+### Changed
+- A new window opened while another one drives now follows it (a lead, not driving) instead of starting off. `/symcc-drive` names itself in the lead's message.
+- A window turned off with `/symcc-disable here` stays off until `/symcc-enable`, whatever other windows do; the old "the symcc window closed · take over" notice is gone.
+- Settings page (terminal, VS Code and OpenCode): plain names with values in one column, and help for the selected row (meaning, name, default, range) at the bottom.
+- Live tab: the usage bar uses solid blocks, so each part's color shows clearly; a blank line before "yesterday:"; organizational memory lines indented like Today's.
+- Task page: Priority is the last row of Details.
+- A short owner reply ("yes") is quoted in a task's Request with what it answered.
+
+## 0.5.41 (2026-11-25)
+
+### Added
+- Doctor offers to delete dropped tasks' leftover folders and branches, but never while an agent may still use them.
+
+### Changed
+- A worker's hand-back does less work per board change, so the board no longer freezes while workers finish.
+- VS Code Live page: a thin line between sections.
+
+## 0.5.40 (2026-11-25)
+
+### Changed
+- VS Code board redesign, finished: the Tasks list has plain headings and the search on top, with no mode switch in its footer. Task pages, Scouts, Settings, Roles and Task types, organizational memory and question pages have no pills, borders or rules. Removing or resetting something asks in place, with a button and a Cancel link.
+- VS Code Live: each lane has its dim numbers line back, as a third line; the task type drops first when the panel is narrow.
+- Run now is only for a task that is to do; any other task is refused ("retry it or move it to todo first").
+- A retried `add` (for example after a tool timeout) makes no second task when every part of it is the same as an add made in the last 5 minutes.
+
+### Removed
+- The `copilot -p` backup runner for Copilot workers; Copilot runs through its extension only.
+
+## 0.5.39 (2026-11-24)
+
+### Changed
+- VS Code board redesign: one shared style (plain headings, links instead of pills); the Live tab shows one line per lane, and Branches one line each, with no graph.
+- "Kinds" are now called "task types" everywhere you see them.
+- Live trains: the task type sits at the right end of the meta line, and change tasks and investigations share one "done" end stop.
+- Health check: a task the lead put later (a higher priority number) no longer counts as "starving".
+- Copilot status line: today's merges and cost come from done tasks.
+- `/symcc-help` lists "e run now" among the task page keys; the README lists the writer role, and says the researcher and writer can use the web.
+- Lead guide: a window that doesn't drive can still add and change tasks.
+
+### Fixed
+- The driving window no longer loses itself when its session id changes.
+
 ## 0.5.38 (2026-11-24)
 
 ### Added

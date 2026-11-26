@@ -13,23 +13,21 @@
 // (a fold and a task id are links: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
 import type { SymccTask } from '../../../types'
-import { type DetailRow, type DiffFile, type Seg, agentLines, findRole, fmtRun, fmtTotal, sumRuns, taskActions, type TaskAction, type TaskActionId, type BoardTask } from '../../board'
-import type { TaskSection } from '../../core/task-sections'
+import { type DetailRow, type DiffFile, type Seg, findRole, fmtTotal, sumRuns, taskActions, type TaskAction, type TaskActionId, type BoardTask } from '../../board'
+import { runLines, type ReportPick, type TaskSection } from '../../core/task-sections'
 import { RUN_NOW_NO, RUN_NOW_YES } from '../../core/run-now'
 import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
 import { S } from '../../app/state'
 import type { PaneParts } from './parts'
 import { draftFor, dropDraft, fieldRows, keepDraftText } from './answer-box'
 import type { $ } from '../panel'
-import { vsCallout, vsChoices, vsFold, vsFooter, vsHref, vsLink, mdLink, vsSection } from './vscode'
+import { vsChoices, vsFold, vsHref, vsLink, mdLink, vsSection, VS_LABEL_W } from './vscode'
 import { type PageHeader, vsPageHeader } from './page-header'
 
 /** How many lines of a report VS Code's task page shows before its "Show all" button. */
 export const REPORT_FIRST_LINES = 12
 /** How many history events (the newest) VS Code's task page shows before its "Show all" button. */
 export const HISTORY_FIRST = 10
-/** The width of the Details grid's label column, in cells: the longest label ("Research") and a space. */
-export const VS_LABEL_WIDTH = 'Research'.length + 1
 
 /** The key of a Details row on VS Code's task page: "vs-row-status", "vs-row-stage"; a row with no label (one that
  *  goes on from the row above) gets the label above it and its place: "vs-row-after-1". */
@@ -66,8 +64,7 @@ export type VsTaskCtx = {
   rows: DetailRow[]
   changes: { files: DiffFile[]; error: string } | null
   reports: { try: number; file: string }[]
-  at: number
-  shown: { try: number; file: string } | undefined
+  shown: { try: number; kind: 'worker' | 'checker'; id?: string; file: string } | null
   reportBody: string | null
   answerShown: boolean
   answerFrom: { try: number; file: string } | undefined
@@ -123,7 +120,7 @@ export type VsTaskCtx = {
     cancelRolePick: () => void
     choicePress: (i: number) => () => void
     sendAnswer: (text: string) => () => void
-    pickReport: (n: number) => () => void
+    pickReport: (p: ReportPick) => () => void
   }
 }
 
@@ -162,6 +159,16 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     <Text key={key} wrap="wrap" color={C(color)} {...extra}>
       {text}
     </Text>
+  )
+  /** T-1006: what needs you: a heading (the mark in the tone's color, bold words) and its lines under it; no box. */
+  const note = (key: string, mark: string, label: string, tone: string, body: unknown[]) => (
+    <Box key={key} flexDirection="column" gap={1}>
+      <Text key={`${key}-head`} wrap="wrap" bold>
+        <Text key={`${key}-mark`} color={C(tone)}>{`${mark} `}</Text>
+        <Text key={`${key}-label`} color={C('text')}>{label}</Text>
+      </Text>
+      {body as never}
+    </Box>
   )
   const section = (name: string, label: string, body: unknown[]) => (
     <Box key={`vs-sec-${name}`} flexDirection="column">
@@ -223,7 +230,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   }
   // the box that asks why, once Reject (or Ask more) was pressed
   const rejectBox = typingBox ? (
-    <Box key="vs-reject" flexDirection="column" borderStyle="round" borderColor={C(x.answered ? 'warning' : 'error')} paddingX={1}>
+    <Box key="vs-reject" flexDirection="column">
       <Input
         key="reject-reason"
         label={x.answered ? 'Your follow-up question' : 'Reason to reject'}
@@ -242,8 +249,8 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   // T-954: Run now's "Start anyway?" question (Cancel is the default)
   const runNowBox = x.runNowAsk ? (
-    <Box key="vs-run-now" flexDirection="column" borderStyle="round" borderColor={C('warning')} paddingX={1}>
-      {plain('vs-run-now-ask', x.runNowAsk, 'warning')}
+    <Box key="vs-run-now" flexDirection="column">
+      {note('vs-run-now-head', '?', x.runNowAsk, 'warning', [])}
       <Box key="vs-run-now-buttons" flexDirection="row" gap={1}>
         <Button key="run-now-yes" label={RUN_NOW_YES} onPress={on.startAnyway} />
         <Button key="run-now-cancel" label={RUN_NOW_NO} variant="secondary" autoFocus onPress={on.cancelRunNow} />
@@ -253,7 +260,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   // the role pick list
   const roleBox = rolePicking ? (
-    <Box key="vs-role" flexDirection="column" borderStyle="round" borderColor={C('ide')} paddingX={1}>
+    <Box key="vs-role" flexDirection="column">
       {plain('vs-role-head', `Pick a role for ${t.id}`, 'text', { bold: true })}
       {S.rolePick!.options.map(o => {
         const cur = o.toLowerCase() === x.nowRole
@@ -275,7 +282,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   const answers = x.choices.slice(0, -1) // the last one is "Answer…": the box below is always there
   const askedFiles = !x.overtime ? (t.ask?.files ?? []) : []
   const question = x.answerable
-    ? vsCallout(vs, 'vs-sec-question', '?', x.overtime ? 'Time is up' : 'Question for you', 'warning', [
+    ? note('vs-sec-question', '?', x.overtime ? 'Time is up' : 'Question for you', 'warning', [
         plain('vs-question', x.askedQuestion ?? '', 'text', { bold: true }),
         ...askedFiles.map(f => plain(`vs-asked-${f}`, `  ${f}`, 'autoAccept')),
         answers.length ? vsChoices(vs, answers.map((c, i) => (askedFiles.length && i === 0 ? 'Allow files' : c)), pickChoice) : null,
@@ -285,15 +292,18 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     : null
 
   const fileWait = x.fileWait
-    ? vsCallout(vs, 'vs-sec-file-wait', '⧗', 'Waiting for your files', 'warning', [plain('vs-file-wait', x.fileWait), plain('vs-file-wait-note', 'Merge now merges it without waiting.', 'inactive')])
+    ? note('vs-sec-file-wait', '⧗', 'Waiting for your files', 'warning', [plain('vs-file-wait', x.fileWait), plain('vs-file-wait-note', 'Merge now merges it without waiting.', 'inactive')])
     : null
 
   const failed = x.why
-    ? vsCallout(vs, 'vs-sec-why-failed', '✗', 'Why it failed', 'error', [plain('vs-why-reason', x.why.reason), x.why.asks ? plain('vs-why-asks', x.why.asks, 'warning') : null, plain('vs-why-next', `Next: ${x.why.next}`, 'inactive')].filter(Boolean) as never[])
+    ? note('vs-sec-why-failed', '✗', 'Why it failed', 'error', [plain('vs-why-reason', x.why.reason), x.why.asks ? plain('vs-why-asks', x.why.asks, 'warning') : null, plain('vs-why-next', `Next: ${x.why.next}`, 'inactive')].filter(Boolean) as never[])
     : null
 
   // which of the shared sections show, and their headings, come from core's taskSections (as on the terminal)
   const sec = (id: TaskSection['id']) => x.sections.find(s => s.id === id)
+  // T-1080: what the whole task has done so far, at the top
+  const doneSec = sec('done')
+  const done = doneSec ? section('done', doneSec.title, [plain('vs-done-text', (t as BoardTask).done ?? '')]) : null
   const answerSec = sec('answer')
   const answer = answerSec
     ? section('answer', answerSec.title, [
@@ -324,7 +334,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     )
     return (
       <Box key={key} flexDirection="row">
-        <Box key={`${key}-label`} width={VS_LABEL_WIDTH} flexShrink={0}>
+        <Box key={`${key}-label`} width={VS_LABEL_W} flexShrink={0}>
           <Text key={`${key}-label-text`} color={C('inactive')}>{r.label}</Text>
         </Box>
         {value}
@@ -358,11 +368,11 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
 
   const details = section('what', 'What to do', [t.details.trim() ? <Markdown key="vs-details-md" text={t.details.trimEnd()} /> : plain('vs-details-none', '(no details)', 'inactive')])
 
-  // a task in review: the files it changed, each opening its diff
+  // a task in review (or a done one, T-1086): the files it changed, each opening its diff
   const changesSec = sec('changes')
   const changes = x.changes && changesSec
     ? section('changes', changesSec.title, [
-        plain('vs-changes-folder', `folder: ${S.N.dir}/worktrees/${t.id}; edit files there, then approve (the tests run again)`, 'inactive'),
+        x.inReview ? plain('vs-changes-folder', `folder: ${S.N.dir}/worktrees/${t.id}; edit files there, then approve (the tests run again)`, 'inactive') : null,
         x.changes.error ? plain('vs-changes-error', `Could not read the changes: ${x.changes.error}`, 'error') : null,
         !x.changes.error && !x.changes.files.length ? plain('vs-changes-none', 'no changes', 'inactive') : null,
         ...x.changes.files.map(f => (
@@ -374,7 +384,6 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
             </Text>
           </Box>
         )),
-        x.changes.files.length ? plain('vs-changes-hint', 'Click a file to see its changes.', 'inactive') : null,
       ])
     : null
 
@@ -393,7 +402,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     ? section('history', historySec.title, [
         <Box key="vs-history" flexDirection="column">
           {shownEvents.map((e, i) => {
-            const stamp = [historyTime(e.at, nowMs), e.label].filter(Boolean).join(' · ')
+            const stamp = [historyTime(e.at, nowMs), e.by, e.label].filter(Boolean).join(' · ')
             const resultColor = e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text'
             // the line goes on below the last shown event when older ones are hidden behind "Show all"
             const line = i < shownEvents.length - 1 || hidden > 0
@@ -425,7 +434,18 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
   // the tries, one line each with a dim line per agent under it (T-774), and their total (the dates are on the Added
   // row); the folded row sums them on one line ("3 tries · 21m · 10.1M tokens (3.6× the usual task) · checkers 2.4M")
   const time = fold('time', 'Time and cost', sec('runs')?.summary || (t.runs?.length ?? 0), [
-    ...(t.runs ?? []).flatMap((r, i) => [plain(`vs-run-${i}`, fmtRun(r, i, nowMs), r.ended ? 'inactive' : 'success'), ...agentLines(r, nowMs).map((l, k) => plain(`vs-run-${i}-agent-${k}`, `  ${l}`, 'inactive'))]),
+    // T-1104: an agent line with a report file is a link-style button that shows that report; the one shown has a ●
+    ...(t.runs ?? []).flatMap((r, i) => runLines(t, r, i, nowMs, x.shown).map((l, k) => {
+      const text = l.segs[0]!.text.slice(2)
+      const color = l.segs[0]!.color
+      return l.pick ? (
+        <Button key={`vs-${l.key}`} plain label={text} onPress={on.pickReport(l.pick)}>
+          <Text color={C(color)}>{text}</Text>
+        </Button>
+      ) : (
+        plain(`vs-${l.key ?? `run-${i}-${k}`}`, text, color)
+      )
+    })),
     t.runs?.length ? plain('vs-total', `total: ${fmtTotal(total)}`, 'text', { bold: true }) : plain('vs-no-runs', 'no tries yet', 'inactive'),
   ])
 
@@ -440,14 +460,13 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       ? section('report', reportSec.title, [
           !x.shown ? plain('vs-report-none', 'no saved report', 'inactive') : null,
           x.shown ? plain('vs-report-file', x.shown.file, 'inactive') : null,
-          x.shown && x.reportBody === null ? plain('vs-report-error', 'Could not read the report file.', 'error') : null,
+          x.shown && x.reportBody === null ? plain('vs-report-error', `Could not read the ${x.shown.kind === 'checker' ? 'checker ' : ''}report file.`, 'error') : null,
           part && part.text.trim() ? <Markdown key="vs-report-md" text={part.text} /> : null,
-          longReport || x.reports.length > 1 ? (
+          longReport ? (
             <Box key="vs-report-buttons" flexDirection="row" flexWrap="wrap" gap={1}>
               {longReport ? (
                 <Button key="report-all" label={all ? 'Show less' : `Show all (${reportPart(x.reportBody!).more} more lines)`} variant="secondary" onPress={() => ((S.reportAll = all ? null : t.id), x.redraw())} />
               ) : null}
-              {x.reports.length > 1 ? x.reports.map((r, i) => <Button key={`report-try-${r.try}`} label={`${i === x.at ? '● ' : ''}Try ${r.try}`} variant="secondary" onPress={on.pickReport(r.try)} />) : null}
             </Box>
           ) : null,
         ])
@@ -457,6 +476,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     <Box flexDirection="column" gap={1}>
       {vsPageHeader(pane, { ...header, backFocus: !(x.answerable || typingBox) })}
       {mergeStatus}
+      {done}
       {question}
       {fileWait}
       {failed}
@@ -471,7 +491,6 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {history}
       {report}
       {time}
-      {vsFooter(vs, 'task-keys')}
     </Box>
   )
 }

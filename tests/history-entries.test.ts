@@ -3,11 +3,12 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { addTask, afterChanges, emptyBoard, mergedHow, patchTask, promoteTask, readArchive, archiveText, readBoard, rejectTask, stashTask, statsReport, find, type Board } from '../hooks/board'
-import { tryEntry, type HistoryAdd, type HistoryKind, HISTORY_KINDS, historyEntry, historyLineText, historyTime, notUsedEntry, resultEntry, stoppedEntry, withHistory, workerHandedBackEntry, workerStartedEntry } from '../hooks/core/history'
+import { changeLines, tryEntry, type HistoryAdd, type HistoryKind, HISTORY_KINDS, historyEntry, historyLineText, historyTime, notUsedEntry, resultEntry, stoppedEntry, withHistory, workerHandedBackEntry, workerStartedEntry } from '../hooks/core/history'
 import { taskWasResult } from '../hooks/core/review'
 import { oldDataRows, guessHistoryKind, migrateHistory, oldHistoryFacts, oldHistoryEntry, upgradeArchiveTask } from '../hooks/core/old-data'
 import { readOld, stillOld } from './old-data-fixture'
 import { taskText } from '../hooks/app/tools'
+import { firstProblemOf } from '../hooks/core/checker'
 
 const T = '2026-11-18T10:00:00.000Z'
 const T2 = '2026-11-18T11:30:00.000Z'
@@ -59,8 +60,8 @@ test('an old board with string history converts once: kinds guessed from the tex
   expect(statsReport({ tasks: r.board.tasks, nowMs: Date.parse(T), full: true })).toContain('Failed tries')
   // an entry with no time shows none; one with a time shows it first
   const text = taskText(r.board.tasks[0]!, false)
-  expect(text).toContain('  • the lead added a note: “the earlier try failed”')
-  expect(text).toContain(`  • ${historyTime('2026-11-01T09:20:00.000Z')}  try 1: did it → tests failed`)
+  expect(text).toContain('  • lead: the lead added a note: “the earlier try failed”')
+  expect(text).toContain(`  • ${historyTime('2026-11-01T09:20:00.000Z')}  worker: try 1: did it → tests failed`)
 })
 
 test('an old archive converts the same way, once, and its stats still count', () => {
@@ -176,4 +177,36 @@ test('T-806: lines today\'s helpers wrote are never read as old text: no reason,
   expect(rows.find(r => r.text.startsWith('history entries without their facts'))?.n ?? 0).toBe(0)
   // an old line with the same words and no fact field at all is still old
   expect(migrateHistory({ history: [{ at: T, kind: 'failed', text: 'try 1: x → tests failed: y' }] })![0]!.reason).toBe('tests')
+})
+
+test('T-1079: merge lines name who started the merge, and the checker line shows the first problem', () => {
+  const t = { id: 'T-1', role: 'general', attempts: 2 }
+  const line = (who: 'you' | 'lead' | 'symcc', said: string) => {
+    const [kind, text, facts] = resultEntry(t, 'merged', said, 'merged into main (abc)', { by: who })
+    return historyLineText(historyEntry(kind, text, T, facts))
+  }
+  expect(line('you', 'approved by the owner')).toContain('you:')
+  expect(line('lead', 'moved to tests by the lead')).toContain('lead:')
+  expect(line('lead', 'moved to tests by the lead')).not.toContain('you:')
+  expect(line('symcc', 'merged once your files were out of the way')).not.toMatch(/you:|worker|lead:/)
+  const rep = (s: string) => firstProblemOf(s)
+  expect(rep('I checked by importing x from /tmp.\n\nProblems:\n\n- a.ts:3 — real bug')).toBe('a.ts:3 — real bug')
+  expect(rep('I checked x.\n\n## Problems\n- a.ts:3 — real bug')).toBe('a.ts:3 — real bug')
+})
+
+test('T-1079: the lead\'s change and question lines say "lead:", and every worker hand-back names its worker', () => {
+  const t = { role: 'coder', attempts: 2, files: ['a.ts'], after: [] as string[], merge_into: 'main', history: [] }
+  const lead = (l: HistoryAdd) => (l[0] === 'answer' ? l : [l[0], l[1], { ...l[2], by: 'lead' as const }] as HistoryAdd)
+  const lines = changeLines(t, { files: ['a.ts', 'b.ts'], after: ['T-9'], merge_into: 'dev' }, true, undefined, 'please do Y').map(lead)
+  expect(lines.length > 3).toBe(true)
+  for (const [k, x, f] of lines) expect(historyLineText(historyEntry(k, x, T, f)).includes('lead:')).toBe(true)
+  const [k, x, f] = resultEntry({ role: 'coder', attempts: 2 }, 'failed', 'I did it', 'worker ended early', { reason: 'other', agent: 'symcc-T-1' })
+  expect(historyLineText(historyEntry(k, x, T, f)).includes('worker symcc-T-1:')).toBe(true)
+})
+
+test('T-1079: the out-of-time hand-back line says "worker <name>:", also without a saved name', () => {
+  const [k, x, f] = tryEntry({ role: 'general', attempts: 2 }, 'out-of-time', 'out of time; handed back: I fixed the parser', { reason: 'timeout', by: 'worker', agent: 'symcc-T-1' })
+  expect(historyLineText(historyEntry(k, x, T, f)).includes('worker symcc-T-1: try 2')).toBe(true)
+  const [k2, x2, f2] = tryEntry({ role: 'general', attempts: 2 }, 'out-of-time', 'ran 45 min, over its time limit; asked the owner for more time')
+  expect(historyLineText(historyEntry(k2, x2, T, f2)).includes('worker')).toBe(false)
 })

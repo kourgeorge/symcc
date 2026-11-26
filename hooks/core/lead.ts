@@ -1,6 +1,6 @@
 // Who drives the board, and which session owns a running task.
 import { type Board, type BoardTask, type CheckStep, CHECKED_STATUSES, isSha, intoOf, DEFAULT_TEST_MINUTES, testMinutesOf } from './board-file'
-import { parseStamp } from './text'
+import { parseStamp, plural } from './text'
 import { stoppedEntry, stopEnd, withHistory } from './history'
 import { addCommits, shortSha } from './commits'
 import { tryLabel } from './roles'
@@ -46,6 +46,10 @@ export function parseLead(text: string | null): Lead | null {
 
 /** T-952: the driver's own times (`since`, `active`) of lead `l`, to write back unchanged. */
 export const driverTimes = (l: Pick<Lead, 'since' | 'active'> | null | undefined): Pick<Lead, 'since' | 'active'> => ({ ...(l?.since !== undefined ? { since: l.since } : {}), ...(l?.active !== undefined ? { active: l.active } : {}) })
+
+/** lead.json `l` moved to the driving window's new session id `to`: its driver times and a pending hand-over request (handTo/handAt) are kept. */
+export const carriedText = (l: Lead | null | undefined, to: string, nowMs: number) =>
+  leadText(to, nowMs, { ...driverTimes(l), ...(l?.handTo ? { handTo: l.handTo, ...(l.handAt !== undefined ? { handAt: l.handAt } : {}) } : {}) })
 
 /**
  * T-952: lead.json written by session `me` on its heartbeat at `nowMs` (it drives): `since` kept from `before` when
@@ -262,7 +266,7 @@ export const MERGED_OUTSIDE_FROM: readonly BoardTask['status'][] = ['todo', 'doi
 export const mergedOutsideLine = (sha: string, by: string) => `merged outside the board (${shortSha(sha)}); marked done by ${by}`
 
 /** The refusal when task `id`'s branch has `n` commits that `into` doesn't have. */
-export const notMergedText = (id: string, n: number, into: string) => `${id}'s branch has ${n} commit${n === 1 ? '' : 's'} that ${n === 1 ? "isn't" : "aren't"} in ${into} yet`
+export const notMergedText = (id: string, n: number, into: string) => `${id}'s branch has ${plural(n, 'commit')} that ${n === 1 ? "isn't" : "aren't"} in ${into} yet`
 
 /**
  * Task `t` as "done" because its work is already in the branch it merges into (`sha`: the merge commit there, or

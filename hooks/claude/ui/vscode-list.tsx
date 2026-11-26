@@ -10,7 +10,7 @@
 // "✓ T-12 title", its mark first, no state. What needs you sits under headings with their colored mark and a count
 // badge (Questions for you, Waiting for you, Review, Failed, Needs you for a running task asking for more time); doing and to do follow as one list with no heading, in the
 // terminal list's order (T-644); a line of space between them, then Backlog, Done and Dropped, folded (each fold a link). No Buttons for rows or folds: VS Code draws a Button as a filled blue box whose label never wraps.
-// No key hints: the mode switch is a link and the search a box in the footer. An empty board says so, with one
+// No key hints: the search is a box at the top. An empty board says so, with one
 // primary button that starts a message to the lead in the prompt box.
 import type { SymccStatus, SymccTask } from '../../../types'
 import { isFinished, statusMark, archivedNote, archivedOf, BACKLOG_SHOWN, ALL_CLEAR, statusCell, rowCell, rowMark, rowStates, stateText, TITLE_ROOM, rowExtra, fitRow, WAITS_FOR, kindTag, SEARCH_WORDS, isInvestigation, needsYou, kindMark, fmtDuration, ownersTurn, shownStatus, LIST_TONE } from '../../board'
@@ -65,7 +65,7 @@ export async function askLead($: $) {
 }
 
 export async function listPageVs($: $, pane: PaneParts) {
-  const { Box, Text, Button, Input, v, mark, word, act, C, header, vs, switchMode, mode, width } = pane
+  const { Box, Text, Button, Input, v, mark, word, act, C, header, vs, width } = pane
   /** The characters an open row is fitted to: more than the reported columns (see VS_ROW_SCALE). */
   const room = vsRowRoom(width)
   const { nowMs } = pane
@@ -338,9 +338,10 @@ export async function listPageVs($: $, pane: PaneParts) {
   return (
     <Box flexDirection="column" gap={1}>
       {header('tasks')}
+      <Box key="vs-top" flexDirection="column">{search}{clear}</Box>
       {active.length ? active : filtering ? null : empty}
       {folded.length ? <Box key="vs-folded" flexDirection="column" gap={1}>{folded}</Box> : null}
-      {vsFooter(vs, 'list-hint', { mode, onSwitch: switchMode, search, extra: clear })}
+      {vsFooter(vs, 'list-hint')}
     </Box>
   )
 }

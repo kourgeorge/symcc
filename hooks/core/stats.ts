@@ -5,10 +5,10 @@
 import type { SymccHistoryEntry, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { type FailReason, onPurposeStop } from './history'
 import { DEFAULT_NAME } from '../name'
-import { isInvestigation, STATUS_WORD } from './board-file'
+import { INVESTIGATION, isErrand, isInvestigation, kindOf, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
 import { ORIGIN_MARK } from './origin'
-import { isObj, jsonObj } from './text'
+import { isObj, jsonObj, plural } from './text'
 import { cutTitle, padWidth, wrapLine } from './width'
 // hooks/claude/stats-lines.ts still reads these two from here.
 export { cutTitle, textWidth } from './width'
@@ -109,8 +109,9 @@ export function failedRows(reasons: Record<FailReason, number>): { key: FailReas
  * How a done task ended: merged on its own, approved by the owner, merged outside the board (by hand, then
  * marked done), "answered" for an investigation (nothing is merged), or null when its history doesn't say.
  */
-export function mergedHow(t: Pick<SymccTask, 'history'> & { kind?: unknown }): 'own' | 'approved' | 'answered' | 'outside' | null {
-  if (isInvestigation(t as { kind?: unknown })) return 'answered'
+export function mergedHow(t: Pick<SymccTask, 'history'> & { kind?: unknown }): 'own' | 'approved' | 'answered' | 'errand' | 'outside' | null {
+  if (isErrand(t as { kind?: unknown })) return 'errand'
+  if (kindOf(t as { kind?: unknown }) === INVESTIGATION) return 'answered'
   // T-514: merged by hand, then marked done on the board
   if (t.history.some(l => l.how === 'outside')) return 'outside'
   const merged = t.history.filter(l => l.how === 'own' || l.how === 'approved')
@@ -130,7 +131,7 @@ export function originKey(t: Pick<SymccTask, 'origin'>): string {
  * (review), or a try of it handed back an answer.
  */
 export const isAnsweredInvestigation = (t: Pick<SymccTask, 'status' | 'runs'> & { kind?: unknown }): boolean =>
-  isInvestigation(t as { kind?: unknown }) && (t.status === 'done' || t.status === 'review' || (t.runs ?? []).some(isAnsweredRun))
+  kindOf(t as { kind?: unknown }) === INVESTIGATION && (t.status === 'done' || t.status === 'review' || (t.runs ?? []).some(isAnsweredRun))
 
 // ---------------- time per stage (T-719) ----------------
 
@@ -351,7 +352,6 @@ const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '-'
 const avgDur = (xs: number[]) => (xs.length ? fmtDuration(mean(xs)!) : '-')
 const avgTok = (xs: number[]) => (xs.length ? fmtTokens(mean(xs)!) : '-')
 const row = (label: string, text: string, w = 12) => `  ${label.padEnd(w)} ${text}`
-export const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 
 /** The widest a bar may be, in blocks. */
 export const BAR_WIDTH = 16
@@ -486,6 +486,8 @@ export type StatsData = {
   /** done change tasks (investigations left out), investigations and how many are answered */
   done: number
   invCount: number
+  /** errands that ended done (they are not investigations and not change tasks) */
+  errandsDone: number
   answered: number
   /** worker time and tokens of every task with data; tokKnown: how many of them report tokens */
   workMs: number
@@ -547,12 +549,13 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
   const totalTok = sumTokens(tokKnown.map(t => F(t).tokens))
   // Investigations hand back an answer and merge nothing: they are counted on their own, not in the
   // done, first-try and merge figures (those are for change tasks).
-  const isInv = (t: SymccTask) => isInvestigation(t as { kind?: unknown })
+  const isInv = (t: SymccTask) => kindOf(t as { kind?: unknown }) === INVESTIGATION
+  const notChange = (t: SymccTask) => isInvestigation(t as { kind?: unknown })
   const inv = all.filter(isInv)
   const answered = inv.filter(isAnsweredInvestigation)
   const finished = all.filter(t => t.status === 'done')
-  const doneAll = finished.filter(t => !isInv(t))
-  const done = withData.filter(t => t.status === 'done' && !isInv(t))
+  const doneAll = finished.filter(t => !notChange(t))
+  const done = withData.filter(t => t.status === 'done' && !notChange(t))
   const first = done.filter(t => F(t).tries === 1).length
   const span = rangeSpan(range, all, nowMs)
 
@@ -571,13 +574,14 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
   const own = how.filter(h => h === 'own').length
   const approved = how.filter(h => h === 'approved').length
   const answeredDone = how.filter(h => h === 'answered').length
+  const errandsDone = how.filter(h => h === 'errand').length
   const outside = how.filter(h => h === 'outside').length
-  const unclear = finished.length - own - approved - answeredDone - outside
+  const unclear = finished.length - own - approved - answeredDone - errandsDone - outside
   const reasons = Object.fromEntries(Object.keys(FAIL_LABEL).map(k => [k, 0])) as Record<FailReason, number>
   for (const t of all) for (const l of t.history) {
     if (l.reason && l.reason in reasons) reasons[l.reason]++
   }
-  const ended = [{ label: 'merged on its own', n: own }, { label: 'approved by you', n: approved }, ...(outside ? [{ label: 'merged outside the board', n: outside }] : []), ...(answeredDone ? [{ label: 'answered (investigation)', n: answeredDone }] : []), ...(unclear ? [{ label: 'not clear from history', n: unclear }] : [])]
+  const ended = [{ label: 'merged on its own', n: own }, { label: 'approved by you', n: approved }, ...(outside ? [{ label: 'merged outside the board', n: outside }] : []), ...(answeredDone ? [{ label: 'answered (investigation)', n: answeredDone }] : []), ...(errandsDone ? [{ label: 'errand done', n: errandsDone }] : []), ...(unclear ? [{ label: 'not clear from history', n: unclear }] : [])]
   const failed = failedRows(reasons)
 
   const group = (key: string, label: string, ts: SymccTask[]): StatsGroup => {
@@ -624,7 +628,7 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
   }
   const failing = failedTryFigures(whole, counting === 'inside' ? winFrom : -Infinity)
   const doneAt = new Map(everyTask.map(t => [t.id, doneAtMs(t)]))
-  const stages = stageFigures(whole.filter(t => t.status === 'done' && !isInv(t)), id => doneAt.get(id), counting === 'inside' ? { from: winFrom, to: nowMs } : undefined)
+  const stages = stageFigures(whole.filter(t => t.status === 'done' && !notChange(t)), id => doneAt.get(id), counting === 'inside' ? { from: winFrom, to: nowMs } : undefined)
   const sumOf = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) : undefined)
   const tryTok = runs.filter(r => tryTokens(r) !== undefined).map(r => tokenCount(tryTokens(r)))
   const today = dayOf(nowMs, off)
@@ -646,6 +650,7 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
     noData: all.length - withData.length,
     done: doneAll.length,
     invCount: inv.length,
+    errandsDone,
     answered: answered.length,
     workMs: withData.reduce((s, t) => s + F(t).ms, 0),
     tokens: totalTok,
@@ -808,6 +813,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
     if (v.tokKnown) out.push(...kindsRow(v.tokens))
     out.push(row('tries', v.withData ? `${v.tries} in all · avg ${(v.avgTries ?? 0).toFixed(1)} per investigation` : '-'))
   } else out.push('  none')
+  if (d.errandsDone) out.push('', `Errands: ${d.errandsDone} errand done`)
 
   // Whole team: the lead and the scouts too, not only the workers
   if (d.team) {

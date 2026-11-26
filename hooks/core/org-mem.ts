@@ -10,6 +10,7 @@
 // T-619, T-687, T-718: the owner sees the notes on a page opened from the Live tab's Organizational memory section (orgMemNotes; the
 // section's newest notes and topic counts: orgMemNewest, orgMemTopicCounts, drawn by core/live.ts's liveOrgMem) and may delete one there (deleteOrgMemNote).
 import type { KeyHint } from './panel'
+import { plural } from './text'
 
 /** The file's name inside symcc's data folder (e.g. .symcc/org-mem.md). */
 export const ORG_MEM_FILE_NAME = 'org-mem.md'
@@ -440,7 +441,7 @@ export const ORG_MEM_TITLE = 'Organizational memory (org-mem)'
 export const ORG_MEM_EMPTY = 'No notes yet.'
 
 /** "3 notes". */
-export const orgMemCount = (n: number) => `${n} note${n === 1 ? '' : 's'}`
+export const orgMemCount = (n: number) => plural(n, 'note')
 
 
 /** T-866: the label of the button next to the Live tab's "newest" that opens the page with all notes (drawn "[all]"). */

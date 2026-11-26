@@ -3,9 +3,10 @@ import { test } from './reset'
 import type { On } from 'claude-code'
 import { ICON, ICON_ART } from '../hooks/name'
 import { textWidth } from '../hooks/core/width'
-import { SETTING_GROUPS, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, bandLeads, type KeyHint } from '../hooks/board'
+import { SETTINGS, SETTING_GROUPS, settingsHelpOf, groupSummary, hintLines, hintLineText, listKeys, scoutKeys, scoutListKeys, settingsKeys, rolesKeys, statusCell, STATUS_MARK, PREP_NOTE, bandLeads, type KeyHint } from '../hooks/board'
 import { keysFor } from './task-keys'
 import { STEP_NOTE } from '../hooks/board'
+import { settingWords } from '../hooks/core/setting-notes'
 const CHECKER_NOTE = STEP_NOTE.checker
 import { arrowTarget, focusStops, isArrow, rowStops, saysArrowsMove } from '../hooks/claude/ui/arrows'
 import type { SymccStatus } from '../types'
@@ -160,7 +161,6 @@ test('T-776: the band\'s first line has the brand, the board summary and the but
       version: 1,
     },
   }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface })
     const lines = await bandLines(ui)
@@ -185,7 +185,6 @@ test('T-776: running scouts show on the band\'s first line, and a narrow band dr
       version: 1,
     },
   }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const wide = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   expect((await bandLines(wide))[0]).toMatch(/⏵ auto merge · 1\/3 agents busy · 1 task waiting · 0 completed today · ⌕ 1 scout +\[ open board \]$/)
   await wide.unmount()
@@ -215,7 +214,6 @@ test('T-748: the band lists the questions for you and the NEEDS YOU tasks in the
   let tasks = [task('T-6', 'review', 'Ready one'), task('T-7', 'failed', 'Broke', { note: 'tests failed' }), task('T-1', 'done', 'Parser')]
   let mode = 'auto'
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode, test_commands: [], questions, driving: true } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   const q = await ui.find({ type: 'Text', text: /^ ⚠ 1 question for you: Q-71 Raise the version\?$/ })
   expect(q?.props.color).toBe('warning')
@@ -251,7 +249,6 @@ test('T-643, T-952: the band of a session that does not drive has a yellow "this
   const view = (driving: boolean, ago: number) => ({ tasks: [task('T-3', 'doing', 'Search command', { note: 'starting at the next turn', updated_at: iso(T0 - ago) }), task('T-4', 'todo', 'Docs')], working: [], scouts: [], mode: 'auto', test_commands: [], driving })
   let v = view(false, 60_000)
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: v }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const band = async (columns = 80) => {
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: columns }, surface: 'terminal' })
     const all = await ui.findAll({ type: 'Text' })
@@ -296,7 +293,6 @@ test("T-748: a running row shows its stage's icon (no stage name, T-893), the ti
     task('T-44', 'doing', 'Third try', { note: 'worker on it', attempts: 3, runs: [{ started: iso(T0 - 5 * 60_000) }] }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   // "⌕" + "checker 8m · try 2": the checker started when the try handed back, 8 minutes ago
   // one line each, the one that started first at the top
@@ -337,7 +333,6 @@ test("T-542: the band shows symcc's own pre-merge step as its icon with its plai
     task('T-51', 'doing', 'Checked one', { note: CHECKER_NOTE, attempts: 1, runs: [{ started: iso(T0 - 20 * 60_000), ended: fresh }], live: { checking: { step: 'checker', at: fresh } }, }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 160 }, surface: 'terminal' })
   // the step's icon, no stage name (T-893); the note still says the step
   expect(await ui.find({ type: 'Text', text: new RegExp(`^ ✎ T-50 10s +Prep one — ${esc(PREP_NOTE)}`, 'u') })).toBeDefined()
@@ -356,7 +351,6 @@ test('T-648: a task in the queue shows ⧗ and one in the test step ⊛, on the 
     task('T-72', 'doing', 'Tested one', { note: 'running the tests', attempts: 1, runs: ran, live: { checking: { step: 'testing', at: fresh } }, }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   // the list's row is keyed by its id, with the total work time; the band's is one Text line, with the stage's time (no stage name, T-893); one space before the title
   const want = { pane: [/^T-71 ⧗ 20m Queued one/, /^T-72 ⊛ 20m Tested one/], band: [/^ ⧗ T-71 10s Queued one/, /^ ⊛ T-72 10s Tested one/] }
   for (const [name, where] of [['pane', { ...PANE, props: { ...PANE.props, bodyColumns: 160 } }], ['band', { ...BAND, props: { ...BAND.props, bodyColumns: 160 } }]] as const) {
@@ -374,7 +368,6 @@ test('T-787: a running band row has its id in the accent color, its stage part i
   mock.clock(on, { now: T0 })
   const tasks = [task('T-73', 'doing', 'Run title', { note: 'worker on it', attempts: 4, runs: [{ started: new Date(T0 - 7 * 60_000).toISOString() }] })]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   const colorOf = async (text: RegExp) => (await ui.find({ type: 'Text', text }))?.props?.color
   expect(await colorOf(/^T-73$/)).toBe('claude')
@@ -391,7 +384,6 @@ test('T-939: a band row shows a later try as "↺3" right after its time, nothin
     task('T-81', 'doing', 'Third try', { note: 'worker on it', attempts: 3, runs: [{ started: new Date(T0 - 3 * 60_000).toISOString() }] }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   for (const surface of ['terminal', 'vscode'] as const) {
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface })
     const rows = (await bandLines(ui)).slice(1)
@@ -414,7 +406,6 @@ test("every band row lines up in one title column: running rows, then the rows t
     task('T-59', 'failed', 'Fail one', { note: 'tests failed' }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [], driving: true } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   const leads = [['T-62', '12m'], ['T-63', '3m ↺2'], ['T-60', 'waiting'], ['T-61', 'review'], ['T-59', 'failed']].map(([id, state]) => `${id} ${state!.padEnd(7)} `)
   for (const lead of leads) expect(await ui.find({ type: 'Text', text: new RegExp(`^${esc(lead)}$`, 'u') }), lead).toBeDefined()
@@ -440,7 +431,6 @@ test("the band hides only the notes a doing row's state says; other notes stay a
     task('T-53', 'doing', 'Starting', { note: 'worker starting', attempts: 1, runs: [{ started: iso(T0 - 60_000) }] }),
   ]
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 140 }, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /^ — time is up: the worker was told to hand back$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^T-50 1h2m *$/ })).toBeDefined()
@@ -452,7 +442,6 @@ test("the band hides only the notes a doing row's state says; other notes stay a
 })
 
 test('with an empty board the band shows nothing of its own', async ($, on) => {
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' })
   expect(await ui.find({ type: 'Text', text: /symcc board/ })).toBeUndefined()
   await ui.unmount()
@@ -1257,7 +1246,8 @@ test('the Tasks / Scouts tabs sit in the header, above the line, in both views',
   await ui.unmount()
 })
 
-test('"c" and the Settings tab show one row per setting, with value, default and range', async ($, on) => {
+test('"c" and the Settings tab show one row per setting: label, dot leaders, value; the focused one has its help below', async ($, on) => {
+  const focusKeys = arrowKeys($, on)
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [task('T-1', 'todo', 'Build it')], working: [], scouts: [], mode: 'review', test_commands: ['npm test'], branch: 'main', max_parallel: 5, max_minutes: 45, auto_retries: 2, open_on_start: true, notify: 'off', notify_choices: ['sound 1', 'sound 2', 'sound 3', 'off'] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const settingsTab = await ui.find({ key: 'tab-settings' })
@@ -1276,16 +1266,34 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   for (const g of SETTING_GROUPS) await ui.press({ key: `group:${g.title}` })
   const keys = (await ui.findAll({ type: 'Button' })).map(r => String(r.props.key)).filter(k => k.startsWith('setting:'))
   expect(keys).toEqual(['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled', 'test_commands', 'docs_test_commands', 'test_minutes', 'tests_with_changes', 'checker', 'scout_findings', 'notify', 'open_on_start', 'archive_days'].map(n => `setting:${n}`))
-  expect(await ui.find({ type: 'Text', text: /^ npm test$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^ 5$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /default 3 · 1-8 · how many workers run at once/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /default 45 · 5-600/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /one shell line, or a list of up to 5 lines/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^ off$/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /^ approve merge$/ })).toBeDefined()
+  // T-1042: "label ... value", values in one column, no default/range on the row
+  expect(SETTINGS.every(x => x.label.length > 0 && x.label !== x.name)).toBe(true)
+  expect(await ui.find({ type: 'Text', text: /^npm test$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^5$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^45 min$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /^approve merge$/ })).toBeDefined()
+  expect(await ui.find({ key: 'setting:max_parallel' })?.then(b => b?.text)).toMatch(/^ {2}Workers at once \.{2,} 5$/)
+  expect(await ui.find({ key: 'setting:max_minutes' })?.then(b => b?.text)).toMatch(/^ {2}Time per worker \.{2,} 45 min$/)
+  const col = async (k: string) => String((await ui.find({ key: k }))?.text).search(/(?<=\.\s)\S/)
+  expect(await col('setting:max_parallel')).toBe(await col('setting:max_minutes'))
+  expect(await ui.find({ type: 'Text', text: /· default / })).toBeUndefined()
+  // the help area is for the focused row only: its meaning, then the name, default and range
+  expect(await ui.find({ type: 'Text', text: /^Work$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /how many workers run at once/i })).toBeUndefined()
+  const [meaning, facts] = settingsHelpOf({ setting: 'max_parallel' }).lines
+  const help = { meaning: meaning!, facts: facts! }
+  expect(help.meaning).toBe(settingWords('max_parallel'))
+  expect(help.facts).toBe('max_parallel · default 3 · 1-8')
+  // moving the focus to the row shows that meaning, default and range in the drawn page
+  await focusKeys.focus('setting:max_parallel')
+  expect(await ui.find({ type: 'Text', text: help.meaning })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: help.facts })).toBeDefined()
   // Enter on a number opens an edit box; on mode a pick list of paused / approve merge / auto merge (stored review / auto)
   await ui.press({ key: 'setting:max_parallel' })
   expect(await ui.find({ key: 'setting-edit' })).toBeDefined()
+  // the help stays on the setting being edited while its box has the focus
+  await focusKeys.focus('setting-edit')
+  expect(await ui.find({ type: 'Text', text: help.facts })).toBeDefined()
   await ui.press({ key: 'setting:mode' })
   expect(await ui.find({ key: 'setting-edit' })).toBeUndefined()
   expect(await ui.find({ key: 'pick:paused' })).toBeDefined()
@@ -1311,6 +1319,19 @@ test('"c" and the Settings tab show one row per setting, with value, default and
   await ui.unmount()
 })
 
+test('Settings closed group lines fit a narrow panel (30 columns)', async ($, on) => {
+  stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], notify: 'off', notify_choices: ['off'] } } })
+  fakeFiles(on, ROLE_FILES)
+  const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: 30 }, surface: 'terminal' })
+  await ui.press({ key: 'tab-settings' })
+  for (const g of SETTING_GROUPS) {
+    const t = (await ui.find({ key: `group:${g.title}` }))?.text ?? ''
+    expect(t.length).toBeGreaterThan(0)
+    expect(t.length).toBeLessThanOrEqual(30)
+  }
+  await ui.unmount()
+})
+
 test('Settings groups its rows under 5 headings, in order; with every group open ↑↓ go heading, its rows, next heading', async ($, on) => {
   stateOf(on, { view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [], mode: 'auto', test_commands: [], notify: 'off', notify_choices: ['off'] } } })
   fakeFiles(on, ROLE_FILES)
@@ -1325,23 +1346,23 @@ test('Settings groups its rows under 5 headings, in order; with every group open
   expect([...at].sort((a, b) => a - b)).toEqual(at)
   // each row's name sits under its own heading, before the next one
   const under: Record<string, string[]> = {
-    Work: ['mode', 'max_parallel', 'max_minutes', 'auto_retries', 'enabled'],
-    'Checks before merging': ['test_commands', 'docs_test_commands', 'test_minutes', 'tests_with_changes', 'checker'],
+    Work: ['Mode', 'Workers at once', 'Time per worker', 'Retries on failure', 'Symcc on'],
+    'Checks before merging': ['Test commands', 'Docs test commands', 'Time per test', 'Code without tests', 'Checker'],
     Workers: ['Roles', 'Task types'],
-    Scouts: ['scout_findings'],
-    'Board and alerts': ['notify', 'open_on_start', 'archive_days'],
+    Scouts: ['Scout findings'],
+    'Board and alerts': ['Alert', 'Open on start', 'Archive after'],
   }
   titles.forEach((t, i) => {
     const from = at[i]!
     const to = at[i + 1] ?? texts.length
     for (const name of under[t]!) {
-      const k = texts.findIndex((x, j) => j > from && x.trimEnd() === name)
+      const k = texts.findIndex((x, j) => j > from && x.replace(/^[› ]+/, '').trimEnd() === name)
       expect(k).toBeGreaterThan(from)
       expect(k).toBeLessThan(to)
     }
   })
   // the ↑↓ stops are each heading then its rows, category after category
-  const rows = titles.flatMap(t => [`group:${t}`, ...under[t]!.map(n => (n === 'Roles' ? 'settings-roles' : n === 'Task types' ? 'settings-kinds' : `setting:${n}`))])
+  const rows = titles.flatMap(t => [`group:${t}`, ...under[t]!.map(n => (n === 'Roles' ? 'settings-roles' : n === 'Task types' ? 'settings-kinds' : `setting:${SETTINGS.find(x => x.label === n)!.name}`))])
   const isStop = (k: string) => k.startsWith('group:') || k.startsWith('setting:') || k === 'settings-roles' || k === 'settings-kinds'
   const stops = (await ui.findAll({ type: 'Button' })).map(b => String(b.key ?? '')).filter(isStop)
   expect(stops).toEqual(rows)
@@ -1364,10 +1385,10 @@ test('Settings groups start closed with the first heading focused; Enter opens a
   expect(work?.props.plain).toBe(true)
   expect(work?.props.autoFocus).toBe(true)
   expect((await ui.find({ key: 'group:Scouts' }))?.props.autoFocus).toBeUndefined()
-  expect(work?.props.label).toBe('▸ Work · auto merge · 3 at once · 45 min · 2 re…')
-  expect(await ui.find({ type: 'Text', text: '▸ Work' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: ' · auto merge · 3 at once · 45 min · 2 re…' })).toBeDefined()
-  expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles? · \d+ task types?/)
+  expect(work?.props.label).toBe('▸ Work · auto merge · 3 at onc…')
+  expect(await ui.find({ type: 'Text', text: /^▸ Work\s+$/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: 'auto merge · 3 at onc…' })).toBeDefined()
+  expect(String((await ui.find({ key: 'group:Workers' }))?.props.label)).toMatch(/^▸ Workers · \d+ roles?/)
   expect(await ui.find({ key: 'setting:mode' })).toBeUndefined()
   // Enter opens Work: its rows show under "▾ Work"; ↑↓ go from its last row to the next heading, past nothing hidden
   await ui.press({ key: 'group:Work' })
@@ -1420,14 +1441,14 @@ test('a closed group heading draws its title bold in the text colour and its val
   on('ui.toast', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   await ui.press({ key: 'tab-settings' })
-  const title = await ui.find({ type: 'Text', text: /^▸ Work$/ })
+  const title = await ui.find({ type: 'Text', text: /^▸ Work\s+$/ })
   expect(title?.props.bold).toBe(true)
   expect(title?.props.color).toBe('text')
-  const values = await ui.find({ type: 'Text', text: /^ · auto merge · 3 at once/ })
+  const values = await ui.find({ type: 'Text', text: /^auto merge · 3 at/ })
   expect(values?.props.color).toBe('inactive')
   expect(values?.props.bold).toBeFalsy()
   const checks = await ui.find({ key: 'group:Checks before merging' })
-  expect(checks?.text).toMatch(/^▸ Checks before merging · 2 test commands/)
+  expect(checks?.text).toMatch(/^▸ Checks before merging {3}2 test commands/)
   expect(checks?.text).not.toMatch(/[[\]"]/)
   await ui.press({ key: 'group:Work' })
   const open = await ui.find({ type: 'Text', text: /^▾ Work$/ })
@@ -1595,7 +1616,7 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   const badge = (await ui.findAll({ type: 'Text', text: /^◆ ready for review$/ })).find(t => t.props.color)
   expect(badge?.props.color).toBe('warning')
   expect(badge?.props.bold).toBe(true)
-  for (const label of ['Steps', 'Added', 'Priority', 'Role', 'From', 'Why', 'Request', 'Seen', 'Files', 'After', 'Branch', 'Tries']) {
+  for (const label of ['Steps', 'Added', 'Role', 'From', 'Why', 'Request', 'Seen', 'Files', 'After', 'Branch', 'Tries', 'Priority']) {
     const row = L.find(l => l.startsWith(`${label}:`))
     expect(row).toBeDefined()
     // every value starts in the same column
@@ -1622,6 +1643,8 @@ test('the task page shows one labelled row per fact, From and Why on their own r
   expect(L.some(l => /^Tries:\s+2$/.test(l))).toBe(true)
   // T-966: a task in review shows only its priority number
   expect(L.some(l => /^Priority:\s+-?\d+$/.test(l))).toBe(true)
+  // T-1044: the Priority row comes last, after Tries
+  expect(L.findIndex(l => l.startsWith('Priority:'))).toBeGreaterThan(L.findIndex(l => l.startsWith('Tries:')))
   // the section headings, in order
   const heads = L.filter(l => /^▍/.test(l))
   expect(heads[0]).toBe('▍Details')
@@ -2129,42 +2152,41 @@ test('the task page shows the latest try\'s full report, and a try\'s number key
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [reportedTask()], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   let L = await lines(ui)
-  expect(L.some(l => /^▍Report \(try 2, 2 of 2\)$/.test(l))).toBe(true)
+  expect(L.some(l => /^▍Report · try 2 · worker$/.test(l))).toBe(true)
   expect(L.some(l => /Second try report\./.test(l))).toBe(true)
   expect(L.some(l => /Last line\./.test(l))).toBe(true)
   expect(L.some(l => /First try report/.test(l))).toBe(false)
   // wrapped to the panel width
   for (const l of L.filter(x => /A long line/.test(x))) expect(l.length).toBeLessThanOrEqual(50)
+  // T-1104: the keys 1-9 stay, with Enter on a Runs line; the Try buttons and the Checker section are gone
   expect(L.some(l => /1-2 a try's report/.test(l))).toBe(true)
-  // T-775: drawn "[Try 1] [● Try 2]", no key in the label; the keys are on hidden Buttons
-  expect(L.filter(l => /Try \d/.test(l))).toEqual(['[Try 1]', '[● Try 2]'])
-    expect((await ui.find({ key: 'report-try-1' }))?.props.hotkey).toBeUndefined()
+  expect(L.some(l => /Enter on a Runs line: its report/.test(l))).toBe(true)
+  expect(L.some(l => /\[Try \d\]|Try \d/.test(l))).toBe(false)
+  expect(L.some(l => /^▍Checker/.test(l))).toBe(false)
   expect((await ui.find({ key: 'report-try-1-key' }))?.props.hotkey).toBe('1')
-  expect((await ui.find({ key: 'report-try-2' }))?.props.label).toBe('● Try 2')
+  // an old try that keeps no agent lines is one "try N" line, a button; the one shown has the ●
+  expect(L.filter(l => /^\s*(● )?try \d:/.test(l)).map(l => l.trim().slice(0, 8))).toEqual(['try 1: 0', '● try 2:'])
   await ui.press({ key: 'report-try-1-key' })
   L = await lines(ui)
-  expect(L.some(l => /^▍Report \(try 1, 1 of 2\)$/.test(l))).toBe(true)
+  expect(L.some(l => /^▍Report · try 1 · worker$/.test(l))).toBe(true)
   expect(L.some(l => /First try report: the tests failed\./.test(l))).toBe(true)
   expect(L.some(l => /Second try report/.test(l))).toBe(false)
-  expect((await ui.find({ key: 'report-try-1' }))?.props.label).toBe('● Try 1')
-  await ui.press({ key: 'report-try-2' })
+  expect(L.some(l => /^\s*● try 1:/.test(l))).toBe(true)
+  await ui.press({ key: 'run-1' })
   expect((await lines(ui)).some(l => /Second try report\./.test(l))).toBe(true)
   await ui.unmount()
 })
 
-test('T-775: on mobile the try buttons are native Buttons labelled "Try 1", with no brackets, and still pick a try', async ($, on) => {
+test('T-1104: on mobile the "try N" lines of Runs are Buttons too and pick that try\'s report', async ($, on) => {
   fakeFiles(on, { '/reports/T-1-try-1.md': 'First try report: the tests failed.\n', '/reports/T-1-try-2.md': 'Second try report.\n' })
   stateOf(on, { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [reportedTask()], working: [], scouts: [], mode: 'auto', test_commands: [] } } })
   const ui = await $.ui.mount({ ...PANE, surface: 'mobile' })
-  const b = await ui.find({ key: 'report-try-1' })
+  const b = await ui.find({ key: 'run-0' })
   expect(b?.type).toBe('Button')
-  expect(b?.props.label).toBe('Try 1')
-  expect(b?.props.variant).toBe('secondary')
-  expect(b?.props.plain).toBe(undefined)
-  expect(b?.text ?? '').not.toContain('[')
+  expect((await ui.find({ key: 'report-try-1' }))).toBeUndefined()
   expect((await ui.find({ key: 'report-try-1-key' }))?.props.hotkey).toBe('1')
-  await ui.press({ key: 'report-try-1' })
-  expect((await ui.find({ key: 'report-try-1' }))?.props.label).toBe('● Try 1')
+  await ui.press({ key: 'run-0' })
+  expect((await lines(ui)).some(l => /First try report: the tests failed\./.test(l))).toBe(true)
   await ui.unmount()
 })
 
@@ -2240,7 +2262,7 @@ test('an old task without saved reports still opens and says "no saved report"',
   const L = await lines(ui)
   expect(L.some(l => /^▍Report$/.test(l))).toBe(true)
   expect(L.some(l => /no saved report/.test(l))).toBe(true)
-  expect(await ui.find({ key: 'report-try-1' })).toBeUndefined()
+  expect(await ui.find({ key: 'run-0' })).toBeUndefined()
   await ui.unmount()
 })
 
@@ -2498,7 +2520,8 @@ test('the ↑↓ stops of a drawn page are only its list rows: the tabs, search,
  *  are checked on arrowTarget and rowStops above. */
 function arrowKeys($: Engine, on: On) {
   const seen = { focused: undefined as string | undefined, scrolls: [] as { by: number; offset: number }[] }
-  on('ui.focus', (_, e) => ((seen.focused = e.element), {}))
+  on('ui.focus', { plugin: '*' }, (_, e) => ((seen.focused = e.element), {}))
+  on('ui.log', () => ({ value: undefined }))
   on('ui.scroll', (_, e) => (seen.scrolls.push({ by: e.by, offset: e.offset }), {}))
   on('ui.toast', () => ({ value: undefined }))
   const focus = (element: string) => $.ui.focus({ component: 'Pane', requestId: PANE.requestId, plugin: 'symcc', element, origin: { kind: 'person' } })
@@ -2634,7 +2657,6 @@ test('T-615: the band ends each row with the same text as OpenCode\'s band and t
   // the band shows six rows at most, so one task at a time
   let shown = tasks
   on('state.get', () => ({ value: { value: { shape: 'view-1', value: { tasks: shown, working: [], scouts: [], mode: 'auto', test_commands: [] } }, version: 1 } }))
-  on('ui.render', ($, e) => $.ui.resolve(e).Text({ children: 'engine' }))
   for (const t of tasks) {
     shown = [t]
     const ui = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 200 }, surface: 'terminal' })

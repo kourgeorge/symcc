@@ -97,6 +97,21 @@ test("wakeLead 'next-turn': a note for the lead is queued, not sent, and goes ou
   expect(c.timers).toEqual([1500])
 })
 
+test('a health-check-only update opens with its own label; a mixed one keeps both labels once', () => {
+  const w = world()
+  const health = `[${S.N.name} health check] Triage needed: found a problem:\n- T-1 waits.`
+  tellLead(w.host, health)
+  const only = leadUpdate() ?? ''
+  expect(only.startsWith(`[${S.N.name} health check]`)).toBe(true)
+  expect(only).not.toContain('Board update:')
+  tellLead(w.host, 'T-2 was merged.')
+  tellLead(w.host, health)
+  const mixed = leadUpdate() ?? ''
+  expect(mixed.startsWith(`[${S.N.name}] Board update:`)).toBe(true)
+  expect(mixed.split('Board update:').length).toBe(2)
+  expect(mixed.split('health check]').length).toBe(2)
+})
+
 test('no plan mode: plan signals are ignored (never "in plan"), and the lead guide leaves the plan mode paragraph out', async () => {
   const w = world()
   await seePlan(w.host, true)
@@ -232,6 +247,8 @@ test('no panel: /symcc-help says /symcc shows the board, not that it opens the p
     expect(manual('', BARE)).not.toContain(line)
     expect(manual('')).toContain(line)
   }
+  // T-1012: the task page keys list e (run now)
+  expect(manual('')).toContain("x drop · e run now (to do tasks) · w watch the worker")
   // the lead topic too: no band line, no panel button; open_on_start only as OpenCode's (T-765); the question tool is still named
   const lead = manual('lead', BARE)
   expect(lead).toContain('question puts a question for you')

@@ -100,16 +100,12 @@ test('T-844: a window that started with no board looks again: /symcc-enable turn
     w.files.set(w.board, JSON.stringify(emptyBoard()))
     w.files.set(w.lead, JSON.stringify({ session: 'a', heartbeat: Date.now() }))
     const r = await runCommand(w.host, cmd, '')
-    expect(r?.text).toContain(cmd === 'symcc-enable' ? 'is on in this window' : 'already set up here')
-    if (cmd === 'symcc-init') expect(r?.text).toContain('/symcc-enable turns it on in this one too')
+    expect(r?.text).toContain(cmd === 'symcc-enable' ? 'already enabled' : 'already set up here')
+    if (cmd === 'symcc-init') expect(r?.text).not.toContain('/symcc-enable')
     expect(S.fresh).toBe(false)
-    if (cmd === 'symcc-enable') {
-      expect(S.offHere).toBe(false)
-      expect(await leadGuideText(w.host)).toBeDefined()
-    } else {
-      // started the normal way: off here, because another window drives
-      expect(S.offHere).toBe(true)
-    }
+    // T-1041: another window drives, so this one follows: on, a lead, not off here
+    expect(S.offHere).toBe(false)
+    expect(await leadGuideText(w.host)).toBeDefined()
     expect((await runCommand(w.host, 'symcc-enable', ''))?.text).not.toBe(notSetUpAnswer(S.N.name))
   }
 })
@@ -127,14 +123,15 @@ test('a folder with an existing board still starts on, with or without `enabled`
   }
 })
 
-test('/symcc-init with another window on stays off here, with its heartbeat running', async () => {
+test('/symcc-init with another window on follows it, with its heartbeat running', async () => {
   const w = world('b')
   w.files.set(`${ROOT}/.git`, '')
   await sessionStart(w.host)
   w.files.set(w.lead, JSON.stringify({ session: 'a', heartbeat: Date.now() }))
   const r = await runCommand(w.host, 'symcc-init', '')
-  expect(r?.text).toContain('already runs in another window')
-  expect(S.offHere).toBe(true)
+  expect(r?.text).toContain('is on in this project')
+  expect(S.offHere).toBe(false)
+  expect(S.driving).toBe(false)
   expect(S.beat !== undefined).toBe(true)
 })
 
@@ -363,7 +360,6 @@ test('T-856: /symcc-init in a window turned off with /symcc-disable here does no
   await sessionStart(w.host)
   await runCommand(w.host, 'symcc-disable', 'here')
   expect(S.offHere).toBe(true)
-  expect(S.offWhy).toBe('off')
   const r = await runCommand(w.host, 'symcc-init', '')
   expect(r?.text).toContain('already set up here')
   expect(r?.text).not.toContain('another window')

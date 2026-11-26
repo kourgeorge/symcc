@@ -26,8 +26,10 @@
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
 // run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
 import { DEFAULT_NAME, dataDir } from '../name'
-import { VIEW_FILE, parseViewFile, bandDraw, panelLines, pagePlace, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, PANEL_MARK, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, BACKLOG_MORE_ID, dayOfId, dayId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, LIVE_OM_ALL_ID, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, resetAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
-import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingShown, settingValue, viewAsBoard, isSettingPage, everyText, nextFindings, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
+import { reportPickId, reportPickOf, VIEW_FILE, parseViewFile, bandDraw, panelLines, pagePlace, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, PANEL_MARK, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, BACKLOG_MORE_ID, dayOfId, dayId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, LIVE_OM_ALL_ID, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, resetAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingShown, settingValue, viewAsBoard, isSettingPage, everyText, nextFindings, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, showsDriveButton, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
+import { resolveReport, type ReportPick } from '../core/task-sections'
+import { choiceNote, settingAbout } from '../core/setting-notes'
 import type { SymccScout } from '../../types'
 import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey, orgMemTopicCounts } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
@@ -154,7 +156,7 @@ export type TuiContext = {
     readonly toast: { show: (o: { readonly title?: string; readonly message: string; readonly variant?: 'info' | 'success' | 'warning' | 'error' }) => void }
     readonly dialog: {
       prompt: (o: { readonly title: string; readonly description?: string; readonly placeholder?: string }) => Promise<string | undefined>
-      select: <V>(o: { readonly title: string; readonly options: readonly { readonly title: string; readonly value: V }[] }) => Promise<V | undefined>
+      select: <V>(o: { readonly title: string; readonly options: readonly { readonly title: string; readonly description?: string; readonly value: V }[] }) => Promise<V | undefined>
     }
     readonly panel: { open: (name: string) => boolean; close: () => void; current: () => { readonly name: string; readonly sessionID: string } | undefined }
     readonly slot: (claim: { readonly append: 'session.panel'; readonly render: (input: TuiPanelInput) => TuiNode } | { readonly append: 'session.composer.top'; readonly render: (input: { readonly sessionID: string }) => TuiNode }) => () => void
@@ -336,6 +338,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [sent, setSent] = r.createSignal<{ id: string; answer: string } | undefined>(undefined)
   // the open task's latest report (T-580), read from its file when the page opens or a newer try's report comes
   const [taskReport, setTaskReport] = r.createSignal<{ file: string; text: string | null | undefined } | undefined>(undefined)
+  // T-1104: the agent picked in the page's Runs section; its report is the one read (none: the latest worker report)
+  const [taskPick, setTaskPick] = r.createSignal<ReportPick | undefined>(undefined)
   // the approve just sent from a task's page (T-614): until its first step is on the board, the page's badge, Status
   // row and Stage line show it started ("✎ prep"), not "ready for review"
   const [approving, setApproving] = r.createSignal<ApproveSent | undefined>(undefined)
@@ -456,19 +460,24 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const place = p.edit ? settingsPlace(file(), p.id) : null
     if (place?.def) openEdit(place.list, place.def)
   }
-  /** Reads the open task's latest report, unless it is the one already read (or being read). */
+  /** Reads the report the open task's page shows (the agent picked in Runs, else the latest worker report), unless it is the one already read (or being read). */
   const readTaskReport = () => {
     const f = file()
     const t = tab() === 'tasks' && opened() ? f?.view.tasks.find(x => x.id === opened()) : undefined
-    const latest = t ? taskReports(t).at(-1) : undefined
-    if (!f || !latest) return void (taskReport() && setTaskReport(undefined))
-    if (taskReport()?.file === latest.file) return
+    const shown = t ? resolveReport(t, taskPick()) : null
+    if (!f || !shown) return void (taskReport() && setTaskReport(undefined))
+    if (taskReport()?.file === shown.file) return
     const id = opened()
-    setTaskReport({ file: latest.file, text: undefined })
-    void d.readText(`${f.root}/${latest.file}`).then(
-      text => opened() === id && taskReport()?.file === latest.file && setTaskReport({ file: latest.file, text }),
-      () => opened() === id && taskReport()?.file === latest.file && setTaskReport({ file: latest.file, text: null }),
+    setTaskReport({ file: shown.file, text: undefined })
+    void d.readText(`${f.root}/${shown.file}`).then(
+      text => opened() === id && taskReport()?.file === shown.file && setTaskReport({ file: shown.file, text }),
+      () => opened() === id && taskReport()?.file === shown.file && setTaskReport({ file: shown.file, text: null }),
     )
+  }
+  /** T-1104: shows the report of `p` (an agent line of Runs, or a try's number key) on the open task's page. */
+  const pickReport = (p: ReportPick) => {
+    setTaskPick(p)
+    readTaskReport()
   }
   // T-700: a task opened from the Live tab goes back there (to its lane) on b, as on the terminal panel and VS Code;
   // T-751: its page says "‹ Live" then (fromLive), and [ and ] go through the Live tab's tasks
@@ -482,6 +491,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     setOpened(id)
     setSent(undefined)
     setTaskReport(undefined)
+    setTaskPick(undefined)
     readTaskReport()
     readTaskParts()
     setRun('')
@@ -532,7 +542,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Whether the cursor is on a page's own rows (a scout's runs, the Roles or Kinds list), not the tab's list. */
   const onPage = () => tab() !== 'tasks' && !!opened()
   const draw = () => {
-    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), backlogAll: backlogAll(), openDays: openDays(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(approving() ? { approving: approving()! } : {}), ...searchChoice(), ...(edit() ? { edit: edit()! } : {}), ...(fromLive() ? { from: 'live' as const } : {}) }, now(), width)
+    return panelLines(file(), { tab: tab(), opened: opened(), run: run(), report: report(), cursor: onPage() ? runCursor() : cursor(), groups: groups(), backlogAll: backlogAll(), openDays: openDays(), settingsOpen: settingsOpen(), scroll: scroll(), ...(rows() ? { rows: rows()! } : {}), ...(sent() ? { sent: sent()! } : {}), ...(taskReport() ? { taskReport: taskReport()! } : {}), ...(taskPick() ? { taskPick: taskPick()! } : {}), pageCursor: runCursor(), ...(approving() ? { approving: approving()! } : {}), ...searchChoice(), ...(edit() ? { edit: edit()! } : {}), ...(fromLive() ? { from: 'live' as const } : {}) }, now(), width)
   }
   /** The rows of the Tasks tab's list, even while a task's page is open (whose draw has no rows), so "open this id"
    *  can put the list cursor on that task and b comes back to it (T-568). */
@@ -563,8 +573,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (info.kind === 'onoff') value = now === 'on' ? 'off' : 'on'
     else {
       asking = setting
-      if (choices.length) value = await ctx.ui.dialog.select({ title: `${setting} (now ${settingShown(setting, now)})`, options: choices.map(c => ({ title: c === now ? `${settingShown(setting, c)} (now)` : settingShown(setting, c), value: c })) })
-      else value = (await ctx.ui.dialog.prompt({ title: `${setting} (now ${now})`, description: `${info.range} · ${info.meaning}`, placeholder: info.kind === 'commands' ? 'e.g. npm test, or none' : info.range }))?.trim()
+      if (choices.length) value = await ctx.ui.dialog.select({ title: `${setting} (now ${settingShown(setting, now)}): ${settingAbout(setting)}`, options: choices.map(c => ({ title: c === now ? `${settingShown(setting, c)} (now)` : settingShown(setting, c), description: choiceNote(setting, c), value: c })) })
+      else value = (await ctx.ui.dialog.prompt({ title: `${setting} (now ${now})`, description: settingAbout(setting), placeholder: info.kind === 'commands' ? 'e.g. npm test, or none' : info.range }))?.trim()
       // its group was closed meanwhile: the pick or box was cancelled
       if (asking !== setting) return
       asking = ''
@@ -832,6 +842,8 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (to && !(page && panelTaskActions(page, approveInProgress(f, page, approving(), now())).some(x => x.key === key))) return showTab(to)
     // the banner's Set up git (g), on the pages that show the banner
     if (key === 'g') return setUpGit(sessionID)
+    // T-1052: the banner's Drive here (d), where the banner shows it and another session drives
+    if (key === 'd' && f && showsDriveButton(f.view, f.view.driving ?? false) && showsHeader(boardPageOf(f, { tab: tab(), opened: opened(), run: run(), ...(edit() ? { edit: edit()! } : {}) }))) return void (await send(sessionID, { kind: 'drive' }))
     keepPage(f)
     if (tab() === 'live') return pressLive(key, sessionID)
     if (tab() === 'scouts') return pressScouts(key, sessionID)
@@ -861,6 +873,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     const t = f?.view.tasks.find(x => x.id === open)
     const act = t ? panelTaskActions(t, approveInProgress(f, t, approving(), now())).find(x => x.key === key) : undefined
     if (act) return doAction(act, sessionID)
+    // T-1104: ↑↓ move over the Runs lines with a report, Enter shows the one under the cursor
+    const runIds = draw().ids.filter(i => reportPickOf(i))
+    if ((key === 'up' || key === 'down') && runIds.length) return void setRunCursor(moveCursor(runCursor(), key === 'up' ? -1 : 1, runIds.length))
+    if (key === 'open' && runIds.length) return pickReport(reportPickOf(runIds[moveCursor(runCursor(), 0, runIds.length)]!)!)
     // a number key picks that choice of the page, as a click on its line does (T-583)
     const n = CHOICE_KEYS.indexOf(key as ChoiceKey)
     if (n >= 0) return pick(n + 1, sessionID)
@@ -933,8 +949,14 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const pick = async (n: number, sessionID: string) => {
     const open = opened()
     if (tab() !== 'tasks' || !open) return
-    const c = answerOptions(file(), open)[n - 1]
+    const choices = answerOptions(file(), open)
+    const c = choices[n - 1]
     if (c) await answerWith(c, sessionID)
+    // T-1104: with no question, the number keys open that try's worker report
+    else if (!choices.length) {
+      const t = file()?.view.tasks.find(x => x.id === open)
+      if (t && taskReports(t).length > 1 && taskReports(t).some(r => r.try === n)) pickReport({ try: n, kind: 'worker' })
+    }
   }
   /** A click on the panel (T-558): a row opens its task or question, a group's row opens or closes it, a key hint
    *  does what its key does. The cursor goes to the clicked row, so the keys go on from there. */
@@ -944,6 +966,11 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if ('choice' in hit) return pick(hit.choice, sessionID)
     if ('action' in hit) return pressAction(hit.action, sessionID)
     if ('save' in hit) return saveEdit(sessionID)
+    if ('report' in hit) {
+      const at = draw().ids.indexOf(reportPickId(hit.report))
+      if (at >= 0) setRunCursor(at)
+      return pickReport(hit.report)
+    }
     const ids = draw().ids
     if ('editField' in hit) {
       const at = ids.indexOf(editBoxId(hit.editField))

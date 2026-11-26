@@ -1,5 +1,6 @@
 import { expect, test } from 'claude-code/testing'
 import { SETTINGS } from '../hooks/board'
+import { settingWords } from '../hooks/core/setting-notes'
 import { TOOLS, manual, MANUAL, leadGuide } from '../hooks/app/tools'
 import { ALL_FEATURES } from '../hooks/host'
 import { SCOUT_EDIT_FIELDS } from '../hooks/core/commands'
@@ -59,8 +60,17 @@ test('the lead help says secret-looking files are left out of a worker\'s commit
   expect(text).toContain('left-out/<task>/')
 })
 
+test('the kind option text names errand and investigation as not merged', () => {
+  const add = TOOLS().find(t => t.name === 'add')!
+  const props = (add.inputSchema as unknown as { properties: Record<string, { description?: string }> }).properties
+  const text = props.kind!.description!
+  expect(text).toContain('Every task type but investigation and errand runs like change')
+  expect(text).toContain('errand:')
+  expect(text).toContain('nothing is merged')
+})
+
 test('the checker texts say it runs before the merge queue, not after the tests pass; a test time-out is a normal failed try', () => {
-  const view = SETTINGS.find(s => s.name === 'checker')!.meaning
+  const view = settingWords('checker')
   const tool = TOOLS().find(t => t.name === 'settings')!
   const props = (tool.inputSchema as unknown as { properties: Record<string, { description?: string }> }).properties
   const help = manual('lead') + manual('')
@@ -68,7 +78,7 @@ test('the checker texts say it runs before the merge queue, not after the tests 
     expect(text).not.toContain('whose tests passed')
     expect(text).not.toContain('after its tests pass')
   }
-  expect(view).toContain('before a change joins the merge queue')
+  expect(view).toContain('before it joins the merge queue')
   expect(help).toContain('before a change joins the merge queue')
   expect(tool.description).toContain('before a change task joins the merge queue')
   expect(props.checker!.description).toContain('before it joins the merge queue')
