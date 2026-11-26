@@ -116,7 +116,10 @@ body.home {
 }
 main.home { max-width: 70rem; }
 main.home > section { margin: 0 auto 3.5rem; }
-main.home h2 { border: 0; text-align: center; font-size: 1.8rem; margin-bottom: .4em; }
+main.home h2 { border: 0; text-align: center; font-size: 1.8rem; margin-top: 1.6em; margin-bottom: .4em; }
+/* T-1090: the home page keeps its table look from before T-1088 (no zebra rows, old padding) */
+main.home tbody tr:nth-child(even) td { background: none; }
+main.home th, main.home td { padding: .4rem .7rem; }
 main.home h3 { font-size: 1.1rem; }
 .home .hero { padding-top: 2.5rem; }
 .home .hero h1 { font-size: clamp(2rem, 6vw, 3.4rem); letter-spacing: -.02em; margin: .2em 0 .4em; }

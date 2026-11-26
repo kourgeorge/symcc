@@ -151,5 +151,12 @@ else {
   if (!steps.some(s => /scripts\/build-site\.ts/.test(s.run ?? ''))) bad('workflow: no step runs scripts/build-site.ts')
 }
 
+// (T-1090) the home page keeps its h2 spacing and table rows as before T-1088
+if (existsSync(join(out, 'style.css'))) {
+  const css = readFileSync(join(out, 'style.css'), 'utf8')
+  if (!/main\.home h2\s*\{[^}]*margin-top:\s*1\.6em/.test(css)) bad('style.css: main.home h2 does not set margin-top 1.6em')
+  if (!/main\.home tbody tr:nth-child\(even\) td\s*\{\s*background:\s*none/.test(css)) bad('style.css: main.home tables still get zebra rows')
+}
+
 for (const f of fails) console.log(`FAIL: ${f}`)
 process.exit(fails.length ? 1 : 0)
