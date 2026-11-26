@@ -90,17 +90,13 @@ export async function scoutRunsOf(host: Pick<Host, 'fs'>, root: string, v: Symcc
   return out
 }
 
-/** T-1086: how many of the newest done tasks get their Changes read for the panel. */
-const DONE_CHANGES = 20
-
 /** The files each task in review changed (T-580; not an answered investigation's: nothing to merge), against the
  *  branch it merges into, or why they can't be read: the TUI's task page lists them under Changes. */
 export async function changesOf(host: Host, v: SymccView): Promise<ViewChanges> {
   const out: ViewChanges = {}
-  let done = 0
-  for (const t of [...(v.tasks ?? [])].sort((x, y) => String(y.updated_at).localeCompare(String(x.updated_at)))) {
-    // T-1086: a done change task's list comes from its merged commits (see mergedChanges); the newest few are read
-    if (hasMergedChanges(t) && done++ < DONE_CHANGES) {
+  for (const t of v.tasks ?? []) {
+    // T-1086: a done change task's list comes from its merged commits (see mergedChanges; answers are kept in memory)
+    if (hasMergedChanges(t)) {
       const got = await mergedChanges(host, t).catch(() => null)
       if (got) out[t.id] = { files: got.files, error: '' }
       continue

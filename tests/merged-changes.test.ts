@@ -190,3 +190,13 @@ test('T-1086: a done change task offers Show changes (d); an investigation does 
   expect(ids(task())).not.toContain('show-changes')
   expect(ids(task({ merged: sha('c'), kind: 'investigation' }))).not.toContain('show-changes')
 })
+
+test('T-1094: a failed git read is not kept: the next open tries again', async () => {
+  const merged = sha('a')
+  const commits = { [merged]: { parents: [sha('b'), sha('c')], message: 'T-7: Do it\n\nSymcc-Task: T-7' } }
+  const bad = gitWorld({ commits, numstat: '' })
+  expect(await mergedChanges(bad.$, task({ merged }))).toBe(null)
+  const again = gitWorld({ commits, numstat: NUMSTAT })
+  const got = await mergedChanges(again.$, task({ merged }))
+  expect(got?.files.length).toBe(2)
+})
