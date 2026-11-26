@@ -45,6 +45,7 @@ test('T-1102: the lead guide names the board views only in chat mode', () => {
   S.chat = 'telegram'
   try {
     expect(leadGuide().includes(line)).toBe(true)
+    expect(leadGuide().includes('"more tasks" ') && leadGuide().includes('page 2')).toBe(true)
   } finally {
     S.chat = ''
   }

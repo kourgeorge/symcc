@@ -1,7 +1,7 @@
 // T-1101: the one short, chat-friendly text shape (used while the owner writes from a chat app, S.chat): the tasks list,
 // the Live status, the no-panel board and one task's page. Plain lines only: no padded columns, rules, bars or box
 // characters; one task per line ("T-5 running: test, try 2, 12m: title"); a question is its own line with its choices
-// numbered under it, never cut; each text at most CHAT_MAX characters, cut at a line end with a "+N more" line.
+// numbered under it, never dropped (a very long one is cut with …); each text at most CHAT_MAX characters, cut at a line end with a "+N more" line.
 import type { SymccTask } from '../../types'
 import { type BoardTask, isFinished, STATUS_WORD } from './board-file'
 import { boardSections, localOffset } from './days'
@@ -39,24 +39,34 @@ export const cut = (s: string, n: number): string => {
   return p.length > n ? `${p.slice(0, n - 1).trimEnd()}…` : p
 }
 
-/** The lines of `lines` that fit CHAT_MAX characters (cut at a line end), then "+N more: <more>" when some were left out. */
-export function fitChat(lines: readonly string[], more: string): string {
-  const all = lines.map(l => l.trimStart())
-  if (all.join('\n').length <= CHAT_MAX) return all.join('\n')
+/** Page `page` of `lines`: each page fits CHAT_MAX characters (cut at a line end), then "+N more: <more>" when lines are left for later pages. */
+export function fitChat(lines: readonly string[], more: string, page = 1): string {
   const room = CHAT_MAX - 60
-  const kept: string[] = []
+  const all = lines.map(l => l.trimStart()).map(l => (l.length > room ? `${l.slice(0, room - 1).trimEnd()}…` : l))
+  if (page <= 1 && all.join('\n').length <= CHAT_MAX) return all.join('\n')
+  const pages: string[][] = [[]]
   let used = 0
   for (const l of all) {
-    if (used + l.length + 1 > room) break
-    kept.push(l)
+    if (used + l.length + 1 > room && pages[pages.length - 1]!.length) {
+      pages.push([])
+      used = 0
+    }
+    pages[pages.length - 1]!.push(l)
     used += l.length + 1
   }
-  return [...kept, `+${all.length - kept.length} more: ${more}`].join('\n')
+  const n = Math.max(1, Math.floor(page))
+  if (n > pages.length) return 'Nothing more.'
+  const left = pages.slice(n).reduce((x, p) => x + p.length, 0)
+  return [...pages[n - 1]!, ...(left ? [`+${left} more: ${more}`] : [])].join('\n')
 }
 
-/** A question as lines: the question on one line, its choices numbered under it. Nothing is cut. */
+/** A question is cut to this many characters, and each of its choices to CHOICE_MAX (cut with …, never dropped). */
+const ASK_MAX = 800
+const CHOICE_MAX = 300
+
+/** A question as lines: the question on one line, its choices numbered under it. A long text is cut with …; no choice is dropped. */
 export function askLines(text: string, choices: readonly string[]): string[] {
-  return [`? ${plain(text)}`, ...choices.map((c, i) => `${i + 1}. ${plain(c)}`)]
+  return [`? ${cut(text, ASK_MAX)}`, ...choices.map((c, i) => `${i + 1}. ${cut(c, CHOICE_MAX)}`)]
 }
 
 type TaskView = { tasks: SymccTask[]; questions?: readonly (Pick<OwnerQuestion, 'id' | 'text' | 'answered_at' | 'dropped'> & { options?: string[] })[] }
@@ -121,27 +131,27 @@ function groupLines(view: TaskView, nowMs: number, offsetMin: number): { groups:
 }
 
 /** The open tasks as chat text (the tasks list and, with `mode`, the no-panel board). */
-export function chatTasksText(view: TaskView, nowMs: number, offsetMin: number = localOffset(nowMs), mode = ''): string {
+export function chatTasksText(view: TaskView, nowMs: number, offsetMin: number = localOffset(nowMs), mode = '', page = 1): string {
   const g = groupLines(view, nowMs, offsetMin)
   const lines = g.lines.length ? g.lines : ['No open tasks.']
   const tail = ['', ...(mode ? [`Mode: ${plain(mode)}`] : []), `Backlog: ${g.backlog} ideas`, `Done today: ${g.doneToday}`, "Say: status, show T-5, more tasks"]
-  return fitChat([...lines, ...tail], "say 'more tasks'").replace(/\n{3,}/g, '\n\n')
+  return fitChat([...lines, ...tail], "say 'more tasks'", page).replace(/\n{3,}/g, '\n\n')
 }
 
 /** Tasks picked by a filter as chat lines (one per task), with how many matched. */
-export function chatRowsText(tasks: readonly SymccTask[], all: readonly SymccTask[], nowMs: number, count: string): string {
+export function chatRowsText(tasks: readonly SymccTask[], all: readonly SymccTask[], nowMs: number, count: string, page = 1): string {
   const lines = tasks.flatMap(t => taskLines(t as BoardTask, all, nowMs, t.status === 'doing'))
-  return fitChat([...(lines.length ? lines : ['No tasks match.']), '', plain(count)], "say 'more tasks'")
+  return fitChat([...(lines.length ? lines : ['No tasks match.']), '', plain(count)], "say 'more tasks'", page)
 }
 
 /** The Live status as chat text: Needs you, each running task, one Today line and one Org-mem line. */
-export function chatStatusText(view: TaskView & { today_team?: TodayTeam }, notes: readonly OrgMemNote[], nowMs: number, offsetMin: number = localOffset(nowMs)): string {
+export function chatStatusText(view: TaskView & { today_team?: TodayTeam }, notes: readonly OrgMemNote[], nowMs: number, offsetMin: number = localOffset(nowMs), page = 1): string {
   const g = groupLines(view, nowMs, offsetMin)
   const lines = g.groups.filter(x => x.label === 'Needs you' || x.label === 'Running').flatMap((x, i) => [...(i ? [''] : []), x.label, ...x.lines])
   const d = liveToday(view.tasks, nowMs, offsetMin)
   const work = todayMore(view.tasks, view.today_team, nowMs, offsetMin).workMs
   const today = `Today: ${d.merged} merged, ${fmtTokens(d.tokens)} tokens, ${fmtDuration(work)} work`
-  return fitChat([...(lines.length ? lines : ['Nothing needs you or runs now.']), '', today, `Org-mem: ${notes.length} notes`, 'Say: tasks, show T-5'], "say 'status'")
+  return fitChat([...(lines.length ? lines : ['Nothing needs you or runs now.']), '', today, `Org-mem: ${notes.length} notes`, 'Say: tasks, show T-5'], "say 'more status'", page)
 }
 
 /** What a task page reads of the latest saved report. */
@@ -154,8 +164,8 @@ const cutPart = (s: string, n: number): string => {
 }
 
 /** One task's page as chat text. */
-export function chatTaskText(t: SymccTask, report: ChatReport | null | undefined, nowMs: number): string {
-  const L = [`${t.id}: ${plain(t.title)}`]
+export function chatTaskText(t: SymccTask, report: ChatReport | null | undefined, nowMs: number, page = 1): string {
+  const L =[`${t.id}: ${plain(t.title)}`]
   const changed = historyLineText({ at: t.updated_at } as never, nowMs).split('  ')[0]
   L.push(`Status: ${STATUS_WORD[t.status]}${Number(t.attempts) > 0 ? `, try ${t.attempts}` : ''}${changed ? `, changed ${changed}` : ''}`)
   L.push(t.origin?.why ? `Why: ${plain(t.origin.why)}` : plain(fromText(t, 100)))
@@ -164,5 +174,5 @@ export function chatTaskText(t: SymccTask, report: ChatReport | null | undefined
   if (t.history.length) L.push('Last events:', ...t.history.slice(-5).reverse().map(h => plain(historyLineText(h, nowMs))))
   if (report?.text) L.push(`Report (try ${report.try}):`, cutPart(report.text, PART_MAX))
   L.push("Say: approve, reject, tasks")
-  return fitChat(L.join('\n').split('\n'), "say 'more'")
+  return fitChat(L.join('\n').split('\n'), `say 'more ${t.id}'`, page)
 }

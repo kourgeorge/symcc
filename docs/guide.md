@@ -2741,7 +2741,7 @@ the same mode):
 - **Short views.** The tasks list, the status, the board text and one task's page use one short
   shape there: plain lines (no columns, rules or bars), one task per line like
   `T-5 running: test, try 2, 12m: title`, "Needs you" first, the backlog only as a count, and at
-  most 3,500 characters (a "+N more" line says what was left out).
+  most 3,500 characters. A long text is split into pages: a "+N more" line says what is left, and when you say "more" (or "more tasks") the lead asks for the next page and posts it. A long question is shortened with "…", but it always keeps every numbered choice.
 - **Plain words work.** Slash commands may not reach symcc from a chat app, so the lead has the
   same views as a tool: ask "status", "tasks", "what's running" or "show T-5" and it posts the same
   text as `/symcc-status`, `/symcc-tasks` or `/symcc-task T-5`.
