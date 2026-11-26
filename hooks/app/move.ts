@@ -1,15 +1,17 @@
 import type { Host } from '../host'
 import { find, patchTask, withHistory, endedBy, isInvestigation, intoOf, failedOnClash, gitNote, type BoardTask } from '../board'
-import { S, finishing } from './state'
+import { S, finishing, movedAway } from './state'
 import { load, change, now } from './store'
 import { gitReady, branchExists, prepareWorktree, taskBranch, worktreeDir } from './git'
 import { haltChecker } from './checker'
 import { stopWorker } from './board-mode'
-import { checkingNow, mergingNow, MERGING_TEXT, CHECKING_TEXT, stopAsked, offAsked, mergeFinished, checkAgain, pump } from './workers'
+import { checkingNow, mergingNow, MERGING_TEXT, CHECKING_TEXT, stopAsked, mergeFinished, checkAgain, pump } from './workers'
 
 /** The stages the lead can move a task to (the `stage` of symcc change). */
 export const STAGES = ['work', 'check', 'tests', 'review'] as const
 type Stage = (typeof STAGES)[number]
+
+const NOT_TESTED = 'not tested yet: moved to review by the lead'
 
 /** The statuses a task can be moved from. */
 const MOVABLE: readonly BoardTask['status'][] = ['todo', 'doing', 'failed', 'waiting', 'review']
@@ -48,7 +50,7 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
     // Only a checker can be stopped; prep, tests and the merge are let to end first.
     if (t.live?.checking && t.live.checking.step !== 'checker') throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`)
     stopAsked.set(t.id, why)
-    offAsked.set(t.id, 'the lead moved the task')
+    movedAway.add(t.id)
     await write(stage === 'work' ? 'todo' : 'review', why)
     await haltChecker($, t.id, why)
     for (const end = Date.now() + 15_000; finishing.has(t.id) && Date.now() < end; ) await $.clock.sleep(50)
@@ -59,12 +61,13 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
   const now_ = find(await load($), t.id) ?? t
   const clash = failedOnClash(now_) || (now_.status !== 'failed' && !!now_.merge_main)
   if (stage === 'work') {
-    await write('todo', 'moved to work by the lead; queued', { merge_main: clash || undefined })
+    // the made-up text of a move to review is no test output (reject clears it the same way)
+    await write('todo', 'moved to work by the lead; queued', { merge_main: clash || undefined, ...(now_.test_output === NOT_TESTED ? { test_output: undefined } : {}) })
     void pump($)
     return `${t.id} moved to work: a new worker try is queued${clash ? '; it merges the latest main first' : ''}`
   }
   if (stage === 'review') {
-    await write('review', 'moved to review by the lead: nothing merged yet; approve runs the tests', { test_output: 'not tested yet: moved to review by the lead' })
+    await write('review', 'moved to review by the lead: nothing merged yet; approve runs the tests', { test_output: NOT_TESTED })
     void pump($)
     return `${t.id} moved to review: it waits for the owner (approve runs its tests)`
   }

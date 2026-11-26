@@ -7,7 +7,7 @@ import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'
-import { S, type CheckerEnd, checkerRuns, adoptedCheckers, halt, stopped } from './state'
+import { S, type CheckerEnd, checkerRuns, adoptedCheckers, halt, stopped, movedAway } from './state'
 import { type Host, notReadyYet } from '../host'
 import type { TurnEnd } from './workers'
 import { change, load, now } from './store'
@@ -170,6 +170,7 @@ async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: str
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.attempts !== t.attempts) return x
+    if (!v && movedAway.has(t.id)) return x // the lead moved the task: its own "moved to ..." line is the only one
     // T-774, T-805: the checker's tokens go only on its own agent entry, ended now (a stopped checker keeps the tokens it had)
     const runs = cur.runs?.length && (agentId || tokens) ? withAgentUsed(cur.runs, 'checker', agentId, now(), tokens ? { tokens } : {}) : undefined
     return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...(before ? [['step', before, { try: cur.attempts }] as HistoryAdd] : []), checkerEntry(tryLabel(cur), v, why, cur.attempts)), ...(runs ? { runs } : {}) }, now())

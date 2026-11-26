@@ -12,7 +12,7 @@ import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
 import { runChecker, checkerName, cleanFolder, STOPPED_AGAIN } from './checker'
 import { loadKinds } from './kinds'
-import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, isOwnAgent, rememberOnBoard, halt, checkerRuns, adoptedCheckers, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
+import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, movedAway, isOwnAgent, rememberOnBoard, halt, checkerRuns, adoptedCheckers, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, startCancelled, claimNote, rewakeStarts } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait, holdPublish } from './store'
@@ -784,7 +784,6 @@ export const stopAsked = new Map<string, string>()
 
 /** Tasks whose check was stopped because symcc was disabled or the board paused: task id → why (e.g. "symcc was disabled"). */
 export const offAsked = new Map<string, string>()
-
 /**
  * Symcc was disabled or the board paused (`why`): every check and merge running now stops before the
  * merge. A finishing task goes back to "todo" at once (its files are kept); an approve in progress
@@ -833,6 +832,7 @@ export const MERGING_TEXT = (id: string) => `${id} is being merged; wait a momen
 /** The check of task `id` has ended: forget a stop asked meanwhile, and remove the folder of a task dropped meanwhile. */
 export async function endCheck(host: Host, id: string) {
   offAsked.delete(id)
+  movedAway.delete(id)
   if (!stopAsked.has(id)) return
   stopAsked.delete(id)
   try {
@@ -894,6 +894,7 @@ async function writeIfSame(host: Host, t: SymccTask, patch: (cur: SymccTask) => 
  */
 async function changedMeanwhile(host: Host, t: SymccTask, b: Board, r: CheckResult, line: HistoryAdd, worktree: string, agentId?: string) {
   const merged = r.ok && !r.review && !!r.merged
+  if (!merged && movedAway.has(t.id)) return // the lead moved the task: its own "moved to ..." line is the only one
   const off = offAsked.get(t.id)
   const was = await change(host, x => {
     const cur = find(x, t.id)

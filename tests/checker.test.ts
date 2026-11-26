@@ -1711,6 +1711,25 @@ test('T-1072: stage work on a failed task starts a worker try (doing, a new try)
   expect(w.spawns.length).toBe(1)
 })
 
+test('T-1072: failed → review → work: the next worker prompt has no "Last failure in full"', async () => {
+  const w = world()
+  inRepo(w)
+  await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }))
+  S.me = 'me'
+  S.startupDone = true
+  S.driving = true
+  w.$.features = { ...w.$.features, startQueue: false }
+  w.$.plugin = { name: 'symcc', root: '/plugin' }
+  w.$.fs.list = async () => []
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'review' })
+  expect(find(await load(w.$), 'T-1')!.test_output).toBe('not tested yet: moved to review by the lead')
+  await runTool(w.$, 'change', { task: 'T-1', stage: 'work' })
+  expect(find(await load(w.$), 'T-1')!.test_output).toBe(undefined)
+  await pump(w.$)
+  await until(() => w.spawns.length > 0)
+  expect(w.spawns[0]!.prompt).not.toContain('Last failure in full')
+})
+
 test('T-1072: a move from a running checker writes one history line, no "review meanwhile" line, and leaves other tasks alone', async () => {
   for (const stage of ['tests', 'review', 'work']) {
     const w = world()
@@ -1725,7 +1744,8 @@ test('T-1072: a move from a running checker writes one history line, no "review 
     const t = find(board, 'T-1')!
     const texts = t.history.map(h => h.text)
     expect(texts.filter(x => x === `moved to ${stage} by the lead`).length).toBe(1)
-    expect(texts.some(x => x.includes('review meanwhile'))).toBe(false)
+    expect(texts.filter(x => x.includes('review meanwhile') || x.includes('not merged') || x.includes('no verdict'))).toEqual([])
+    expect(leadQueue.filter(x => x.includes('was stopped'))).toEqual([])
     const o = find(board, 'T-2')!
     expect(o.status).toBe('waiting')
     expect(o.note).toBe('asked')
