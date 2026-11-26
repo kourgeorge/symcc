@@ -2,6 +2,17 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here.
 
+## 0.5.45 (2026-11-26)
+
+### Added
+- Task page: every history line says who wrote it, with the agent's id (`worker symcc-T-5:`, `checker symcc-T-5-checker:`, `lead:`, `you:`); the checker's verdict is its own line with its first problem, and a ▍Checker (try n) section shows its full report.
+- Task page and Live: the change size (`25 files · +539 −3,722`) under the title and at the end of a finished Live row, and a ▍Done line with what the whole task did (also in the merge message).
+- The checker sends work back only for what is worse than main; after 2 send-backs symcc asks you once: Merge as is / Keep fixing / Drop.
+
+### Fixed
+- Moving a task to another stage works again (it was refused for every call).
+- A move to tests that stops at review writes the full review (history line, "no test" flag, secrets text).
+
 ## 0.5.44 (2026-11-26)
 
 ### Added
