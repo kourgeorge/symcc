@@ -114,6 +114,13 @@ export type PanelOrgMem = {
   notes: PanelOrgNote[]
 }
 
+/**
+ * Another window drives the board (only the driver starts work): the notice's words in parts, with the slash command
+ * marked (hooks/core/banner.ts driveNoticeParts), and the button that makes this window drive: its label and the
+ * command it runs ("symcc-drive").
+ */
+export type PanelFollows = { parts: { text: string; command?: boolean }[]; button: string; command: string }
+
 export type PanelView = {
   /** symcc is on in this project (else `off` says why, and the panel offers to turn it on) */
   on: boolean
@@ -136,6 +143,8 @@ export type PanelView = {
   orgMem: PanelOrgMem
   /** a note about the board itself (git missing, a data file near its size limit) */
   note?: string
+  /** another window drives the board and this one follows: what the notice says, and its Drive here button */
+  follows?: PanelFollows
   /** the data folder in the project (".symcc"), where each agent's session is kept: <dir>/sessions/<agent>.jsonl */
   dir: string
   nowMs: number

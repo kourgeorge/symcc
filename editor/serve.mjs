@@ -57895,6 +57895,8 @@ var DRIVER_IDLE_MS = 5 * 6e4;
 function driverLooksIdle(tasks, nowMs) {
   return tasks.some((t) => t.status === "doing" && CLAIM_NOTES.has(t.note ?? "") && !t.runs?.some((r) => !r.ended) && nowMs - Date.parse(t.updated_at ?? "") > DRIVER_IDLE_MS);
 }
+var DRIVE_HERE_LABEL = "Drive here (d)";
+var showsDriveButton = (v, drivingNow = v.driving ?? true) => !drivingNow && v.on_here !== false;
 function driveNoticeParts(tasks, nowMs, name = DEFAULT_NAME, width = Infinity, driver) {
   return fitForm(followForms(namesFor(name).name, driver, nowMs, driverLooksIdle(tasks, nowMs)), width, "\u26A0 ");
 }
@@ -67893,6 +67895,10 @@ function panelIdle(view, nowMs) {
   const hint = f.kind === "done" ? liveIdle(view, nowMs, Infinity)[1] : void 0;
   return { kind: f.kind, text: f.text, ...hint ? { hint } : {}, next: f.next, more: f.more };
 }
+function followsOf(v, name, nowMs) {
+  if (!showsDriveButton(v, v.driving ?? true)) return void 0;
+  return { parts: driveNoticeParts(v.tasks ?? [], nowMs, name, Infinity, v.driver), button: DRIVE_HERE_LABEL.replace(/\s*\(\w\)$/, ""), command: `${name}-drive` };
+}
 var startOfDay = (nowMs) => {
   const d = new Date(nowMs);
   d.setHours(0, 0, 0, 0);
@@ -67900,6 +67906,7 @@ var startOfDay = (nowMs) => {
 };
 function panelView(v, o) {
   const nowMs = o.nowMs;
+  const follows = followsOf(v, o.name ?? DEFAULT_NAME, nowMs);
   const tasks = v.tasks ?? [];
   const questions = (v.questions ?? []).filter((q) => isOpenQuestion(q));
   const needs = [
@@ -67949,6 +67956,7 @@ function panelView(v, o) {
     idle: panelIdle(view, nowMs),
     orgMem: panelOrgMem(o.orgMem?.notes ?? [], o.orgMem?.file ?? `${o.dir}/org-mem.md`),
     ...v.branch_note ? { note: v.branch_note } : {},
+    ...follows ? { follows } : {},
     dir: o.dir,
     nowMs
   };
@@ -68319,7 +68327,7 @@ async function openCursorSession(o) {
   const base = nodeHost({ root: o.root, agents, say: (line) => log(line), ...o.sessionId ? { sessionId: o.sessionId } : {}, ...o.pluginRoot ? { pluginRoot: o.pluginRoot } : {} });
   const project = o.root.split("/").filter(Boolean).pop() ?? o.root;
   let published = emptyView();
-  let shown = panelView(published, { project, dir: S.N.dir, nowMs: Date.now() });
+  let shown = panelView(published, { project, dir: S.N.dir, name: S.N.name, nowMs: Date.now() });
   const changes = /* @__PURE__ */ new Map();
   const draw = async () => {
     const v = published;
@@ -68328,7 +68336,7 @@ async function openCursorSession(o) {
       changes.set(t.id, { at: t.updated_at, files: await changedFiles(ref.host, intoOf(t), t).catch(() => []) });
     }
     const orgMem = await orgMemNow(ref.host).catch(() => void 0);
-    shown = panelView(v, { project, dir: S.N.dir, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])), ...orgMem ? { orgMem } : {} });
+    shown = panelView(v, { project, dir: S.N.dir, name: S.N.name, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])), ...orgMem ? { orgMem } : {} });
     o.onView?.(shown);
   };
   let drawing = Promise.resolve();

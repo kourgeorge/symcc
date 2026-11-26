@@ -2,7 +2,7 @@
 // what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
 // with the message box under it, and the running work beside it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { AgentChoice, BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
+import type { AgentChoice, BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelFollows, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
 import { LEAD_AGENT, addStep } from '../../steps'
 import { ask, onMessage, tell } from './bridge'
 import { Icon, IdleNote, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
@@ -171,7 +171,39 @@ function Header({ view, onSay }: { view: PanelView | null; onSay: Say }) {
           <Icon name="warning" /> {view.note}
         </p>
       )}
+      {view?.follows && <DriveNotice follows={view.follows} onSay={onSay} />}
     </header>
+  )
+}
+
+/** Another window drives the board: the board's notice, its slash command and the Drive here button both make this window drive. */
+export function DriveNotice({ follows, onSay }: { follows: PanelFollows; onSay: Say }) {
+  const [busy, setBusy] = useState(false)
+  const drive = () => {
+    setBusy(true)
+    ask({ type: 'command', name: follows.command })
+      .then(t => t && onSay(t), (e: Error) => onSay(e.message, true))
+      .finally(() => setBusy(false))
+  }
+  return (
+    <div className="head-note drive-note" role="status">
+      <p>
+        <Icon name="warning" />{' '}
+        {follows.parts.map((p, i) =>
+          p.command ? (
+            <button key={i} type="button" className="link" disabled={busy} onClick={drive}>
+              {p.text}
+            </button>
+          ) : (
+            <span key={i}>{p.text}</span>
+          ),
+        )}
+      </p>
+      <button type="button" className="btn" disabled={busy} onClick={drive}>
+        {busy ? <Icon name="loading" /> : null}
+        {follows.button}
+      </button>
+    </div>
   )
 }
 

@@ -13,7 +13,9 @@ import { actionCommand, openCursorSession } from '../session'
 import type { PanelStep, PanelView } from '../protocol'
 import { PROTOCOL } from '../contract'
 import { addStep, readSteps, sessionMarkdown } from '../steps'
-import { taskSessions } from '../view'
+import { panelView, taskSessions } from '../view'
+import type { PaneView } from '../../../hooks/app/state'
+import { driveWarning } from '../../../hooks/board'
 import { modelInfos, type SdkToolVerdict } from '../sdk'
 import { copilotGuard } from '../guard'
 import { skillOf } from '../skills'
@@ -483,6 +485,21 @@ test("a task's sessions: one per agent of each try, newest first, the running on
     { label: 'Try 3 (1)', agent: 'w3', running: false },
     { label: 'Try 2', agent: 'w2', running: false },
   ])
+})
+
+test("another window drives: the panel says so in the board's words, and its Drive here runs /<name>-drive; nothing while this window drives, is off, or before it knows", () => {
+  const nowMs = Date.parse('2026-11-26T10:00:00Z')
+  const o = { project: 'p', dir: '.symcc', nowMs }
+  const of = (v: Partial<PaneView>, name?: string) => panelView({ tasks: [], on_here: true, ...v } as PaneView, { ...o, ...(name ? { name } : {}) }).follows
+  expect(of({ driving: true })).toBe(undefined)
+  expect(of({})).toBe(undefined)
+  expect(of({ driving: false, on_here: false })).toBe(undefined)
+  const driver = { heartbeat: nowMs - 3 * 60_000, since: nowMs - 3_600_000, active: nowMs - 3 * 60_000 }
+  const f = of({ driving: false, driver })!
+  expect([f.button, f.command]).toEqual(['Drive here', 'symcc-drive'])
+  expect(`⚠ ${f.parts.map(p => p.text).join('')}`).toBe(driveWarning(false, [], nowMs, 'symcc', Infinity, driver))
+  expect(f.parts.filter(p => p.command).map(p => p.text)).toEqual(['/symcc-drive'])
+  expect(of({ driving: false }, 'team')).toEqual({ parts: [{ text: 'this window follows; ' }, { text: '/team-drive', command: true }, { text: ' to drive from here' }], button: 'Drive here', command: 'team-drive' })
 })
 
 test('panel actions are sent as the owner’s own commands', () => {

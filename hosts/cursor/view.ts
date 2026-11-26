@@ -3,13 +3,14 @@
 // the scouts, in the board's own words. The webview only draws it; every rule about what a task needs lives in core/.
 import type { SymccTask } from '../../types'
 import type { PaneView } from '../../hooks/app/state'
-import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isFinished, needsYou, newestFirst, taskAsks, taskActions, whyFailed, liveLanes, liveFinishedLanes, onDemand, everyText, shownStatus, roleOf, HISTORY_KINDS, isHistoryKind, MODE_NAME, MODE_MEANING } from '../../hooks/board'
+import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isFinished, needsYou, newestFirst, taskAsks, taskActions, whyFailed, liveLanes, liveFinishedLanes, onDemand, everyText, shownStatus, roleOf, HISTORY_KINDS, isHistoryKind, MODE_NAME, MODE_MEANING, driveNoticeParts, showsDriveButton, DRIVE_HERE_LABEL } from '../../hooks/board'
+import { DEFAULT_NAME } from '../../hooks/name'
 import { isOpenQuestion } from '../../hooks/core/questions'
 import { viewMarks } from '../../hooks/core/board-parts'
 import { byRunOrder } from '../../hooks/core/board-file'
 import { liveIdle, liveIdleFacts } from '../../hooks/core/live'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, ORG_MEM_SUBTITLE, ORG_MEM_TITLE, orgMemAbout, orgMemDeleteAsk, orgMemNoteHead, orgMemNoteKey, orgMemTopicCounts, type OrgMemNote } from '../../hooks/core/org-mem'
-import type { PanelAction, PanelActionId, PanelIdle, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelScout, PanelSession, PanelTask, PanelView } from './protocol'
+import type { PanelAction, PanelActionId, PanelFollows, PanelIdle, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelScout, PanelSession, PanelTask, PanelView } from './protocol'
 
 const ms = (iso: unknown): number | undefined => {
   const n = typeof iso === 'string' ? Date.parse(iso) : NaN
@@ -165,6 +166,13 @@ function panelIdle(view: Parameters<typeof liveIdleFacts>[0], nowMs: number): Pa
   return { kind: f.kind, text: f.text, ...(hint ? { hint } : {}), next: f.next, more: f.more }
 }
 
+/** Another window drives the board and this one is on: the board's notice and its Drive here button; none while this
+ *  window drives, and none before the first publish says (driving unknown). */
+function followsOf(v: PaneView, name: string, nowMs: number): PanelFollows | undefined {
+  if (!showsDriveButton(v, v.driving ?? true)) return undefined
+  return { parts: driveNoticeParts(v.tasks ?? [], nowMs, name, Infinity, v.driver), button: DRIVE_HERE_LABEL.replace(/\s*\(\w\)$/, ''), command: `${name}-drive` }
+}
+
 const startOfDay = (nowMs: number) => {
   const d = new Date(nowMs)
   d.setHours(0, 0, 0, 0)
@@ -173,11 +181,12 @@ const startOfDay = (nowMs: number) => {
 
 /**
  * The panel's view of published view `v` at `nowMs`. `changes` holds the changed files of each task in review (read
- * with git by the caller, see session.ts); `project` is the project folder's name; `orgMem` org-mem's notes and file
- * (hooks/app/org-mem.ts orgMemNow, also read by the caller).
+ * with git by the caller, see session.ts); `project` is the project folder's name; `name` the plugin's (its commands'
+ * prefix); `orgMem` org-mem's notes and file (hooks/app/org-mem.ts orgMemNow, also read by the caller).
  */
-export function panelView(v: PaneView, o: { project: string; dir: string; nowMs: number; changes?: Record<string, DiffFile[]>; orgMem?: { notes: OrgMemNote[]; file: string } }): PanelView {
+export function panelView(v: PaneView, o: { project: string; dir: string; nowMs: number; name?: string; changes?: Record<string, DiffFile[]>; orgMem?: { notes: OrgMemNote[]; file: string } }): PanelView {
   const nowMs = o.nowMs
+  const follows = followsOf(v, o.name ?? DEFAULT_NAME, nowMs)
   const tasks = (v.tasks ?? []) as BoardTask[]
   const questions = (v.questions ?? []).filter(q => isOpenQuestion(q))
   const needs: PanelNeed[] = [
@@ -227,6 +236,7 @@ export function panelView(v: PaneView, o: { project: string; dir: string; nowMs:
     idle: panelIdle(view, nowMs),
     orgMem: panelOrgMem(o.orgMem?.notes ?? [], o.orgMem?.file ?? `${o.dir}/org-mem.md`),
     ...(v.branch_note ? { note: v.branch_note } : {}),
+    ...(follows ? { follows } : {}),
     dir: o.dir,
     nowMs,
   }

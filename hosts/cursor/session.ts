@@ -225,7 +225,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
   // changed files of each task in review are read with git once per change of the task
   const project = o.root.split('/').filter(Boolean).pop() ?? o.root
   let published: SymccView = emptyView()
-  let shown = panelView(published as PaneView, { project, dir: S.N.dir, nowMs: Date.now() })
+  let shown = panelView(published as PaneView, { project, dir: S.N.dir, name: S.N.name, nowMs: Date.now() })
   const changes = new Map<string, { at: string; files: DiffFile[] }>()
   const draw = async () => {
     const v = published as PaneView
@@ -234,7 +234,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
       changes.set(t.id, { at: t.updated_at, files: await changedFiles(ref.host!, intoOf(t), t).catch(() => []) })
     }
     const orgMem = await orgMemNow(ref.host!).catch(() => undefined)
-    shown = panelView(v, { project, dir: S.N.dir, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])), ...(orgMem ? { orgMem } : {}) })
+    shown = panelView(v, { project, dir: S.N.dir, name: S.N.name, nowMs: Date.now(), changes: Object.fromEntries([...changes].map(([id, c]) => [id, c.files])), ...(orgMem ? { orgMem } : {}) })
     o.onView?.(shown)
   }
   let drawing: Promise<void> = Promise.resolve()

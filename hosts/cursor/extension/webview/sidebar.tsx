@@ -4,7 +4,7 @@
 import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import type { BoardPage, ChatItem, PanelStep, PanelView } from '../../protocol'
 import { LEAD_AGENT } from '../../steps'
-import { EngineScreen, LaneCard, ModeMenu, NeedCard, NetworkCard, NoticeLine, OffScreen, useNotice, useSymcc, type Say, type Steps } from './App'
+import { DriveNotice, EngineScreen, LaneCard, ModeMenu, NeedCard, NetworkCard, NoticeLine, OffScreen, useNotice, useSymcc, type Say, type Steps } from './App'
 import { ask, tell } from './bridge'
 import { Icon, IdleNote, Mark, Markdown, ago, useNow } from './parts'
 import { latestStep, stepIcon, stepWords } from './session'
@@ -81,6 +81,7 @@ function Head({ view, onSay }: { view: PanelView; onSay: Say }) {
           <Icon name="warning" /> {view.note}
         </p>
       )}
+      {view.follows && <DriveNotice follows={view.follows} onSay={onSay} />}
     </header>
   )
 }

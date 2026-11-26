@@ -376,6 +376,15 @@ time,
   color: var(--wait);
   font-size: 12px;
 }
+.drive-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.drive-note .link {
+  font-family: var(--mono);
+}
 
 .network-wrap {
   padding: 12px 20px 0;

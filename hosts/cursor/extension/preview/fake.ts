@@ -250,6 +250,7 @@ function busyView(): PanelView {
     counts: { needs: needs.length, running: 3, next: next.length, doneToday: 6, backlog: 3 },
     idle: { kind: 'waiting', text: 'Nothing running · 2 waiting: T-46 waits for T-42, T-47 waits for T-46', next: [], more: 0 },
     orgMem: orgMem(),
+    ...(state === 'follows' && !drives ? { follows: { parts: [{ text: 'this window follows (driver started Nov 26 09:12, active 2 min ago); ' }, { text: '/symcc-drive', command: true }, { text: ' to drive from here' }], button: 'Drive here', command: 'symcc-drive' } } : {}),
     dir: '.symcc',
     nowMs: Date.now(),
   }
@@ -305,6 +306,7 @@ const send = (msg: ToWebview) => window.dispatchEvent(new MessageEvent('message'
 const later = (ms: number, fn: () => void) => setTimeout(fn, ms)
 let busy = state === 'busy'
 let mode: PanelView['mode'] = 'review'
+let drives = false
 const net = new URLSearchParams(location.search).get('state') === 'net'
 
 window.acquireVsCodeApi = () => ({
@@ -387,6 +389,11 @@ window.acquireVsCodeApi = () => ({
       reply('symcc restarted with the new proxy.')
       later(450, () => send({ type: 'network', problem: null }))
       return
+    }
+    if (msg.type === 'command' && msg.name === 'symcc-drive') {
+      drives = true
+      reply('The other session hands the board over on its next heartbeat; this one drives after that.')
+      return later(900, () => send({ type: 'view', view: view() }))
     }
     reply('done')
   },
