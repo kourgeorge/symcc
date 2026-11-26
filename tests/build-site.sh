@@ -84,7 +84,7 @@ else
   b="$tmp/blog/blog"
   for f in index.html rss.xml old-one.html middle.html new-one.html old-one.md; do [ -f "$b/$f" ] || bad "blog: missing $f"; done
   for p in index.html guide.html research/index.html blog/new-one.html; do
-    grep -q 'href="[./]*blog/index.html">Blog</a>' "$tmp/blog/$p" || bad "blog: no Blog link in $p"
+    grep -q 'href="[./]*blog/index.html"[^>]*>Blog</a>' "$tmp/blog/$p" || bad "blog: no Blog link in $p"
   done
   grep -q 'href="blog/index.html">Blog</a>' "$tmp/blog/index.html" || bad "blog: no Blog link on the home page"
   order="$(grep -o '"\(new-one\|middle\|old-one\)\.html"' "$b/index.html" | tr -d '\n')"

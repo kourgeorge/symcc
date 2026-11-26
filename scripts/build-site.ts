@@ -394,9 +394,50 @@ function relink(html: string, depth: number): string {
   return html.replace(/\b(href|src)="(?![a-z][a-z0-9+.-]*:|#|\/)([^"]*)"/gi, (_, a: string, v: string) => `${a}="${up}${v}"`)
 }
 
+// T-1088: the pages in the header's order; each gets Previous / Next boxes at the bottom.
+const NAV: { out: string; title: string }[] = [
+  { out: 'overview.html', title: 'Overview' },
+  { out: 'guide.html', title: 'Guide' },
+  { out: 'reference.html', title: 'Reference' },
+  { out: 'engine-and-clients.html', title: 'Engine and clients' },
+  { out: 'research/index.html', title: 'Research notes' },
+]
+
+// The h2 and h3 headings of a page body, for the "On this page" list. Fewer than 3 h2 headings: no list.
+export function tocItems(body: string): { level: number; id: string; text: string }[] {
+  const items = [...body.matchAll(/<h([23]) id="([^"]+)">([\s\S]*?) <a class="anchor"/g)]
+    .map(m => ({ level: Number(m[1]), id: m[2]!, text: stripTags(m[3]!) }))
+  return items.filter(i => i.level === 2).length >= 3 ? items : []
+}
+
+function tocHtml(items: { level: number; id: string; text: string }[]): { fold: string; side: string } {
+  if (!items.length) return { fold: '', side: '' }
+  const list = `<ul>${items.map(i => `<li class="l${i.level}"><a href="#${i.id}">${escapeHtml(i.text)}</a></li>`).join('\n')}</ul>`
+  return {
+    fold: `<details class="toc-fold"><summary>On this page</summary>\n${list}\n</details>\n`,
+    side: `<aside class="toc-side"><nav aria-label="On this page"><p class="toc-title">On this page</p>\n${list}\n</nav></aside>\n`,
+  }
+}
+
+function prevNext(page: Page): string {
+  const k = NAV.findIndex(n => n.out === page.out)
+  if (k < 0) return ''
+  const box = (n: { out: string; title: string } | undefined, cls: string, label: string) =>
+    n ? `<a class="${cls}" href="${escapeHtml(posix.relative(posix.dirname(page.out), n.out))}"><span class="label">${label}</span><span class="title">${escapeHtml(n.title)}</span></a>` : ''
+  return `<nav class="prev-next" aria-label="Previous and next page">${box(NAV[k - 1], 'prev', 'Previous')}${box(NAV[k + 1], 'next', 'Next')}</nav>`
+}
+
 function render(page: Page, body: string, f: { header: string; footer: string }, head = ''): string {
   const depth = page.out.split('/').length - 1
   const up = '../'.repeat(depth)
+  // the page's own header link is marked
+  const here = NAV.some(n => n.out === page.out) ? page.out : page.out.startsWith('research/') ? 'research/index.html' : page.out.startsWith('blog/') ? 'blog/index.html' : ''
+  const header = relink(f.header, depth).replace(`<a href="${up}${here}">`, `<a href="${up}${here}" aria-current="page">`)
+  const toc = tocHtml(tocItems(body))
+  const pn = prevNext(page)
+  const main = `<main class="doc">
+${toc.fold}${body}${pn ? `\n${pn}` : ''}
+</main>`
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -406,10 +447,8 @@ function render(page: Page, body: string, f: { header: string; footer: string },
 <link rel="stylesheet" href="${up}style.css">
 ${head}</head>
 <body>
-${relink(f.header, depth)}
-<main class="doc">
-${body}
-</main>
+${header}
+${toc.side ? `<div class="doc-wrap">\n${main}\n${toc.side}</div>` : main}
 ${relink(f.footer, depth)}
 </body>
 </html>
