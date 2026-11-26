@@ -134,9 +134,22 @@ export async function gitReady($: Host, b?: Board): Promise<boolean> {
     S.toldGit = 'ok'
   } else if (S.driving && S.toldGit !== s) {
     S.toldGit = s
-    tellLead($, s === 'no-git' ? noGitText(S.N.name, S.gitInstall) : setupAskText(s, S.N.name))
+    tellLead($, s === 'no-git' ? noGitText(S.N.name, S.gitInstall) : s === 'no-repo' && (await holdsRepos($)) ? workspaceText() : setupAskText(s, S.N.name))
   }
   return s === 'ok'
+}
+
+export const workspaceText = () => `This looks like a workspace of several repos; ${S.N.name} can't run a board over several repos yet. Open ${S.W.app} in one repo instead.`
+
+/** True when a folder one or two levels below the project holds its own .git (hidden folders, the data folder and node_modules skipped). */
+async function holdsRepos($: Host): Promise<boolean> {
+  const dirs = async (path: string) =>
+    (await $.fs.list(path).catch(() => [])).filter(e => e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== S.N.dir).map(e => e.name)
+  for (const a of await dirs(S.root)) {
+    if (await $.fs.exists(`${S.root}/${a}/.git`)) return true
+    for (const b of await dirs(`${S.root}/${a}`)) if (await $.fs.exists(`${S.root}/${a}/${b}/.git`)) return true
+  }
+  return false
 }
 
 /**
@@ -150,6 +163,7 @@ export async function setupGit($: Host, who: string): Promise<string> {
   const s = await probeGit($)
   if (s === 'ok') return 'git is set up already: this folder is a git repo with commits'
   if (s === 'no-git') return noGitText(S.N.name, S.gitInstall)
+  if (s === 'no-repo' && (await holdsRepos($))) return workspaceText()
   S.settingUp = true
   try {
     const init = s === 'no-repo'

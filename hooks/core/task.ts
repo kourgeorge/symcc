@@ -35,7 +35,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     id: `T-${b.next_id}`,
     title,
     details: clean(f.details ?? title, DETAILS_MAX),
-    files: cleanFiles(f.files, dir),
+    files: cleanFiles(f.files, dir, isErrand({ kind: f.kind })),
     status: f.backlog === true ? 'backlog' : 'todo',
     note: '',
     priority: isPriority(f.priority) ? f.priority : 0,
@@ -95,7 +95,7 @@ export function patchTask(b: Board, id: string, patch: TaskPatch, now: string, d
   }
   if (patch.title !== undefined) next.title = clean(patch.title, 200)
   if (patch.details !== undefined) next.details = clean(patch.details, DETAILS_MAX)
-  if (patch.files !== undefined) next.files = cleanFiles(patch.files, dir)
+  if (patch.files !== undefined) next.files = cleanFiles(patch.files, dir, isErrand(patch.kind !== undefined ? { kind: patch.kind } : t))
   if (patch.role !== undefined) {
     const role = cleanRole(patch.role)
     if (role) next.role = role
@@ -105,6 +105,8 @@ export function patchTask(b: Board, id: string, patch: TaskPatch, now: string, d
     const kind = kindOf(patch)
     if (kind !== DEFAULT_KIND) next.kind = kind
     else delete next.kind
+    // T-1129: only an errand's files may be absolute folders outside the project
+    if (!isErrand({ kind }) && next.files?.some(f => f.startsWith('/'))) next.files = next.files.filter(f => !f.startsWith('/'))
   }
   if (patch.needs_review !== undefined) {
     if (patch.needs_review === true) next.needs_review = true

@@ -71,13 +71,13 @@ const call = async ($: unknown, args: Record<string, unknown>) => String(await r
 test('kinds list shows every task type and where it comes from; with name, one kind in full', async () => {
   const { $ } = setup({ 'bug.md': '---\ndescription: a defect\n---\n', 'chore.md': '---\ndescription: small upkeep\noff: true\n---\n' })
   const list = await call($, {})
-  expect(list).toContain('- change (built-in): a general change')
+  expect(list).toContain('- change (built-in): a general coding task')
   expect(list).toContain('- bug (replaced): a defect')
   expect(list).toContain('- chore (added, off): small upkeep')
   const one = await call($, { action: 'list', name: 'change' })
-  expect(one).toContain('change (built-in): a general change')
+  expect(one).toContain('change (built-in): a general coding task')
   expect(one).toContain('file: kinds/change.ts (in the plugin)')
-  expect(one).toContain('The worker changes files, which are committed, tested and merged.')
+  expect(one).toContain('The worker changes project files, which are committed, tested and merged.')
   expect(await call($, { name: 'nope' })).toContain('no task type named nope')
 })
 
@@ -163,4 +163,14 @@ test("the lead's instructions and the help name the kinds tool and say not to wr
   expect(leadGuide()).toContain('Manage task types with symcc kinds, never by writing .symcc/kinds/ files by hand')
   expect(leadGuide()).toContain('Only change task types when the owner asks')
   expect(manual('lead')).toContain('kinds does the same for the task types')
+})
+
+test('the change and errand descriptions say what they are for, and the lead guide picks the type by result', () => {
+  const list = `${BUILT_IN_KIND_TEXTS.change}\n${BUILT_IN_KIND_TEXTS.errand}`
+  expect(list).toContain('a general coding task (code, tests, config) when no other task type fits (the default)')
+  expect(list).toContain('work outside the project or with nothing to merge (make or tidy files elsewhere such as ~/Desktop, gather, write, run something); ends done with a report')
+  const guide = leadGuide()
+  expect(guide).toContain('Pick the task type by the result wanted')
+  expect(guide).toContain('just make it on my Desktop" → errand')
+  expect(guide).toContain('investigations and errands are not merged')
 })

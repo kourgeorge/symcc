@@ -13,8 +13,10 @@ export { gitDeniedRules }
 
 /** The `--allowedTools` rule that lets the agent edit `file` (relative to its folder; a folder ends with "/" or is "."). */
 export function editRule(file: string): string[] {
-  const f = file.replace(/^\.\//, '').replace(/^\/+/, '')
-  const glob = f === '' || f === '.' ? './**' : f.endsWith('/') ? `./${f}**` : `./${f}`
+  // An absolute path (an errand's outside folder) stays absolute: Claude Code writes it with a leading "//".
+  const abs = file.startsWith('/')
+  const f = abs ? file.replace(/^\/+/, '/') : file.replace(/^\.\//, '')
+  const glob = abs ? `/${f}${f.endsWith('/') ? '**' : ''}` : f === '' || f === '.' ? './**' : f.endsWith('/') ? `./${f}**` : `./${f}`
   // Edit's rules cover Write too; both are listed, so a version that reads them apart still allows the same files.
   // A plain file name may also be a folder (e.g. "docs"): its contents are allowed too.
   const globs = f.endsWith('/') || glob === './**' ? [glob] : [glob, `${glob}/**`]

@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>symcc Workspace Vision</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eef1f5;
+  --text: #1c2430;
+  --muted: #5b6676;
+  --border: #d5dbe3;
+  --accent: #2f5fd0;
+  --accent-soft: #e3ebfb;
+  --good: #1f7a4d;
+  --good-soft: #def3e7;
+  --warn: #a8660a;
+  --warn-soft: #fbeed5;
+  --bad: #b3312f;
+  --bad-soft: #f8e0df;
+  --idea: #7a4fb8;
+  --idea-soft: #efe6fa;
+  --shadow: 0 1px 2px rgba(20, 30, 50, 0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12161c;
+    --surface: #1b212a;
+    --surface-2: #232b36;
+    --text: #e6eaf0;
+    --muted: #9aa5b5;
+    --border: #333d4b;
+    --accent: #7aa2ff;
+    --accent-soft: #223152;
+    --good: #5fcf94;
+    --good-soft: #1b3a2b;
+    --warn: #e0a24a;
+    --warn-soft: #3d2f17;
+    --bad: #f07a77;
+    --bad-soft: #432524;
+    --idea: #c39cf5;
+    --idea-soft: #2f2345;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12161c;
+  --surface: #1b212a;
+  --surface-2: #232b36;
+  --text: #e6eaf0;
+  --muted: #9aa5b5;
+  --border: #333d4b;
+  --accent: #7aa2ff;
+  --accent-soft: #223152;
+  --good: #5fcf94;
+  --good-soft: #1b3a2b;
+  --warn: #e0a24a;
+  --warn-soft: #3d2f17;
+  --bad: #f07a77;
+  --bad-soft: #432524;
+  --idea: #c39cf5;
+  --idea-soft: #2f2345;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: #f6f7f9;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+.deck { display: flex; flex-direction: column; height: 100%; }
+.stage { flex: 1; position: relative; min-height: 0; }
+.slide {
+  display: none;
+  position: absolute; inset: 0;
+  overflow-y: auto; overflow-x: hidden;
+  padding: 24px 16px 28px;
+}
+.slide.active { display: block; }
+.inner { max-width: 1040px; margin: 0 auto; }
+h1 { font-size: clamp(30px, 6vw, 52px); line-height: 1.12; margin: 0 0 14px; letter-spacing: -0.02em; }
+h2 { font-size: clamp(22px, 3.6vw, 32px); line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+h3 { font-size: 17px; margin: 0 0 6px; }
+.kicker { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; margin: 0 0 6px; }
+.lead { color: var(--muted); font-size: clamp(16px, 2.2vw, 20px); margin: 0 0 18px; max-width: 760px; }
+p { margin: 0 0 10px; }
+ul { margin: 0 0 10px; padding-left: 20px; }
+li { margin: 0 0 5px; }
+code, .mono { font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 0.86em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+.grid { display: grid; gap: 12px; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; box-shadow: var(--shadow); min-width: 0; }
+.card.good { border-left: 4px solid var(--good); }
+.card.bad { border-left: 4px solid var(--bad); }
+.card.warn { border-left: 4px solid var(--warn); }
+.card.acc { border-left: 4px solid var(--accent); }
+.card.idea { border-left: 4px solid var(--idea); }
+.card p:last-child, .card ul:last-child { margin-bottom: 0; }
+.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); margin-right: 4px; white-space: nowrap; }
+.tag.good { background: var(--good-soft); color: var(--good); }
+.tag.bad { background: var(--bad-soft); color: var(--bad); }
+.tag.warn { background: var(--warn-soft); color: var(--warn); }
+.tag.idea { background: var(--idea-soft); color: var(--idea); }
+.tag.proj { background: var(--surface); color: var(--muted); border: 1px solid var(--border); font-family: "JetBrains Mono", ui-monospace, monospace; font-weight: 500; }
+.status { margin: 0 0 12px; }
+.small { font-size: 14px; color: var(--muted); }
+.diagram { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px; overflow-x: auto; margin: 0 0 12px; }
+.diagram svg { display: block; width: 100%; height: auto; }
+.tablewrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--surface-2); font-weight: 600; }
+tr:last-child td { border-bottom: 0; }
+.title-slide { min-height: 100%; display: flex; align-items: center; }
+.nav {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 16px; border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.nav button {
+  font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+  background: var(--accent-soft); color: var(--accent);
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 14px;
+}
+.nav button:disabled { opacity: 0.4; cursor: default; }
+.nav .count { flex: 1; text-align: center; color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.svg-box { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+.svg-acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+.svg-good { fill: var(--good-soft); stroke: var(--good); stroke-width: 1.5; }
+.svg-warn { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 1.5; }
+.svg-bad { fill: var(--bad-soft); stroke: var(--bad); stroke-width: 1.5; }
+.svg-idea { fill: var(--idea-soft); stroke: var(--idea); stroke-width: 1.5; }
+.svg-t { fill: var(--text); font-family: "Inter", sans-serif; font-size: 13px; font-weight: 600; text-anchor: middle; }
+.svg-s { fill: var(--muted); font-family: "Inter", sans-serif; font-size: 11px; text-anchor: middle; }
+.svg-main { stroke: var(--accent); stroke-width: 2.4; fill: none; }
+.svg-dash { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-dasharray: 5 4; }
+.svg-head-a { fill: var(--accent); }
+.mock { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 10px; min-width: 0; box-shadow: var(--shadow); }
+.mock h4 { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; color: var(--muted); border-bottom: 1px solid var(--border); padding: 0 0 6px; margin: 0 0 8px; }
+.tabs .on { color: var(--accent); font-weight: 700; text-decoration: underline; }
+.sec { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: var(--muted); margin: 8px 0 4px; }
+.tk { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px; margin: 0 0 6px; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.tk b { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 12px; margin-right: 4px; }
+.tk.need { border-left: 4px solid var(--bad); }
+.tk.run { border-left: 4px solid var(--accent); }
+.tk.todo { border-left: 4px solid var(--muted); }
+.tk.ok { border-left: 4px solid var(--good); }
+.tk.pulse { animation: pulse 2s ease-in-out infinite; }
+.tree { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; font-family: "JetBrains Mono", ui-monospace, Menlo, monospace; font-size: 13px; line-height: 1.7; min-width: 0; overflow-wrap: anywhere; }
+.tree div { white-space: pre-wrap; }
+.tree .n { color: var(--muted); font-family: "Inter", sans-serif; font-size: 12px; }
+.tree .a { color: var(--accent); font-weight: 600; }
+.tree .g { color: var(--good); font-weight: 600; }
+.phone { max-width: 340px; margin: 0 auto; background: var(--surface); border: 2px solid var(--border); border-radius: 26px; padding: 14px 10px; box-shadow: var(--shadow); min-width: 0; }
+.phone .top { text-align: center; font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+.bubble { border-radius: 14px; padding: 8px 10px; font-size: 13.5px; margin: 0 0 8px; min-width: 0; overflow-wrap: anywhere; max-width: 88%; }
+.bubble.me { background: var(--accent-soft); border: 1px solid var(--accent); margin-left: auto; }
+.bubble.ai { background: var(--surface-2); border: 1px solid var(--border); }
+.bubble pre { margin: 0; font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11.5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.steps { counter-reset: s; list-style: none; padding: 0; margin: 0; }
+.steps li { counter-increment: s; position: relative; padding: 8px 10px 8px 40px; margin: 0 0 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+.steps li::before { content: counter(s); position: absolute; left: 10px; top: 8px; width: 22px; height: 22px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 12px; text-align: center; line-height: 22px; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px; }
+.flowdash { stroke-dasharray: 6 6; animation: dash 1.2s linear infinite; }
+@keyframes dash { to { stroke-dashoffset: -12; } }
+@keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 0 3px var(--bad-soft); } }
+@media (prefers-reduced-motion: reduce) {
+  .flowdash, .tk.pulse { animation: none !important; }
+}
+@media (max-width: 760px) {
+  body { font-size: 16px; }
+  .g2, .g3, .g4 { grid-template-columns: minmax(0, 1fr); }
+  .slide { padding: 16px 16px 24px; }
+  .nav { padding: 8px 16px; gap: 6px; }
+  .nav button { padding: 6px 10px; font-size: 14px; }
+}
+</style>
+</head>
+<body>
+<div class="deck">
+<div class="stage" id="stage">
+
+<!-- 1 -->
+<section class="slide" data-title="Title">
+<div class="inner title-slide"><div>
+  <p class="kicker">symcc, the workspace vision</p>
+  <h1>One agent organization over all your work.</h1>
+  <p class="lead">Several repos, plain folders and outside work, run from one board, with everything checked before it counts.</p>
+  <div class="diagram"><svg viewBox="0 0 700 120" role="img" aria-label="Three repos, a folder and an inbox flow into one board, which leads to checked results">
+    <defs><marker id="a1" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker></defs>
+    <rect x="10" y="6" width="150" height="30" rx="8" class="svg-box"/><text x="85" y="26" class="svg-t">repo: rubrica</text>
+    <rect x="10" y="45" width="150" height="30" rx="8" class="svg-box"/><text x="85" y="65" class="svg-t">repo: symcc</text>
+    <rect x="10" y="84" width="150" height="30" rx="8" class="svg-box"/><text x="85" y="104" class="svg-t">folders, email, issues</text>
+    <rect x="260" y="30" width="170" height="60" rx="10" class="svg-acc"/><text x="345" y="56" class="svg-t">One board</text><text x="345" y="74" class="svg-s">one lead, one workspace</text>
+    <rect x="530" y="30" width="160" height="60" rx="10" class="svg-good"/><text x="610" y="56" class="svg-t">Checked results</text><text x="610" y="74" class="svg-s">merged, answered, done</text>
+    <g class="svg-main flowdash"><path d="M160 21 C210 21 210 50 258 52" marker-end="url(#a1)"/><line x1="160" y1="60" x2="258" y2="60" marker-end="url(#a1)"/><path d="M160 99 C210 99 210 70 258 68" marker-end="url(#a1)"/><line x1="430" y1="60" x2="528" y2="60" marker-end="url(#a1)"/></g>
+  </svg></div>
+  <p class="small">Every slide is marked: <span class="tag good">today</span> works now, <span class="tag">designed</span> written up and planned, <span class="tag idea">idea</span> only proposed. Sources: <code>docs/workspace-model.md</code> and the T-1130 design note. Use the arrow keys or the buttons below.</p>
+</div></div>
+</section>
+
+<!-- 2 -->
+<section class="slide" data-title="Today vs vision">
+<div class="inner">
+  <p class="kicker">Where we are, where we go</p>
+  <h2>Today: one board per repo. Vision: one board per workspace.</h2>
+  <div class="grid g2" style="margin-top:14px">
+    <div class="card good"><p class="status"><span class="tag good">today</span></p>
+      <h3>One board = one repo</h3>
+      <ul><li>The board (<code>.symcc/</code>) lives inside one git repo.</li><li>Every task is a copy of that repo, merged into its branch.</li><li>Work in a second repo needs a second board and a second lead.</li><li>Git must be ready before anything starts, even for errands.</li></ul></div>
+    <div class="card acc"><p class="status"><span class="tag">designed</span></p>
+      <h3>One board = one workspace folder</h3>
+      <ul><li>The board lives in a plain folder, for example <code>~/repositories</code>. It need not be a git repo.</li><li>The repos below it are its <strong>projects</strong>, found by folder name.</li><li>A task may name a project, or none at all.</li><li>One workspace per folder, not per machine: work in one folder, home in another.</li></ul></div>
+  </div>
+  <p class="small" style="margin-top:12px">Today's one-repo board simply becomes a workspace whose only project is its own folder.</p>
+</div>
+</section>
+
+<!-- 3 -->
+<section class="slide" data-title="Workspace model">
+<div class="inner">
+  <p class="kicker">The workspace model <span class="tag">designed</span></p>
+  <h2>Workspace, projects, and tasks with or without a project</h2>
+  <div class="grid g2" style="margin-top:12px">
+    <div class="tree" role="img" aria-label="Folder tree of a workspace">
+<div><span class="a">~/repositories/</span>          <span class="n">the workspace</span></div>
+<div>├─ <span class="a">.symcc/</span>               <span class="n">one board, one lead</span></div>
+<div>│  ├─ board.json  org-mem.md</div>
+<div>│  ├─ scouts/  roles/  kinds/</div>
+<div>│  ├─ <span class="g">worktrees/T-41</span>      <span class="n">copy of rubrica</span></div>
+<div>│  ├─ <span class="g">worktrees/T-42</span>      <span class="n">copy of symcc</span></div>
+<div>│  └─ <span class="g">work/T-44</span>           <span class="n">no project, no git</span></div>
+<div>├─ <span class="a">rubrica/</span>              <span class="n">project (a git repo)</span></div>
+<div>└─ <span class="a">symcc/</span>                <span class="n">project (a git repo)</span></div>
+    </div>
+    <div>
+      <div class="card acc"><h3>Workspace</h3><p>One folder, one board. Org-mem, scouts, roles and task types stay board-wide.</p></div>
+      <div class="card acc" style="margin-top:8px"><h3>Projects</h3><p>Repos stay where they are. symcc copies nothing and keeps no repo list; it stores only settings it can't guess, like a test command.</p></div>
+      <div class="card acc" style="margin-top:8px"><h3>Tasks</h3><p>A task's <code>project</code> is a folder name like <code>rubrica</code>. No project: research or a note, nothing to merge.</p></div>
+    </div>
+  </div>
+  <p class="small" style="margin-top:10px">Guards have one root: the workspace folder. A worker may touch only its own copy, recognised by its place under <code>.symcc/worktrees/</code>. Still open: whether copies sit under the workspace (shown here) or inside each repo, as today.</p>
+</div>
+</section>
+
+<!-- 4 -->
+<section class="slide" data-title="A day">
+<div class="inner">
+  <p class="kicker">A day in the workspace <span class="tag idea">picture of the idea</span></p>
+  <h2>One board, many kinds of work</h2>
+  <p class="lead">Hand-drawn, with made-up task numbers. The tabs and sections are today's board; the project tags are the vision.</p>
+  <div class="grid g2">
+    <div class="mock">
+      <div class="tabs"><span class="on">[l] Live</span><span>[t] Tasks (9)</span><span>[s] Scouts (4)</span><span>[c] Settings</span></div>
+      <div class="sec">NEEDS YOU</div>
+      <div class="tk need pulse"><b>T-43</b> <span class="tag proj">rubrica</span> Fix the export date bug <span class="tag warn">review</span><br><span class="small">came from email intake, so it waits for your yes</span></div>
+      <div class="tk need"><b>Q-7</b> Which talk should the slides cover? <span class="tag">1 Demo</span><span class="tag">2 Design</span></div>
+      <div class="sec">TASKS</div>
+      <div class="tk run"><b>T-41</b> <span class="tag proj">rubrica</span> Add CSV export <span class="tag good">test</span></div>
+      <div class="tk run"><b>T-42</b> <span class="tag proj">symcc</span> Rename the doctor item <span class="tag good">worker</span></div>
+      <div class="tk run"><b>T-44</b> <span class="tag proj">no project</span> Build the talk on my Desktop <span class="tag">errand</span><br><span class="small">where: ~/Desktop</span></div>
+      <div class="tk run"><b>T-45</b> <span class="tag proj">no project</span> Which PDF library fits rubrica? <span class="tag">investigation</span></div>
+      <div class="sec">BACKLOG</div>
+      <div class="tk todo"><b>T-46</b> <span class="tag proj">rubrica</span> Issue #12: login slow on Safari<br><span class="small">filed by the intake-github scout</span></div>
+    </div>
+    <div>
+      <div class="card"><h3>What you see</h3><ul><li><strong>NEEDS YOU</strong> stays on top, as today.</li><li>Each row says which project it is for, or "no project".</li><li>Code tasks from two repos run side by side.</li><li>An errand writes only to the folder it names.</li><li>An investigation hands back an answer.</li><li>Outside requests wait in the backlog until you or the lead pick them.</li></ul></div>
+      <p class="small" style="margin-top:8px"><code>where</code> and <code>intake-github</code> are proposed names; they don't exist yet.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 5 -->
+<section class="slide" data-title="Code per repo">
+<div class="inner">
+  <p class="kicker">How a code task runs <span class="tag good">today, per repo</span> <span class="tag">designed, many repos</span></p>
+  <h2>Each repo keeps its own copy, tests and merge</h2>
+  <div class="diagram"><svg viewBox="0 0 760 210" role="img" aria-label="Two code tasks, each copied from its own repo, tested with that repo's tests and merged into that repo">
+    <defs><marker id="a5" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker></defs>
+    <text x="70" y="22" class="svg-s">task</text><text x="245" y="22" class="svg-s">worker copy</text><text x="430" y="22" class="svg-s">that repo's tests</text><text x="630" y="22" class="svg-s">merge</text>
+    <rect x="10" y="34" width="120" height="54" rx="8" class="svg-box"/><text x="70" y="57" class="svg-t">T-41</text><text x="70" y="74" class="svg-s">project rubrica</text>
+    <rect x="170" y="34" width="150" height="54" rx="8" class="svg-acc"/><text x="245" y="57" class="svg-t">symcc/T-41</text><text x="245" y="74" class="svg-s">copy of rubrica</text>
+    <rect x="360" y="34" width="140" height="54" rx="8" class="svg-warn"/><text x="430" y="57" class="svg-t">npm test</text><text x="430" y="74" class="svg-s">rubrica's command</text>
+    <rect x="540" y="34" width="180" height="54" rx="8" class="svg-good"/><text x="630" y="57" class="svg-t">rubrica / main</text><text x="630" y="74" class="svg-s">its own branch</text>
+    <rect x="10" y="118" width="120" height="54" rx="8" class="svg-box"/><text x="70" y="141" class="svg-t">T-42</text><text x="70" y="158" class="svg-s">project symcc</text>
+    <rect x="170" y="118" width="150" height="54" rx="8" class="svg-acc"/><text x="245" y="141" class="svg-t">symcc/T-42</text><text x="245" y="158" class="svg-s">copy of symcc</text>
+    <rect x="360" y="118" width="140" height="54" rx="8" class="svg-warn"/><text x="430" y="141" class="svg-t">plugin tests</text><text x="430" y="158" class="svg-s">symcc's commands</text>
+    <rect x="540" y="118" width="180" height="54" rx="8" class="svg-good"/><text x="630" y="141" class="svg-t">symcc / main</text><text x="630" y="158" class="svg-s">its own branch</text>
+    <g class="svg-main"><line x1="130" y1="61" x2="168" y2="61" marker-end="url(#a5)"/><line x1="320" y1="61" x2="358" y2="61" marker-end="url(#a5)"/><line x1="500" y1="61" x2="538" y2="61" marker-end="url(#a5)"/>
+    <line x1="130" y1="145" x2="168" y2="145" marker-end="url(#a5)"/><line x1="320" y1="145" x2="358" y2="145" marker-end="url(#a5)"/><line x1="500" y1="145" x2="538" y2="145" marker-end="url(#a5)"/></g>
+    <text x="380" y="200" class="svg-s">The test commands here are examples. Each repo's command is guessed or asked once and stored (how is still open).</text>
+  </svg></div>
+  <div class="grid g3">
+    <div class="card good"><h3>Same safety as today</h3><p>Own copy, file list, checker, tests on the merged code, then the branch moves.</p></div>
+    <div class="card warn"><h3>No cross-repo test</h3><p>Owner's decision: each repo is tested alone. A change across repos is split into linked tasks with <code>after</code>.</p></div>
+    <div class="card acc"><h3>A break between repos</h3><p>is fixed by a normal follow-up task. Task files are written relative to the repo: <code>README.md</code>, not <code>rubrica/README.md</code>.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- 6 -->
+<section class="slide" data-title="Kinds by result">
+<div class="inner">
+  <p class="kicker">Task kinds, sorted by what they give back <span class="tag good">today</span></p>
+  <h2>Merged, answered, or done</h2>
+  <div class="grid g3" style="margin-top:12px">
+    <div class="card good"><h3>Merged</h3><p><code>change</code> <code>bug</code> <code>feature</code> <code>refactor</code> <code>docs</code></p><p>The worker changes files. They are committed, tested and merged into the project.</p><p class="small">"Fix the export date bug in rubrica."</p></div>
+    <div class="card acc"><h3>An answer</h3><p><code>investigation</code></p><p>The worker finds the answer and hands it back in full. Nothing is merged. It waits for you, even in auto mode.</p><p class="small">"Which PDF library fits rubrica?"</p></div>
+    <div class="card warn"><h3>Done, with a report</h3><p><code>errand</code></p><p>Work outside the project, or work with nothing to merge. It ends with a report of what was done and where.</p><p class="small">"Build the talk on my Desktop." "Tidy my downloads folder."</p></div>
+  </div>
+  <div class="card idea" style="margin-top:12px"><p><span class="tag good">today</span> An errand ends done on its own and no one checks it. <span class="tag">designed</span> It gets a place to act, a required "Done when" and a check. The next slide shows how. Kinds stay labels: no new kinds beyond errand.</p></div>
+</div>
+</section>
+
+<!-- 7 -->
+<section class="slide" data-title="Trust, non-code">
+<div class="inner">
+  <p class="kicker">Trust for non-code work <span class="tag">designed</span> <span class="tag idea">sending: idea, needs a probe</span></p>
+  <h2>The same trust, built from different parts</h2>
+  <div class="grid g4" style="margin-top:12px">
+    <div class="card acc"><h3>Where</h3><p>The folders it may write, and the services it may use. Writes anywhere else are refused.</p></div>
+    <div class="card acc"><h3>Done when</h3><p>Required for errands. It is the written goal, like tests for code.</p></div>
+    <div class="card acc"><h3>A checker</h3><p>A second agent reads the report and the named folders and judges them against "Done when".</p></div>
+    <div class="card warn"><h3>Ask before sending</h3><p>A send, reply or new event becomes a question to you, unless the task's "where" names that service.</p></div>
+  </div>
+  <div class="tablewrap" style="margin-top:12px"><table>
+    <tr><th>Part of trust</th><th>Code work (today)</th><th>General work (designed)</th></tr>
+    <tr><td>Its own place</td><td>A worker copy and a file list</td><td><code>where</code>: named folders and services</td></tr>
+    <tr><td>A written goal</td><td>The repo's tests</td><td>A required "Done when"</td></tr>
+    <tr><td>A second look</td><td>The checker tries to break the change</td><td>The checker reads the result, no tests run</td></tr>
+    <tr><td>You say yes</td><td>Review before merge</td><td>A question before anything leaves the machine</td></tr>
+    <tr><td>Undo</td><td>A merge can be reverted</td><td>Sending can't be undone, so it asks first</td></tr>
+    <tr><td>A record</td><td>Report, history, commits</td><td>Report and history stay on the task</td></tr>
+  </table></div>
+  <p class="small" style="margin-top:8px">With the checker off, an errand waits in review, like an investigation. Today nothing guards <code>curl</code> or similar commands; the git guard only refuses push and fetch.</p>
+</div>
+</section>
+
+<!-- 8 -->
+<section class="slide" data-title="From anywhere">
+<div class="inner">
+  <p class="kicker">Talking to it from anywhere <span class="tag good">today</span></p>
+  <h2>Terminal, VS Code, OpenCode, or your phone</h2>
+  <div class="grid g2" style="margin-top:12px">
+    <div>
+      <div class="card good"><h3>At the computer</h3><p>The same board in the Claude Code terminal, VS Code and OpenCode, with Live, Tasks, Scouts and Settings.</p></div>
+      <div class="card good" style="margin-top:8px"><h3>From a chat app</h3><ul><li>A message from Telegram, Discord or Slack turns on <strong>chat mode</strong>.</li><li><strong>Short views:</strong> plain lines, one task per line, "Needs you" first.</li><li>Questions come as <strong>numbered text</strong>; they are on the board too.</li><li>Ask for the board as a picture and you get <code>.symcc/board.html</code>, fine on a phone.</li><li>Typing at the terminal again turns chat mode off.</li></ul></div>
+      <p class="small" style="margin-top:8px">In a workspace these views would show tasks from all projects. That part is <span class="tag">designed</span>.</p>
+    </div>
+    <div class="phone" role="img" aria-label="A phone chat: the owner asks for status, the lead answers with short lines and a numbered question">
+      <p class="top">Telegram · symcc lead</p>
+      <div class="bubble me">status</div>
+      <div class="bubble ai"><pre>Needs you
+T-43 review: Fix the export date bug
+Running
+T-41 running: test, 6m: Add CSV export
+T-44 running: worker, 12m: Build the talk
+backlog 1</pre></div>
+      <div class="bubble ai">Which talk should the slides cover?<br>1. Demo<br>2. Design<br>Reply with the number or your own words.</div>
+      <div class="bubble me">1</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 9 -->
+<section class="slide" data-title="Intake, routines">
+<div class="inner">
+  <p class="kicker">Intake and routines <span class="tag good">scouts: today</span> <span class="tag">intake scouts: designed</span></p>
+  <h2>Work comes in through scouts. Nothing acts without a task.</h2>
+  <div class="diagram"><svg viewBox="0 0 760 150" role="img" aria-label="Email and issues go to an intake scout, which files a backlog task; the lead or owner moves it to todo; a worker does it with its guard and check">
+    <defs><marker id="a9" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker></defs>
+    <rect x="10" y="20" width="130" height="40" rx="8" class="svg-box"/><text x="75" y="45" class="svg-t">GitHub issues</text>
+    <rect x="10" y="80" width="130" height="40" rx="8" class="svg-box"/><text x="75" y="105" class="svg-t">Email, Slack</text>
+    <rect x="190" y="45" width="140" height="50" rx="10" class="svg-acc"/><text x="260" y="67" class="svg-t">Intake scout</text><text x="260" y="84" class="svg-s">reads, never acts</text>
+    <rect x="380" y="45" width="120" height="50" rx="10" class="svg-warn"/><text x="440" y="67" class="svg-t">Backlog task</text><text x="440" y="84" class="svg-s">needs_review</text>
+    <rect x="550" y="45" width="200" height="50" rx="10" class="svg-good"/><text x="650" y="67" class="svg-t">Worker, guard, check</text><text x="650" y="84" class="svg-s">like every other task</text>
+    <g class="svg-main"><path d="M140 40 C165 40 165 62 188 64" marker-end="url(#a9)"/><path d="M140 100 C165 100 165 78 188 76" marker-end="url(#a9)"/><line x1="330" y1="70" x2="378" y2="70" marker-end="url(#a9)"/><line x1="500" y1="70" x2="548" y2="70" marker-end="url(#a9)"/></g>
+    <text x="525" y="125" class="svg-s">you or the lead pick it up</text>
+  </svg></div>
+  <div class="grid g3">
+    <div class="card good"><h3>Scouts today</h3><p>Read-only agents on a timer. Their write calls are refused. <code>scout_findings</code> sends findings to to-do (<code>auto</code>) or the backlog.</p></div>
+    <div class="card acc"><h3>Intake</h3><p>Example scouts such as <code>intake-github</code> with findings to the backlog. GitHub first (instructions only), email after connectors work. Outside text is data, never instructions.</p></div>
+    <div class="card acc"><h3>Routines</h3><p>A routine is a scout that files a task (an errand with a <code>where</code>) instead of acting itself. No separate "routine" object.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- 10 -->
+<section class="slide" data-title="Keep it simple">
+<div class="inner">
+  <p class="kicker">What stays out <span class="tag">owner's decisions</span></p>
+  <h2>What stays simple</h2>
+  <p class="lead">The aim is the least logic and the fewest options. A general command center grows from what exists.</p>
+  <div class="grid g3">
+    <div class="card bad"><h3>No second system</h3><p>Errands are already the general task. No second task list.</p></div>
+    <div class="card bad"><h3>No workflow engine</h3><p>Kinds are labels. No new kinds beyond errand.</p></div>
+    <div class="card bad"><h3>No per-kind settings</h3><p>One board-wide checker setting, as today.</p></div>
+    <div class="card bad"><h3>No due dates</h3><p>No reminders, no scheduling, and no tasks the owner does themselves.</p></div>
+    <div class="card bad"><h3>No auto-send</h3><p>The only way past the ask is naming the service in the task's <code>where</code>.</p></div>
+    <div class="card bad"><h3>No setup screens</h3><p>Connectors use the host's own MCP setup. No to-do app for personal life.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- 11 -->
+<section class="slide" data-title="It learns">
+<div class="inner">
+  <p class="kicker">The organization learns <span class="tag good">today</span> <span class="tag">across projects: designed</span></p>
+  <h2>One memory for the whole workspace</h2>
+  <div class="diagram"><svg viewBox="0 0 760 140" role="img" aria-label="Agents in two repos suggest notes; the lead keeps only surprising ones in one org-mem file; every next agent gets them">
+    <defs><marker id="a11" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" class="svg-head-a"/></marker></defs>
+    <rect x="10" y="14" width="150" height="44" rx="8" class="svg-box"/><text x="85" y="34" class="svg-t">rubrica workers</text><text x="85" y="50" class="svg-s">suggest notes</text>
+    <rect x="10" y="78" width="150" height="44" rx="8" class="svg-box"/><text x="85" y="98" class="svg-t">symcc workers</text><text x="85" y="114" class="svg-s">suggest notes</text>
+    <rect x="210" y="43" width="140" height="50" rx="10" class="svg-acc"/><text x="280" y="65" class="svg-t">Lead</text><text x="280" y="82" class="svg-s">keeps the surprising ones</text>
+    <rect x="400" y="43" width="150" height="50" rx="10" class="svg-good"/><text x="475" y="65" class="svg-t">org-mem.md</text><text x="475" y="82" class="svg-s">at most 60 lines</text>
+    <rect x="600" y="43" width="150" height="50" rx="10" class="svg-box"/><text x="675" y="65" class="svg-t">Every next agent</text><text x="675" y="82" class="svg-s">in any project</text>
+    <g class="svg-main flowdash"><path d="M160 36 C185 36 185 62 208 64" marker-end="url(#a11)"/><path d="M160 100 C185 100 185 74 208 72" marker-end="url(#a11)"/><line x1="350" y1="68" x2="398" y2="68" marker-end="url(#a11)"/><line x1="550" y1="68" x2="598" y2="68" marker-end="url(#a11)"/></g>
+  </svg></div>
+  <div class="grid g3">
+    <div class="card good"><h3>Org-mem</h3><p>Short notes every worker, checker and scout gets. In a workspace it stays board-wide, so a trap found in one repo helps the next.</p></div>
+    <div class="card good"><h3>Scouts that review</h3><p><code>org-mem-review</code> checks the notes are still true. <code>backlog-review</code> finds backlog tasks that are done, out of date or repeats.</p></div>
+    <div class="card good"><h3>Owner notes</h3><p>An answer you want kept becomes a document (<code>docs/research/&lt;topic&gt;.md</code>), for people, not agents.</p></div>
+  </div>
+</div>
+</section>
+
+<!-- 12 -->
+<section class="slide" data-title="Build order">
+<div class="inner">
+  <p class="kicker">Build order, with status</p>
+  <h2>Small steps, safest first</h2>
+  <div class="grid g2" style="margin-top:12px">
+    <div>
+      <h3>Workspace (from <code>docs/workspace-model.md</code>)</h3>
+      <ol class="steps">
+        <li><strong>Safety fixes</strong> <span class="tag warn">in progress: T-1133, T-1134</span><br><span class="small">Recognise worker copies by their place; block "Set up git" over a folder of repos.</span></li>
+        <li><strong>Projects</strong> <span class="tag">designed</span><br><span class="small">A <code>project</code> field on tasks, optional per-project settings, <code>add</code> takes a project.</span></li>
+        <li><strong>Per-project git and tests</strong> <span class="tag">designed</span><br><span class="small">About 110 git calls run in the task's repo; the merge too.</span></li>
+        <li><strong>Tasks with no project</strong> <span class="tag">designed</span><br><span class="small">Research and notes in a plain folder, no git.</span></li>
+        <li><strong>Intake</strong> <span class="tag">designed</span><br><span class="small">Scouts for email, GitHub issues and Slack.</span></li>
+      </ol>
+    </div>
+    <div>
+      <h3>Errands (from the T-1130 design)</h3>
+      <ol class="steps">
+        <li><strong>Wording</strong> <span class="tag good">T-1129 done, merging</span><br><span class="small">"Merged" only for change tasks; errands "done", investigations "answered".</span></li>
+        <li><strong>Done when + review</strong> <span class="tag">designed</span><br><span class="small">Errands need "Done when"; with the checker off they wait for you.</span></li>
+        <li><strong><code>where</code> folders</strong> <span class="tag">designed</span><br><span class="small">Writes outside the named folders are refused.</span></li>
+        <li><strong>Checker for errands</strong> <span class="tag">designed</span><br><span class="small">A missing part of "Done when" sends it back.</span></li>
+        <li><strong>Ask before sending</strong> <span class="tag idea">probe first</span><br><span class="small">Can a symcc agent get MCP connector tools at all? Not known yet.</span></li>
+      </ol>
+    </div>
+  </div>
+</div>
+</section>
+
+<!-- 13 -->
+<section class="slide" data-title="Risks">
+<div class="inner">
+  <p class="kicker">Risks and the one rule</p>
+  <h2>What could break the trust</h2>
+  <div class="grid g2" style="margin-top:12px">
+    <div class="card bad"><h3>Unguarded copies</h3><p>Today a copy of a repo below the workspace is not seen as a worker copy, so a session in it runs with no guard. Fixed first (T-1133, T-1134).</p></div>
+    <div class="card bad"><h3>"Set up git" over a folder of repos</h3><p>Today it would commit the repos as broken pointers, and workers would see empty folders. Blocked first.</p></div>
+    <div class="card warn"><h3>Unchecked errands</h3><p>Today an errand is done the moment it hands back, and can write outside the repo. The errand steps fix this.</p></div>
+    <div class="card warn"><h3>Things leaving the machine</h3><p>Nothing guards <code>curl</code> or <code>gh issue comment</code> today. Connectors for email are not proven yet.</p></div>
+    <div class="card warn"><h3>A large git change</h3><p>About 110 git calls assume one repo. Each must learn the task's repo, step by step.</p></div>
+    <div class="card warn"><h3>Outside text</h3><p>An email can say anything. It is data, never instructions, and its tasks can wait for your review.</p></div>
+  </div>
+  <div class="card acc" style="margin-top:12px"><h3>The one rule</h3><p style="font-size:19px"><strong>Keep "checked before it counts" true.</strong> No new kind of work joins the board until it has a place, a goal, a check and a yes from you where it can't be undone.</p></div>
+</div>
+</section>
+
+<!-- 14 -->
+<section class="slide" data-title="Closing">
+<div class="inner title-slide"><div>
+  <p class="kicker">Closing</p>
+  <h1>One board. All your work. Checked before it counts.</h1>
+  <div class="grid g3" style="margin-top:14px">
+    <div class="card good"><h3>Keep the core</h3><p>Safe, checked agent work on code: copy, guard, checker, tests, merge.</p></div>
+    <div class="card acc"><h3>Widen gently</h3><p>Many repos, then tasks with no repo, then outside work, each with the same kind of trust.</p></div>
+    <div class="card warn"><h3>Stay in charge</h3><p>Questions on the board and in the chat, review, and a yes before anything is sent.</p></div>
+  </div>
+  <p class="small" style="margin-top:14px">Read more: <code>docs/workspace-model.md</code>, <code>docs/research/design-symcc-as-a-general-command-center-not-just-for-code.md</code>, <code>docs/research/probe-one-workspace-board-over-several-repos-what-breaks-wha.md</code>, <code>docs/guide.md</code>.</p>
+</div></div>
+</section>
+
+</div>
+<div class="nav">
+  <button id="prev" type="button" aria-label="Previous slide">&larr; Prev</button>
+  <div class="count" id="count" aria-live="polite">1 / 1</div>
+  <button id="next" type="button" aria-label="Next slide">Next &rarr;</button>
+</div>
+</div>
+<script>
+(function () {
+  var slides = Array.prototype.slice.call(document.querySelectorAll('.slide'));
+  var i = 0;
+  var prev = document.getElementById('prev');
+  var next = document.getElementById('next');
+  var count = document.getElementById('count');
+  function show(n) {
+    i = Math.max(0, Math.min(slides.length - 1, n));
+    slides.forEach(function (s, k) { s.classList.toggle('active', k === i); });
+    slides[i].scrollTop = 0;
+    count.textContent = (i + 1) + ' / ' + slides.length + ' · ' + slides[i].getAttribute('data-title');
+    prev.disabled = i === 0;
+    next.disabled = i === slides.length - 1;
+    try { history.replaceState(null, '', '#' + (i + 1)); } catch (e) {}
+  }
+  prev.addEventListener('click', function () { show(i - 1); });
+  next.addEventListener('click', function () { show(i + 1); });
+  document.addEventListener('keydown', function (e) {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.key === 'ArrowRight' || e.key === 'PageDown') { show(i + 1); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { show(i - 1); e.preventDefault(); }
+    else if (e.key === 'Home') { show(0); }
+    else if (e.key === 'End') { show(slides.length - 1); }
+  });
+  var h = parseInt((location.hash || '').slice(1), 10);
+  show(isNaN(h) ? 0 : h - 1);
+})();
+</script>
+</body>
+</html>
