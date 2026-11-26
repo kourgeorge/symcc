@@ -18,6 +18,7 @@ import { runTool, type In, manual, ownerSettings, taskText, latestReport, statsT
 import { openPane } from './open'
 import { tasksListText } from '../core/task-list'
 import { liveStatusText } from '../core/live-text'
+import { chatTasksText, chatStatusText } from '../core/chat-text'
 import { setSymcc, setBoardMode } from './board-mode'
 import { doctor } from './doctor'
 import { guardOnlyText, refreshFresh, initProject } from './session-start'
@@ -150,17 +151,21 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       return say(manual(cmd.topic, host.features))
     case 'tasks':
       // T-901: every client prints the open tasks as a short list in the chat; no panel opens
-      return say(tasksListText(b, Date.now(), S.N.name))
+      return say(S.chat ? chatTasksText(b, Date.now()) : tasksListText(b, Date.now(), S.N.name))
     case 'status':
       // T-902: the Live tab's picture as text in the chat, in every client; no panel opens
-      return say(liveStatusText(await statusView(host, b), (await orgMemNow(host)).notes, Date.now(), S.N.name))
+      {
+      const view = await statusView(host, b)
+      const notes = (await orgMemNow(host)).notes
+      return say(S.chat ? chatStatusText(view, notes, Date.now()) : liveStatusText(view, notes, Date.now(), S.N.name))
+    }
     case 'board':
       if (!host.features.panel) return say(noPanelText())
       await openPane(host, { tab: 'live' })
       return say(boardOpened())
     case 'open':
       // a host with no panel: the text board, as the board tool answers it (or why the board can't be read)
-      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving }, S.version) : `${loaded.broken} Then try again.`)
+      if (!host.features.panel) return say(loaded.board ? boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { driving: S.driving, chat: !!S.chat }, S.version) : `${loaded.broken} Then try again.`)
       await openPane(host, { tab: 'live' })
       return say(boardOpened())
     case 'scouts': {

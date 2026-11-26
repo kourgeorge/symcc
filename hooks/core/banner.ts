@@ -24,6 +24,7 @@ import { shortSizeWarns } from './board-parts'
 import { type LiveView, liveLanes, liveToday, liveTrains, todayCost } from './live'
 import { type LogoFrame, LOGO_MIN_WIDTH, restFrame } from './logo'
 import { plural } from './text'
+import { chatRowsText, chatTasksText } from './chat-text'
 
 /** The project's folder name, the last part of a path: "/Users/me/repositories/app" → "app". */
 export function folderName(path: string): string {
@@ -470,7 +471,7 @@ export const bannerText = (l: BannerLine) => l.art + l.parts.map(p => p.text).jo
 /** What the lead's board tool lists: tasks with one of `status` and matching `search` (see parseSearch: plain words and
  *  filter words like last:5 or type:bug); `limit` and `sort` are the same as last:N ("newest", the default) and
  *  top:N ("order"). `kinds`: the known kinds, so an unknown type: word gives an error. */
-export type BoardFilter = { status?: SymccStatus[]; search?: string; limit?: number; sort?: 'newest' | 'order'; kinds?: readonly string[]; /** false: another session drives the board (see sessionNote) */ driving?: boolean }
+export type BoardFilter = { status?: SymccStatus[]; search?: string; limit?: number; sort?: 'newest' | 'order'; kinds?: readonly string[]; /** false: another session drives the board (see sessionNote) */ driving?: boolean; /** T-1101: the chat's short shape (core/chat-text.ts) */ chat?: boolean }
 
 /** The board tool's status words (a list, or one string like "todo, doing") as statuses; "open" adds every OPEN one.
  *  Undefined when none were given; throws on an unknown word. */
@@ -527,6 +528,9 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
   // the lead's open questions for the owner, first (see core/questions.ts)
   const open = openQuestions(b)
   const asks = open.length ? [`${questionsLabel(open.length)}:`, ...open.map(q => `  ${questionLine(q)}`)] : []
+  const chatNow = nowMs ?? Date.now()
+  const plainFilter = !(filter.status?.length || filter.search?.trim() || filter.limit !== undefined || filter.sort)
+  if (filter.chat && plainFilter) return chatTasksText(b, chatNow, offsetMin, modeText(modeOf(b)))
   if (!b.tasks.length) return [...top, ...asks, 'The board is empty.', ...(gone ? [gone] : [])].join('\n')
   const s: BoardSections = boardSections(b.tasks, nowMs ?? NaN, offsetMin)
   const closed = [...s.today, ...s.days.flatMap(g => g.tasks)]
@@ -549,6 +553,7 @@ export function boardText(b: Board, nowMs?: number, where?: string, name: string
     const asked = [picked, filter.status?.length ? `status: ${filter.status.join(', ')}` : '', search ? `search: ${search}` : ''].filter(Boolean).join('; ')
     // with last / top the line says how many matched in all: "10 of 37 matching shown (484 tasks on the board; ...)"
     const count = q.pick ? `${rows.length} of ${q.pick.by === 'order' && !q.status ? matched.filter(t => t.status === 'todo').length : matched.length} matching shown (${b.tasks.length} tasks on the board; ${asked})` : `${rows.length} of ${b.tasks.length} tasks (${asked})`
+    if (filter.chat) return chatRowsText(rows, b.tasks, chatNow, count)
     body = rows.length ? [...rows.flatMap(t => boardRow(t, b.auto_retries, nowMs ?? Date.now(), filter.driving)), count] : [`No tasks match (${asked}).`]
   } else {
     const hidden = hiddenLine(closed.filter(t => t.status === 'done').length, closed.filter(t => t.status === 'dropped').length)

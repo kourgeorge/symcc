@@ -2,6 +2,7 @@ import type { SymccTask } from '../../types'
 import { isFinished, priorityError, makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, filesAllowedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, PROSE_ROLE_TEXT, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
 import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
 import { checkerReportOf } from '../core/task-sections'
+import { chatTaskText } from '../core/chat-text'
 import { sizeSegs } from '../core/page-header'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
 import { gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, taskWork, resetScratch } from './git'
@@ -54,6 +55,7 @@ export type ReportRead = { file: string; try: number; text: string | null; check
 
 /** Task `t` as text for /<name>-task; `report` is its latest saved report (latestReport), shown last. */
 export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], report?: ReportRead | null, archivedDone: string[] = []): string {
+  if (S.chat) return chatTaskText(t, report, Date.now())
   const word = STATUS_WORD
   const L = [`${t.id}  [${word[t.status]}]  ${t.title}`, `added ${when(t.created_at)} · changed ${when(t.updated_at)} · tries ${t.attempts}`]
   // T-1080: how big its change is, right under the title
@@ -663,7 +665,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       return questionTool($, a)
     case 'board': {
       const b = await load($)
-      if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { status: parseStatusFilter(a.status), search: str(a.search), limit: typeof a.limit === 'number' ? a.limit : undefined, sort: a.sort === 'order' || a.sort === 'newest' ? a.sort : undefined, kinds: [...BUILT_IN_KINDS, ...kindNames(S.kinds)], driving: S.driving }, S.version)
+      if (!id) return boardText(b, Date.now(), shortHome(S.root, S.home), S.N.name, undefined, { status: parseStatusFilter(a.status), search: str(a.search), limit: typeof a.limit === 'number' ? a.limit : undefined, sort: a.sort === 'order' || a.sort === 'newest' ? a.sort : undefined, kinds: [...BUILT_IN_KINDS, ...kindNames(S.kinds)], driving: S.driving, chat: !!S.chat }, S.version)
       const t = find(b, id) ?? (await findArchived($, id))
       if (!t) throw new Error(`${id} is not on the board or in the archive`)
       const archived = !find(b, id)
