@@ -77,7 +77,7 @@ export async function sessionStart(host: Host) {
     const oldMe = S.me
     const wasDriving = S.driving && !S.fresh && !S.offHere && !!oldMe
     S.me = await host.session.id().catch(() => `session-${Math.random().toString(36).slice(2, 10)}`)
-    S.dam = await isDamSession(host)
+    S.chat = (await isDamSession(host)) ? 'dam' : ''
     // T-795: a new project (no board.json) stays off, like plain Claude, until the owner runs /<name>-init (T-844: no .<name> in this folder or above): nothing is
     // written, no lead is claimed, no scouts are seeded and no timer starts; only the band and status line say so.
     S.fresh = !(await host.fs.exists(path(S.N.boardFile)).catch(() => false))
