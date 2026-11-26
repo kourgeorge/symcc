@@ -44,6 +44,12 @@ export const ALLOWED: [name: string, rewrite: (w: string[], who: Who) => string[
   // `echo &>x git push` is echo with a redirect: git push is echo's words
   ['&> after a word is a redirect (echo &>x git push runs echo)', w => w.map(x => (x.startsWith('&>') ? '>' + x.slice(2) : x))],
   // `time > git commit` writes a file named git; the old guard could take `>` as an option's value
+  // `-I 2>{ git push` writes a file named { and runs -I; the old guard took the glued { as a group start
+  ['a { or } glued to a redirect is its file (-I 2>{ git push runs -I)', w => w.map(x => (/^\d*[<>]+[{}]$/.test(x) ? x.slice(0, -1) + 'x' : x))],
+  // a lone { or } (not a redirect's file) ends the command: zsh closes a group there, bash runs a command named };
+  // the old guard could take it as an option's value (`command -I } -I git commit` runs no git)
+  ['a lone { or } ends the command (command -I } -I git commit runs no git)', w =>
+    w.map((x, k) => ((x === '{' || x === '}') && !/^\d*[<>]$/.test(w[k - 1] ?? '') ? ';' : x))],
   ['the word after a lone > or < is its file (time > git commit)', w => w.map((x, k) => (k > 0 && /^\d*[<>]$/.test(w[k - 1]!) && !SEPARATORS.has(x) ? GONE : x))],
   // the old guard took sh, bash or eval anywhere as a command start (`grep sh git push`, `nice root watch bash git
   // push`): it counts only where the new guard sees no command start either (`git push` put there is let through)
@@ -105,7 +111,7 @@ const GROUPS = [
   ['-u', '-i', '-n', '-0', '-s', '-E', '--', '-S', '-iu', '--user', '-c', '-l', '-I', '-r', '-R', '-T', '-x', '-5', '-lc', '-C', '-g', '-k'],
   ['root', '5', 'KILL', 'X', '/tmp', 'A=1', 'grep', 'echo', 'find', '-exec', 'x.ts'],
   ['sh', 'bash', 'zsh', 'fish', 'dash', '\\sh', '/bin/bash'],
-  ['>x', '2>x', '>', '<x', '&>x', '>&2', '2>&1'],
+  ['>x', '2>x', '>', '<x', '&>x', '>&2', '2>&1', '{', '}', '>}', '2>{', '}x', '{x'],
   ["'-i'", '"-u"', "'git push'", '"git push"', "'-i git push'", "'-u root git push'", '\\git', '/usr/bin/git', '"git"'],
   ['git', 'push', 'commit', ';', '&&', '||', '|', '&'],
 ]
