@@ -1113,7 +1113,7 @@ export async function restartCheckers(host: Host, agents: HostAgent[]) {
  * as a worker's hand-back (workerFinished). When its folder can't be read, the task goes back to "todo"
  * instead (its branch is kept, so the next try goes on from there and the merge path runs again).
  */
-export async function checkAgain(host: Host, t0: BoardTask) {
+export async function checkAgain(host: Host, t0: BoardTask, moved = false) {
   const id = t0.id
   const tryNo = t0.attempts
   if (finishing.has(id)) return
@@ -1140,7 +1140,7 @@ export async function checkAgain(host: Host, t0: BoardTask) {
     if (await folderGone(host, t0, note, `${id} "${t.title}": its checker stopped when the plugin reloaded and could not be started again (its folder couldn't be read), so it goes back to todo; the next try goes on from the same branch. This is not counted as a retry.`)) return
     await markFinishing(host, id, tryNo).catch(() => undefined)
     // told once: a start tried again because the agent type wasn't loaded yet is the same restart
-    if (!checkerNotReady.has(id) && !adoptedCheckers.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
+    if (!moved && !checkerNotReady.has(id) && !adoptedCheckers.has(id)) tellLead(host, `${id} "${t.title}": its checker stopped when the plugin reloaded, so I started a new checker on the same work. This is not counted as a retry; nothing to do.`)
     go = { b, t, dir }
   } finally {
     if (!go) await endFinishing(host, id, tryNo)

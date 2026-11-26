@@ -54,7 +54,7 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
     return `${t.id} moved to work: a new worker try is queued${clash ? '; it merges the latest main first' : ''}`
   }
   if (stage === 'review') {
-    await write('review', 'moved to review by the lead: nothing merged yet; approve runs the tests')
+    await write('review', 'moved to review by the lead: nothing merged yet; approve runs the tests', { test_output: 'not tested yet: moved to review by the lead' })
     void pump($)
     return `${t.id} moved to review: it waits for the owner (approve runs its tests)`
   }
@@ -68,6 +68,6 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
   // check: a fresh checker on the branch as it is, then the merge line
   await write('doing', 'moved to check by the lead', { live: { session: S.me, phase: 'checker', checking: { step: 'checker', at: now() } } })
   const cur = find(await load($), t.id)!
-  void checkAgain($, cur).catch(() => undefined)
+  void checkAgain($, cur, true).catch(() => undefined)
   return `${t.id} moved to check: a fresh checker starts on its branch (no new worker try)`
 }
