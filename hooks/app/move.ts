@@ -1,11 +1,11 @@
 import type { Host } from '../host'
 import { find, patchTask, withHistory, endedBy, isInvestigation, intoOf, failedOnClash, gitNote, type BoardTask } from '../board'
-import { S, finishing, workers } from './state'
+import { S, finishing } from './state'
 import { load, change, now } from './store'
 import { gitReady, branchExists, prepareWorktree, taskBranch, worktreeDir } from './git'
 import { haltChecker } from './checker'
 import { stopWorker } from './board-mode'
-import { checkingNow, mergingNow, MERGING_TEXT, CHECKING_TEXT, stopAsked, mergeFinished, checkAgain, pump } from './workers'
+import { checkingNow, mergingNow, MERGING_TEXT, CHECKING_TEXT, stopAsked, offAsked, mergeFinished, checkAgain, pump } from './workers'
 
 /** The stages the lead can move a task to (the `stage` of symcc change). */
 export const STAGES = ['work', 'check', 'tests', 'review'] as const
@@ -27,7 +27,8 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
   if (!MOVABLE.includes(t.status)) throw new Error(`${t.id} is ${t.status}; a task can be moved from todo, doing, failed, waiting or review`)
   if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
   // A running worker may have half-done uncommitted edits: only "work" may stop it (a move never commits or deletes them).
-  if (stage !== 'work' && t.status === 'doing' && !checkingNow(t.id) && [...workers.values()].some(w => w.task === t.id)) throw new Error(`${t.id}'s worker is still running; move it to work, or wait until it hands back`)
+  // Whether this session tracks the worker or not (another session's, or not found again after a reload).
+  if (stage !== 'work' && t.status === 'doing' && !checkingNow(t.id) && t.live?.phase !== 'checker') throw new Error(`${t.id}'s worker is still running; move it to work, or wait until it hands back`)
   if (stage !== 'work') {
     if (isInvestigation(t)) throw new Error(`${t.id} is an investigation: it has no work to check, test or review`)
     if (!(await branchExists($, taskBranch(t)))) throw new Error(`${t.id} has no branch yet (no worker has made work for it); move it to work instead`)
@@ -35,15 +36,19 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
   }
   const why = `moved to ${stage} by the lead`
   // The task is written in a status the old step can't write over; then what ran is stopped and let go of.
+  let said = false // one history line per move
   const write = (status: BoardTask['status'], note: string, extra: Partial<BoardTask> = {}) =>
     change($, x => {
       const cur = find(x, t.id) ?? t
-      return patchTask(x, t.id, { status, note, test_tries: 0, ...extra, history: withHistory(cur.history, now(), ['other', why]), ...endedBy(cur, now(), 'stopped', why) }, now(), S.N.dir)
+      const history = said ? cur.history : withHistory(cur.history, now(), ['other', why])
+      said = true
+      return patchTask(x, t.id, { status, note, test_tries: 0, ...extra, history, ...endedBy(cur, now(), 'stopped', why) }, now(), S.N.dir)
     })
   if (checkingNow(t.id)) {
     // Only a checker can be stopped; prep, tests and the merge are let to end first.
     if (t.live?.checking && t.live.checking.step !== 'checker') throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`)
     stopAsked.set(t.id, why)
+    offAsked.set(t.id, 'the lead moved the task')
     await write(stage === 'work' ? 'todo' : 'review', why)
     await haltChecker($, t.id, why)
     for (const end = Date.now() + 15_000; finishing.has(t.id) && Date.now() < end; ) await $.clock.sleep(50)

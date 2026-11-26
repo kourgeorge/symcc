@@ -1651,7 +1651,7 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
     })
     const made: string[] = []
     const stop = () => (gaveUp() ? 'given up after running too long' : stopAsked.get(t.id))
-    const r: CheckResult = await checkAndMerge(host, t, dir, b, kind, made, stop, retest, release, limit).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
+    const r: CheckResult = await checkAndMerge(host, t, dir, b, force && kind === 'merge' && modeOf(b) === 'review' ? 'finish' : kind, made, stop, retest, release, limit).catch((e: Error) => ({ ok: false, reason: 'other' as const, detail: `checking failed: ${e.message.slice(0, 300)}` }))
     // Given up meanwhile: mergeRanOver already wrote its note; this late outcome is not written over
     // it, unless the work reached the branch after all (landedLate).
     if (gaveUp()) {
@@ -1660,6 +1660,11 @@ async function mergeWork(host: Host, t: SymccTask, b: Board, kind: 'approve' | '
     }
     await recordCommits(host, t.id, made, r.merged)
     const cur = find(await load(host), t.id)
+    if (r.ok && r.review && !r.merged) {
+      // A move to tests in board mode "review": the tests passed; it waits for the owner's approve like any finished task.
+      await change(host, x => (find(x, t.id)?.status === status ? patchTask(x, t.id, { note: `ready for review: the tests passed, nothing merged yet`, test_output: undefined, live: { merge_wait: undefined } }, now()) : x))
+      return `${t.id} passed its tests and is ready for review (nothing merged yet); approve it to merge`
+    }
     if (r.merged) {
       outcomes.set(t.id, 'merged')
       // The work is on the target branch: the task is done, whatever happened to it meanwhile
