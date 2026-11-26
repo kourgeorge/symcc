@@ -104,16 +104,17 @@ const GIT_OPTION_OK = new Set(['--no-pager', '-P', '-p', '--paginate', '--no-opt
 
 /**
  * A git call in a command's text: `git` (or `/usr/bin/git`), or a git program by its own name (`git-push`), where a
- * command starts: at the start, after `&&`, `||`, `;`, `|`, `&`, `(`, `$(`, `{`, a backquote, a line end or
- * `sh -c` (`bash -lc`, `eval`...), and after leading `VAR=x` settings or env, sudo, command, exec, time, timeout, nice,
+ * command starts: at the start, after `&&`, `||`, `;`, `|`, `&`, `(`, `)` (a `case` label), `$(`, `{`, a backquote, a line end or
+ * `sh -c` (`bash -lc`, `eval`...), and after leading redirects (`2>/dev/null`, `> out`), `VAR=x` settings or env, sudo, command, exec, time, timeout, nice,
  * nohup, xargs, eval, if, then... with their options, an option's value (`sudo -u root`) and a number (`timeout 5`).
  * gitWriteIn takes out quotes and backslashes first (`"git" push`, `\git push` run git), so
  * `grep "git push" docs/` and `git commit -m "make git simpler"` hold no git call (git is not where a command starts).
  */
 const GIT_AT = new RegExp(
-  String.raw`(?:^|&&|\|\||[;|&({\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n])` +
+  String.raw`(?:^|&&|\|\||[;|&(){\n` + '`' + String.raw`]|\b(?:sh|bash|zsh|dash|ksh|eval)(?:[^\S\n]+-\w+)*[^\S\n])` +
     String.raw`(?:[^\S\n]*(?:(?:env|sudo|command|exec|time|timeout|nice|nohup|xargs|eval|if|then|do|else|elif|while|until|!)` +
-    String.raw`(?:[^\S\n]+(?:-[a-zA-Z](?:[^\S\n]+(?!-)(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]+|\d[\w.]*))*|\w+=[^\s;&|]*)(?=\s))*` +
+    String.raw`(?:[^\S\n]+(?:-[a-zA-Z](?:[^\S\n]+(?!-)(?!(?:\S*/)?git(?![\w.]))[^\s;&|]+)?|-[^\s;&|]+|\d[\w.]*))*|\w+=[^\s;&|]*` +
+    String.raw`|\d*&?[<>]{1,2}&?[^\S\n]*[^\s;&|<>()]+)(?=\s))*` +
     String.raw`[^\S\n]*(?:(?:/[\w.-]+)*/)?git(?:-([a-z][\w-]*))?(?=$|[\s'"` + '`' + String.raw`;&|()<>\\])`,
   'gi',
 )

@@ -217,7 +217,7 @@ test('T-496: claude -p deny rules refuse every git write for a worker and a chec
 })
 
 test('T-1053: a claude -p worker may change git on its own branch; push, other branches, stash, worktree, config, tags and -C stay refused', () => {
-  const own = ['git commit -m x', 'git merge main', 'git merge --no-edit symcc/T-7', 'git cherry-pick abc', 'git revert HEAD', 'git restore .', 'git reset --hard', 'git add -A', 'git rm a.ts', 'git clean -fd', 'git am p', 'git apply p.diff', 'git bisect start', 'git rebase main', 'git rebase --continue', 'git init /tmp/x']
+  const own = ['git commit -m x', 'git merge main', 'git merge --no-edit symcc/T-7', 'git cherry-pick abc', 'git revert HEAD', 'git restore .', 'git reset --hard', 'git add -A', 'git rm a.ts', 'git clean -fd', 'git am p', 'git apply p.diff', 'git bisect start', 'git rebase main', 'git rebase --continue']
   const bad = [
     'git push', 'git push . HEAD:main', 'git remote add x y', 'git branch -D x', 'git branch -f main HEAD', 'git checkout main', 'git checkout -- a.ts',
     // T-1062: a program git runs is refused too
@@ -225,6 +225,8 @@ test('T-1053: a claude -p worker may change git on its own branch; push, other b
     'git switch main', 'git fetch . HEAD:main', 'git pull', 'git stash', 'git stash pop', 'git worktree add x', 'git config user.name x',
     'git tag v1', 'git update-ref refs/heads/main HEAD', 'git -C /r commit -m x', 'git -C . merge main', 'git --git-dir=/r/.git commit', 'git -c core.hooksPath=x commit',
     'env git commit', 'xargs git commit',
+    // T-1062: init could move the owner's .git (--separate-git-dir); the Node host refuses it whole
+    'git init /tmp/x', 'git init --separate-git-dir=/tmp/zz',
     'git bisect reset other', 'git merge --autostash main', 'git merge --no-edit --autostash main', 'git rebase --root other',
     // git takes a start of --autostash (down to --au)
     'git merge --autost main', 'git merge --no-edit --au origin/side', 'git rebase --quit', 'git fetch -p -P origin', 'git pull --set-upstream origin main',

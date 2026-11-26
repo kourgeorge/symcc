@@ -1680,7 +1680,7 @@ only asks for the rest:
   (`echo ... > file`, `rm`, `sed -i` and such). symcc does not check these; your normal
   permission rules still apply.
 
-The git check works on the command's plain text (a git command named anywhere in it counts) and is a best effort, not a sandbox. It also sees the open tasks, so it
+The git check works on the command's plain text (a git command counts wherever a command starts) and is a best effort, not a sandbox. It also sees the open tasks, so it
 doesn't suggest them again. To look further at the board it has symcc's two read-only tools:
 `board` (no arguments: the open tasks; `status` and `search` narrow it; `task`: one task in full
 with its latest report) and `stats`. Every symcc tool that changes something (`add`, `change`,
@@ -1828,7 +1828,7 @@ changed. Only you can pause or resume a scout; the lead is told a paused scout d
 A worker (of a change task) may change git in its own folder, on its own
 branch: `commit`, `merge` (main, another task's branch, a pull request's branch), `cherry-pick`,
 `revert`, `restore`, `checkout -- <file>`, `reset`, `rebase` of its own branch,
-`bisect`, `add`, `rm`, `mv`, `clean`, `am`, `apply` and `init`. A git write must run in
+`bisect`, `add`, `rm`, `mv`, `clean`, `am` and `apply` (`git init` only for a new repository under `/tmp`, and not at all on the Node host). A git write must run in
 its folder or under `/tmp` (the shell's folder, or a `cd` to a full path in one of them); `cd /other/repo && git commit`
 is refused. Still refused, from one deny list: `push`, `fetch`, `pull` (a fetch also copies tags; symcc brings the branch up to date with main itself) and any change to remotes;
 switching to, making or deleting a branch (`checkout <branch>`, `switch`, `branch -d/-D/-m`,
@@ -1837,8 +1837,9 @@ switching to, making or deleting a branch (`checkout <branch>`, `switch`, `branc
 `worktree`; `config`; `tag`; `update-ref`; `symbolic-ref`; every other git command that is not a plain read (`send-pack`, `checkout-index`, `archive`, `format-patch`..., your git aliases such as `git co` and add-ons too: it is an allow list); every `stash` and `--autostash` on merge or rebase (the stash is shared with your own folder);
 any git option before the command (`-C`, `-c`, `--git-dir`, `--work-tree`...), `GIT_*` settings, `core.hooksPath`,
 a look-up of git's own folder (`--git-dir`, `--git-common-dir`), and anything that names your copy of the project or another task's folder.
-The check reads the command's plain text: a git command named anywhere in it counts, even inside
-quotes (`sh -c 'git push'`, or a commit message that says `git push`; put such a message in a file and use `git commit -F`). An
+The check reads the command's plain text: a git command counts wherever a command starts (at the start, after
+`&&`, `;`, `|`, `(`, `$(`, a leading redirect such as `2>/dev/null`, a `case` label's `)`, `sh -c '...'` and such), even inside
+quotes (`sh -c 'git push'`). A commit message or a grep pattern that says `git push` is not where a command starts, so it passes. An
 investigation's worker still only reads with git: its changes are never kept. symcc's checks cover
 the worker's own commits too: the scope check looks at every file any commit of the branch changed, a merged-in
 branch's files included (even ones deleted again later), the secret check at every commit (merge commits too), and when a scope check fails, the undo always makes the branch's work one commit again, so a

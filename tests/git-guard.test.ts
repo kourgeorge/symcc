@@ -117,6 +117,12 @@ test('T-1062: the git text is read whole: git inside quotes, after a wrapper, or
     ['nohup git push', 'git push'], ['A=1 B=2 git push', 'git push'], ['if true; then git push; fi', 'git push'], ["bash -lc 'git push'", 'git push'],
   ] as const)
     expect([c, gitWriteIn(c, 'worker')]).toEqual([c, what])
+  // after a leading redirect and after a case label's `)` a command starts too
+  for (const c of ['2>/dev/null git push', '>/dev/null git push', '2> /dev/null git push', '&>/dev/null git push', '>&2 git push', 'x; 2>/dev/null git push', 'case x in x) git push;; esac'])
+    for (const who of ['reader', 'worker'] as const) expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+  // a redirect into a file named git runs no git
+  expect(gitWriteIn('echo x > git push', 'worker')).toBe(undefined)
+  expect(gitWriteIn('2>/dev/null git commit -m x', 'worker')).toBe(undefined)
 })
 
 test('T-1062: a quoted or backslashed git and git after a wrapper with options still count', () => {
