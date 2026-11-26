@@ -351,6 +351,8 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
       if (bad) return bad
     }
   let i = 0
+  /** Whether the next command word came right after a wrapper option that takes a value, and is a shell. */
+  let valueShell = false
   for (;;) {
     while (i < words.length && SETTING.test(words[i]!)) i++
     if (i >= words.length) return undefined
@@ -361,9 +363,20 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
         const bad = /^[-+]/.test(a) ? undefined : checkText(a, who, budget)
         if (bad) return bad
       }
-      return undefined
+      // without -c the words after the shell's options are read as a command too (`sh git push` was refused on main
+      // as well); a shell right after a wrapper option that takes a value was read that way already (valueShell)
+      if (valueShell) return undefined
+      let j = i + 1
+      while (j < words.length && /^[-+]/.test(words[j]!)) j++
+      if (words.slice(i + 1, j).some(o => /^-[a-zA-Z]*c/.test(o))) return undefined
+      const rest = words.slice(j)
+      budget.left -= rest.length + 1
+      if (budget.left < 0) throw new Error(TOO_COMPLEX)
+      return rest.length ? checkCommand(rest, who, budget, true) : undefined
     }
     if (!WRAPPERS.has(name)) break
+    const wrapper = words[i]!
+    valueShell = false
     i++
     const letters = SUDO_WORDS.has(name) ? VALUE_LETTERS + 'rt' : VALUE_LETTERS
     while (i < words.length) {
@@ -384,6 +397,16 @@ function checkCommand(words: string[], who: 'reader' | 'worker', budget: Budget,
       if (takes && i < words.length && !runsCommand(words[i]!)) {
         if (name === 'env' && (a.endsWith('S') || a === '--split-string')) split = words[i]
         i++
+      } else if (takes && i < words.length && SHELLS.has(nameOf(words[i]!))) {
+        // a shell name may be the value too (`env -u sh git push`, `timeout -s ksh 5 git push`): that reading is
+        // checked here, and the reading as the next command goes on below
+        const rest = words.slice(i + 1)
+        budget.left -= rest.length + 1
+        if (budget.left < 0) throw new Error(TOO_COMPLEX)
+        const bad = checkCommand([wrapper, ...rest], who, budget, false)
+        if (bad) return bad
+        valueShell = true
+        break
       }
       if (split !== undefined) {
         const parts: string[][] = []

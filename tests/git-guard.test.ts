@@ -386,6 +386,27 @@ test('T-1116: a word that runs a command is never a wrapper option\'s value; env
   expect(Date.now() - t < 200).toBe(true)
 })
 
+test('T-1116: a shell word without -c is read both as an option value and as the command (`env -u sh git push`)', () => {
+  for (const who of ['reader', 'worker'] as const)
+    for (const c of [
+      'env -u sh git push', 'env -u bash git push', 'sudo -u sh git push', 'sudo -g zsh git push', 'nice -n dash git push',
+      'timeout -s ksh 5 git push', 'xargs -I sh git push', 'env -u fish git push', 'sh git push', 'bash git push', 'bash -l git push',
+    ])
+      expect([c, who, gitWriteIn(c, who)]).toEqual([c, who, 'git push'])
+  for (const c of ['bash script.sh push', "sh -c 'echo git push'", 'xargs -0 grep "git push"', 'sh git status'])
+    expect([c, gitWriteIn(c, 'reader')]).toEqual([c, undefined])
+  // many shell words can't make a check slow
+  for (const r of ['sh ', 'env -u sh ', 'bash -l ']) {
+    const c = r.repeat(40) + 'gi' + 't push'
+    const t = Date.now()
+    expect([c, gitWriteIn(c, 'reader')]).toEqual([c, 'git push'])
+    expect([r, Date.now() - t < 20]).toEqual([r, true])
+  }
+  const t = Date.now()
+  expect(typeof gitWriteIn('sh '.repeat(5000) + 'gi' + 't push', 'reader')).toBe('string')
+  expect(Date.now() - t < 200).toBe(true)
+})
+
 test('T-1116: repeated wrappers, redirects and a long random command check fast', () => {
   const push = 'gi' + 't push'
   for (const r of ['xargs -0 ', 'env -i A=1 ', 'nice >x - ', '<x - ', '- 5 >x ', 'env -i >x - ', 'sudo -u a -s ', 'timeout -s >x KILL 5 ']) {
