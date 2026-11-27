@@ -9,6 +9,7 @@ import { claudeHost } from './claude/host'
 import { seeMainMode, seeSpawnMode, seeAttachment } from './claude/plan'
 import { registerAll } from './claude/registration'
 import { editTouch, fileTouch } from './claude/tools'
+import { readInsideProjects } from './claude/project-reads'
 import type { $ } from './claude/panel'
 import { usageTokens, turnEnd } from './claude/usage'
 import { noteBackground, stopSeen, takeBackground } from './claude/background'
@@ -16,7 +17,7 @@ import { sessionStarting, sessionStart, sessionCleared, sessionEnd, leadGuideTex
 import { S, useName } from './app/state'
 import { damOwnerPrompt } from './app/dam'
 import { isOwnUpdate } from './app/tell'
-import { hookFailed } from './app/ask'
+import { hookFailed, readAllowed } from './app/ask'
 import { popupCall } from './app/questions'
 import { spawnFailedText, shellCwd } from './core/path-guard'
 import { DEFAULT_NAME, cleanName } from './name'
@@ -207,7 +208,9 @@ export const register: Register = on => {
     const cwd = e.agentId && e.tool === 'Bash' ? shellCwd(await Promise.resolve().then(() => $.session.cwd()).catch(() => undefined)) : undefined
     // an error in toolCheck is not swallowed here: the .catch below refuses the call of symcc's own agents
     const deny = await toolCheck(host, e.agentId, editTouch(e.tool, e.input), cwd)
-    return deny ? { decision: 'deny', reason: deny } : next(e)
+    if (deny) return { decision: 'deny', reason: deny }
+    // T-1200: a symcc agent's plain read inside a project's repo path is allowed (no prompt a background agent can't answer)
+    return readAllowed(e.agentId, roots => readInsideProjects(e.tool, e.input, roots)) ? { decision: 'allow' } : next(e)
   }).catch(($, e, next) => {
     if (next.called) return next(e)
     useName(claudeHost($))

@@ -12,6 +12,18 @@ import type { FileTouch, Host } from '../host'
 import { load, change, now } from './store'
 import { timedSync } from './slow-log'
 
+/**
+ * T-1200: true when the call of agent `agentId` (one of symcc's own scouts, workers or checkers) only reads inside a
+ * project's repo path from the board's table (the Read tool, or a read-only shell command such as cat, grep, find, ls).
+ * Claude Code asks for a permission on a read outside the session folder, which a background agent can't answer, so
+ * symcc answers "allow" for these. Edits there stay refused (the edit guard runs first).
+ */
+export function readAllowed(agentId: string | undefined, onlyReads: (projectPaths: string[]) => boolean): boolean {
+  if (!agentId) return false
+  if (!scoutRuns.has(agentId) && !workers.has(agentId) && !checkerRuns.has(agentId)) return false
+  return onlyReads(guardedRoots().slice(1))
+}
+
 /** The git guard check, timed (T-1048). */
 const gitWrite = ($: Host, command: unknown, who?: 'reader' | 'worker') => timedSync($, 'gitWriteIn', () => gitWriteIn(command, who))
 import { workerOf, agentOnBoard } from './workers'

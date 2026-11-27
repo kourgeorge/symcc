@@ -5,6 +5,35 @@ import { expect, test } from 'claude-code/testing'
 import type { SymccScout, SymccTask } from '../types'
 import { parseScout, scoutText, scoutPrompt, scoutProjectsError, scoutProjectTable, leadScoutText } from '../hooks/core/scouts'
 import { fillPrompt } from '../hooks/core/prompts'
+import { readInsideProjects as ok } from '../hooks/claude/project-reads'
+import { readAllowed } from '../hooks/app/ask'
+import { S, scoutRuns } from '../hooks/app/state'
+
+test('symcc answers allow only for a symcc scout reading inside a project path', () => {
+  S.root = '/board'
+  S.projects = { api: '/code/api' }
+  scoutRuns.set('s1', 'bugs')
+  expect(readAllowed('s1', r => ok('Read', { file_path: '/code/api/CLAUDE.md' }, r))).toBe(true)
+  expect(readAllowed('s1', r => ok('Bash', { command: 'cat /code/api/AGENTS.md' }, r))).toBe(true)
+  expect(readAllowed('s1', r => ok('Bash', { command: 'ls /code/api/src' }, r))).toBe(true)
+  expect(readAllowed('s1', r => ok('Read', { file_path: '/etc/passwd' }, r))).toBe(false)
+  expect(readAllowed('s1', r => ok('Edit', { file_path: '/code/api/a' }, r))).toBe(false)
+  expect(readAllowed('other', r => ok('Read', { file_path: '/code/api/CLAUDE.md' }, r))).toBe(false)
+  expect(readAllowed(undefined, r => ok('Read', { file_path: '/code/api/CLAUDE.md' }, r))).toBe(false)
+  scoutRuns.delete('s1')
+  S.projects = {}
+})
+
+test('reads inside a project path are allowed; edits, pipes and other paths are not', () => {
+  expect(ok('Read', { file_path: '/code/api/CLAUDE.md' }, ['/code/api'])).toBe(true)
+  expect(ok('Read', { file_path: '/code/web/x' }, ['/code/api'])).toBe(false)
+  expect(ok('Bash', { command: 'cat /code/api/AGENTS.md' }, ['/code/api'])).toBe(true)
+  expect(ok('Bash', { command: 'grep -rn foo /code/api/src' }, ['/code/api'])).toBe(true)
+  expect(ok('Bash', { command: 'cat /code/api/a /etc/passwd' }, ['/code/api'])).toBe(false)
+  expect(ok('Bash', { command: 'cat /code/api/a > /code/api/b' }, ['/code/api'])).toBe(false)
+  expect(ok('Bash', { command: 'find /code/api -delete' }, ['/code/api'])).toBe(false)
+  expect(ok('Edit', { file_path: '/code/api/a' }, ['/code/api'])).toBe(false)
+})
 
 const TABLE = { api: '/code/api', web: '/code/web', docs: '/code/docs' }
 const base = { scout: 'bugs', root: '/board', instructions: 'Find bugs.', open: [] as string[], name: 'symcc' }
