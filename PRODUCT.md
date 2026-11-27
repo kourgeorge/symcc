@@ -48,7 +48,7 @@ A team, not a session: other tools run coding agents one chat at a time with the
 
 ## Evidence on Hand
 
-- README.md, docs/guide.md, docs/reference.md: product copy and every feature.
+- README.md, docs/docs.md and the user pages it lists, docs/reference.md: product copy and every feature.
 - docs/logo.svg, docs/demo.svg, docs/architecture.svg: existing visuals.
 - No testimonials, customer names or usage numbers exist; none may be invented.
 
