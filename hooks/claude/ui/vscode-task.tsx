@@ -476,8 +476,8 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
     <Box flexDirection="column" gap={1}>
       {vsPageHeader(pane, { ...header, backFocus: !(x.answerable || typingBox) })}
       {mergeStatus}
-      {done}
       {question}
+      {done}
       {fileWait}
       {failed}
       {rejectBox}

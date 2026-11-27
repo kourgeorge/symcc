@@ -323,6 +323,10 @@ plain sentences on what the whole task has done so far. The worker writes them a
 every report, `Done: …`; symcc keeps the latest one on the task, puts it in the commit message and in
 the lead's `✓ merged` update. An old task, or one whose report has no `Done:` line, shows no ▍Done.
 
+When the task waits for your answer (a question, a checker's Merge as is / Keep fixing / Drop, a file
+request, more time), its question box is the first thing under the header, above ▍Done and every other
+section, on every board. The number keys pick a choice as before.
+
 Further down, ▍Runs comes right above ▍Report, the last section (you pick a report in Runs, so Runs
 comes first; the order is ▍What to do, ▍History, ▍Runs, ▍Report). ▍Report is one section for whichever agent's report you picked in ▍Runs (T-1104):
 its heading says exactly whose and which try, `▍Report · try 3 · worker af4…74a` or

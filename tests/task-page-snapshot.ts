@@ -3328,6 +3328,54 @@ export const TASK_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
+        "props": {"flexDirection":"column","borderStyle":"round","borderColor":"warning","paddingX":1},
+        "children": [
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["asks: "]},
+              {
+                "type": "Text",
+                "props": {"color":"text"},
+                "children": ["Should the report show all of its lines at once, or only the first part with a button to show the rest?"]
+              }
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"answer-choices","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-1","flexDirection":"column"},
+                "children": [{"type":"Button","props":{"key":"choice-1","label":"1. Only the first part","autoFocus":true},"press":{"plugin":"symcc"}}]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-2","flexDirection":"column"},
+                "children": [{"type":"Button","props":{"key":"choice-2","label":"2. All of it"},"press":{"plugin":"symcc"}}]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-3","flexDirection":"column"},
+                "children": [{"type":"Button","props":{"key":"choice-3","label":"3. Answer…"},"press":{"plugin":"symcc"}}]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-keys","display":"none"},
+                "children": [
+                  {"type":"Button","props":{"key":"choice-key-1","label":"Only the first part","hotkey":"1"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"choice-key-2","label":"All of it","hotkey":"2"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"choice-key-3","label":"Answer…","hotkey":"3"},"press":{"plugin":"symcc"}}
+                ]
+              }
+            ]
+          },
+          {"type":"Text","props":{"color":"inactive"},"children":["keys 1-3 pick a choice"]}
+        ]
+      },
+      {
+        "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Details"]},
@@ -3479,54 +3527,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
         ]
       },
       "",
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column","borderStyle":"round","borderColor":"warning","paddingX":1},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["asks: "]},
-              {
-                "type": "Text",
-                "props": {"color":"text"},
-                "children": ["Should the report show all of its lines at once, or only the first part with a button to show the rest?"]
-              }
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"answer-choices","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-1","flexDirection":"column"},
-                "children": [{"type":"Button","props":{"key":"choice-1","label":"1. Only the first part","autoFocus":true},"press":{"plugin":"symcc"}}]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-2","flexDirection":"column"},
-                "children": [{"type":"Button","props":{"key":"choice-2","label":"2. All of it"},"press":{"plugin":"symcc"}}]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-3","flexDirection":"column"},
-                "children": [{"type":"Button","props":{"key":"choice-3","label":"3. Answer…"},"press":{"plugin":"symcc"}}]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-keys","display":"none"},
-                "children": [
-                  {"type":"Button","props":{"key":"choice-key-1","label":"Only the first part","hotkey":"1"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"choice-key-2","label":"All of it","hotkey":"2"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"choice-key-3","label":"Answer…","hotkey":"3"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {"type":"Text","props":{"color":"inactive"},"children":["keys 1-3 pick a choice"]}
-        ]
-      },
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -4106,6 +4106,76 @@ export const TASK_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
+        "props": {"flexDirection":"column","borderStyle":"round","borderColor":"warning","paddingX":1},
+        "children": [
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"warning"},"children":["asks: "]},
+              {"type":"Text","props":{"color":"text"},"children":["Should the report show all of its lines"]}
+            ]
+          },
+          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["at once, or only the first part with a button"]}]},
+          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["to show the rest?"]}]},
+          {
+            "type": "Box",
+            "props": {"key":"answer-choices","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-1","flexDirection":"column"},
+                "children": [
+                  {
+                    "type": "Button",
+                    "props": {"key":"choice-1","label":"Only the first part","plain":true,"autoFocus":true},
+                    "press": {"plugin":"symcc"},
+                    "hover": {"inverse":true},
+                    "children": [{"type":"Text","props":{"color":"text"},"children":["1. Only the first part"]}]
+                  }
+                ]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-2","flexDirection":"column"},
+                "children": [
+                  {
+                    "type": "Button",
+                    "props": {"key":"choice-2","label":"All of it","plain":true},
+                    "press": {"plugin":"symcc"},
+                    "hover": {"inverse":true},
+                    "children": [{"type":"Text","props":{"color":"text"},"children":["2. All of it"]}]
+                  }
+                ]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-3","flexDirection":"column"},
+                "children": [
+                  {
+                    "type": "Button",
+                    "props": {"key":"choice-3","label":"Answer…","plain":true},
+                    "press": {"plugin":"symcc"},
+                    "hover": {"inverse":true},
+                    "children": [{"type":"Text","props":{"color":"inactive"},"children":["3. Answer…"]}]
+                  }
+                ]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-keys","display":"none"},
+                "children": [
+                  {"type":"Button","props":{"key":"choice-key-1","label":"Only the first part","hotkey":"1"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"choice-key-2","label":"All of it","hotkey":"2"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"choice-key-3","label":"Answer…","hotkey":"3"},"press":{"plugin":"symcc"}}
+                ]
+              }
+            ]
+          },
+          {"type":"Text","props":{"color":"inactive"},"children":["keys 1-3 pick a choice"]}
+        ]
+      },
+      {
+        "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Details"]},
@@ -4248,76 +4318,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
         ]
       },
       "",
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column","borderStyle":"round","borderColor":"warning","paddingX":1},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"warning"},"children":["asks: "]},
-              {"type":"Text","props":{"color":"text"},"children":["Should the report show all of its lines"]}
-            ]
-          },
-          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["at once, or only the first part with a button"]}]},
-          {"type":"Text","children":[{"type":"Text","props":{"color":"text"},"children":["to show the rest?"]}]},
-          {
-            "type": "Box",
-            "props": {"key":"answer-choices","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-1","flexDirection":"column"},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"choice-1","label":"Only the first part","plain":true,"autoFocus":true},
-                    "press": {"plugin":"symcc"},
-                    "hover": {"inverse":true},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["1. Only the first part"]}]
-                  }
-                ]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-2","flexDirection":"column"},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"choice-2","label":"All of it","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "hover": {"inverse":true},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["2. All of it"]}]
-                  }
-                ]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-3","flexDirection":"column"},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"choice-3","label":"Answer…","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "hover": {"inverse":true},
-                    "children": [{"type":"Text","props":{"color":"inactive"},"children":["3. Answer…"]}]
-                  }
-                ]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-keys","display":"none"},
-                "children": [
-                  {"type":"Button","props":{"key":"choice-key-1","label":"Only the first part","hotkey":"1"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"choice-key-2","label":"All of it","hotkey":"2"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"choice-key-3","label":"Answer…","hotkey":"3"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {"type":"Text","props":{"color":"inactive"},"children":["keys 1-3 pick a choice"]}
-        ]
-      },
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -13884,6 +13884,50 @@ export const TASK_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
+        "props": {"flexDirection":"column","borderStyle":"round","borderColor":"warning","paddingX":1},
+        "children": [
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["asks: "]},
+              {"type":"Text","props":{"color":"text"},"children":["it waits for your answer"]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"answer-choices","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-1","flexDirection":"column"},
+                "children": [{"type":"Button","props":{"key":"choice-1","label":"1. Allow","autoFocus":true},"press":{"plugin":"symcc"}}]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-2","flexDirection":"column"},
+                "children": [{"type":"Button","props":{"key":"choice-2","label":"2. Don't allow"},"press":{"plugin":"symcc"}}]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-3","flexDirection":"column"},
+                "children": [{"type":"Button","props":{"key":"choice-3","label":"3. Answer…"},"press":{"plugin":"symcc"}}]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-keys","display":"none"},
+                "children": [
+                  {"type":"Button","props":{"key":"choice-key-1","label":"Allow","hotkey":"1"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"choice-key-2","label":"Don't allow","hotkey":"2"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"choice-key-3","label":"Answer…","hotkey":"3"},"press":{"plugin":"symcc"}}
+                ]
+              }
+            ]
+          },
+          {"type":"Text","props":{"color":"inactive"},"children":["keys 1-3 pick a choice"]}
+        ]
+      },
+      {
+        "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Details"]},
@@ -14035,50 +14079,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
         ]
       },
       "",
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column","borderStyle":"round","borderColor":"warning","paddingX":1},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"warning","weight":"semibold"},"children":["asks: "]},
-              {"type":"Text","props":{"color":"text"},"children":["it waits for your answer"]}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"answer-choices","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-1","flexDirection":"column"},
-                "children": [{"type":"Button","props":{"key":"choice-1","label":"1. Allow","autoFocus":true},"press":{"plugin":"symcc"}}]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-2","flexDirection":"column"},
-                "children": [{"type":"Button","props":{"key":"choice-2","label":"2. Don't allow"},"press":{"plugin":"symcc"}}]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-3","flexDirection":"column"},
-                "children": [{"type":"Button","props":{"key":"choice-3","label":"3. Answer…"},"press":{"plugin":"symcc"}}]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-keys","display":"none"},
-                "children": [
-                  {"type":"Button","props":{"key":"choice-key-1","label":"Allow","hotkey":"1"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"choice-key-2","label":"Don't allow","hotkey":"2"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"choice-key-3","label":"Answer…","hotkey":"3"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {"type":"Text","props":{"color":"inactive"},"children":["keys 1-3 pick a choice"]}
-        ]
-      },
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -14658,6 +14658,74 @@ export const TASK_BEFORE: Record<string, unknown> = {
       },
       {
         "type": "Box",
+        "props": {"flexDirection":"column","borderStyle":"round","borderColor":"warning","paddingX":1},
+        "children": [
+          {
+            "type": "Text",
+            "children": [
+              {"type":"Text","props":{"bold":true,"color":"warning"},"children":["asks: "]},
+              {"type":"Text","props":{"color":"text"},"children":["it waits for your answer"]}
+            ]
+          },
+          {
+            "type": "Box",
+            "props": {"key":"answer-choices","flexDirection":"column"},
+            "children": [
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-1","flexDirection":"column"},
+                "children": [
+                  {
+                    "type": "Button",
+                    "props": {"key":"choice-1","label":"Allow","plain":true,"autoFocus":true},
+                    "press": {"plugin":"symcc"},
+                    "hover": {"inverse":true},
+                    "children": [{"type":"Text","props":{"color":"text"},"children":["1. Allow"]}]
+                  }
+                ]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-2","flexDirection":"column"},
+                "children": [
+                  {
+                    "type": "Button",
+                    "props": {"key":"choice-2","label":"Don't allow","plain":true},
+                    "press": {"plugin":"symcc"},
+                    "hover": {"inverse":true},
+                    "children": [{"type":"Text","props":{"color":"text"},"children":["2. Don't allow"]}]
+                  }
+                ]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-row-3","flexDirection":"column"},
+                "children": [
+                  {
+                    "type": "Button",
+                    "props": {"key":"choice-3","label":"Answer…","plain":true},
+                    "press": {"plugin":"symcc"},
+                    "hover": {"inverse":true},
+                    "children": [{"type":"Text","props":{"color":"inactive"},"children":["3. Answer…"]}]
+                  }
+                ]
+              },
+              {
+                "type": "Box",
+                "props": {"key":"choice-keys","display":"none"},
+                "children": [
+                  {"type":"Button","props":{"key":"choice-key-1","label":"Allow","hotkey":"1"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"choice-key-2","label":"Don't allow","hotkey":"2"},"press":{"plugin":"symcc"}},
+                  {"type":"Button","props":{"key":"choice-key-3","label":"Answer…","hotkey":"3"},"press":{"plugin":"symcc"}}
+                ]
+              }
+            ]
+          },
+          {"type":"Text","props":{"color":"inactive"},"children":["keys 1-3 pick a choice"]}
+        ]
+      },
+      {
+        "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
           {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Details"]},
@@ -14800,74 +14868,6 @@ export const TASK_BEFORE: Record<string, unknown> = {
         ]
       },
       "",
-      {
-        "type": "Box",
-        "props": {"flexDirection":"column","borderStyle":"round","borderColor":"warning","paddingX":1},
-        "children": [
-          {
-            "type": "Text",
-            "children": [
-              {"type":"Text","props":{"bold":true,"color":"warning"},"children":["asks: "]},
-              {"type":"Text","props":{"color":"text"},"children":["it waits for your answer"]}
-            ]
-          },
-          {
-            "type": "Box",
-            "props": {"key":"answer-choices","flexDirection":"column"},
-            "children": [
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-1","flexDirection":"column"},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"choice-1","label":"Allow","plain":true,"autoFocus":true},
-                    "press": {"plugin":"symcc"},
-                    "hover": {"inverse":true},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["1. Allow"]}]
-                  }
-                ]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-2","flexDirection":"column"},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"choice-2","label":"Don't allow","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "hover": {"inverse":true},
-                    "children": [{"type":"Text","props":{"color":"text"},"children":["2. Don't allow"]}]
-                  }
-                ]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-row-3","flexDirection":"column"},
-                "children": [
-                  {
-                    "type": "Button",
-                    "props": {"key":"choice-3","label":"Answer…","plain":true},
-                    "press": {"plugin":"symcc"},
-                    "hover": {"inverse":true},
-                    "children": [{"type":"Text","props":{"color":"inactive"},"children":["3. Answer…"]}]
-                  }
-                ]
-              },
-              {
-                "type": "Box",
-                "props": {"key":"choice-keys","display":"none"},
-                "children": [
-                  {"type":"Button","props":{"key":"choice-key-1","label":"Allow","hotkey":"1"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"choice-key-2","label":"Don't allow","hotkey":"2"},"press":{"plugin":"symcc"}},
-                  {"type":"Button","props":{"key":"choice-key-3","label":"Answer…","hotkey":"3"},"press":{"plugin":"symcc"}}
-                ]
-              }
-            ]
-          },
-          {"type":"Text","props":{"color":"inactive"},"children":["keys 1-3 pick a choice"]}
-        ]
-      },
       {
         "type": "Box",
         "props": {"flexDirection":"column"},

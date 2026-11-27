@@ -4,6 +4,8 @@ symcc was built with symcc. From the first commit on, every change to it went th
 
 {{stats:summary}}
 
+See also [What's new](../CHANGELOG.md): every release, newest first.
+
 The numbers are made by `bun scripts/site-stats.ts` and kept in `docs/data/symcc-stats.json`. The owner or the lead runs the script before a release and commits the file, so the page is as fresh as the last release.
 
 ## In all

@@ -11,6 +11,7 @@ Every detail of symcc, one topic per page. New here? Start with [Get started](ge
 - [Clients](clients.md): Claude Code, VS Code, OpenCode, Copilot CLI, the VS Code and Cursor extension, and chat apps.
 - [Troubleshooting](troubleshooting.md): disabling symcc, where everything lives, and good to know (with the slow-step log).
 - [Reference](reference.md): every command, setting, file and board key.
+- [What's new](../CHANGELOG.md): every release, newest first, as a timeline.
 
 ## For contributors
 
