@@ -1,7 +1,7 @@
 # symcc video
 
 `symcc.mp4` (the full video, 78 seconds, 1280x720, no sound) and `symcc.gif` (a 20-second
-preview shown at the top of the main README) are made by `make_video.py`. To rebuild them,
+preview shown on the How it works page, `docs/how-it-works.md`) are made by `make_video.py`. To rebuild them,
 run `python3 docs/video/make_video.py` from the project folder. It needs Python 3 with
 Pillow (`pip install Pillow`), ffmpeg (on your PATH, or set `FFMPEG=/path/to/ffmpeg`) and
 the macOS fonts Helvetica Neue and Menlo (on other systems, point `FONT_SANS` and

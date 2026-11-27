@@ -8,7 +8,7 @@ outside fonts or images. They use the same colors and rounded dark card as `docs
 
 | Picture | What it shows | Where it is |
 |---|---|---|
-| `docs/editor-extension.svg` | the extension, the symcc a harness installed, and the agents | the README, and "Using symcc in VS Code and Cursor" in [Clients](clients.md#using-symcc-in-vs-code-and-cursor) |
+| `docs/editor-extension.svg` | the extension, the symcc a harness installed, and the agents | "Using symcc in VS Code and Cursor" in [Clients](clients.md#using-symcc-in-vs-code-and-cursor) |
 | `docs/editor-parts.svg` | how the extension and serve talk, and the five steps when the board opens | "The editor extension" in [Architecture](architecture.md#the-editor-extension) |
 | `docs/editor-releases.svg` | the plugin's release track and the extension's | [releasing.md](releasing.md) |
 

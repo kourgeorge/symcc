@@ -1,6 +1,6 @@
 # symcc reference
 
-Look things up here: exact names of modes, commands, settings and statuses, and the install details. This page lists *what* exists. The [documentation](docs.md) explains *how it works and why*, and the [README](../README.md) is the short start.
+Look things up here: exact names of modes, commands, settings and statuses, and the install details. This page lists *what* exists. The [documentation](docs.md) explains *how it works and why*, and [Get started](get-started.md) is the short start.
 
 - [How it works, step by step](#how-it-works-step-by-step)
 - [Install: other ways and fixes](#install-other-ways-and-fixes)
@@ -15,7 +15,7 @@ Look things up here: exact names of modes, commands, settings and statuses, and 
 
 ## How it works, step by step
 
-The picture and the video are in the [README](../README.md#how-it-works).
+The picture and the video are in [How it works](how-it-works.md#pictures-and-the-video).
 
 1. **Ask.** You ask for something, or a scout finds something.
 2. **Plan.** The lead turns it into tasks, sets their order and the files each may change.
@@ -54,9 +54,17 @@ or later. You also need **git**; if it is missing, nothing starts and the board 
 install step for your machine. With no git repo yet, symcc offers to run `git init` on `main`, write a
 `.gitignore` and make a first commit. It never pushes. There is no build step.
 
-**Option A: try it from a clone** is in the [README](../README.md#install). Update it with `git -C ~/symcc pull`, then start Claude Code again.
+**Option A: try it from a clone** (nothing is installed; you pass the folder each time):
 
-**Option B: install as a plugin** (stays installed). The README shows the one-line way. Or in two steps:
+```bash
+git clone https://github.com/kourgeorge/symcc ~/symcc
+cd /path/to/your/project
+claude --plugin-dir ~/symcc
+```
+
+Update it with `git -C ~/symcc pull`, then start Claude Code again.
+
+**Option B: install as a plugin** (stays installed). The one-line way is in [Get started](get-started.md#install). Or in two steps:
 
 ```bash
 claude plugin marketplace add kourgeorge/symcc

@@ -73,6 +73,8 @@ reasons for one queue are in [Why it is built this way](how-it-works.md#why-it-i
 **Task dependencies.** The lead sets them. A task's `after` lists the tasks that must be
 finished first: it starts only when every one of them is `done` (merged). Any other status
 keeps it waiting, also `dropped` or `failed`; then the lead changes or clears its `after`.
+When two tasks may change the same files, the lead makes the later one wait for the earlier
+one, so they don't clash when merging; tasks with different files run in parallel.
 
 **Priority.** Every task has a `priority`, a whole number from -20 to 19 that works like
 Unix's nice value: lower runs first. Every new task starts at 0. The lead gives urgent work
