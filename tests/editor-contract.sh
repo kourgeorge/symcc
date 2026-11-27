@@ -28,4 +28,4 @@ fi
 if [ "$was" != "$protocol" ]; then
   fail "PROTOCOL is $protocol, and $record has $was. Write this line into it: $protocol $hash"
 fi
-fail "$contract changed since protocol $protocol was recorded. If an extension that speaks $protocol can still follow, write this line into $record: $protocol $hash. If not, raise PROTOCOL in $contract and record that number with the hash (see "The contract and its number" in docs/architecture.md)."
+fail "$contract changed since protocol $protocol was recorded. If an extension that speaks $protocol can still follow, write this line into $record: $protocol $hash. If not, raise PROTOCOL in $contract and record that number with the hash (see 'The contract and its number' in docs/architecture.md)."
