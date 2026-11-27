@@ -1455,7 +1455,7 @@ const resultKind = (r: CheckResult): HistoryKind => (r.blocked || r.ask || r.rev
  * What happens to task `t` after its work was checked (`r`): back to "todo" for a new try after
  * a conflict or failing tests (while it has tries left), "review" when it waits for the owner,
  * else "done" (merged) or "failed". `summary` is what the worker (or the owner, on approve) said.
- * The lead is told only the outcome: the worker's own report already reached it as the agent's hand-back.
+ * The lead is told the outcome; the worker's own report is muted (T-1173), so it reads it with board task T-n.
  * A merge the owner approved (`approved`) wakes nobody: it waits as a "Meanwhile" line.
  */
 export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false, mergedBy?: 'approved', mergeBy?: 'you' | 'lead' | 'symcc') {

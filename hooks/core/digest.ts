@@ -25,12 +25,16 @@ export function digestText(tasks: readonly DigestTask[], sinceMs: number, nowMs:
   const open = tasks.filter(t => !ENDED.includes(t.status))
   const tries = open.filter(t => Number(t.attempts) >= 3)
   if (tries.length) lines.push(`On try 3 or more: ${tries.map(t => `${short(t)} (try ${t.attempts})`).join(', ')}.`)
-  const testy = open.filter(t => (t.history ?? []).filter(h => h.kind === 'failed' && h.reason === 'tests').length >= 2 && (t.history ?? []).some(h => h.reason === 'tests' && since(h.at, sinceMs)))
+  const testFails = (t: DigestTask) => (t.history ?? []).filter(h => h.kind === 'failed' && h.reason === 'tests')
+  const testy = open.filter(t => testFails(t).length >= 2 && testFails(t).some(h => since(h.at, sinceMs)))
+  const testTasks = tasks.filter(t => testFails(t).some(h => since(h.at, sinceMs)))
   if (testy.length) lines.push(`Tests failed in 2 or more tries: ${testy.map(short).join(', ')}.`)
-  const back = open.reduce((n, t) => n + (t.history ?? []).filter(h => h.kind === 'checker-problems' && since(h.at, sinceMs)).length, 0)
+  if (testTasks.length >= 2) lines.push(`Tests failed in ${testTasks.length} tasks since the last digest: ${testTasks.map(short).join(', ')}.`)
+  // Every task counts, merged and dropped ones too: the usual path is send back, fix, merge.
+  const back = tasks.reduce((n, t) => n + (t.history ?? []).filter(h => h.kind === 'checker-problems' && since(h.at, sinceMs)).length, 0)
   if (back >= 2) {
     const merged = tasks.filter(t => t.status === 'done' && t.merged && since(t.updated_at, sinceMs))
-    const first = merged.filter(t => Number(t.attempts) <= 1).length
+    const first = merged.filter(t => (t.history ?? []).every(h => h.kind !== 'checker-problems') && Number(t.attempts) <= 1).length
     lines.push(`The checker sent work back ${back} times since the last digest${merged.length ? `; ${first} of ${merged.length} merged tasks passed on the first try` : ''}.`)
   }
   const old = (t: DigestTask) => nowMs - at(t.updated_at) > DIGEST_STUCK_MS

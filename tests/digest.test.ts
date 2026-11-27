@@ -41,6 +41,18 @@ test('digest: tests failing in 2 tries, and a task waiting for the owner too lon
   expect(text).toContain('Waiting on the owner for a long time: T-2')
 })
 
+test('digest: tasks sent back twice then merged are counted; tests failing in 2 tasks are named', () => {
+  const back = (n: number) => ({ at: '2026-11-13T01:00:00.000Z', kind: 'checker-problems', text: `try ${n}: problems`, try: n })
+  const fail = { at: '2026-11-13T01:00:00.000Z', kind: 'failed', text: 'tests failed', try: 1, reason: 'tests' }
+  const merged = (extra: Record<string, unknown> = {}) => ({ status: 'done', merged: 'abc', attempts: 3, updated_at: '2026-11-13T02:00:00.000Z', history: [back(1), back(2)], ...extra })
+  const b = boardWith(merged(), merged(), merged({ attempts: 1, history: [] }))
+  const text = digestText(b.tasks, T0 - 1, T0 + 1000)!
+  expect(text).toContain('sent work back 4 times')
+  expect(text).toContain('1 of 3 merged tasks passed on the first try')
+  const t = boardWith({ status: 'done', attempts: 1, history: [fail] }, { status: 'done', attempts: 1, history: [fail] })
+  expect(digestText(t.tasks, T0 - 1, T0 + 1000)).toContain('Tests failed in 2 tasks')
+})
+
 async function ticking() {
   const files = new Map<string, string>()
   const w = fakeHost({
