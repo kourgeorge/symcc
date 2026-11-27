@@ -7,7 +7,7 @@ import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun, keepAgentIds } from './runs'
 import { clean, num, shownPath } from './text'
 
-/** The most a task's details may hold (addTask and patchTask cut the rest). */
+/** The most a task's details may hold (add and change refuse longer text; addTask and patchTask cut only as a last safety). */
 export const DETAILS_MAX = 8000
 
 /** Why details of this length are refused (they are never cut silently); null when they fit. */
