@@ -3541,7 +3541,12 @@ test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at 
     expect(d.ids.includes('T-750') || d.ids.includes('T-740') || d.ids.slice(1).includes('T-741') || d.ids.includes('T-742')).toBe(false)
     const at = texts.findIndex(x => x.startsWith(`${LIVE_INDENT}✓ T-747 `))
     expect(at > texts.findIndex(x => x.startsWith(`${LIVE_INDENT}▶ T-760 `))).toBe(true)
-    if (w === 120) expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓ +merged 3m ago$/)
+    // T-1177: the track ends at the right edge, no "ago" on the first line; "merged 3m ago" starts the second
+    if (w === 120) {
+      expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓$/)
+      expect(texts[at]!.length).toBe(w)
+      expect(texts[at + 1]!).toMatch(/^ +merged 3m ago · try 1\//)
+    }
     const lane = d.lines[at]!
     // T-850: "✓ " dim before the id, the id in the accent color, the title dim
     expect(lane.find(x => x.text.includes('✓ '))?.color).toBe('inactive')
