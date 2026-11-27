@@ -118,6 +118,26 @@ test('T-1210: a task that needs the owner and the tasks waiting on it are not dr
   expect(back).toContain('+ also')
 })
 
+test('T-1210: a running task with a pending worker question is in NEEDS YOU, not in TASKS, and its trains go too', () => {
+  const now = Date.now()
+  const iso = new Date(now).toISOString()
+  let b = emptyBoard()
+  for (const [i, title] of ['Asks', 'Waits on asks', 'Runs', 'Waits on both'].entries()) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'], after: i === 1 ? ['T-1'] : i === 3 ? ['T-1', 'T-3'] : [] }, iso)[0]
+  const run = { started: iso, agents: [] }
+  const ask = { by: 'worker', text: 'Which one?', asked_at: iso }
+  const board = {
+    ...b,
+    tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? { status: 'doing', runs: [run], live: { ask } } : t.id === 'T-3' ? { status: 'doing', runs: [run] } : {}) }) as BoardTask),
+  } as Board
+  const text = liveStatusText(board as never, [], now)
+  const tasks = statusSection(text, 'TASKS').join('\n')
+  expect(statusSection(text, 'NEEDS YOU').join('\n')).toContain('T-1')
+  expect(tasks).not.toContain('T-1 ')
+  expect(tasks).not.toContain('T-2')
+  expect(tasks).toMatch(/└─◇ T-4 Waits on both {2}waits$/m)
+  expect(tasks).not.toContain('also')
+})
+
 test('T-1210: when every open task needs the owner, TASKS shows the nothing running line', () => {
   const now = Date.now()
   const b = statusBoard(now)
