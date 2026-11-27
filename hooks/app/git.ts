@@ -195,10 +195,9 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
   }
   const real = await probeGit($)
   S.gitRoot = real
-  // a task with no project still needs the board folder's own repo: only without such a task is the folder fine as it is
+  // T-1178: a workspace (projects below, no repo of its own) is fine as it is; a task with no project holds back only itself
   const board = b ?? (await load($))
-  const loose = board.tasks.some(t => isOpenTask(t) && !((t as { project?: string }).project && isProjectName((t as { project?: string }).project!)))
-  const s: GitState = real === 'no-repo' && !loose && (await projectNames($).catch(() => [] as string[])).length ? 'ok' : real
+  const s: GitState = real === 'no-repo' && (await projectNames($).catch(() => [] as string[])).length ? 'ok' : real
   if (s === 'no-git' && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => '')
   if (s !== 'no-git') S.gitInstall = ''
   const ws = (s === 'no-repo' || s === 'no-commits') && (await holdsRepos($)) ? workspaceText() : ''
@@ -206,6 +205,11 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
     S.gitState = s
     S.gitWorkspace = ws
     await publish($, b ?? (await load($)))
+  }
+  const loose = noProjectText(board)
+  if (S.driving && loose !== S.toldLoose) {
+    S.toldLoose = loose
+    if (loose) tellLead($, loose)
   }
   if (s === 'ok') {
     // T-968: the lead was told git is not ready (and may be asking the owner about it): a check that finds it ready
@@ -218,6 +222,15 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
     tellLead($, s === 'no-git' ? noGitText(S.N.name, S.gitInstall) : ws ? ws : setupAskText(s, S.N.name))
   }
   return s === 'ok'
+}
+
+/** T-1178: on a workspace board, the open tasks with no project (they can't start there yet); '' when none or not a workspace. */
+export function noProjectText(b: Board): string {
+  if (S.gitState !== 'ok' || S.gitRoot !== 'no-repo') return ''
+  const ids = b.tasks.filter(t => isOpenTask(t) && !isProjectName((t as { project?: string }).project ?? '')).map(t => t.id)
+  if (!ids.length) return ''
+  const many = ids.length > 1
+  return `${ids.join(', ')} ${many ? 'have' : 'has'} no project, so ${many ? "they can't" : "it can't"} start on a board over several repos; give ${many ? 'each' : 'it'} a project (${S.N.name} change project)`
 }
 
 export const workspaceText = () => `This looks like a workspace of several repos; ${S.N.name} can't run a board over several repos yet. Open ${S.W.app} in one repo instead.`

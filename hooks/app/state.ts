@@ -157,6 +157,8 @@ export const startS = () => ({
   gitWorkspace: '',
   /** the git state the lead was last told about, so it is told once, not every check */
   toldGit: 'ok' as GitState,
+  /** T-1178: the no-project note last told to the lead (a workspace board) */
+  toldLoose: '',
   /** set while setupGit runs, so a second press waits */
   settingUp: false,
   /** set at the end of session.start: until then pump starts no work (the worker type may not be registered yet) */

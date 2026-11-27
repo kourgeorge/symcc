@@ -7,10 +7,12 @@ import { runCommand, PLUGIN_ROOT } from '../host'
 import { openSession, closeSession, leadTool } from '../session'
 import { claudeRunner } from '../../../hooks/process/claude-runner'
 import { nodeProcessSystem } from '../system'
-import { prepareWorktree, gitReady, taskGitReady, recheckGit, allGitReady, cleanupMerged } from '../../../hooks/app/git'
+import { prepareWorktree, gitReady, taskGitReady, recheckGit, allGitReady, cleanupMerged, noProjectText } from '../../../hooks/app/git'
 import { changedFiles } from '../../../hooks/app/review'
 import { readTaskBranch } from '../../../hooks/app/branches'
 import { change, load, now } from '../../../hooks/app/store'
+import { pump } from '../../../hooks/app/workers'
+import { runNowTool } from '../../../hooks/app/tools'
 import { S } from '../../../hooks/app/state'
 import { find, intoOf, patchTask } from '../../../hooks/board'
 
@@ -184,6 +186,45 @@ test('T-1168: a backlog task keeps no project repo checked', async () => {
       expect(calls.filter(c => c.includes('/empty'))).toEqual([])
       host.run = run
     } finally {
+      await closeSession(s).catch(() => undefined)
+    }
+  } finally {
+    await rm(board, { recursive: true, force: true })
+  }
+}, 180_000)
+
+// T-1178: a task with no project on a workspace board holds back only itself.
+test('T-1178: a no-project todo task does not stop a project task from starting', async () => {
+  const board = await realpath(await mkdtemp('/tmp/symcc-node-wsl-'))
+  const git = (cwd: string, ...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd })
+  try {
+    await mkdir(`${board}/client`, { recursive: true })
+    await git(`${board}/client`, 'init', '-q', '-b', 'main')
+    await writeFile(`${board}/client/c.txt`, 'c')
+    await git(`${board}/client`, 'add', '.')
+    await git(`${board}/client`, 'commit', '-qm', 'init')
+    const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
+    await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    process.env.FAKE_SLEEP = '600' // the fake worker waits, so the task stays doing
+    const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1178' })
+    try {
+      const add = (title: string, project?: string) => leadTool(s, 'add', { title, details: 'Do it', files: ['x.txt'], ...(project ? { project } : {}), why: 'test', origin_by: 'owner', request: 'test' })
+      expect(await add('Loose')).toContain('T-1')
+      expect(await add('Client work', 'client')).toContain('T-2')
+      s.working = true
+      void pump(s.host).catch(() => undefined)
+      for (const end = Date.now() + 60_000; find(await load(s.host), 'T-2')?.status === 'todo' && Date.now() < end; ) await new Promise<void>(r => void setTimeout(r, 20))
+      const b = await load(s.host)
+      expect(find(b, 'T-1')?.status).toBe('todo')
+      expect(find(b, 'T-2')?.status).toBe('doing')
+      expect(S.gitState).toBe('ok')
+      expect(noProjectText(b)).toContain('T-1 has no project')
+      expect(noProjectText(b)).not.toContain('T-2')
+      expect(S.gitWorkspace).toBe('')
+      expect(await msg(runNowTool(s.host, 'T-1', false))).toContain('T-1 has no project')
+      expect(find(await load(s.host), 'T-1')?.status).toBe('todo')
+    } finally {
+      delete process.env.FAKE_SLEEP
       await closeSession(s).catch(() => undefined)
     }
   } finally {

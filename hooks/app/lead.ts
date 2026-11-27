@@ -1,5 +1,5 @@
 import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, beatText, driverTimes, carriedText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, driveNoticeParts, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
-import { homeBranch, openProjects, projectNotes } from './git'
+import { homeBranch, noProjectText, openProjects, projectNotes } from './git'
 import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, fitView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
 import { timed } from './slow-log'
@@ -512,7 +512,7 @@ async function publishView(host: Host, b: Board) {
   // T-675: a data file close to the 4 MB read limit is warned about where the git warning goes (banner and status line)
   const size_note = [...sizeNotes.values()].join('; ')
   const projectNote = projectNotes(openProjects(b)) // T-1154: a project whose repo is not ready holds back only its own tasks
-  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, size_note].filter(Boolean).join('; ')
+  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, noProjectText(b), size_note].filter(Boolean).join('; ')
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const can = await playable(host)
   // T-727: the Live tab's Branches figures: the last ones read (a stale read starts in the background, never waited for here)
@@ -532,7 +532,7 @@ async function publishView(host: Host, b: Board) {
   const size_now = [...sizeNotes.values()].join('; ')
   if (size_now !== size_note) {
     for (const x of new Set([v, fit.view as PaneView])) {
-      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, size_now].filter(Boolean).join('; ')
+      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, noProjectText(b), size_now].filter(Boolean).join('; ')
       if (size_now) x.size_note = size_now
       else delete x.size_note
     }

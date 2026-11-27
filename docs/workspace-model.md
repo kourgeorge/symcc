@@ -126,6 +126,8 @@ Each step depends on the one before. The probe has the files and tests for each.
 3. **Per-project git and tests (built, T-1152 to T-1155).** Every git call runs in the task's repo (the probe counts
    about 110), git readiness is checked per project, the merge runs in the task's repo, and
    each repo uses its own test command.
-4. **Tasks with no project.** Research and notes that need no repo.
+4. **Tasks with no project (not built).** Research and notes that need no repo. Until then (T-1178) a task with no
+   project on a workspace board starts nothing and holds back only itself: the board names it, the lead is told once, and the
+   lead guide asks for a project on every task there.
 5. **Intake.** Scouts for email, GitHub issues and Slack, each with its own start-or-backlog
    choice (the existing findings setting). The lead can set `needs_review` on their tasks.

@@ -589,8 +589,13 @@ test('T-1136: a folder whose subfolders are their own repos: the view carries th
       expect((w.panel.view() as unknown as { git_state: string }).git_state).toBe('ok')
       // a task with no project still needs the folder's own repo: the workspace text comes back, so it doesn't wait silently
       await change(w.host, bb => addTask(bb, { origin: { why: 'a test' }, title: 'Loose', details: 'Do it.\nDone when: done.', files: ['src/'] }, new Date().toISOString()))
-      expect(await gitReady(w.host)).toBe(false)
-      expect((w.panel.view() as unknown as { git_workspace?: string }).git_workspace).toContain('workspace of several repos')
+      // T-1178: the whole board stays ready; the note names the no-project task and the old workspace text is gone
+      expect(await gitReady(w.host)).toBe(true)
+      const lv = w.panel.view() as unknown as { git_state: string; git_workspace?: string; branch_note?: string }
+      expect(lv.git_state).toBe('ok')
+      expect(lv.git_workspace).toBe(undefined)
+      expect(lv.branch_note ?? '').toContain('has no project')
+      expect(lv.branch_note ?? '').not.toContain('several repos yet')
       continue
     }
     expect(await gitReady(w.host)).toBe(false)
