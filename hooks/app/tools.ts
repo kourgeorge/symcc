@@ -4,7 +4,7 @@ import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, know
 import { checkerReportOf } from '../core/task-sections'
 import { sizeSegs } from '../core/page-header'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
-import { noProjectText, repoOf, taskBranch, taskGitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, projectNames, projectRefusal, taskWork, resetScratch } from './git'
+import { plainTask, changeNeedsProject, noProjectText, repoOf, taskBranch, taskGitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, projectNames, projectRefusal, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
 import { S, heard, workers, starting, toolName } from './state'
@@ -394,7 +394,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Pick the task type by the result wanted: project files to merge → change (or bug, feature, refactor, docs); an answer to read → investigation; anything else, including work outside the project or "don't merge" / "just make it on my Desktop" → errand. Never use a plain background agent for work the board can do as an errand.
 - Turn what the owner wants into tasks with ${S.N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes. Every change task's details say how the change will be tested, e.g. "Done when: tests show …" (the test that will check it). A change task whose commit edits code but no test file is flagged before merging (setting tests_with_changes: ask, the default, merges it and tells you "T-5 changed code but no test", so follow up with a test task or ask the owner; review makes it wait for the owner's review; off does nothing). Test files: in a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder (or a folder ending .Test/.Tests), or with test/spec/e2e/cy as a name part split by . _ or - (a.test.ts, a-test.ts, a.cy.ts), or a name ending in Test/Tests (FooTest.java); latest.ts and run-tests.sh are not tests. Docs: .md/.mdx, README/CHANGELOG/LICENSE names, images/video/audio/fonts, non-code files under docs/ (not docs/build.ts or Notice.tsx). A docs-only change is never flagged.
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly (when those words are a short reply like "yes", quote “<the owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<the reply>”); for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
-- On a workspace board (the board folder holds several repos, each in its own folder, and is no repo itself), give every task its project (change, investigation or errand): the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A task with no project can't start on a workspace board yet, even an investigation or an errand: give it the project folder it works in (or the nearest one).\n- When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
+- On a workspace board (the board folder holds several repos, each in its own folder, and is no repo itself), give every change task its project (an investigation or errand may have none: it then runs in a plain folder, with no repo, and may read all the projects): the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A change task with no project is refused on a workspace board; an investigation or errand with none works in a plain folder, reads any project and writes into none (an errand may name outside folders).\n- When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - Workers can't read the board or ${S.N.dir}/ (no board tool, and their folder is their own copy). To hand a worker an earlier task's answer, give its task from_task (that task's latest report is copied into the worker's folder and its prompt names it), or name the report file (${S.N.dir}/reports/T-n-try-N.md, or T-n-try-*.md for the latest), or paste the key facts into the details.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
 - Keeping the board in order (triage): older tasks go first unless the owner says a task is urgent; bugs and safety fixes go before features. Use priority for urgency: lower runs first; every task starts at 0; give urgent work -1, -2…, later work 1, 2… (a whole number from -20 to 19; ties go to the older task). Use it, not only after. Chain tasks with after only when they really share files; tasks with different files should run side by side. Never leave a task waiting forever. When a new task shares files with an older task that is still waiting, the new one goes behind it (the new one gets after: the older one), not the other way round.
@@ -722,6 +722,11 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
       const kind = await kindIn($, a)
       const project = await projectIn($, a)
+      // T-1182: on a board over several repos a change task needs a project (an investigation or errand may have none)
+      if (!project && !isInvestigation(kind ?? kindFor(undefined, role))) {
+        const needs = changeNeedsProject(await projectNames($).catch(() => [] as string[]))
+        if (needs) throw new Error(`Nothing added: ${needs}`)
+      }
       const tooLong = detailsTooLong(clean(str(a.details) ?? '', Infinity).length)
       if (tooLong) throw new Error(tooLong)
       if (!str(a.why)?.trim()) throw new Error('why is missing: say in one line why this task exists (and fill origin_by, plus request, scout or from_task)')
@@ -807,6 +812,13 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       }
       // A task given the researcher role becomes an investigation, unless kind is given too.
       const kind = (await kindIn($, a)) ?? (role && role !== t.role && isInvestigation(kindFor(undefined, role)) ? kindFor(undefined, role) : undefined)
+      // T-1182: a change that would leave a change task with no project on a board over several repos is refused (an old task is left alone unless project or kind changes)
+      if ((project !== undefined || kind !== undefined) && !(project ?? t.project) && !isInvestigation(kind ?? t)) {
+        const needs = changeNeedsProject(await projectNames($).catch(() => [] as string[]))
+        if (needs) throw new Error(`Nothing changed: ${needs}`)
+      }
+      // T-1182: a plain folder (no project) holds only scratch; a task given a project starts clean in a git copy
+      if (projectMoves && project && plainTask(t) && (await $.fs.exists(worktreeDir(t.id)))) await removeWorktree($, t.id, worktreeDir(t.id))
       // Another branch to merge into: given, or the owner said yes to "branch x is gone: merge into main instead?".
       let into = str(a.merge_into)?.trim()
       if (a.merge_into !== undefined && !(into && (await branchExists($, into, repoOf({ project: project ?? t.project }))))) {
@@ -1064,8 +1076,8 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   const b = await load($)
   const waits = runNowWaits(b, t)
   if (waits.length && !anyway) return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`
-  if (S.gitState === 'ok' && S.gitRoot === 'no-repo' && !isProjectName(t.project ?? '')) return `${noProjectText({ ...b, tasks: [t] })}; nothing started`
-  if (S.gitState === 'no-git' || !(await taskGitReady($, b, t))) return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : 'here'} yet`
+  if (S.gitState === 'ok' && S.gitRoot === 'no-repo' && !isProjectName(t.project ?? '') && !isInvestigation(t)) return `${noProjectText({ ...b, tasks: [t] })}; nothing started`
+  if (S.gitState === 'no-git' || (!plainTask(t) && !(await taskGitReady($, b, t)))) return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : 'here'} yet`
   const busy = workers.size + starting.size
   const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : undefined
   const paused = modeOf(b) === 'paused'

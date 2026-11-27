@@ -4,7 +4,7 @@ import { type BoardTask, type Checking, MERGE_LINE_FILE, type LineEntry, parseMe
 import { S } from './state'
 import { change, load, locked, now, path, safeWrite } from './store'
 
-// ---------------- the merge line: one task's merge turn at a time, project-wide (T-546) ----------------
+// ---------------- the merge line: one task's merge turn at a time per repo (T-546) ----------------
 
 /** How often a task whose line has another session's task in front looks again. */
 export const MERGE_LINE_POLL_MS = 2_000

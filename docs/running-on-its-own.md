@@ -26,9 +26,13 @@ branch. The task's files are relative to the repo (`README.md`, not `client/READ
 commands (settings tool: `project` plus `test_commands`); a project without its own uses the board's. Git readiness is
 checked per project, so a repo that is not ready holds back only its own tasks. A change that touches two repos is two
 tasks, linked with `after`. The prompts of workers and checkers name the task's project, and scouts are told the list of
-project folders, because the board folder is not a repo. A task with no project can't start on such a board yet (even an answer to read or an errand): it waits, and
-only it; the board notes which task it is ("T-12 has no project, so it can't start on a board over several repos; give it a
-project"), and the lead is told once. Give it a project (`symcc change project`) and it starts. To start, ask the lead: "add this to client".
+project folders, because the board folder is not a repo. An investigation (an answer to read) or an errand may have no project: it runs in a plain folder
+with no git copy and no branch, may read every project and writes into none, and nothing is merged. A change task needs a
+project: adding one without it is refused ("on a board over several repos a change task needs a project: client, server").
+An old change task with no project waits, and only it; the board notes which task it is ("T-12 has no project, so it can't
+start on a board over several repos (a change task needs a project); give it a project"), and the lead is told once. Give it a
+project (`symcc change project`) and it starts. To start, ask the lead: "add this to client". "Keep as a note" on an answered
+investigation with no project is refused until it has a project, because the note is a docs task.
 
 ### A folder without git
 

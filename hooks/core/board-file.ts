@@ -313,7 +313,7 @@ export const testMinutesOf = (b: { test_minutes?: unknown }): number => (typeof 
 export const mergeTestCount = (b: { test_commands: string[]; docs_test_commands?: string[]; projects?: Record<string, ProjectSettings> }, t?: object | null): number => Math.max(testCommandsOf(b, t).length, docsTestCommandsOf(b, t).length)
 
 /**
- * The project-wide merge line (<data folder>/merge-line.json, T-546): every way into a merge (a hand-back, an approve, a
+ * The merge line, one merge at a time per repo (<data folder>/merge-line.json, T-546): every way into a merge (a hand-back, an approve, a
  * finished work whose files are clear again, a checker's pass) joins it, across tasks and sessions, and only
  * the task at its front has its turn: catch up with the target branch, run the tests, move the branch (see inMergeLine
  * in app/merge-line.ts). Entries are kept oldest first: the task, a key for that one go, its session, when it joined,
