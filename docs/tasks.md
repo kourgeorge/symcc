@@ -326,7 +326,7 @@ The steps, in this order:
    never joins the queue, so no tests run for that try (see [The checker](#the-checker)).
 4. **Queue.** The task joins the merge queue and waits for its turn. The queue is kept in
    `.symcc/merge-line.json`; it survives a reload (a task that was in the queue just joins again), and
-   a stale entry is cleared by itself, so you never need to edit it. Merges go one at a time.
+   a stale entry is cleared by itself, so you never need to edit it. Merges go one at a time per repo.
 5. **Catch up.** At its turn, if the target branch has moved since the worker started (another
    task was merged), symcc brings those changes into the task's copy first. If they clash, that
    try failed like failing tests do: it uses one of the `auto_retries`, and the next worker is told
