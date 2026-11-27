@@ -1568,7 +1568,9 @@ export type BranchCommit = { sha: string; at: number }
 export type BranchFigures = { ahead: number; behind: number; base: string }
 /** The branch figures in the view (T-727): the branch the main line shows (`into`), its latest commits (newest first),
  *  each open task's branch figures by task id (a task whose git command failed is left out), and when they were read. */
-export type BranchFacts = { into: string; commits: BranchCommit[]; tasks: Record<string, BranchFigures>; at: number }
+export type BranchFacts = { into: string; commits: BranchCommit[]; tasks: Record<string, BranchFigures>; at: number; /** T-1199: on a board with projects, each repo's own figures (its tasks' project is `project`, '' = the board folder's repo); the first fields are then the first repo's */ repos?: BranchRepo[] }
+/** T-1199: one repo's branch figures: its project name ('' = the board folder), the name shown, the branch its tasks merge into, its latest commits and its tasks' figures. */
+export type BranchRepo = { project: string; name: string; into: string; commits: BranchCommit[]; tasks: Record<string, BranchFigures> }
 
 /** The task statuses whose branch gets a row. */
 export const BRANCH_STATUSES: readonly SymccTask['status'][] = ['doing', 'review', 'waiting', 'failed', 'paused']
@@ -1592,7 +1594,7 @@ export type BranchRow = { id?: string; kind: BranchRowKind; col: number; lines: 
 /** The section in a width: its header, the main line (`main`: its segments; `name` the branch, `commits` the shown ones
  *  oldest first, `step` the columns from one dot to the next, `indent` the columns before the first dot, `right` the
  *  newest commit's sha and age), and the rows. */
-export type LiveBranches = { head: LiveSeg[]; main: LiveSeg[]; name: string; commits: BranchCommit[]; step: number; indent: number; right: string; rows: BranchRow[] }
+export type LiveBranches = { /** T-1199: with several repos, the line above this repo's main line ("client · merges into dev"); absent on a board with no projects */ repoHead?: LiveSeg[]; head: LiveSeg[]; main: LiveSeg[]; name: string; commits: BranchCommit[]; step: number; indent: number; right: string; rows: BranchRow[] }
 
 /** "just now", "2 min ago", "3 h ago", "4 d ago". */
 export function agoText(ms: number): string {
@@ -1624,19 +1626,21 @@ export function branchState(t: LiveView['tasks'][number], nowMs: number): Branch
 /** The tasks the section shows, in the order they are kept when there are too many: the open tasks with a branch git
  *  answered for (by id), then (T-794) the tasks ▍Tasks keeps as finished lanes (liveFinishedLanes: merged in the last
  *  LIVE_FINISHED_MS, at most LIVE_FINISHED_MAX, newest first), then up to BRANCH_NEW_MAX next-up tasks with no branch yet. */
-function branchItems(view: LiveView, facts: BranchFacts, nowMs: number): BranchItem[] {
+function branchItems(view: LiveView, facts: Pick<BranchFacts, 'tasks'>, nowMs: number, project?: string): BranchItem[] {
   const open: BranchItem[] = []
+  // T-1199: with a project ('' = none), only that repo's tasks
+  const mine = (id: string) => project === undefined || ((view.tasks.find(t => t.id === id) as { project?: string } | undefined)?.project ?? '') === project
   for (const t of view.tasks) {
-    if (t.status === 'done') continue
+    if (t.status === 'done' || !mine(t.id)) continue
     const fig = facts.tasks[t.id]
     if (BRANCH_STATUSES.includes(t.status) && t.branch && fig) open.push({ id: t.id, kind: 'branch', fig, state: branchState(t, nowMs) })
   }
-  const merged = liveFinishedLanes(view, nowMs).map((l): BranchItem => {
+  const merged = liveFinishedLanes(view, nowMs).filter(l => mine(l.id)).map((l): BranchItem => {
     const sha = view.tasks.find(t => t.id === l.id)?.merged
     return { id: l.id, kind: 'merged', ...(sha ? { merged: sha } : {}), atMs: l.done?.atMs ?? nowMs }
   })
   const next = liveTrains(view, nowMs)
-    .next.filter(x => !x.stuck.length && !(view.tasks.find(t => t.id === x.id)?.branch))
+    .next.filter(x => mine(x.id) && !x.stuck.length && !(view.tasks.find(t => t.id === x.id)?.branch))
     .slice(0, BRANCH_NEW_MAX)
     .map((x): BranchItem => ({ id: x.id, kind: 'new' }))
   const byId = (a: BranchItem, b: BranchItem) => num(a.id) - num(b.id)
@@ -1684,11 +1688,32 @@ const LABEL_ROOM = textWidth(' T-000 ‖ +0 · 0 behind')
  * `width`, the lines under it in liveInner(width) (words are cut with "…"), for the client to indent (LIVE_INDENT).
  */
 export function liveBranches(view: LiveView, nowMs: number, width: number): LiveBranches | null {
+  return liveBranchBlocks(view, nowMs, width)[0] ?? null
+}
+
+/**
+ * T-1199: the Branches section as one block per repo (a board with no projects has one block, drawn as ever; its
+ * `repoHead` is absent). Each block is a liveBranches-shaped section: its main line is its own repo's, its rows hang off
+ * that line, and (with several repos or projects) `repoHead` names the repo and the branch its tasks merge into.
+ * Only repos with open or just-merged tasks have a block; the clients draw the heading once, above the first.
+ */
+export function liveBranchBlocks(view: LiveView, nowMs: number, width: number): LiveBranches[] {
   const facts = view.branches
-  if (!facts || !facts.commits.length) return null
+  if (!facts) return []
+  if (!facts.repos) return [branchBlock(view, facts, nowMs, width)].flatMap(x => (x ? [x] : []))
+  return facts.repos.flatMap(r => {
+    const x = branchBlock(view, r, nowMs, width, r.project)
+    if (!x) return []
+    const head: LiveSeg[] = [{ text: ` ${r.name}`, tone: 'title' }, { text: ` · merges into ${r.into}`, tone: 'dim' }]
+    return [{ ...x, repoHead: head }]
+  })
+}
+
+function branchBlock(view: LiveView, facts: Pick<BranchFacts, 'into' | 'commits' | 'tasks'>, nowMs: number, width: number, project?: string): LiveBranches | null {
+  if (!facts.commits.length) return null
   const full = Math.max(1, Math.floor(width))
   const w = liveInner(full)
-  const items = branchItems(view, facts, nowMs)
+  const items = branchItems(view, facts, nowMs, project)
   if (!items.length) return null
   const kept = items.slice(0, BRANCH_ROWS_MAX)
   const hidden = items.length - kept.length

@@ -147,7 +147,7 @@ test('T-1146: a change that sets only the project keeps a running or finished ta
 test('T-1146: settings with no input lists the per-project test_commands; a project that is not text is refused', async () => {
   const { w } = await world(['server', 'client'])
   await runTool(w.host, 'settings', { project: 'server', test_commands: ['make test'] })
-  expect(await runTool(w.host, 'settings', {})).toContain('project server: test_commands')
+  expect(await runTool(w.host, 'settings', {})).toContain('project server → /ws/server: test_commands')
   expect(await runTool(w.host, 'settings', { project: 5 })).toContain('Nothing changed')
 })
 

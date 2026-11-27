@@ -11,12 +11,16 @@ Which branch work goes into, how symcc keeps work moving while you are away, and
 - If a task's branch was deleted, the task waits and asks you whether to merge into another
   branch instead. Nothing is marked failed.
 
-### Projects: a folder with several repos
+### Projects: repos anywhere on disk
 
-When the board folder is not a repo itself but holds repos (`~/repositories/client`, `~/repositories/server`),
-each of those folders is a **project**: a folder directly below the board folder that has its own `.git`. symcc keeps no
-list of them; it finds them by folder name. A task can name its project (`project` on `symcc add` / `symcc change`, for
-example "add this to client"). A wrong name is refused, and the answer lists the folders that are projects. Rows and task
+A **project** is a repo at any path on disk (`~/repositories/client`, `~/code/server`), listed in the board's project
+table as a name and a path. The Settings page shows each one as `name → path` with its test commands. You add one by
+asking the lead (the lead only does it after your yes): `settings` with `project` (a plain name) and `path` (the repo's top
+folder, `~` allowed). symcc refuses, with a plain reason, a path that does not exist, is not a repo's top folder, has no
+commits, is inside a `.symcc/` folder, or is a repo with a board of its own, and a name that is taken. The path is stored
+as its real path. A project's path can be changed only while none of its open tasks has a copy or branch, and a project
+can be removed (`project` plus `remove: true`) only while no open task uses it. A task can name its project (`project` on `symcc add` / `symcc change`, for
+example "add this to client"). A wrong name is refused, and the answer lists the projects there are. Rows and task
 pages show a small tag in front of the title, like `[client] Fix login`. A board inside one repo has no projects: no tag
 shows and `add` works as before.
 
@@ -26,7 +30,7 @@ branch. The task's files are relative to the repo (`README.md`, not `client/READ
 commands (settings tool: `project` plus `test_commands`); a project without its own uses the board's. Git readiness is
 checked per project, so a repo that is not ready holds back only its own tasks. A change that touches two repos is two
 tasks, linked with `after`. The prompts of workers and checkers name the task's project, and scouts are told the list of
-project folders, because the board folder is not a repo. An investigation (an answer to read) or an errand may have no project: it runs in a plain folder
+projects, because the board folder is not a repo. An investigation (an answer to read) or an errand may have no project: it runs in a plain folder
 with no git copy and no branch, may read every project and writes into none, and nothing is merged. A change task needs a
 project: adding one without it is refused ("on a board over several repos a change task needs a project: client, server").
 An old change task with no project waits, and only it; the board notes which task it is ("T-12 has no project, so it can't
@@ -52,7 +56,7 @@ gets its own git worktree. It checks this when a session starts and before a wor
 - In the two cases below, git is there, so symcc looks again by itself every 2 minutes and
   when the board panel opens: a `git init` and a first commit made by hand clear the notice.
 - **No git repo, or no commits yet**: the board still works, and shows "No git repo here: symcc
-  needs git for task branches. No worker starts until it is set up." with a **Set up git** button. A folder whose subfolders are their own git repos (a workspace) is ready as it is: see "Projects" above.
+  needs git for task branches. No worker starts until it is set up." with a **Set up git** button. A board with projects in its table is ready as it is, with no repo of its own: see "Projects" above. To work on repos that are elsewhere, add them as projects.
   The lead asks you too; say yes, or press **g** in the board panel.
   Nothing starts until it's done. The setup:
   - runs `git init -b main` (skipped if a repo is already there);

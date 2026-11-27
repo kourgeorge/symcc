@@ -513,7 +513,7 @@ async function publishView(host: Host, b: Board) {
   // T-675: a data file close to the 4 MB read limit is warned about where the git warning goes (banner and status line)
   const size_note = [...sizeNotes.values()].join('; ')
   const projectNote = projectNotes(openProjects(b)) // T-1154: a project whose repo is not ready holds back only its own tasks
-  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, noProjectText(b), size_note].filter(Boolean).join('; ')
+  const branch_note = [gitNote(S.gitState), projectNote, noProjectText(b), size_note].filter(Boolean).join('; ')
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const can = await playable(host)
   // T-727: the Live tab's Branches figures: the last ones read (a stale read starts in the background, never waited for here)
@@ -523,7 +523,7 @@ async function publishView(host: Host, b: Board) {
   const team = todayTeam(host, [...scoutState.keys()]).team
   // T-761: each task page's Branch section, read the same way (OpenCode's panel draws only what the view holds)
   const task_branches = taskBranchesView(host, b).facts
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s)), mode: modeOf(b), test_commands: b.test_commands, ...(b.projects && Object.keys(b.projects).length ? { projects: b.projects } : {}), ...(b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}), home_branch: own, ...(branch !== own ? { branch_line: branch } : {}), max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify_now: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...(!S.driving && S.driver ? { driver: S.driver } : {}), ...(S.offHere ? { off_here: 'off' as const } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, ...(S.gitInstall ? { git_install: S.gitInstall } : {}), ...(S.gitWorkspace ? { git_workspace: S.gitWorkspace } : {}), plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s)), mode: modeOf(b), test_commands: b.test_commands, ...(b.projects && Object.keys(b.projects).length ? { projects: b.projects } : {}), ...(b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}), home_branch: own, ...(branch !== own ? { branch_line: branch } : {}), max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify_now: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...(!S.driving && S.driver ? { driver: S.driver } : {}), ...(S.offHere ? { off_here: 'off' as const } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, ...(S.gitInstall ? { git_install: S.gitInstall } : {}), plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
   // T-891: the view as it is stored (trimmed by slimView), worked out once here and written as it is: the owner is
   // told when trimming had to leave tasks out of the panel
   const fit = fitView(host, v)
@@ -533,7 +533,7 @@ async function publishView(host: Host, b: Board) {
   const size_now = [...sizeNotes.values()].join('; ')
   if (size_now !== size_note) {
     for (const x of new Set([v, fit.view as PaneView])) {
-      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, noProjectText(b), size_now].filter(Boolean).join('; ')
+      x.branch_note = [gitNote(S.gitState), projectNote, noProjectText(b), size_now].filter(Boolean).join('; ')
       if (size_now) x.size_note = size_now
       else delete x.size_note
     }

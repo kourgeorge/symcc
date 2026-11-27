@@ -792,7 +792,7 @@ test('an option with no value is refused: a bare --files never adds a task that 
   }
 })
 
-test('T-1134: setup_git over a folder of repos answers the refusal and makes no .git; an empty folder still sets up', async () => {
+test('T-1134: setup_git in an empty folder sets up git there', async () => {
   const run = async (repo: string, body: (s: Awaited<ReturnType<typeof openSession>>) => Promise<void>) => {
     await enableHere(repo)
     const s = await openSession({ root: repo, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1134' })
@@ -802,21 +802,13 @@ test('T-1134: setup_git over a folder of repos answers the refusal and makes no 
       await closeSession(s).catch(() => undefined)
     }
   }
-  const ws = await mkdtemp('/tmp/symcc-node-ws-')
   const empty = await mkdtemp('/tmp/symcc-node-empty-')
   try {
-    await mkdir(`${ws}/a/.git`, { recursive: true })
-    await mkdir(`${ws}/group/b/.git`, { recursive: true })
-    await run(ws, async s => {
-      expect(await leadTool(s, 'setup_git', {})).toContain('workspace of several repos')
-      expect((await readdir(ws, { withFileTypes: true })).map(d => d.name).includes('.git')).toBe(false)
-    })
     await run(empty, async s => {
       expect(await leadTool(s, 'setup_git', {})).not.toContain('workspace of several repos')
       expect((await readdir(empty, { withFileTypes: true })).map(d => d.name).includes('.git')).toBe(true)
     })
   } finally {
-    await rm(ws, { recursive: true, force: true })
     await rm(empty, { recursive: true, force: true })
   }
 }, 180_000)

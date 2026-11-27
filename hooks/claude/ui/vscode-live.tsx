@@ -13,7 +13,7 @@
 // up under them. The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code asks for
 // reduced motion. T-715: under a lane hang its waiting trains, one line each, indented by their level.
 import type { RenderChildren } from 'claude-code'
-import { laneLines, liveInner, liveBranches, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, LIVE_SECTIONS, type LiveLane, type LiveStation, type LiveLayout, type LiveSeg, LIVE_TONE, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
+import { laneLines, liveInner, liveBranchBlocks, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, LIVE_SECTIONS, type LiveLane, type LiveStation, type LiveLayout, type LiveSeg, LIVE_TONE, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
 import { STATUS_MARK } from '../../core/details'
 import { textWidth } from '../../core/width'
 import { nextMode } from '../../board'
@@ -103,17 +103,17 @@ function liveSection($: $, pane: PaneParts, key: string, name: string, body: () 
  *  task) in a sized cell, then its figures (main: "sha · age"; a task: "+3 commits · 1 behind"; a merged one: "merged 3m ago"). */
 function branchesVs($: $, pane: PaneParts, open: (id: string) => () => void) {
   const { Box, Text, C, v, width, nowMs, vs } = pane
-  const br = liveBranches(v, nowMs, 200)
-  if (!br) return null
+  const blocks = liveBranchBlocks(v, nowMs, 200)
+  if (!blocks.length) return null
   const inner = liveInner(width)
-  const idW = Math.max(4, textWidth(br.name), ...br.rows.map(r => textWidth(r.id ?? '')))
+  const idW = Math.max(4, ...blocks.flatMap(br => [textWidth(br.name), ...br.rows.map(r => textWidth(r.id ?? ''))]))
   const room = Math.max(1, inner - idW - 1)
   // core picks each row's wording for a width (longest first); try widths from wide to narrow and keep the first wording
   // that fits the room beside the id cell, so a narrow panel gets "+3 · 1 behind" and not a cut line
-  const tries = [200, 100, 80, 64, 56, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12].map(w => liveBranches(v, nowMs, w) ?? br!)
+  const tries = [200, 100, 80, 64, 56, 48, 44, 40, 36, 32, 28, 24, 20, 16, 12].map(w => liveBranchBlocks(v, nowMs, w))
   const fits = (xs: LiveSeg[]) => textWidth(segText(xs).trim()) <= room
-  const pickFor = (get: (b: NonNullable<typeof br>) => LiveSeg[]) => {
-    const all = tries.map(get)
+  const pickFor = (bi: number, get: (b: (typeof blocks)[number]) => LiveSeg[]) => {
+    const all = tries.map(t => get(t[bi] ?? blocks[bi]!))
     const xs = all.find(fits) ?? all[all.length - 1]!
     // the text starts at the cell's edge: no leading blanks
     const first = xs[0]
@@ -124,29 +124,36 @@ function branchesVs($: $, pane: PaneParts, open: (id: string) => () => void) {
       {xs.map(s => <Text tabular wrap="truncate" color={C(LIVE_TONE[s.tone])}>{s.text}</Text>)}
     </Box>
   )
-  const mainFig = pickFor(b => (b.right ? [{ text: b.right, tone: 'dim' as const }] : []))
-  return liveSection($, pane, 'br', LIVE_SECTIONS.branches, () => [
-    <Box key="live-br-main" flexDirection="column">
-      {vsRow(vs, 'live-br-main-row', [
-        { key: 'id', width: idW, node: <Box key="live-br-main-name" flexDirection="row"><Text bold color={C('text')}>{br.name}</Text></Box> },
-        { key: 'figures', node: figures('live-br-main-text', mainFig) },
-      ])}
-    </Box>,
-    ...br.rows.map((r, i) => {
-      if (!r.id) return <Box key="live-br-more" flexDirection="column"><Text color={C('inactive')}>{segText(r.label).trim()}</Text></Box>
-      const href = vsHref('task', r.id)
-      const id = r.id
-      const figs = pickFor(b => (b.rows.find(x => x.id === id) ?? r).label.slice(1))
-      return (
-        <Box key={`live-br-row:${id}`} flexDirection="column" hover={{ backgroundColor: ROW_HOVER }}>
-          {vsRow(vs, `live-br-line:${id}`, [
-            { key: 'id', width: idW, node: vsLink(vs, branchKey(id), mdLink(id, href), [[href, open(id)]], r.kind === 'merged') },
-            { key: 'figures', node: figures(`live-br-note:${id}`, figs) },
+  return liveSection($, pane, 'br', LIVE_SECTIONS.branches, () =>
+    blocks.flatMap((br, bi) => {
+      const sfx = bi ? `:${bi}` : ''
+      const mainFig = pickFor(bi, x => (x.right ? [{ text: x.right, tone: 'dim' as const }] : []))
+      return [
+        // T-1199: with several repos, each block starts with its repo and the branch its tasks merge into
+        ...(br.repoHead ? [<Box key={`live-br-repo${sfx}`} flexDirection="row">{br.repoHead.map(s => <Text bold={s.tone === 'title'} color={C(LIVE_TONE[s.tone])}>{s.text.replace(/^\s+/, '')}</Text>)}</Box>] : []),
+        <Box key={`live-br-main${sfx}`} flexDirection="column">
+          {vsRow(vs, `live-br-main-row${sfx}`, [
+            { key: 'id', width: idW, node: <Box key={`live-br-main-name${sfx}`} flexDirection="row"><Text bold color={C('text')}>{br.name}</Text></Box> },
+            { key: 'figures', node: figures(`live-br-main-text${sfx}`, mainFig) },
           ])}
-        </Box>
-      )
+        </Box>,
+        ...br.rows.map(r => {
+          if (!r.id) return <Box key={`live-br-more${sfx}`} flexDirection="column"><Text color={C('inactive')}>{segText(r.label).trim()}</Text></Box>
+          const href = vsHref('task', r.id)
+          const id = r.id
+          const figs = pickFor(bi, x => (x.rows.find(y => y.id === id) ?? r).label.slice(1))
+          return (
+            <Box key={`live-br-row:${id}`} flexDirection="column" hover={{ backgroundColor: ROW_HOVER }}>
+              {vsRow(vs, `live-br-line:${id}`, [
+                { key: 'id', width: idW, node: vsLink(vs, branchKey(id), mdLink(id, href), [[href, open(id)]], r.kind === 'merged') },
+                { key: 'figures', node: figures(`live-br-note:${id}`, figs) },
+              ])}
+            </Box>
+          )
+        }),
+      ]
     }),
-  ])
+  )
 }
 
 /** A task id as markdown code (drawn in the mono face) inside a link: "[`T-5`](…)". */

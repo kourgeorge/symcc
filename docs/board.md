@@ -546,6 +546,10 @@ words as bold headings with the same spacing):
            ╰─────────────────────────○ T-726  not started
   ```
 
+  On a board with projects, the section has one block per repo that has open or just-merged tasks: a line with the repo's
+  name and the branch its tasks merge into (`client · merges into dev`), then that repo's own `main` line, and each task
+  hangs off its own repo's line (`N behind` counts that repo's branch). A board with no projects looks as above.
+
   The `main` line has its last 7 commits, the newest at the right, with the newest one's short
   sha and age. Each task with a branch (doing, review, waiting, failed or paused) has a row that
   hangs from the commit its branch started from (at the left edge when that commit is older than

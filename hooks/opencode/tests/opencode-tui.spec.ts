@@ -186,11 +186,6 @@ test('T-517, T-706: with no git repo the banner warns with Claude Code\'s "set u
     expect(rows.length).toBeGreaterThan(1)
     for (const r of rows) expect(lineText(r).length).toBeLessThan(79)
   }
-  // T-1136: a workspace folder: the workspace text, no button
-  const ws = 'This looks like a workspace of several repos; symcc can\'t run a board over several repos yet. Open OpenCode in one repo instead.'
-  const wsRows = panelLines({ ...f, view: { ...f.view, git_state: 'no-repo', git_workspace: ws } }, { opened: '', cursor: 0 }, NOW, 200).lines.map(lineText)
-  expect(wsRows.join('\n')).toContain(ws)
-  expect(wsRows.some(l => l.includes('Set up git ('))).toBe(false)
   // git set up: no row
   expect(panelLines(f, { opened: '', cursor: 0 }, NOW, 100).lines.map(lineText).some(l => l.includes('Set up git'))).toBe(false)
 })

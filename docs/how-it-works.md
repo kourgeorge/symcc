@@ -127,9 +127,9 @@ Each part is there for a reason. Knowing it makes the rest of the documentation 
 
 ## Working with several repos
 
-One board can sit in a folder that holds several repos. Each task names the repo it belongs to (its project). The worker
+One board can work on several repos, kept as projects (a name and a path each). Each task names the repo it belongs to (its project). The worker
 gets a copy of that repo, the checks and the tests run there with that repo's own test command, and the change merges
-into that repo only. See [Projects: a folder with several repos](running-on-its-own.md#projects-a-folder-with-several-repos).
+into that repo only. See [Projects: repos anywhere on disk](running-on-its-own.md#projects-repos-anywhere-on-disk).
 
 ## Scouts at work
 

@@ -495,7 +495,10 @@ export function testsShort(cmds: readonly string[]): string {
 export function settingWithProjects(b: Partial<Board>, name: SettingName, root = ''): string {
   const v = settingValue(b, name, root)
   if (name !== 'test_commands') return v
-  const ps = Object.entries(b.projects ?? {}).filter(([, x]) => x?.test_commands?.length).map(([p, x]) => `${p}: ${testCommandsText(x.test_commands ?? [])}`)
+  // T-1199: each project as "name → path" (its repo) with its own test commands when it has some
+  const ps = Object.entries(b.projects ?? {})
+    .filter(([, x]) => x?.test_commands?.length || x?.path)
+    .map(([p, x]) => `${p}${x.path ? ` → ${x.path}` : ''}${x.test_commands?.length ? `: ${testCommandsText(x.test_commands)}` : ''}`)
   return ps.length ? [v, ...ps].join(' · ') : v
 }
 
@@ -724,7 +727,7 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
       }),
       ...(g.items.some(isSettingPage) ? ['roles and task types: use the roles and kinds tools (the owner sees roles and task types as pages in the Settings view)', 'org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board\'s Live tab, and may delete them there)'] : []),
     ]),
-    ...Object.entries(b.projects ?? {}).filter(([, v]) => v?.test_commands?.length).map(([name, v]) => `project ${name}: test_commands: ${testCommandsText(v.test_commands ?? [])}`),
+    ...Object.entries(b.projects ?? {}).filter(([, v]) => v?.test_commands?.length || v?.path).map(([name, v]) => `project ${name}${v.path ? ` → ${v.path}` : ''}: test_commands: ${testCommandsText(v.test_commands ?? [])}`),
   ].join('\n')
 }
 

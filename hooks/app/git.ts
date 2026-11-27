@@ -225,10 +225,8 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
   const s: GitState = real === 'no-repo' && projectNames().length ? 'ok' : real
   if (s === 'no-git' && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => '')
   if (s !== 'no-git') S.gitInstall = ''
-  const ws = (s === 'no-repo' || s === 'no-commits') && (await holdsRepos($)) ? workspaceText() : ''
-  if (s !== S.gitState || ws !== S.gitWorkspace) {
+  if (s !== S.gitState) {
     S.gitState = s
-    S.gitWorkspace = ws
     await publish($, b ?? (await load($)))
   }
   const loose = noProjectText(board)
@@ -244,7 +242,7 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
     S.toldGit = 'ok'
   } else if (S.driving && S.toldGit !== s) {
     S.toldGit = s
-    tellLead($, s === 'no-git' ? noGitText(S.N.name, S.gitInstall) : ws ? ws : setupAskText(s, S.N.name))
+    tellLead($, s === 'no-git' ? noGitText(S.N.name, S.gitInstall) : setupAskText(s, S.N.name))
   }
   return s === 'ok'
 }
@@ -283,19 +281,6 @@ export function noProjectText(b: Board): string {
   return `${ids.join(', ')} ${many ? 'have' : 'has'} no project, so ${many ? "they can't" : "it can't"} start on a board over several repos (a change task needs a project); give ${many ? 'each' : 'it'} a project (${S.N.name} change project)`
 }
 
-export const workspaceText = () => `This looks like a workspace of several repos; ${S.N.name} can't run a board over several repos yet. Open ${S.W.app} in one repo instead.`
-
-/** True when a folder one or two levels below the project holds its own .git (hidden folders, the data folder and node_modules skipped). */
-async function holdsRepos($: Host): Promise<boolean> {
-  const dirs = async (path: string) =>
-    (await $.fs.list(path).catch(() => [])).filter(e => e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== S.N.dir).map(e => e.name)
-  for (const a of await dirs(S.root)) {
-    if (await $.fs.exists(`${S.root}/${a}/.git`)) return true
-    for (const b of await dirs(`${S.root}/${a}`)) if (await $.fs.exists(`${S.root}/${a}/${b}/.git`)) return true
-  }
-  return false
-}
-
 /** T-1137: why `name` is not a project, or '' when it is one of `names` (the board's project table). */
 export const projectRefusal = (name: string, names: readonly string[]): string =>
   names.includes(name) ? '' : names.length ? `'${name}' is not a project here. The projects are: ${names.join(', ')}.` : `'${name}' is not a project: this board has no projects in its project table.`
@@ -311,7 +296,6 @@ export async function setupGit($: Host, who: string): Promise<string> {
   const s = await probeGit($)
   if (s === 'ok') return 'git is set up already: this folder is a git repo with commits'
   if (s === 'no-git') return noGitText(S.N.name, S.gitInstall)
-  if ((s === 'no-repo' || s === 'no-commits') && (await holdsRepos($))) return workspaceText()
   S.settingUp = true
   try {
     const init = s === 'no-repo'

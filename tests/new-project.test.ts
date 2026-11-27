@@ -575,44 +575,21 @@ test('T-968: Meanwhile lines not yet given with a prompt still go at the top of 
   await sessionEnd(w.host)
 })
 
-test('T-1136: a folder whose subfolders are their own repos: the view carries the workspace text (no Set up git), setup_git refuses and commits nothing, with no repo or with a top repo with no commit; an empty folder keeps the button', async () => {
-  for (const noCommit of [false, true]) {
-    const w = world('a', '/home/me/proj', '/home/me', { uname: 'Darwin', nested: ['a', 'b'], noCommit, ...(noCommit ? { repo: { on: true } } : {}) })
-    w.files.set('/home/me/.git', '')
-    w.files.set('/home/me/proj/a/.git', '')
-    w.files.set('/home/me/proj/b/.git', '')
-    await sessionStart(w.host)
-    await runCommand(w.host, 'symcc-init', '')
-    // T-1196: the repos below the folder are in the project table (the one-time move writes them for an old board)
-    await change(w.host, bb => ({ ...bb, projects: { a: { path: '/home/me/proj/a' }, b: { path: '/home/me/proj/b' } } }))
-    // T-1154: with no repo at the top and repos directly below, each task needs only its own repo: the folder counts as ready
-    if (!noCommit) {
-      expect(await gitReady(w.host)).toBe(true)
-      expect((w.panel.view() as unknown as { git_state: string }).git_state).toBe('ok')
-      // a task with no project still needs the folder's own repo: the workspace text comes back, so it doesn't wait silently
-      await change(w.host, bb => addTask(bb, { origin: { why: 'a test' }, title: 'Loose', details: 'Do it.\nDone when: done.', files: ['src/'] }, new Date().toISOString()))
-      // T-1178: the whole board stays ready; the note names the no-project task and the old workspace text is gone
-      expect(await gitReady(w.host)).toBe(true)
-      const lv = w.panel.view() as unknown as { git_state: string; git_workspace?: string; branch_note?: string }
-      expect(lv.git_state).toBe('ok')
-      expect(lv.git_workspace).toBe(undefined)
-      expect(lv.branch_note ?? '').toContain('has no project')
-      expect(lv.branch_note ?? '').not.toContain('several repos yet')
-      continue
-    }
-    expect(await gitReady(w.host)).toBe(false)
-    const v = w.panel.view() as unknown as { git_state: string; git_workspace?: string }
-    expect(v.git_state).toBe(noCommit ? 'no-commits' : 'no-repo')
-    expect(v.git_workspace).toContain('workspace of several repos')
-    expect((w.panel.view() as unknown as { branch_note?: string }).branch_note ?? '').not.toContain('set up git')
-    const out = await setupGit(w.host, 'you')
-    expect(out).toContain('workspace of several repos')
-    expect(w.ran.some(x => x.args.includes('commit') || x.args.startsWith('add'))).toBe(false)
-  }
-  // an empty folder: no flag, so the banners keep the button
-  const e = world('a', '/home/me/proj', '/home/me', { uname: 'Darwin' })
-  e.files.set('/home/me/.git', '')
-  await sessionStart(e.host)
-  await runCommand(e.host, 'symcc-init', '')
-  expect((e.panel.view() as unknown as { git_workspace?: string }).git_workspace).toBe(undefined)
+test('T-1136: a folder with repos in its project table is ready with no repo of its own; a task with no project is noted; the old several-repos text is gone', async () => {
+  const w = world('a', '/home/me/proj', '/home/me', { uname: 'Darwin', nested: ['a', 'b'] })
+  w.files.set('/home/me/.git', '')
+  w.files.set('/home/me/proj/a/.git', '')
+  w.files.set('/home/me/proj/b/.git', '')
+  await sessionStart(w.host)
+  await runCommand(w.host, 'symcc-init', '')
+  await change(w.host, bb => ({ ...bb, projects: { a: { path: '/home/me/proj/a' }, b: { path: '/home/me/proj/b' } } }))
+  expect(await gitReady(w.host)).toBe(true)
+  expect((w.panel.view() as unknown as { git_state: string }).git_state).toBe('ok')
+  await change(w.host, bb => addTask(bb, { origin: { why: 'a test' }, title: 'Loose', details: 'Do it.\nDone when: done.', files: ['src/'] }, new Date().toISOString()))
+  expect(await gitReady(w.host)).toBe(true)
+  const lv = w.panel.view() as unknown as { git_state: string; branch_note?: string }
+  expect(lv.git_state).toBe('ok')
+  expect(lv.branch_note ?? '').toContain('has no project')
+  expect(lv.branch_note ?? '').not.toContain('several repos yet')
+  expect(JSON.stringify(lv)).not.toContain('git_workspace')
 })

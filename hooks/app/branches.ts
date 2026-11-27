@@ -5,7 +5,7 @@
 // the open branches changed), starts a new read in the background, which puts its figures in the view when done.
 // A git command that fails leaves out only what it was for: a task's row, or (the main line's log) the whole section.
 import type { Board } from '../board'
-import { BRANCH_COMMITS, BRANCH_STATUSES, liveFinishedLanes, type BranchFacts, type BranchFigures } from '../core/live'
+import { BRANCH_COMMITS, BRANCH_STATUSES, liveFinishedLanes, type BranchFacts, type BranchFigures, type BranchRepo } from '../core/live'
 import { intoOf, isFinished, isSha } from '../core/board-file'
 import { TASK_BRANCH_COMMITS, TASK_BRANCH_MAIN, type TaskBranchCommit, type TaskBranchFacts } from '../core/task-branch'
 import { trailerPrefix } from '../core/commits'
@@ -13,7 +13,7 @@ import type { BranchCommit } from '../core/live'
 import type { SymccTask } from '../../types'
 import type { Host } from '../host'
 import { type PaneView, S, updateView } from './state'
-import { git, repoOf, gitStateOfTask, projectGone } from './git'
+import { git, repoOf, gitStateOfTask, projectGone, projectPath } from './git'
 
 /** How long the figures are kept before they are read again. */
 export const BRANCH_CACHE_MS = 30_000
@@ -35,8 +35,14 @@ export function resetBranches() {
 const safe = (name: string) => !!name && !name.startsWith('-') && !/\s/.test(name)
 
 /** The open tasks of `b` whose branch is shown: id, branch and the branch it merges into. */
-function openBranches(b: Pick<Board, 'tasks'>): { id: string; branch: string; into: string }[] {
-  return b.tasks.filter(t => BRANCH_STATUSES.includes(t.status) && typeof t.branch === 'string' && safe(t.branch)).map(t => ({ id: t.id, branch: t.branch!, into: intoOf(t) }))
+function openBranches(b: Pick<Board, 'tasks'>): { id: string; branch: string; into: string; project: string }[] {
+  return b.tasks.filter(t => BRANCH_STATUSES.includes(t.status) && typeof t.branch === 'string' && safe(t.branch)).map(t => ({ id: t.id, branch: t.branch!, into: intoOf(t), project: projectOfTask(t) }))
+}
+
+/** T-1199: a task's project name ('' = none: the board folder's repo). */
+const projectOfTask = (t: object): string => {
+  const p = (t as { project?: unknown }).project
+  return typeof p === 'string' ? p : ''
 }
 
 /**
@@ -45,8 +51,28 @@ function openBranches(b: Pick<Board, 'tasks'>): { id: string; branch: string; in
  * Null when the main line can't be read; a task whose commands fail is left out.
  */
 export async function readBranches(host: Host, into: string, b: Pick<Board, 'tasks'>, nowMs: number): Promise<BranchFacts | null> {
+  // T-1199: a board whose tasks name projects gets one block per repo that has open or just-merged tasks; a board with none is read as ever
+  const projectBoard = b.tasks.some(t => projectOfTask(t)) && Object.keys(S.projects).length > 0
+  if (!projectBoard) return readRepo(host, S.root, into, b, nowMs)
+  const merged = liveFinishedLanes({ tasks: b.tasks as SymccTask[] }, nowMs).map(l => l.id)
+  const keys = new Set([...openBranches(b).map(t => t.project), ...b.tasks.filter(t => merged.includes(t.id)).map(projectOfTask)])
+  const repos: BranchRepo[] = []
+  for (const project of [...keys].sort((x, y) => (x === '' ? -1 : y === '' ? 1 : x.localeCompare(y)))) {
+    const cwd = project ? projectPath(project) : S.root
+    if (!cwd) continue
+    const mine = b.tasks.filter(t => projectOfTask(t) === project)
+    const repoInto = project ? (mine.map(t => intoOf(t)).find(i => i && safe(i)) ?? '') : into
+    const f = repoInto ? await readRepo(host, cwd, repoInto, { tasks: mine }, nowMs) : null
+    if (f) repos.push({ project, name: project || S.root.split('/').filter(Boolean).pop() || 'board', into: f.into, commits: f.commits, tasks: f.tasks })
+  }
+  const first = repos[0]
+  return first ? { into: first.into, commits: first.commits, tasks: first.tasks, at: nowMs, repos } : null
+}
+
+/** One repo's figures: `cwd` is the repo, `into` the branch its tasks merge into. */
+async function readRepo(host: Host, cwd: string, into: string, b: Pick<Board, 'tasks'>, nowMs: number): Promise<BranchFacts | null> {
   if (!safe(into)) return null
-  const run = (args: string[]) => git(host, args, S.root, GIT_MS).catch(() => null)
+  const run = (args: string[]) => git(host, args, cwd, GIT_MS).catch(() => null)
   const log = await run(['log', `-${BRANCH_COMMITS}`, '--format=%H %ct', into, '--'])
   if (!log || log.exitCode !== 0) return null
   const commits = log.stdout
@@ -81,7 +107,7 @@ export function branchFacts(host: Host, b: Pick<Board, 'tasks'>, into: string, n
   // T-794: the tasks merged in the last 10 minutes keep a row (the same ones ▍Tasks keeps: liveFinishedLanes)
   const recent = liveFinishedLanes({ tasks: b.tasks as SymccTask[] }, nowMs).length > 0
   if (!open.length && !recent) return { facts: undefined }
-  const key = [into, ...open.map(t => `${t.id}:${t.branch}:${t.into}`), ...b.tasks.filter(t => t.status === 'done' && t.merged).map(t => t.merged)].join(' ')
+  const key = [into, ...open.map(t => `${t.id}:${t.branch}:${t.into}:${t.project}`), ...b.tasks.filter(t => t.status === 'done' && t.merged).map(t => t.merged)].join(' ')
   const fresh = cache.key === key && nowMs - cache.readAt < BRANCH_CACHE_MS
   if (fresh || cache.running) return { facts: cache.facts }
   cache.running = true

@@ -14,7 +14,7 @@ may have moved.
 | Word | Meaning |
 |---|---|
 | Workspace | A folder that holds a symcc board (`.symcc/`), for example `~/repositories`. |
-| Project | A git repo in a folder below the workspace, for example `~/repositories/rubrica`. |
+| Project | A git repo at any path on disk, listed by name and path in the board's project table, for example `rubrica` → `~/repositories/rubrica`. |
 | Worker copy | A git worktree (a second checkout of a repo, sharing its history) where one worker does one task, on branch `symcc/T-n`. |
 | Lead | The agent you talk to. It plans tasks and runs the board. |
 | Scout | An agent that looks for work on a schedule and suggests tasks. |
@@ -24,11 +24,12 @@ may have moved.
 1. **One workspace per folder, not per machine.** For example `~/repositories` for work and
    another folder for home. The board (`.symcc/`) lives in that folder. The folder itself
    need not be a git repo. One board and one lead per workspace.
-2. **Repos stay where they are.** symcc copies nothing and keeps no list of repos. A task
-   names its project as the folder below the workspace (for example `rubrica`). The worker
+2. **Repos stay where they are.** symcc copies nothing. The board keeps a table of projects,
+   each a name and the path of a repo anywhere on disk (this replaces "folders below the
+   workspace"). The lead adds one only on your yes. A task names its project (for example `rubrica`). The worker
    copy is a git worktree of that repo, on a `symcc/T-n` branch, merged into that repo's own
-   branch. symcc stores only optional per-project settings, such as a test command when it
-   can't be guessed.
+   branch. symcc also stores optional per-project settings, such as a test command when it
+   can't be guessed. The Live tab's Branches section has one block per repo with open tasks.
 3. **A task need not belong to a project.** Research runs in a plain scratch folder and its
    answer comes back. A note or document is saved in the workspace. Nothing is merged.
 4. **Mostly developer work.** symcc is not a to-do app for personal life.

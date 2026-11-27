@@ -107,8 +107,8 @@ export async function paneParts($: $, e: PaneEvent) {
     v.git_state === 'no-repo' || v.git_state === 'no-commits' || v.git_state === 'no-git'
       ? [
           <Box key="banner-git" flexDirection="row" {...(vscode ? { flexWrap: 'wrap' as const } : {})}>
-            <Text wrap={vscode ? 'wrap' : 'truncate'} color={C('warning')}>{`${v.git_workspace || gitNotice(v.git_state, v.git_install ?? '', S.N.name)} `}</Text>
-            {v.git_workspace ? null : v.git_state === 'no-git' ? <Button key="check-git" label="Check again (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await recheckGit(claudeHost($)))))} /> : <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await setupGit(claudeHost($), 'you'))))} />}
+            <Text wrap={vscode ? 'wrap' : 'truncate'} color={C('warning')}>{`${gitNotice(v.git_state, v.git_install ?? '', S.N.name)} `}</Text>
+            {v.git_state === 'no-git' ? <Button key="check-git" label="Check again (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await recheckGit(claudeHost($)))))} /> : <Button key="setup-git" label="Set up git (g)" hotkey="g" onPress={act(async () => $.ui.toast(S.N.toast(await setupGit(claudeHost($), 'you'))))} />}
           </Box>,
         ]
       : []

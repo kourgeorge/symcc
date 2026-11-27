@@ -5,7 +5,7 @@
 // yesterday and last 7 days lines) and ORGANIZATIONAL MEMORY (the count and the newest notes), then one hint line, then (when lanes show) the ✧ / ⌀ legend
 // as the last lines (T-933: never under the task rows).
 import { DEFAULT_NAME } from '../name'
-import { LIVE_INDENT, LIVE_SECTIONS, liveIdle, laneLines, liveBranches, liveColumns, liveHeaderSegs, liveHeading, liveNowSegs, liveInner, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveOrgMem, liveTaskLanes, liveTodayLines, liveTrains, segText, trainRows, type LiveSeg, type LiveView } from './live'
+import { LIVE_INDENT, LIVE_SECTIONS, liveIdle, laneLines, liveBranchBlocks, liveColumns, liveHeaderSegs, liveHeading, liveNowSegs, liveInner, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveOrgMem, liveTaskLanes, liveTodayLines, liveTrains, segText, trainRows, type LiveSeg, type LiveView } from './live'
 import type { OrgMemNote } from './org-mem'
 import { localOffset } from './days'
 
@@ -58,12 +58,15 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
     }
   }
   // BRANCHES: the last figures git gave (none until read)
-  const br = liveBranches(view, nowMs, w)
-  if (br) {
+  const blocks = liveBranchBlocks(view, nowMs, w)
+  if (blocks.length) {
     out.push('')
-    line(br.head)
-    under(br.main)
-    for (const r of br.rows) under(r.segs)
+    line(blocks[0]!.head)
+    for (const br of blocks) {
+      if (br.repoHead) under(br.repoHead)
+      under(br.main)
+      for (const r of br.rows) under(r.segs)
+    }
   }
   // TODAY: today's figures, then the yesterday and last 7 days lines
   heading(LIVE_SECTIONS.today)

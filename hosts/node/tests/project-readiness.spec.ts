@@ -132,7 +132,6 @@ test('T-1165: workspace git checks count only open, real tasks and never touch t
       // (b) a backlog task without a project does not make the workspace board "no-repo"
       await gitReady(s.host)
       expect(S.gitState).toBe('ok')
-      expect(S.gitWorkspace).toBe('')
 
       // (a) the broken repo counts while its task is open, and is forgotten after the task is dropped
       await recheckGit(s.host)
@@ -228,7 +227,6 @@ test('T-1178: a no-project todo task does not stop a project task from starting'
       expect(S.gitState).toBe('ok')
       expect(noProjectText(b)).toContain('T-1 has no project')
       expect(noProjectText(b)).not.toContain('T-2')
-      expect(S.gitWorkspace).toBe('')
       expect(await msg(runNowTool(s.host, 'T-1', false))).toContain('T-1 has no project')
       expect(find(await load(s.host), 'T-1')?.status).toBe('todo')
     } finally {

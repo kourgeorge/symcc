@@ -195,17 +195,17 @@ setting, opens a pick list for `mode`, `notify`, `scout_findings` and `tests_wit
 
 ### Projects
 
-On a board folder that is not a repo itself, every folder directly below it with its own `.git` is a project (found by
-folder name, no stored list). A board inside one repo has none.
+A project is a repo at any path on disk, stored in the board's project table (name → path). A board inside one repo has
+none. The Settings page lists each as `name → path` with its test commands.
 
 | Where | What |
 |---|---|
-| Task field `project` | The project folder's name; missing = no project. Set by the lead's `add` and `change` (`change` with `project: ""` clears it). A name that is not a project folder is refused and the answer lists the folders that are. |
-| Board field `projects` | Optional settings by project name; only `test_commands` (a list of up to 5 shell lines) for now. Stored, not used yet. Set with the settings tool: `project: "client", test_commands: [...]`; `[]` removes it. Nothing else can be set per project. |
+| Task field `project` | The project's name; missing = no project. Set by the lead's `add` and `change` (`change` with `project: ""` clears it). A name that is not in the table is refused and the answer lists the projects. |
+| Board field `projects` | The table by project name: `path` (the repo's real path) and optional `test_commands` (a list of up to 5 shell lines). Settings tool: `project: "client", path: "~/code/client"` adds it (the lead asks you first) or moves it (only while none of its open tasks has a copy or branch); `project: "client", remove: true` removes it (refused while open tasks use it); `project: "client", test_commands: [...]` sets its test commands, `[]` clears them. A path must be a repo's top folder with commits, outside any `.symcc/` folder, with no board of its own. |
 | Rows and pages | `[client] title` in the terminal, VS Code and OpenCode lists and task pages, in the chat text, and on `board.html`. Nothing shows for a task with no project. |
 
-Git, merges and tests still run in the board's own repo; per-project git comes later. Worker copies will live under the
-workspace (`<workspace>/.symcc/worktrees/T-n`).
+Git, merges and tests run in the task's project repo. Worker copies live under the board folder
+(`<board>/.symcc/worktrees/T-n`), as worktrees of that repo.
 
 ### What `notify` uses on each system
 

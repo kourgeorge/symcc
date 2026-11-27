@@ -16,7 +16,7 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747, T-789: each section (Tasks, Today, Branches, Organizational memory) starts with a bold UPPERCASE heading (core's
 // liveHeading; no bar, no rule), one empty line above it (none above the first) and one under it, its lines indented by LIVE_INDENT.
-import { liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranches, liveNowSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
+import { liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranchBlocks, liveNowSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -122,7 +122,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
   const nowSegs = liveNowSegs(v, running, nowMs, inner)
   const needs = liveNeeds(v, nowMs, inner)
   const om = liveOrgMem(notes, width)
-  const br = liveBranches(v, nowMs, width)
+  const blocks = liveBranchBlocks(v, nowMs, width)
   // T-930: fill: the page is at least the pane's height, so the legend (live-key) sits at the bottom of the screen
   return (
     <Box flexDirection="column" {...(pane.bodyRows ? { minHeight: pane.bodyRows } : {})}>
@@ -159,19 +159,22 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
           ),
         ]
       })}
-      {br ?<Text key="live-br-blank"> </Text> : null}
-      {br ? <Text key="live-br-head">{draw(br.head)}</Text> : null}
-      {br ? <Text key="live-br-under"> </Text> : null}
-      {br ? <Text key="live-br-main">{under(br.main)}</Text> : null}
-      {br?.rows.map(r =>
-        r.id ? (
-          <Button key={row(branchKey(r.id))} plain onPress={open(r.id)}>
-            {under(r.segs)}
-          </Button>
-        ) : (
-          <Text key="live-br-more">{under(r.segs)}</Text>
+      {blocks.length ?<Text key="live-br-blank"> </Text> : null}
+      {blocks.length ? <Text key="live-br-head">{draw(blocks[0]!.head)}</Text> : null}
+      {blocks.length ? <Text key="live-br-under"> </Text> : null}
+      {blocks.flatMap((br, bi) => [
+        ...(br.repoHead ? [<Text key={`live-br-repo:${bi}`}>{under(br.repoHead)}</Text>] : []),
+        <Text key={bi ? `live-br-main:${bi}` : 'live-br-main'}>{under(br.main)}</Text>,
+        ...br.rows.map(r =>
+          r.id ? (
+            <Button key={row(branchKey(r.id))} plain onPress={open(r.id)}>
+              {under(r.segs)}
+            </Button>
+          ) : (
+            <Text key={bi ? `live-br-more:${bi}` : 'live-br-more'}>{under(r.segs)}</Text>
+          ),
         ),
-      )}
+      ])}
       <Text key="live-today-blank"> </Text>
       <Text key="live-today-head">{draw(liveHeading(LIVE_SECTIONS.today, width))}</Text>
       <Text key="live-today-under"> </Text>

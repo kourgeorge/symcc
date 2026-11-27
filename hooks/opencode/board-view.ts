@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning, DRIVE_HERE_LABEL, showsDriveButton,
   searchTasks, showsHeader, type BoardPage, groupLabel,
-  LIVE_TABS, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranches, liveTaskLanes, liveLayout, liveColumns, liveNowSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranchBlocks, liveTaskLanes, liveLayout, liveColumns, liveNowSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { notSetUpAnswer } from '../core/settings'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
@@ -178,6 +178,8 @@ export function parseViewFile(text: string | null | undefined): ViewFile | null 
     // T-727: the Live tab's Branches figures; a broken value is left out (no section)
     const br = rest.branches as Partial<NonNullable<PaneView['branches']>> | undefined
     if (!br || typeof br !== 'object' || typeof br.into !== 'string' || !Array.isArray(br.commits) || !br.tasks || typeof br.tasks !== 'object') delete rest.branches
+    // T-1199: a broken per-repo list is left out (the one-repo figures stay)
+    else if (br.repos !== undefined && !(Array.isArray(br.repos) && br.repos.every(x => x && typeof x === 'object' && typeof x.name === 'string' && typeof x.project === 'string' && typeof x.into === 'string' && Array.isArray(x.commits) && x.tasks && typeof x.tasks === 'object'))) rest.branches = { ...br, repos: undefined } as never
     // T-769: ▍Today's lead, scout and cost figures; a broken value is left out
     const team = rest.today_team as Partial<NonNullable<PaneView['today_team']>> | undefined
     if (!team || typeof team !== 'object' || typeof team.day !== 'string') delete rest.today_team
@@ -578,12 +580,11 @@ export const NEW_SCOUT_BUTTON: PanelButton = { label: '+ New scout', hit: { key:
 
 /** The banner's git row (T-706, as Claude Code's): with no git repo or no commit yet, what is wrong and the
  *  "[ Set up git (g) ]" button, which asks for a yes before /<name>-settings git setup; no row otherwise. */
-export function gitRowLines(v: Pick<PaneView, 'git_state'> & Partial<Pick<PaneView, 'git_install' | 'git_workspace'>>, w: number, name: string = DEFAULT_NAME): Line[] {
+export function gitRowLines(v: Pick<PaneView, 'git_state'> & Partial<Pick<PaneView, 'git_install'>>, w: number, name: string = DEFAULT_NAME): Line[] {
   const missing = v.git_state === 'no-git'
   if (!missing && v.git_state !== 'no-repo' && v.git_state !== 'no-commits') return []
   // the panel clips long lines, so the notice wraps; the button goes at the end of the last line when it fits, else on its own line
-  const lines: Line[] = wrapSegs([{ text: v.git_workspace || gitNotice(v.git_state!, v.git_install ?? '', name), color: 'warning' }], w)
-  if (v.git_workspace) return lines // T-1136: several repos here: no Set up git button
+  const lines: Line[] = wrapSegs([{ text: gitNotice(v.git_state!, v.git_install ?? '', name), color: 'warning' }], w)
   const b = missing ? CHECK_GIT_BUTTON : SETUP_GIT_BUTTON
   const button = buttonText(b)
   const last = lines[lines.length - 1]
@@ -910,12 +911,12 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   const rows = new Map(lanes.map(l => [l.id, trainRows(trains.lanes[l.id] ?? [], inner)]))
   const needs = liveNeeds(v, nowMs, inner)
   const om = liveOrgMem(orgMemIn(f), w)
-  const br = liveBranches(v, nowMs, w)
+  const blocks = liveBranchBlocks(v, nowMs, w)
   // the cursor's stops, top to bottom: each lane, then its trains; (T-727) the Branches rows; then (T-718) the newest notes and the topics
   const ids = [
     ...needs.map(n => liveNeedId(n.id)),
     ...lanes.flatMap(l => [l.id, ...rows.get(l.id)!.flatMap(r => (r.id ? [r.id] : []))]),
-    ...(br?.rows ?? []).flatMap(r => (r.id ? [liveBranchId(r.id)] : [])),
+    ...blocks.flatMap(x => x.rows).flatMap(r => (r.id ? [liveBranchId(r.id)] : [])),
     LIVE_OM_ALL_ID,
     ...om.newest.map(x => liveNoteId(x.note.n)),
     ...om.grid.flatMap(r => r.map(c => liveTopicId(c.topic))),
@@ -949,12 +950,15 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
     b.add(under(second))
     for (const r of rows.get(l.id)!) r.id ? opens(r.segs, r.id) : b.add(under(r.segs))
   }
-  if (br) {
+  if (blocks.length) {
     b.blank()
-    b.add(liveSegs(br.head))
+    b.add(liveSegs(blocks[0]!.head))
     b.blank()
-    b.add(under(br.main))
-    for (const r of br.rows) r.id ? opens(r.segs, liveBranchId(r.id)) : b.add(under(r.segs))
+    for (const br of blocks) {
+      if (br.repoHead) b.add(under(br.repoHead))
+      b.add(under(br.main))
+      for (const r of br.rows) r.id ? opens(r.segs, liveBranchId(r.id)) : b.add(under(r.segs))
+    }
   }
   // T-738: one empty line above each section after the first (Today, Branches, Organizational memory)
   b.blank()
