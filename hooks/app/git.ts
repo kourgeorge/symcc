@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { isFinished, liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, gitNotice, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, latestReportPattern, latestReportOf,SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit, isProjectName } from '../board'
+import { isFinished, isInvestigation, liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, gitNotice, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, latestReportPattern, latestReportOf,SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit, isProjectName } from '../board'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
@@ -224,13 +224,23 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
   return s === 'ok'
 }
 
-/** T-1178: on a workspace board, the open tasks with no project (they can't start there yet); '' when none or not a workspace. */
+/** T-1182: whether this is a workspace board (the board folder is no repo, projects below it), as the last check found. */
+export const workspaceNow = (): boolean => S.gitState === 'ok' && S.gitRoot === 'no-repo'
+
+/** T-1182: a task that runs in a plain folder (no git copy, no branch): an investigation or errand with no project on a workspace board. */
+export const plainTask = (t: object | null | undefined): boolean => workspaceNow() && !(t as { project?: string } | null | undefined)?.project && isInvestigation(t as { kind?: unknown })
+
+/** T-1182: why a change task can't have no project on a board over several repos; '' when there are no project folders. */
+export const changeNeedsProject = (names: readonly string[]): string =>
+  names.length ? `on a board over several repos a change task needs a project: ${names.join(', ')} (only an investigation or an errand may have none)` : ''
+
+/** T-1178: on a workspace board, the open change tasks with no project (they can't start there; investigations and errands may have none, T-1182); '' when none or not a workspace. */
 export function noProjectText(b: Board): string {
-  if (S.gitState !== 'ok' || S.gitRoot !== 'no-repo') return ''
-  const ids = b.tasks.filter(t => isOpenTask(t) && !isProjectName((t as { project?: string }).project ?? '')).map(t => t.id)
+  if (!workspaceNow()) return ''
+  const ids = b.tasks.filter(t => isOpenTask(t) && !isProjectName((t as { project?: string }).project ?? '') && !isInvestigation(t)).map(t => t.id)
   if (!ids.length) return ''
   const many = ids.length > 1
-  return `${ids.join(', ')} ${many ? 'have' : 'has'} no project, so ${many ? "they can't" : "it can't"} start on a board over several repos; give ${many ? 'each' : 'it'} a project (${S.N.name} change project)`
+  return `${ids.join(', ')} ${many ? 'have' : 'has'} no project, so ${many ? "they can't" : "it can't"} start on a board over several repos (a change task needs a project); give ${many ? 'each' : 'it'} a project (${S.N.name} change project)`
 }
 
 export const workspaceText = () => `This looks like a workspace of several repos; ${S.N.name} can't run a board over several repos yet. Open ${S.W.app} in one repo instead.`
@@ -384,6 +394,12 @@ export async function prepareWorktree($: Host, t: SymccTask, target: string, cat
   const dir = worktreeDir(t.id)
   const branch = taskBranch(t)
   const repo = repoOf(t)
+  // T-1182: no project on a workspace board: a plain folder, no git copy and no branch
+  if (plainTask(t)) {
+    if ((await $.run(['mkdir', '-p', dir])).exitCode !== 0) throw new Error(`could not make the folder ${dir}`)
+    const plain: { dir: string; branch: string } & CatchUp = { dir, branch, behind: 0 }
+    return plain
+  }
   let made = false
   if (!(await $.fs.exists(`${dir}/.git`))) {
     await git($, ['worktree', 'prune'], repo)
@@ -632,6 +648,8 @@ export async function removeWorktree($: Host, taskId: string, dir: string, excep
   const t = find(await load($), taskId)
   if (liveWorkersFor({ id: taskId, runs: t?.runs }, agents.map(agentState), S.N.name).some(a => a.id !== except)) return false
   const repo = repoOf(t)
+  // T-1182: a plain folder (no project on a workspace board) is only a folder
+  if (plainTask(t)) return (await $.run(['rm', '-rf', dir])).exitCode === 0
   await git($, ['worktree', 'remove', '--force', dir], repo)
   await git($, ['worktree', 'prune'], repo)
   return true
@@ -666,6 +684,13 @@ export async function cleanupMerged($: Host, b: Board) {
   const existing: string[] = []
   for (const t of b.tasks) if (isFinished(t) && (await $.fs.exists(`${worktreeDir(t.id)}/.git`))) existing.push(t.id)
   let dirs = 0
+  // T-1182: the plain folders of finished tasks with no project (no git in them)
+  for (const t of b.tasks) {
+    if (!isFinished(t) || !plainTask(t) || busy.has(t.id) || starting.has(t.id) || finishing.has(t.id) || approving.has(t.id)) continue
+    if (!(await $.fs.exists(worktreeDir(t.id))) || (await $.fs.exists(`${worktreeDir(t.id)}/.git`))) continue
+    if (liveWorkersFor({ id: t.id, runs: t.runs }, agents.map(agentState), S.N.name).length) continue
+    if ((await $.run(['rm', '-rf', worktreeDir(t.id)])).exitCode === 0) dirs++
+  }
   for (const id of worktreesToRemove(b.tasks, existing)) {
     const t = find(b, id)
     if (busy.has(id) || starting.has(id) || finishing.has(id) || approving.has(id) || liveWorkersFor({ id, runs: t?.runs }, agents.map(agentState), S.N.name).length) continue

@@ -14,9 +14,12 @@ import { change, load, now } from '../../../hooks/app/store'
 import { pump } from '../../../hooks/app/workers'
 import { runNowTool } from '../../../hooks/app/tools'
 import { S } from '../../../hooks/app/state'
-import { find, intoOf, patchTask } from '../../../hooks/board'
+import { find, intoOf, patchTask, addTask } from '../../../hooks/board'
+import type { Host } from '../../../hooks/host'
 
 const FAKE = `${PLUGIN_ROOT}/hosts/node/tests/fake-claude.sh`
+// T-1182: a change task with no project is refused on a workspace board now; an old one (made before) is put on the board directly
+const oldLoose = (h: Host, title: string) => change(h, b => addTask(b, { origin: { why: 'a test' }, title, details: 'Do it', files: ['x.txt'] }, now()))
 const msg = (p: Promise<string>) => p.then(x => x, (e: Error) => `ERR ${e.message}`)
 
 test('T-1154: readiness, Changes, Branch facts and the doctor look at each task\'s own repo', async () => {
@@ -85,7 +88,7 @@ test('T-1154: readiness, Changes, Branch facts and the doctor look at each task\
 
       // a project change: refused while a copy exists; with none yet, merge_into follows the new repo's branch
       expect(await msg(leadTool(s, 'change', { task: 'T-1', project: 'server' }))).toContain('already has a copy in client; drop and re-add it, or finish it first')
-      expect(await add('Loose')).toContain('T-4')
+      await oldLoose(s.host, 'Loose')
       expect(intoOf(find(await load(s.host), 'T-4')!)).toBe('main')
       await leadTool(s, 'change', { task: 'T-4', project: 'client' })
       expect(intoOf(find(await load(s.host), 'T-4')!)).toBe('dev')
@@ -120,7 +123,7 @@ test('T-1165: workspace git checks count only open, real tasks and never touch t
       const add = (title: string, project?: string) => leadTool(s, 'add', { title, details: 'Do it', files: ['x.txt'], ...(project ? { project } : {}), why: 'test', origin_by: 'owner', request: 'test' })
       expect(await add('Client work', 'client')).toContain('T-1')
       expect(await add('Empty work', 'empty')).toContain('T-2')
-      expect(await add('Scout idea')).toContain('T-3')
+      await change(s.host, b => addTask(b, { origin: { why: 'a test' }, title: 'Scout idea', details: 'Do it', files: ['x.txt'] }, now()))
       await change(s.host, b => patchTask(b, 'T-3', { status: 'backlog' }, now()))
 
       // (b) a backlog task without a project does not make the workspace board "no-repo"
@@ -209,7 +212,7 @@ test('T-1178: a no-project todo task does not stop a project task from starting'
     const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1178' })
     try {
       const add = (title: string, project?: string) => leadTool(s, 'add', { title, details: 'Do it', files: ['x.txt'], ...(project ? { project } : {}), why: 'test', origin_by: 'owner', request: 'test' })
-      expect(await add('Loose')).toContain('T-1')
+      await oldLoose(s.host, 'Loose')
       expect(await add('Client work', 'client')).toContain('T-2')
       s.working = true
       void pump(s.host).catch(() => undefined)
@@ -254,9 +257,8 @@ test('T-1179: cleanupMerged leaves an outer repo alone; run now names only its o
     await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
     const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1179' })
     try {
-      const add = (title: string) => leadTool(s, 'add', { title, details: 'Do it', files: ['x.txt'], why: 'test', origin_by: 'owner', request: 'test' })
-      expect(await add('Loose')).toContain('T-1')
-      expect(await add('Loose two')).toContain('T-2')
+      await oldLoose(s.host, 'Loose')
+      await oldLoose(s.host, 'Loose two')
       await recheckGit(s.host)
       expect(S.gitRoot).toBe('no-repo')
       await cleanupMerged(s.host, await load(s.host))

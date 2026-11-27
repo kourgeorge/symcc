@@ -152,7 +152,7 @@ export type CheckMode = 'finish' | 'approve' | 'merge'
  * 'merge' is the same as 'approve', for finished work whose merge waited only for the owner's files.
  * `stop` is asked after each test and just before the merge: when it returns a reason (the task
  * was dropped or paused meanwhile), nothing is merged and that reason is returned.
- * Every merge takes its turn in the project-wide merge line (inMergeLine, app/merge-line.ts): at its turn, in one go, it
+ * Every merge takes its turn in the merge line (one merge at a time per repo) (inMergeLine, app/merge-line.ts): at its turn, in one go, it
  * catches up with the target branch, tests and moves the branch. When the branch still moved before ours could move it
  * (the owner committed to it by hand), nothing is merged: a worker's finished work ('finish') puts the same branch back
  * in the line to test again, at most AGAIN_MAX times per try; after that, or in the other modes, the turn fails.
@@ -273,7 +273,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   const pre = first ? await first(changed) : undefined
   if (pre && 'result' in pre) return withSecrets(pre.result)
   const noVerdict = pre?.noVerdict
-  // One merge line for the whole project (inMergeLine): only the task at its front catches up, tests and moves its branch.
+  // One merge at a time per repo (inMergeLine): only the task at its front catches up, tests and moves its branch.
   // So the branch can only move under it by hand (the owner committed to it meanwhile): then the same branch is tested
   // again (T-733, below), at most AGAIN_MAX times per try; only after that does the turn fail as one normal try.
   // The time limit runs only during its own turn (each task in front has its own limit and `release`, so the line keeps moving).

@@ -58,7 +58,15 @@ test('add with a project stores it; a wrong name is refused with the project fol
   expect(await runTool(w.host, 'board', { task: 'T-1' })).toContain('project: client')
   expect(await runTool(w.host, 'change', { task: 'T-1', project: 'server' })).toContain('T-1')
   expect(boardOf(files).tasks[0]!.project).toBe('server')
-  await runTool(w.host, 'change', { task: 'T-1', project: '' })
+  // T-1182: a change task can't be left with no project on such a board; an investigation or errand may have none
+  const clear = await runTool(w.host, 'change', { task: 'T-1', project: '' }).catch((e: Error) => e.message)
+  expect(clear).toContain('a change task needs a project: client, server')
+  expect(boardOf(files).tasks[0]!.project).toBe('server')
+  const none = await runTool(w.host, 'add', { ...WISH, title: 'Loose', ...{} }).catch((e: Error) => e.message)
+  expect(none).toContain('a change task needs a project: client, server')
+  expect(await runTool(w.host, 'add', { ...WISH, title: 'Question', kind: 'investigation' })).toContain('added T-2')
+  expect(await runTool(w.host, 'add', { ...WISH, title: 'Errand', kind: 'errand' })).toContain('added T-3')
+  await runTool(w.host, 'change', { task: 'T-1', kind: 'investigation', project: '' })
   expect(boardOf(files).tasks[0]!.project).toBe(undefined)
 })
 

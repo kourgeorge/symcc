@@ -126,8 +126,11 @@ Each step depends on the one before. The probe has the files and tests for each.
 3. **Per-project git and tests (built, T-1152 to T-1155).** Every git call runs in the task's repo (the probe counts
    about 110), git readiness is checked per project, the merge runs in the task's repo, and
    each repo uses its own test command.
-4. **Tasks with no project (not built).** Research and notes that need no repo. Until then (T-1178) a task with no
-   project on a workspace board starts nothing and holds back only itself: the board names it, the lead is told once, and the
-   lead guide asks for a project on every task there.
+4. **Tasks with no project (built, T-1182).** Research and errands that need no repo. On a workspace board an
+   investigation or errand with no project runs in a plain folder (`.symcc/worktrees/T-n`, no git copy, no branch): it may
+   read every project, writes into none, and nothing is committed, tested or merged; the folder goes when the task ends.
+   A change task with no project is refused when added or changed ("a change task needs a project: client, server"), and
+   "Keep as a note" on an answered investigation with no project is refused until it has one. Only an old change task with no
+   project still waits (T-1178: the board names it, the lead is told once).
 5. **Intake.** Scouts for email, GitHub issues and Slack, each with its own start-or-backlog
    choice (the existing findings setting). The lead can set `needs_review` on their tasks.

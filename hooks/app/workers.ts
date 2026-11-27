@@ -2,7 +2,7 @@ import type { SymccTask, SymccTokens } from '../../types'
 import { doneLine, PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, mergeTestCount, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerProblems, problemsBlockLines, CHECKER_PROBLEMS_MAX, checkerRetryText, kindOf, isInvestigation, isErrand, errandFolders, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, isUsageLimit, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs, isProseRole, checkerSendBacks, CHECKER_SEND_BACKS, checkerAskText, CHECKER_ASK_OPTIONS, firstProblemOf, CHECKER_MARK } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
-import { repoOf, gitReady, taskGitReady, gitStateOfTask, projectNotes, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
+import { repoOf, plainTask, workspaceNow, projectNames, gitReady, taskGitReady, gitStateOfTask, projectNotes, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
 import { publish, drivesHere, drivenElsewhere, readLeadText } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
 import type { TurnLimit } from './merge-line'
@@ -128,7 +128,8 @@ export async function pump(host: Host) {
     if (workers.size + starting.size >= b.max_parallel) break
     if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
     const repo = repoOf(t)
-    if (repo === S.root ? S.gitRoot !== 'ok' : !(repoOk.get(repo) ?? (repoOk.set(repo, await gitReady(host, b, repo)), repoOk.get(repo)))) continue
+    // T-1182: a task with no project on a workspace board needs no repo
+    if (!plainTask(t) && (repo === S.root ? S.gitRoot !== 'ok' : !(repoOk.get(repo) ?? (repoOk.set(repo, await gitReady(host, b, repo)), repoOk.get(repo))))) continue
     const q = await queueWorker(host, t.id).catch(async (err: Error) => (await failed(t.id)(err), null))
     if (q) queued.push(q.started.catch(failed(t.id)))
   }
@@ -190,12 +191,14 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     const t0 = find(b, id)
     if (!mayStart(t0, agents.map(agentState), S.N.name)) return null
     // T-1154: its own repo must be ready (run now, which skips the pump's look, checks here)
-    if (repoOf(t0) === S.root ? S.gitRoot !== 'ok' : !(await taskGitReady(host, b, t0))) return null
+    // T-1182: a task with no project on a workspace board runs in a plain folder: no repo to be ready
+    const plain = plainTask(t0)
+    if (!plain && (repoOf(t0) === S.root ? S.gitRoot !== 'ok' : !(await taskGitReady(host, b, t0)))) return null
     // Its last try's work is already on the branch it merges into (e.g. a reload sent it back, or
     // the owner retried it after it was wrongly failed): it is done, not tried again.
-    if (await mergedBeforeStart(host, t0!)) return null
+    if (!plain && (await mergedBeforeStart(host, t0!))) return null
     // the branch it merges into is gone: it waits for the owner instead of failing
-    if (await waitIfBranchGone(host, b, t0!, 'start')) return null
+    if (!plain && (await waitIfBranchGone(host, b, t0!, 'start'))) return null
     // T-764: the catch-up merge commit names the try about to start (the same one when T-743's go-on rule keeps it)
     const tryNo = t0!.attempts > 0 && goOnRun(t0!.runs, now()) ? t0!.attempts : t0!.attempts + 1
     const { dir, branch, behind, why, merged, commit } = await prepareWorktree(host, { ...t0!, attempts: tryNo }, intoOf(t0!), true)
@@ -235,8 +238,9 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.live?.session === S.me && cur.attempts === t.attempts
     }
+    const plainNote = plain ? `\n\nYou work in a plain folder (no git, no branch). The board's projects are folders you may read, but never write into: ${(await projectNames(host)).map(n => `${S.root}/${n}`).join(', ')}. Read them with your file tools. Nothing you leave here is kept: put what the owner needs in your report.` : ''
     const errandOut = (x: BoardTask) => (isErrand(x) ? errandFolders(x.files, S.root, S.home) : [])
-    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince(host, t, dir, Date.parse(now()))) + (errandOut(t).length ? `\n\nYou may write here (outside the project): ${errandOut(t).join(', ')}` : '') + reportsNote(reports, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(isProseRole(role) && !isInvestigation(t) ? { prose: true as const } : {}), ...(errandOut(t).length || (!isInvestigation(t) && t.files?.length) ? { files: isErrand(t) ? errandOut(t) : t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
+    const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince(host, t, dir, Date.parse(now()))) + plainNote + (errandOut(t).length ? `\n\nYou may write here (outside the project): ${errandOut(t).join(', ')}` : '') + reportsNote(reports, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(isProseRole(role) && !isInvestigation(t) ? { prose: true as const } : {}), ...(errandOut(t).length || (!isInvestigation(t) && t.files?.length) ? { files: isErrand(t) ? errandOut(t) : t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) }
@@ -1570,6 +1574,8 @@ export async function approve(host: Host, id: string, keepNote = false): Promise
   if (!approving.has(id)) outcomes.set(id, 'failed')
   const b = await load(host)
   const t = reviewTask(b, id, 'approve')
+  // T-1182: the note is a docs task, which needs a project on a board over several repos
+  if (isInvestigation(t) && keepNote && workspaceNow() && !t.project) throw new Error(`${t.id} has no project, and a note is a docs task that needs one on a board over several repos (${(await projectNames(host)).join(', ')}): give ${t.id} a project (${S.N.name} change project), then keep it as a note`)
   if (isInvestigation(t)) return endInvestigation(host, t, keepNote)
   if (keepNote) throw new Error(`${t.id} is a change task: keep_note is only for an answered investigation. Approve it without keep_note to merge it.`)
   return mergeFinished(host, b, t, 'approve')
@@ -1595,12 +1601,12 @@ const everyReport = (t: BoardTask, latest?: string): string[] => [...new Set([..
  */
 async function endInvestigation(host: Host, t: BoardTask, keepNote: boolean, handBackFrom?: string): Promise<string> {
   const full = keepNote ? await fullAnswer(host, t) : { text: '' }
-  const merge_into = keepNote ? await homeBranch(host, repoOf(t)) : undefined
+  const merge_into = keepNote && !plainTask(t) ? await homeBranch(host, repoOf(t)) : undefined
   // notes already written: a new note never overwrites one (it gets -2, -3… instead)
   const notes = keepNote ? (await Promise.resolve().then(() => host.fs.list(path('docs/research'))).catch(() => [])).map(f => `docs/research/${f.name}`) : []
   const added = await change(host, x => {
     if (!keepNote) return [investigationDone(x, t.id, now()), undefined] as [Board, BoardTask | undefined]
-    const [y, n] = addTask(x, { ...keepNoteTask(find(x, t.id) ?? t, full.text, everyReport(find(x, t.id) ?? t, full.file), [...notes, ...noteFilesInUse(x)]), merge_into }, now(), S.N.dir)
+    const [y, n] = addTask(x, { ...keepNoteTask(find(x, t.id) ?? t, full.text, everyReport(find(x, t.id) ?? t, full.file), [...notes, ...noteFilesInUse(x)]), merge_into, ...(t.project ? { project: t.project } : {}) }, now(), S.N.dir)
     return [investigationDone(y, t.id, now(), n.id), n] as [Board, BoardTask | undefined]
   })
   const branch = taskBranch(t)
@@ -1609,7 +1615,7 @@ async function endInvestigation(host: Host, t: BoardTask, keepNote: boolean, han
   const keep = commits !== 0
   const what = commits === null ? `git could not tell whether it has commits ${intoOf(t)} doesn't have` : `it has ${plural(commits, 'commit')} from an earlier change try that ${intoOf(t)} doesn't have`
   const kept = keep ? ` Its branch ${branch} was kept: ${what}. Delete it by hand once that work is not needed.` : ''
-  if ((await removeWorktree(host, t.id, worktreeDir(t.id), handBackFrom, handBackFrom !== undefined).catch(() => false)) && !keep) await git(host, ['branch', '-D', branch], repoOf(t))
+  if ((await removeWorktree(host, t.id, worktreeDir(t.id), handBackFrom, handBackFrom !== undefined).catch(() => false)) && !keep && !plainTask(t)) await git(host, ['branch', '-D', branch], repoOf(t))
   if (kept) tellLead(host, `${t.id} "${t.title}" is done.${kept}`)
   void pump(host)
   outcomes.set(t.id, 'done')

@@ -59,3 +59,68 @@ test('T-1155: two projects below one board: each task runs, is tested with its o
     for (const f of ['args', 'prompt', 'cwd']) await rm(`${log}.${f}`, { recursive: true, force: true })
   }
 }, 300_000)
+
+test('T-1182: tasks with no project on a workspace board: an investigation and an errand run in a plain folder; a change task needs a project', async () => {
+  const board = await realpath(await mkdtemp('/tmp/symcc-node-wsn-'))
+  const log = `${board}.fake`
+  const git = (cwd: string, ...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd })
+  try {
+    for (const name of ['client', 'server']) {
+      const d = `${board}/${name}`
+      await mkdir(d, { recursive: true })
+      await git(d, 'init', '-q', '-b', 'main')
+      await writeFile(`${d}/${name}.txt`, name)
+      await writeFile(`${d}/.gitignore`, '.scratch/\n')
+      await git(d, 'add', '.')
+      await git(d, 'commit', '-qm', 'init')
+    }
+    const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, ...args], { cwd: board, env: { FAKE_LOG: log }, timeoutMs: 120_000 })
+    const add = (input: Record<string, unknown>) => cli('tool', 'add', JSON.stringify({ details: 'Do it', why: 'test', origin_by: 'owner', request: 'test', ...input }))
+    await cli('cmd', 'symcc-init')
+    await cli('tool', 'settings', JSON.stringify({ project: 'client', test_commands: ['test -f hello.txt'] }))
+    // a change task with no project is refused, and the reason names the projects
+    const refused = await add({ title: 'Loose change', files: ['hello.txt'] })
+    expect(`${refused.stdout}${refused.stderr}`).toContain('a change task needs a project: client, server')
+    expect(`${refused.stdout}${refused.stderr}`).not.toContain('added T-')
+    // an investigation and an errand with no project, and a project task beside them
+    expect((await add({ title: 'Look around', kind: 'investigation' })).stdout).toContain('added T-1')
+    // alone first: its worker started in a folder that is no git copy
+    expect((await cli('tick')).exitCode).toBe(0)
+    const cwd = (await readFile(`${log}.cwd`, 'utf8')).trim()
+    expect(cwd.endsWith('/.symcc/worktrees/T-1')).toBe(true)
+    expect(await isThere(`${cwd}/.git`)).toBe(false)
+    expect((await readFile(`${log}.prompt`, 'utf8'))).toContain('plain folder')
+    expect((await add({ title: 'Make a note', kind: 'errand' })).stdout).toContain('added T-2')
+    expect((await add({ title: 'Hello in client', files: ['hello.txt'], project: 'client' })).stdout).toContain('added T-3')
+    const tick = await cli('tick')
+    expect(tick.exitCode).toBe(0)
+    const b = JSON.parse(await readFile(`${board}/.symcc/board.json`, 'utf8')) as { tasks: { id: string; status: string }[] }
+    const status = (id: string) => b.tasks.find(t => t.id === id)?.status
+    expect(status('T-1')).toBe('review') // answered, waits for the owner
+    expect(status('T-2')).toBe('done')
+    expect(status('T-3')).toBe('done')
+    // the worker of a task with no project ran in a folder that was no git copy (the last worker to run was T-3's, so check the repos instead)
+    expect((await git(`${board}/client`, 'log', '--format=%s', 'main')).stdout).toContain('Hello in client')
+    expect((await git(`${board}/server`, 'log', '--format=%s', 'main')).stdout).not.toContain('Look around')
+    for (const name of ['client', 'server']) {
+      expect((await git(`${board}/${name}`, 'status', '--porcelain')).stdout.trim()).toBe('')
+      expect((await git(`${board}/${name}`, 'branch', '--list')).stdout).not.toMatch(/symcc\/T-[12]\b/)
+      expect((await git(`${board}/${name}`, 'worktree', 'list')).stdout).not.toMatch(/T-[12]\b/)
+    }
+    // the errand's folder is gone; the answered investigation's stays until the owner reads it, and is no git copy
+    expect(await isThere(`${board}/.symcc/worktrees/T-2`)).toBe(false)
+    expect(await isThere(`${board}/.symcc/worktrees/T-1`)).toBe(true)
+    expect(await isThere(`${board}/.symcc/worktrees/T-1/.git`)).toBe(false)
+    expect(await isThere(`${board}/.git`)).toBe(false)
+    // Keep as a note needs a project (the note is a docs task): refused, the answer stays
+    const keep = await cli('tool', 'approve', JSON.stringify({ task: 'T-1', keep_note: true }))
+    expect(`${keep.stdout}${keep.stderr}`).toContain('has no project')
+    expect(await isThere(`${board}/.symcc/worktrees/T-1`)).toBe(true)
+    // Done on the answer ends it, and its folder goes
+    await cli('tool', 'approve', JSON.stringify({ task: 'T-1' }))
+    expect(await isThere(`${board}/.symcc/worktrees/T-1`)).toBe(false)
+  } finally {
+    await rm(board, { recursive: true, force: true })
+    for (const f of ['args', 'prompt', 'cwd']) await rm(`${log}.${f}`, { recursive: true, force: true })
+  }
+}, 300_000)
