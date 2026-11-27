@@ -127,6 +127,7 @@ export async function pump(host: Host) {
   for (const t of ready(b)) {
     if (workers.size + starting.size >= b.max_parallel) break
     if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
+    if (projectGone(t)) continue // an unknown project can't start
     const repo = repoOf(t)
     // T-1182: a task with no project on a workspace board needs no repo
     if (!plainTask(t) && (repo === S.root ? S.gitRoot !== 'ok' : !(repoOk.get(repo) ?? (repoOk.set(repo, await gitReady(host, b, repo)), repoOk.get(repo))))) continue
@@ -193,6 +194,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     // T-1154: its own repo must be ready (run now, which skips the pump's look, checks here)
     // T-1182: a task with no project on a workspace board runs in a plain folder: no repo to be ready
     const plain = plainTask(t0)
+    if (projectGone(t0)) return null
     if (!plain && (repoOf(t0) === S.root ? S.gitRoot !== 'ok' : !(await taskGitReady(host, b, t0)))) return null
     // Its last try's work is already on the branch it merges into (e.g. a reload sent it back, or
     // the owner retried it after it was wrongly failed): it is done, not tried again.

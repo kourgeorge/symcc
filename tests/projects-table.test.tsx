@@ -6,6 +6,7 @@ import { test } from './reset'
 import { change, load } from '../hooks/app/store'
 import { runTool } from '../hooks/app/tools'
 import { S } from '../hooks/app/state'
+import { pump } from '../hooks/app/workers'
 import { projectNames, repoOf, projectGone, taskGitReady, projectNotes, openProjects } from '../hooks/app/git'
 import { emptyBoard, find } from '../hooks/board'
 import { oldDataRows, upgradeBoard, withProjectPaths } from '../hooks/core/old-data'
@@ -83,4 +84,16 @@ test('a board that is its own repo: no table, a task with no project works in th
   expect(repoOf(find(await load(w.host), 'T-1'))).toBe('/ws')
   expect((JSON.parse(files.get('/ws/.symcc/board.json')!) as { projects?: unknown }).projects).toBe(undefined)
   expect(projectNotes(openProjects(await load(w.host)))).toBe('')
+})
+
+test('a task with an unknown project can be moved to a valid one, and the pump skips it instead of throwing', async () => {
+  const { w } = await world()
+  S.projects = { client: '/ws/client' }
+  await change(w.host, b => ({ ...b, projects: { client: { path: '/ws/client' } } }))
+  await runTool(w.host, 'add', { ...WISH, title: 'Old', project: 'client' })
+  await change(w.host, b => ({ ...b, tasks: b.tasks.map(t => ({ ...t, project: 'gone' })) }))
+  expect(await runTool(w.host, 'change', { task: 'T-1', project: 'client', why: 'w' })).toContain('updated')
+  expect(find(await load(w.host), 'T-1')?.project).toBe('client')
+  await change(w.host, b => ({ ...b, tasks: b.tasks.map(t => ({ ...t, project: 'gone' })) }))
+  await pump(w.host)
 })

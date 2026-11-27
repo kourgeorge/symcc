@@ -4,7 +4,7 @@ import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, know
 import { checkerReportOf } from '../core/task-sections'
 import { sizeSegs } from '../core/page-header'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
-import { plainTask, changeNeedsProject, noProjectText, repoOf, taskBranch, taskGitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, projectNames, projectRefusal, taskWork, resetScratch } from './git'
+import { plainTask, changeNeedsProject, noProjectText, repoOf, taskBranch, taskGitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, projectNames, projectGone, projectRefusal, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
 import { S, heard, workers, starting, toolName } from './state'
@@ -807,7 +807,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const project = await projectIn($, a)
       // T-1154: a task that already has a copy or a branch stays in the repo they are in; with none yet, a new project means a new repo and its current branch
       const projectMoves = project !== undefined && project !== (t.project ?? '')
-      if (projectMoves && ((await $.fs.exists(`${worktreeDir(t.id)}/.git`)) || (await branchExists($, taskBranch(t), repoOf(t))))) {
+      if (projectMoves && ((await $.fs.exists(`${worktreeDir(t.id)}/.git`)) || (!projectGone(t) && (await branchExists($, taskBranch(t), repoOf(t)))))) {
         throw new Error(`Nothing changed: ${t.id} already has a copy in ${t.project || 'the board folder'}; drop and re-add it, or finish it first`)
       }
       // A task given the researcher role becomes an investigation, unless kind is given too.
