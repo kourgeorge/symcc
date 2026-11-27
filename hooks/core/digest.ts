@@ -20,11 +20,22 @@ const hours = (ms: number) => `${Math.max(1, Math.round(ms / 3_600_000))}h`
  * saying: a task on try 3 or more, tests that failed in 2 or more tries, the checker sending work back 2 or more times,
  * or tasks stuck (todo, or waiting for the owner, for a long time).
  */
-export function digestText(tasks: readonly DigestTask[], sinceMs: number, nowMs: number): string | null {
+export function digestText(tasks: readonly DigestTask[], sinceMs: number, nowMs: number, seen: Map<string, string> = new Map()): string | null {
   const lines: string[] = []
+  const shown = new Map<string, string>()
   const open = tasks.filter(t => !ENDED.includes(t.status))
-  const tries = open.filter(t => Number(t.attempts) >= 3)
-  if (tries.length) lines.push(`On try 3 or more: ${tries.map(t => `${short(t)} (try ${t.attempts})`).join(', ')}.`)
+  const key = (t: DigestTask) => `${t.status}:${t.attempts}`
+  // A stuck or waiting task is named again only when its status or try changed since it was last named.
+  const fresh = (t: DigestTask) => seen.get(t.id) !== key(t)
+  // At most 3 names, then "and N more"; only the named ones count as told.
+  const list = (items: DigestTask[], what: (t: DigestTask) => string) => {
+    const head = items.slice(0, 3)
+    head.forEach(t => shown.set(t.id, key(t)))
+    return head.map(what).join(', ') + (items.length > 3 ? ` and ${items.length - 3} more` : '')
+  }
+  const running = (t: DigestTask) => t.status === 'doing' || t.status === 'review'
+  const tries = open.filter(t => t.status !== 'backlog' && Number(t.attempts) >= 3 && (running(t) || fresh(t)))
+  if (tries.length) lines.push(`On try 3 or more: ${list(tries, t => `${short(t)} (try ${t.attempts})`)}.`)
   const testFails = (t: DigestTask) => (t.history ?? []).filter(h => h.kind === 'failed' && h.reason === 'tests')
   const testy = open.filter(t => testFails(t).length >= 2 && testFails(t).some(h => since(h.at, sinceMs)))
   const testTasks = tasks.filter(t => testFails(t).some(h => since(h.at, sinceMs)))
@@ -38,9 +49,10 @@ export function digestText(tasks: readonly DigestTask[], sinceMs: number, nowMs:
     lines.push(`The checker sent work back ${back} times since the last digest${merged.length ? `; ${first} of ${merged.length} merged tasks passed on the first try` : ''}.`)
   }
   const old = (t: DigestTask) => nowMs - at(t.updated_at) > DIGEST_STUCK_MS
-  const idle = open.filter(t => t.status === 'todo' && !(t.after ?? []).length && old(t))
-  if (idle.length) lines.push(`Waiting to start for a long time: ${idle.map(t => `${short(t)} (${hours(nowMs - at(t.updated_at))})`).join(', ')}.`)
-  const owner = open.filter(t => t.status === 'waiting' && old(t))
-  if (owner.length) lines.push(`Waiting on the owner for a long time: ${owner.map(t => `${short(t)} (${hours(nowMs - at(t.updated_at))})`).join(', ')}.`)
+  const idle = open.filter(t => t.status === 'todo' && !(t.after ?? []).length && old(t) && fresh(t))
+  if (idle.length) lines.push(`Waiting to start for a long time: ${list(idle, t => `${short(t)} (${hours(nowMs - at(t.updated_at))})`)}.`)
+  const owner = open.filter(t => t.status === 'waiting' && old(t) && fresh(t))
+  if (owner.length) lines.push(`Waiting on the owner for a long time: ${list(owner, t => `${short(t)} (${hours(nowMs - at(t.updated_at))})`)}.`)
+  shown.forEach((v, k) => seen.set(k, v))
   return lines.length ? `Digest (what is stuck or repeating; agent reports are muted, read one with board task T-n):\n${lines.map(l => `- ${l}`).join('\n')}` : null
 }

@@ -324,7 +324,8 @@ export const mergeTestCount = (b: { test_commands: string[]; docs_test_commands?
 export const MERGE_LINE_FILE = 'merge-line.json'
 export const mergeLineStaleMs = (testMinutes: number) => 2 * testMinutes * 60_000
 export const MERGE_LINE_STALE_MS = mergeLineStaleMs(DEFAULT_TEST_MINUTES)
-export type LineEntry = { task: string; key: string; session: string; joined: string; at: number }
+/** `repo` is the task's repo (T-1181): each repo has its own line inside the file; none is the line of a board that is its own repo. */
+export type LineEntry = { task: string; key: string; session: string; joined: string; at: number; repo?: string }
 export const mergeLineText = (line: readonly LineEntry[]) => JSON.stringify({ line }, null, 2) + '\n'
 /** The entries of merge line file text `text`, oldest first; entries that are not one are skipped, a file that can't be read is an empty line. */
 export function parseMergeLine(text: string | null): LineEntry[] {

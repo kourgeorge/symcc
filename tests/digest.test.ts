@@ -91,6 +91,37 @@ test('digest: sent when a task is on try 3, not when nothing is worth saying, an
   expect(await digestTick(host, sent + DIGEST_EVERY_MS)).toBe(true) // still on try 3: named again
 })
 
+test('digest: a backlog task on try 3 is left out', () => {
+  const b = boardWith({ status: 'backlog', attempts: 3 })
+  expect(digestText(b.tasks, T0, T0 + 1000)).toBeNull()
+})
+
+test('digest: 5 stuck tasks show 3 names and "and 2 more"; the rest are named next time', () => {
+  const b = boardWith(...[1, 2, 3, 4, 5].map(() => ({ status: 'todo', attempts: 0 })))
+  const seen = new Map<string, string>()
+  const later = T0 + 6 * 3_600_000
+  const text = digestText(b.tasks, T0, later, seen)!
+  expect(text).toContain('and 2 more')
+  expect(text).toContain('T-3')
+  expect(text).not.toContain('T-4')
+  const next = digestText(b.tasks, later, later + DIGEST_EVERY_MS, seen)!
+  expect(next).toContain('T-4')
+  expect(next).toContain('T-5')
+  expect(next).not.toContain('T-1 ')
+  expect(next).not.toContain('more')
+})
+
+test('digest: a second digest 2 hours later with nothing changed is not sent', async () => {
+  const host = await ticking()
+  await saveBoard(host, boardWith({ status: 'waiting', attempts: 1 }))
+  const first = T0 + 6 * 3_600_000
+  expect(await digestTick(host, first)).toBe(false) // starts the clock
+  expect(await digestTick(host, first + DIGEST_EVERY_MS)).toBe(true)
+  expect(takeBoardUpdate()).toContain('Waiting on the owner')
+  expect(await digestTick(host, first + 2 * DIGEST_EVERY_MS)).toBe(false)
+  expect(leadQueue).toEqual([])
+})
+
 test('a scout update carries its report', () => {
   const m = scoutLeadMessage('deps', '1. very particular finding')!
   expect(m).toContain('very particular finding')
