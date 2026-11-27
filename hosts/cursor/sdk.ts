@@ -1,7 +1,8 @@
 // The few parts of the Cursor SDK (@cursor/sdk) the Cursor host uses, behind a small interface so tests can hand in a
 // fake (tests/fake-sdk.ts) and GitHub Copilot's agents can stand in (./copilot.ts). cursorSdk() loads the real SDK on
-// first use. It isn't bundled: it ships native helpers.
+// first use. It isn't bundled: its license keeps it out of symcc, so ./sdk-fetch.ts fetches it when Node can't find it.
 import type { Host } from '../../hooks/host'
+import { loadCursorSdk } from './sdk-fetch'
 import { argWords, short } from './steps'
 
 /** A tool served from this process to an agent (the SDK's custom tools): it answers text. */
@@ -168,7 +169,7 @@ export function cursorSdk(env: Record<string, string | undefined> = process.env)
         const { HttpsProxyAgent } = await import('https-proxy-agent')
         https.globalAgent = new HttpsProxyAgent(proxy) as unknown as typeof https.globalAgent
       }
-      const sdk = await import('@cursor/sdk')
+      const sdk = await loadCursorSdk(env)
       if (proxy) sdk.configureCursorSdk({ local: { useHttp1ForAgent: true } })
       return sdk
     })())

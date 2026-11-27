@@ -376,6 +376,15 @@ time,
   color: var(--wait);
   font-size: 12px;
 }
+.drive-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+.drive-note .link {
+  font-family: var(--mono);
+}
 
 .network-wrap {
   padding: 12px 20px 0;
@@ -1920,6 +1929,20 @@ input:focus {
 .task-note {
   color: var(--wait);
 }
+.task-part {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 80ch;
+}
+.task-part h4 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.size {
+  font-variant-numeric: tabular-nums;
+}
 .task-details {
   max-width: 80ch;
   max-height: 320px;
@@ -2077,6 +2100,57 @@ input:focus {
   margin-top: 6px;
   max-height: 280px;
   overflow: auto;
+}
+.task-body .report {
+  max-width: 100ch;
+}
+.history {
+  list-style: none;
+  padding: 0;
+  margin-top: 6px;
+  max-height: 280px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.history li {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 4px;
+}
+.history-mark {
+  font-weight: 600;
+  color: var(--muted);
+}
+.history .is-step .history-mark {
+  color: var(--fg);
+}
+.history .is-good :is(.history-mark, .history-result) {
+  color: var(--good);
+}
+.history .is-bad :is(.history-mark, .history-result),
+.history-bad {
+  color: var(--bad);
+}
+.history-dim {
+  color: var(--muted);
+}
+.checker summary .codicon-pass {
+  color: var(--good);
+}
+.checker summary .codicon-warning {
+  color: var(--wait);
+}
+.checker-file {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.checker-file .link {
+  font-family: var(--mono);
 }
 
 /* ---------- Organizational memory: the notes every agent reads ---------- */

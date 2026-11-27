@@ -6,13 +6,15 @@
 // OpenCode plugin or a standalone client builds its Host the same way.
 import { readFile, writeFile, mkdir, readdir, lstat, stat, realpath, access } from 'node:fs/promises'
 import { spawn, spawnSync } from 'node:child_process'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { type Host, type HostFeatures, type HostFileEntry, type HostFileStat, type HostProcess, type HostProcesses, type HostRunResult, SYMCC_WORDS, etimeArgv, holderFromPs, manifestVersion, noUi, startFromEtime } from '../../hooks/host'
 
 /** What this host can do: no screen, and the lead is told when the CLI asks (it prints the update). */
 export const NODE_FEATURES: HostFeatures = { panel: false, band: false, wakeLead: 'next-turn', planMode: false, leadUsage: false, startQueue: false }
 
 /** The symcc folder this file ships in (where roles/, kinds/, examples/ and .claude-plugin/plugin.json are). */
-export const PLUGIN_ROOT = decodeURIComponent(import.meta.url.replace(/^file:\/\//, '')).replace(/\/hosts\/node\/[^/]*$/, '')
+export const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
 export type NodeHostOptions = {
   /** the project folder (a git repository, or the folder to make one in) */

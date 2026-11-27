@@ -156,6 +156,14 @@ copilot plugin install symcc@symcc
 
 The lead's tools, workers, scouts and checkers work. There is no board panel yet (`/symcc` prints the board as text), and slash commands work only in the interactive CLI. In `copilot -p`, Copilot loads symcc only with `--allow-all` (or `--allow-all-tools`); without it none of symcc's tools are there. The details, including your own model provider (BYOK), are in [Clients](docs/clients.md#using-symcc-in-copilot-cli).
 
+## Using symcc in VS Code and Cursor
+
+The symcc extension shows the board, a sidebar and the lead's chat in VS Code or Cursor. The agents are Cursor's or GitHub Copilot's. This is a first version. The extension brings no symcc of its own: it runs the symcc you installed with Claude Code, Copilot CLI or OpenCode, so you install and update symcc in one place.
+
+![symcc in VS Code and Cursor: the extension finds and starts the symcc a harness installed, and that symcc runs the agents](docs/editor-extension.svg)
+
+Install symcc with a harness (see above), then the extension: search for **symcc** in the editor's Extensions view, or run `code --install-extension kourgeorge.symcc` (`cursor --install-extension kourgeorge.symcc` in Cursor). The details, including the accounts for the agents, are in [Clients](docs/clients.md#using-symcc-in-vs-code-and-cursor).
+
 ## All features
 
 | Feature | What it does |

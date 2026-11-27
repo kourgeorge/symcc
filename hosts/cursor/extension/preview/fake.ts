@@ -1,7 +1,7 @@
 // A stand-in for the extension in a plain browser: demo data (made up, for looking at the panel) and replies that
 // act like the engine's, so every card and button can be tried. Loaded before the webview's bridge.
 import type { ChatItem, FromWebview, LeadSettings, ModelInfo, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelOrgNote, PanelStep, PanelTask, PanelView, PanelWorktree, SlashItem, ToWebview } from '../../protocol'
-import { copilotModels } from '../../copilot'
+import { copilotModels } from '../../copilot-models'
 
 const now = Date.now()
 const m = (min: number) => now - min * 60_000
@@ -42,7 +42,7 @@ const lanes: PanelLane[] = [
   lane('T-42', 'CSV export for invoices', 0, 4.2, { agentId: 'cursor-1-a' }),
   lane('T-43', 'Fix the flaky date test', 3, 0.6, { agent: false, tokens: 48_200 }),
   lane('T-45', 'Webhook retry backoff', 0, 1.1, { tokens: 31_900, agentId: 'cursor-2-b', tryNo: 2 }),
-  { ...lane('T-38', 'Dark mode toggle', 4, 0), doneMs: m(3), agent: false, tokens: 72_400 },
+  { ...lane('T-38', 'Dark mode toggle', 4, 0), doneMs: m(3), agent: false, tokens: 72_400, size: [{ text: '+212', tone: 'added' }, { text: ' ' }, { text: '−38', tone: 'removed' }] },
 ]
 
 const next = [task('T-46', 'Paginate the customer list', 'todo', 'up next'), task('T-47', 'Docs for the export API', 'todo', 'up next', { kind: 'docs' }), task('T-48', 'Remove the old v1 routes', 'todo', 'up next'), task('T-49', 'Cache tax rates per region', 'todo', 'up next')]
@@ -128,6 +128,8 @@ const SESSIONS: Record<string, PanelTask['sessions']> = {
   'T-39': [{ label: 'Try 1', agent: 'cursor-4-d', running: false }],
 }
 
+/** A time as the board's history writes it ("14:05"). */
+const hm = (ms: number) => new Date(ms).toTimeString().slice(0, 5)
 const step = (min: number, kind: PanelStep['kind'], text: string, more: Partial<PanelStep> = {}): PanelStep => ({ atMs: m(min), kind, text, ...more })
 const tool = (min: number, name: string, text: string, status: PanelStep['status'] = 'completed') => step(min, 'tool', text, { tool: name, status, callId: `${name}-${min}` })
 const steps: Record<string, PanelStep[]> = {
@@ -234,9 +236,31 @@ function busyView(): PanelView {
       ...needs.filter(n => n.id.startsWith('T-')).map(n => task(n.id, n.id === 'T-44' ? 'CSV export for invoices' : n.title, n.kind === 'failed' ? 'failed' : n.kind === 'review' ? 'review' : 'waiting', n.kind === 'failed' ? 'failed' : n.kind === 'review' ? 'ready for review' : 'waits for you', { needsYou: true, actions: n.actions, sessions: SESSIONS[n.id] ?? [] })),
       task('T-42', 'CSV export for invoices', 'doing', 'running'),
       task('T-43', 'Fix the flaky date test', 'doing', 'running', { kind: 'bug', details: 'The date test fails around midnight UTC because it builds “today” from the local clock.' }),
-      task('T-45', 'Webhook retry backoff', 'doing', 'running', { attempts: 2, sessions: SESSIONS['T-45']!, actions: [{ id: 'pause', label: 'Pause', primary: true }, { id: 'drop', label: 'Drop', ask: 'Why (optional)' }] }),
+      task('T-45', 'Webhook retry backoff', 'doing', 'running', {
+        attempts: 2,
+        sessions: SESSIONS['T-45']!,
+        actions: [{ id: 'pause', label: 'Pause', primary: true }, { id: 'drop', label: 'Drop', ask: 'Why (optional)' }],
+        historyCount: 6,
+        history: [
+          { mark: '●', tone: 'step', at: hm(m(1.1)), by: 'worker symcc-T-45', label: 'try 2', said: 'worker started' },
+          { mark: '✗', tone: 'bad', at: hm(m(9)), by: 'you', label: 'try 1', said: 'sent back: retry with backoff, not at once' },
+          { mark: '✗', tone: 'bad', at: hm(m(12)), by: 'checker symcc-T-45-checker', said: 'found problems: retries at once, no backoff; 2 tests skipped' },
+          { mark: '○', tone: 'other', at: hm(m(14)), by: 'worker symcc-T-45', label: 'try 1', said: 'handed back for review' },
+          { mark: '●', tone: 'step', at: hm(m(22)), by: 'worker symcc-T-45', label: 'try 1', said: 'worker started' },
+          { mark: '○', tone: 'other', at: hm(m(40)), said: 'created by the lead' },
+        ],
+        checker: {
+          title: 'Checker (try 1) · symcc-T-45-checker',
+          ok: false,
+          file: '.symcc/reports/T-45-try-1-checker.md',
+          text: 'Found problems.\n\n1. `deliver()` retries at once after a 5xx; the task asks for exponential backoff.\n2. `test/webhooks/retry.test.ts` skips the two timeout tests (`it.skip`).\n\nThe rest looks right: the payload is signed once and reused.',
+        },
+      }),
       ...next,
-      task('T-38', 'Dark mode toggle', 'done', 'done'),
+      task('T-38', 'Dark mode toggle', 'done', 'done', {
+        done: 'Added a dark mode toggle to the settings page. The choice is kept per user and follows the system theme until set.',
+        size: [{ text: 'merged 7c1e2f9a' }, { text: ' · ' }, { text: '6 files' }, { text: ' · ' }, { text: '+212', tone: 'added' }, { text: ' ' }, { text: '−38', tone: 'removed' }],
+      }),
       task('T-50', 'Try a faster CSV writer', 'backlog', 'backlog', { kind: 'investigation' }),
       task('T-52', 'Export invoices as PDF too', 'backlog', 'backlog'),
       task('T-53', 'Remember the last CSV filter per user', 'backlog', 'backlog'),
@@ -250,6 +274,7 @@ function busyView(): PanelView {
     counts: { needs: needs.length, running: 3, next: next.length, doneToday: 6, backlog: 3 },
     idle: { kind: 'waiting', text: 'Nothing running · 2 waiting: T-46 waits for T-42, T-47 waits for T-46', next: [], more: 0 },
     orgMem: orgMem(),
+    ...(state === 'follows' && !drives ? { follows: { parts: [{ text: 'this window follows (driver started Nov 26 09:12, active 2 min ago); ' }, { text: '/symcc-drive', command: true }, { text: ' to drive from here' }], button: 'Drive here', command: 'symcc-drive' } } : {}),
     dir: '.symcc',
     nowMs: Date.now(),
   }
@@ -297,10 +322,15 @@ let worktrees: PanelWorktree[] = [
   { path: '/home/dana/orca/billing-service/pricing-page', where: '~/orca/billing-service/pricing-page', kind: 'other', branch: 'dana/pricing-page', head: '5566778', base: 'origin/dana/pricing-page', ahead: 0, behind: 0, files: [], dirty: 0, untracked: 0, commits: [], lastCommitMs: m(60 * 5) },
 ]
 
+const AGENTS = [
+  { id: 'cursor', name: 'Cursor' },
+  { id: 'copilot', name: 'GitHub Copilot' },
+]
 const send = (msg: ToWebview) => window.dispatchEvent(new MessageEvent('message', { data: msg }))
 const later = (ms: number, fn: () => void) => setTimeout(fn, ms)
 let busy = state === 'busy'
 let mode: PanelView['mode'] = 'review'
+let drives = false
 const net = new URLSearchParams(location.search).get('state') === 'net'
 
 window.acquireVsCodeApi = () => ({
@@ -313,10 +343,13 @@ window.acquireVsCodeApi = () => ({
       send({ type: 'lead', settings: lead })
       send({ type: 'models', models: copilot ? copilotList : models })
       send({ type: 'slash', items: slash })
+      send({ type: 'agents', list: AGENTS, current: copilot ? 'copilot' : 'cursor' })
       if (net) send({ type: 'network', problem: { text: 'the lead could not run: Network request failed', proxy: '', service: copilot ? 'GitHub Copilot' : 'Cursor' } })
       return
     }
     if (msg.type === 'restart' || msg.type === 'log' || msg.type === 'session' || msg.type === 'open-file' || msg.type === 'open-board') return
+    // serve restarts with the other agents: here, the page reloads with them
+    if (msg.type === 'agents-set') return void location.assign(`?${new URLSearchParams({ ...Object.fromEntries(new URLSearchParams(location.search)), agents: msg.agents })}`)
     if (msg.type === 'worktrees') return void later(250, () => send({ type: 'worktrees', list: worktrees, atMs: Date.now() }))
     if (msg.type === 'worktree') {
       const w = worktrees.find(x => x.path === msg.path)
@@ -380,6 +413,11 @@ window.acquireVsCodeApi = () => ({
       reply('symcc restarted with the new proxy.')
       later(450, () => send({ type: 'network', problem: null }))
       return
+    }
+    if (msg.type === 'command' && msg.name === 'symcc-drive') {
+      drives = true
+      reply('The other session hands the board over on its next heartbeat; this one drives after that.')
+      return later(900, () => send({ type: 'view', view: view() }))
     }
     reply('done')
   },

@@ -1,8 +1,11 @@
-// What the Cursor extension's board panel draws and sends: the panel view the engine process works out from the board
-// (./view.ts), and the messages between the webview, the extension and the engine. Plain data only: the webview
-// bundle imports this file too, so nothing here may pull in the engine.
+// What the board's webview draws and sends: the panel view serve works out from the board (./view.ts), and the
+// messages between the webview and serve (./board.ts), which pass through the editor extension unread. Internal: serve
+// and the webview ship together, so these change freely; what the extension relies on is ./contract.ts. Plain data
+// only: the webview bundle imports this file too, so nothing here may pull in the engine.
 import type { SdkImage, SdkModel, SdkModelInfo } from './sdk'
+import type { BoardPage, EngineState, ExtensionToWebview, WebviewToExtension } from './contract'
 
+export type { BoardPage, EngineState } from './contract'
 export type ChatImage = SdkImage
 export type LeadModel = SdkModel
 export type ModelInfo = SdkModelInfo
@@ -18,6 +21,10 @@ export type PanelActionId = 'approve' | 'reject' | 'done' | 'keep-note' | 'ask-m
 export type PanelAction = { id: PanelActionId; label: string; primary?: boolean; ask?: string }
 
 export type PanelFile = { file: string; added: number; removed: number }
+
+/** A change's size in the board's words, in pieces ("merged 1a2b3c4 · 25 files · +539 −3,722", hooks/core/page-header.ts
+ *  sizeSegs); `tone` marks the lines added and removed. */
+export type PanelSize = { text: string; tone?: 'added' | 'removed' }[]
 
 /** One thing that needs the owner: a board question (Q-3), or a task that asks, waits for review or failed. */
 export type PanelNeed = {
@@ -54,6 +61,8 @@ export type PanelLane = {
   agentId?: string
   /** set on a lane whose task merged a moment ago */
   doneMs?: number
+  /** a merged lane's change size: the lines added and removed ("+539 −3,722") */
+  size?: PanelSize
 }
 
 export type PanelTask = {
@@ -68,11 +77,32 @@ export type PanelTask = {
   updatedMs?: number
   note?: string
   details?: string
+  /** what the whole task has done so far, from its worker's latest "Done:" line */
+  done?: string
+  /** its change's size: where the change is, its files, the lines added and removed */
+  size?: PanelSize
+  /** its history, newest first: the latest lines, out of `historyCount` */
+  history?: PanelHistory[]
+  historyCount?: number
+  /** the checker's saved report of the try its latest report is about */
+  checker?: PanelChecker
   needsYou: boolean
   actions: PanelAction[]
   /** the agents that worked on it, newest first ("Try 5", "Try 4 checker"), for their sessions */
   sessions: PanelSession[]
 }
+
+/**
+ * A line of a task's history in the board's words (hooks/core/history.ts historyEvent): its mark and tone, when ("10:42",
+ * "Nov 23 10:42"), who wrote it ("worker symcc-T-3", "checker", "you"), its try label, what was said and the try's result.
+ */
+export type PanelHistory = { mark: string; tone: 'good' | 'bad' | 'step' | 'other'; at?: string; by?: string; label?: string; said: string; result?: string }
+
+/**
+ * A checker's saved report: its heading ("Checker (try 2) · symcc-T-3-checker"), its verdict, its file in the project,
+ * and its text (null: it can't be read; `cut`: only its start is here, the rest is in the file).
+ */
+export type PanelChecker = { title: string; ok: boolean; file: string; text: string | null; cut?: boolean }
 
 export type PanelSession = { label: string; agent: string; running: boolean }
 
@@ -111,6 +141,13 @@ export type PanelOrgMem = {
   notes: PanelOrgNote[]
 }
 
+/**
+ * Another window drives the board (only the driver starts work): the notice's words in parts, with the slash command
+ * marked (hooks/core/banner.ts driveNoticeParts), and the button that makes this window drive: its label and the
+ * command it runs ("symcc-drive").
+ */
+export type PanelFollows = { parts: { text: string; command?: boolean }[]; button: string; command: string }
+
 export type PanelView = {
   /** symcc is on in this project (else `off` says why, and the panel offers to turn it on) */
   on: boolean
@@ -133,6 +170,8 @@ export type PanelView = {
   orgMem: PanelOrgMem
   /** a note about the board itself (git missing, a data file near its size limit) */
   note?: string
+  /** another window drives the board and this one follows: what the notice says, and its Drive here button */
+  follows?: PanelFollows
   /** the data folder in the project (".symcc"), where each agent's session is kept: <dir>/sessions/<agent>.jsonl */
   dir: string
   nowMs: number
@@ -204,8 +243,6 @@ export type PanelWorktree = {
 /** What the owner can do with a worktree on the Worktrees page. */
 export type WorktreeAction = 'window' | 'terminal' | 'reveal' | 'copy' | 'changes' | 'file' | 'remove'
 
-export type EngineState = { state: 'starting' | 'ready' | 'stopped' | 'failed'; text?: string }
-
 /** One step of an agent's turn (hosts/cursor/sdk.ts SdkStep), with when it happened. */
 export type PanelStep = { atMs: number; kind: 'text' | 'thinking' | 'tool' | 'status'; text: string; tool?: string; callId?: string; status?: 'running' | 'completed' | 'error' }
 
@@ -215,14 +252,14 @@ export type PanelStep = { atMs: number; kind: 'text' | 'thinking' | 'tool' | 'st
  */
 export type NetworkProblem = { text: string; proxy: string; service: string }
 
-/** A page of the board panel. */
-export type BoardPage = 'now' | 'board' | 'trees' | 'scouts' | 'memory'
+/** Whose agents serve can run the lead and the workers on (`id` is what symcc.agents holds). */
+export type AgentChoice = { id: string; name: string }
 
-/** From the extension to the webview (the board panel and the sidebar alike; `go` only to the panel). */
+/** To the webview: from serve, and the extension's own (`go` only to the panel). */
 export type ToWebview =
+  | ExtensionToWebview
   | { type: 'view'; view: PanelView }
   | { type: 'chat'; items: ChatItem[]; busy: boolean }
-  | { type: 'engine'; engine: EngineState }
   | { type: 'network'; problem: NetworkProblem | null }
   | { type: 'steps'; all: Record<string, PanelStep[]> }
   | { type: 'step'; agent: string; step: PanelStep }
@@ -232,11 +269,11 @@ export type ToWebview =
   | { type: 'slash'; items: SlashItem[] }
   | { type: 'lead'; settings: LeadSettings }
   | { type: 'worktrees'; list: PanelWorktree[]; atMs: number; error?: string }
-  | { type: 'go'; page: BoardPage; task?: string }
+  | { type: 'agents'; list: AgentChoice[]; current: string }
 
-/** From the webview to the extension; `id` comes back on the reply, to the webview that asked. */
+/** From the webview: to serve, and the few the extension handles; `id` comes back on the reply, to the webview that asked. */
 export type FromWebview =
-  | { type: 'ready' }
+  | WebviewToExtension
   | { type: 'send'; id: number; text: string; images?: ChatImage[] }
   | { type: 'lead-set'; settings: LeadSettings }
   | { type: 'lead-stop' }
@@ -248,10 +285,8 @@ export type FromWebview =
   | { type: 'scout'; id: number; name: string }
   | { type: 'forget'; id: number; n: number }
   | { type: 'proxy'; id: number; proxy: string }
-  | { type: 'log' }
+  | { type: 'agents-set'; agents: string }
   | { type: 'session'; agent: string; title: string }
-  | { type: 'restart' }
   | { type: 'open-file'; path: string; line?: number }
   | { type: 'worktrees' }
   | { type: 'worktree'; id: number; path: string; action: WorktreeAction; file?: string }
-  | { type: 'open-board'; page?: BoardPage; task?: string }
