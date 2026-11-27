@@ -169,12 +169,13 @@ async function holdsRepos($: Host): Promise<boolean> {
 /**
  * T-1137: the projects of this board: the folders directly below the board folder that hold their own .git (found by
  * folder name, nothing stored), sorted. None when the board folder is itself a repo (a board inside one repo).
+ * Only folders whose names pass isProjectName count: a folder like "my app" is simply not offered as a project.
  */
 export async function projectNames($: Host): Promise<string[]> {
   if (await $.fs.exists(`${S.root}/.git`)) return []
   const dirs = (await $.fs.list(S.root).catch(() => [])).filter(e => e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== S.N.dir).map(e => e.name)
   const found: string[] = []
-  for (const d of dirs) if (await $.fs.exists(`${S.root}/${d}/.git`)) found.push(d)
+  for (const d of dirs) if (isProjectName(d) && await $.fs.exists(`${S.root}/${d}/.git`)) found.push(d)
   return found.sort()
 }
 

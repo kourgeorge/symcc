@@ -61,6 +61,14 @@ test('add with a project stores it; a wrong name is refused with the project fol
   expect(boardOf(files).tasks[0]!.project).toBe(undefined)
 })
 
+test('a repo folder whose name is not a safe project name (like "my app") is not offered as a project', async () => {
+  const { w, files } = await world(['client', 'my app'])
+  expect(await projectNames(w.host)).toEqual(['client'])
+  const err = await runTool(w.host, 'add', { ...WISH, title: 'Nope', project: 'my app' }).catch((e: Error) => e.message)
+  expect(err).toContain('The project folders are: client.')
+  expect(boardOf(files).tasks.length).toBe(0)
+})
+
 test('a board inside one repo has no projects: add without project works, and a project name is refused', async () => {
   const { w, files } = await world(['server'], true)
   expect(await projectNames(w.host)).toEqual([])
