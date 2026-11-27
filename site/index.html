@@ -189,18 +189,21 @@ T-747 try 1 → merged into main
     <h3 id="claude-code">Claude Code</h3>
     <p>You need Claude Code and git. There is no build step.</p>
     <pre><code>claude plugin install symcc --marketplace kourgeorge/symcc</code></pre>
-    <p>Then start Claude Code in your project. The board opens by itself; if not, run <code>/symcc</code>.</p>
+    <p>Then start Claude Code in your project and type <code>/symcc-init</code> once to make the board. Later, <code>/symcc</code> opens it. The details are in <a href="clients.html#install-in-claude-code">Clients</a>.</p>
     <h3 id="opencode">OpenCode</h3>
     <p>symcc also runs in OpenCode 2.3 or newer (a first version). From a clone of symcc:</p>
     <pre><code>git clone https://github.com/kourgeorge/symcc &amp;&amp; sh symcc/scripts/install-opencode.sh</code></pre>
     <p>Or, with no clone:</p>
     <pre><code>opencode plugin add github:kourgeorge/symcc</code></pre>
-    <p>Pick one of the two ways. The details are in <a href="clients.html#using-symcc-in-opencode">Clients</a>.</p>
+    <p>Pick one of the two ways. The details are in <a href="clients.html#install-in-opencode">Clients</a>.</p>
     <h3 id="copilot-cli">Copilot CLI</h3>
     <p>symcc also runs in GitHub Copilot CLI as an extension (a first version, with no board panel yet). Extensions are experimental, so start Copilot with <code>copilot --experimental</code>.</p>
     <pre><code>copilot plugin marketplace add kourgeorge/symcc
 copilot plugin install symcc@symcc</code></pre>
-    <p>The details are in <a href="clients.html#using-symcc-in-copilot-cli">Clients</a>.</p>
+    <p>The details are in <a href="clients.html#install-in-copilot-cli">Clients</a>.</p>
+    <h3 id="vs-code">VS Code or Cursor</h3>
+    <p>For Claude's agents in VS Code, use the Claude Code extension: install symcc with the Claude Code command above, then type <code>/symcc-init</code> in its panel. No symcc extension is needed (<a href="clients.html#install-in-claude-code-in-vs-code">the steps</a>).</p>
+    <p>For Cursor's or GitHub Copilot's agents, use the symcc editor extension. It is not in the VS Code Marketplace yet, so you build it from a clone and install the file: <a href="clients.html#install-the-symcc-extension-in-vs-code-or-cursor">the steps</a>.</p>
   </section>
 
   <section aria-labelledby="faq">

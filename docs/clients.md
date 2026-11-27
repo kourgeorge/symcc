@@ -2,13 +2,133 @@
 
 symcc runs inside a program you already use: Claude Code (in the terminal or VS Code), OpenCode, Copilot CLI, VS Code or Cursor through the symcc extension, and it can be reached from chat apps. One section each.
 
+## Install
+
+Pick the program you use. Each section below has the same five parts: what you need first, the commands, how to start symcc and see the board, how to update, and the most common trouble. Every way needs **git**.
+
+| Where you work | Whose agents | Steps |
+|---|---|---|
+| Claude Code in the terminal | Claude | [Install in Claude Code](#install-in-claude-code) |
+| Claude Code in VS Code (the Claude Code extension) | Claude | [Install in Claude Code in VS Code](#install-in-claude-code-in-vs-code) |
+| OpenCode | any model OpenCode knows | [Install in OpenCode](#install-in-opencode) |
+| Copilot CLI | GitHub Copilot's | [Install in Copilot CLI](#install-in-copilot-cli) |
+| VS Code or Cursor, with the symcc extension | Cursor's or GitHub Copilot's | [Install the symcc extension in VS Code or Cursor](#install-the-symcc-extension-in-vs-code-or-cursor) |
+
+After any of them, keep the board out of git in each project: `echo ".symcc/" >> .gitignore`.
+
+### Install in Claude Code
+
+- **You need first:** Claude Code (symcc is built and tested with **2.1.319**; `claude --version` tells you yours) and git. There is no build step.
+- **Commands** (in any folder):
+
+  ```bash
+  claude plugin install symcc --marketplace kourgeorge/symcc
+  ```
+
+  To try it from a clone instead, with nothing installed, see [the reference](reference.md#install-other-ways-and-fixes).
+- **Start it and see the board:** `cd` into your project and run `claude`. Type `/symcc-init` once in the folder you want the board in; it makes the board and opens the panel. Later, `/symcc` opens the board again.
+- **Update** (then start Claude Code again):
+
+  ```bash
+  claude plugin marketplace update symcc && claude plugin update symcc@symcc
+  ```
+
+- **Common trouble:** no panel? The terminal is too narrow: make it wider, or run `/symcc`. More fixes: [Troubleshooting](reference.md#troubleshooting).
+
+### Install in Claude Code in VS Code
+
+Use this to run Claude's agents inside VS Code. You need only the Claude Code extension and the symcc plugin; you do **not** need the symcc editor extension.
+
+- **You need first:** VS Code with Anthropic's Claude Code extension, the `claude` command (Claude Code itself) and git. The extension runs the real Claude Code, so it loads the same plugins as the `claude` command.
+- **Commands** (in VS Code's terminal, in any folder):
+
+  ```bash
+  claude plugin install symcc --marketplace kourgeorge/symcc
+  ```
+
+- **Start it and see the board:** open your project folder in VS Code, open the Claude Code panel, and type `/symcc-init` once (later, `/symcc`). The board there is clicked, not typed: see [In VS Code](#in-vs-code).
+- **Update:** the same as in the terminal, `claude plugin marketplace update symcc && claude plugin update symcc@symcc`, then reload the VS Code window.
+- **Common trouble:** `/symcc` is unknown? The plugin was installed after the panel started: reload the window (**Developer: Reload Window**).
+
+### Install in OpenCode
+
+- **You need first:** OpenCode **2.3 or newer** and git. Homebrew's `opencode` is the old 1.x line, which can't load symcc; get 2.x with `npm install -g @opencode/cli`, and check with `opencode --version`.
+- **Commands:** pick **one** of the two ways.
+
+  With no clone (in any folder):
+
+  ```bash
+  opencode plugin add github:kourgeorge/symcc
+  ```
+
+  Or from a clone (in the folder you want the clone in; the script links it into OpenCode's plugins folder):
+
+  ```bash
+  git clone https://github.com/kourgeorge/symcc && sh symcc/scripts/install-opencode.sh
+  ```
+
+- **Start it and see the board:** `cd` into your project, run `opencode`, open a session and type `/symcc-init` once. The board panel opens next to the session; `/symcc-board` opens or closes it later.
+- **Update:** `opencode plugin update` for the first way; `git pull` in the clone for the second. Then restart OpenCode.
+- **Common trouble:** "Plugin failed": check `opencode --version` says 2.3 or higher. More in [Install details in OpenCode](#install-details-in-opencode).
+
+### Install in Copilot CLI
+
+- **You need first:** GitHub Copilot CLI (`npm install -g @github/copilot`, then `copilot login` once) and git. symcc was tried with Copilot CLI 1.0.114.
+- **Commands** (in any folder):
+
+  ```bash
+  copilot plugin marketplace add kourgeorge/symcc
+  copilot plugin install symcc@symcc
+  ```
+
+- **Start it and see the board:** `cd` into your project and run `copilot --experimental` (extensions are still experimental; without it symcc does not load). Say yes when Copilot asks you to trust the folder, then type `/symcc-init` once. There is no board panel yet: `/symcc` prints the board as text in the chat.
+- **Update:**
+
+  ```bash
+  copilot plugin marketplace update symcc
+  copilot plugin update symcc@symcc
+  ```
+
+- **Common trouble:** no `symcc_*` tools and no `/symcc` commands? You started Copilot without `--experimental`, or said no to the folder trust question. More in [Install details in Copilot CLI](#install-details-in-copilot-cli).
+
+### Install the symcc extension in VS Code or Cursor
+
+**First, choose.** The symcc editor extension runs **Cursor's** or **GitHub Copilot's** agents. If you want **Claude's** agents in VS Code, you don't need this extension: use [Claude Code in VS Code](#install-in-claude-code-in-vs-code) instead.
+
+**Not in the Marketplace yet.** The extension (`kourgeorge.symcc`) is not published to the VS Code Marketplace or Open VSX yet, so `code --install-extension kourgeorge.symcc` fails with "not found". Until it is, build it from a clone as a `.vsix` file (one file that holds the whole extension) and install that file.
+
+- **You need first:**
+  - symcc installed by one of the programs above (Claude Code, Copilot CLI or OpenCode), or a clone of symcc. The extension brings no symcc of its own; it finds and runs that copy.
+  - VS Code 1.101 or newer, or a Cursor built on it.
+  - Node and npm (to build the file), and git.
+  - For the agents, one of these. Cursor's (the `symcc.agents` setting is `"cursor"`, the default): set `CURSOR_API_KEY`, or have a saved Cursor login. GitHub Copilot's (`"symcc.agents": "copilot"`): install the Copilot CLI (`npm install -g @github/copilot`) and run `copilot login` once.
+- **Commands.** Clone symcc if you have no clone yet (`git clone https://github.com/kourgeorge/symcc`). Then, with `<symcc clone>` being that clone's folder:
+
+  ```bash
+  cd <symcc clone>/hosts/vscode && npm ci
+  cd extension && npm ci && npx -y @vscode/vsce@4.1.1 package --out symcc.vsix
+  ```
+
+  That writes `symcc.vsix` in `<symcc clone>/hosts/vscode/extension`. Install it from that same folder, or give the full path from anywhere:
+
+  ```bash
+  code --install-extension <symcc clone>/hosts/vscode/extension/symcc.vsix
+  ```
+
+  In Cursor, use `cursor --install-extension` with the same full path. On a Mac, don't add `--omit=optional` to `npm ci`: it leaves out esbuild's Mac program, and the build fails with "Expected 0.25.12 but got 0.21.5".
+
+  Once the extension is published, this one command will be enough: `code --install-extension kourgeorge.symcc` (or `cursor --install-extension kourgeorge.symcc`).
+- **Start it and see the board:** open a project folder that is a git repository and click the symcc icon in the activity bar. Run **symcc: Set up symcc in this project** (or tell the lead `/symcc-init`) once.
+- **Update:** pull the clone (`git pull` in `<symcc clone>`), build and install the `.vsix` again as above, then run **symcc: Restart symcc**. When you update the symcc plugin itself, run **symcc: Restart symcc** too.
+- **Common trouble:** the sidebar says symcc is not installed? Install it with one of the programs above, or point `symcc.pluginPath` at your clone, then run **symcc: Look for the installed symcc again**. More in [Using symcc in VS Code and Cursor](#using-symcc-in-vs-code-and-cursor).
+
 ## Claude Code
 
-Claude Code is where symcc started, and where it has the most: the board panel, the band above the prompt, plan mode, sounds and voice. Install it as in [Get started](get-started.md); the [board](board.md) and [tasks](tasks.md) pages describe it.
+Claude Code is where symcc started, and where it has the most: the board panel, the band above the prompt, plan mode, sounds and voice. Install it as in [Install in Claude Code](#install-in-claude-code); the [board](board.md) and [tasks](tasks.md) pages describe it.
 
 ## In VS Code
 
-In the Claude Code extension's side panel, letter keys and ↑↓ do nothing: you click a button
+This is the board in the Claude Code extension (install it as in [Install in Claude Code in VS Code](#install-in-claude-code-in-vs-code)). In the Claude Code extension's side panel, letter keys and ↑↓ do nothing: you click a button
 (or Tab to it and press Enter). So the board there has its own layout; the terminal's is
 unchanged.
 
@@ -124,7 +244,9 @@ unchanged.
 
 symcc also runs in [OpenCode](https://opencode.ai) 2.x (2.3 or newer). The older 1.x line has a different plugin system and is not supported (`opencode --version` tells you which one you have). This is a first version: the board, the lead, workers, scouts and the guard work; a few things are missing or differ from Claude Code (see [What differs from Claude Code](#what-differs-from-claude-code)). The Claude Code plugin is not changed by any of this, and both can be used on the same project.
 
-### Install in OpenCode
+### Install details in OpenCode
+
+The short steps are in [Install in OpenCode](#install-in-opencode). The details:
 
 **What you need:** OpenCode 2.3 or newer, git, and a copy of symcc. Nothing else is installed: symcc's `opencode/` folder has no packages of its own. Its board screen (the panel and the strip above the prompt) is drawn with Solid and OpenTUI, and OpenCode's window gives those to its plugins itself, so the board uses the very same copies as OpenCode's window (two copies of Solid would not work together).
 
@@ -211,7 +333,9 @@ The code is in `hooks/opencode/` and `opencode/`; `sh scripts/test-opencode-host
 
 symcc also runs in [GitHub Copilot CLI](https://docs.github.com/copilot/how-tos/copilot-cli) as an extension (tried with Copilot CLI 1.0.114). This is a first version: the lead's tools, the `/symcc` commands, the board as text, workers, scouts and checkers work; there is no board panel yet. The Claude Code and OpenCode plugins are not changed by it.
 
-### Install in Copilot CLI
+### Install details in Copilot CLI
+
+The short steps are in [Install in Copilot CLI](#install-in-copilot-cli). The details:
 
 Copilot extensions are still experimental, so start Copilot with `copilot --experimental` (or turn it on once inside Copilot with `/settings experimental on`). Without it, symcc is installed but doesn't load.
 
@@ -272,15 +396,11 @@ Copilot runs one JavaScript file per extension, so symcc's TypeScript is bundled
 
 ## Using symcc in VS Code and Cursor
 
-The symcc extension (`kourgeorge.symcc`, on the VS Code Marketplace and Open VSX) shows the board, a sidebar and the lead's chat in VS Code or Cursor. The agents are Cursor's or GitHub Copilot's. The extension brings no symcc of its own: it runs the symcc you installed with Claude Code, Copilot CLI or OpenCode. Nothing changes for those harnesses.
+The symcc extension (`kourgeorge.symcc`) shows the board, a sidebar and the lead's chat in VS Code or Cursor. The agents are Cursor's or GitHub Copilot's; for Claude's agents in VS Code, use [Claude Code in VS Code](#install-in-claude-code-in-vs-code) instead. The extension brings no symcc of its own: it runs the symcc you installed with Claude Code, Copilot CLI or OpenCode. Nothing changes for those harnesses.
 
 ![symcc in VS Code and Cursor: the extension finds and starts the symcc a harness installed, and that symcc runs the agents](editor-extension.svg)
 
-### Install in VS Code or Cursor
-
-1. Install symcc with a harness, if you haven't: [Get started](get-started.md), [Install in Copilot CLI](#install-in-copilot-cli), or [Using symcc in OpenCode](#using-symcc-in-opencode). A clone of the repository works too.
-2. Install the extension: search for **symcc** in the editor's Extensions view, or run `code --install-extension kourgeorge.symcc` (`cursor --install-extension kourgeorge.symcc` in Cursor).
-3. Open a project folder that is a git repository, and click the symcc icon in the activity bar.
+The extension is not in the VS Code Marketplace or Open VSX yet: build it from a clone and install the file, as in [Install the symcc extension in VS Code or Cursor](#install-the-symcc-extension-in-vs-code-or-cursor).
 
 It needs VS Code 1.101 or newer, or a Cursor built on it: symcc needs Node 22.13 or newer, and these editors bring it. With an older editor, set `symcc.nodePath` to a Node 22.13 or newer.
 
