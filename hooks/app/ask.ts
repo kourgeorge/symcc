@@ -95,26 +95,39 @@ async function bothNames(look: PathLookup, dir: string): Promise<string[]> {
  * all three stay as written (the checks then work as before T-303, with /tmp and /private/tmp still matched, see
  * pathAliases). Null when the path goes through a link that leads nowhere.
  */
-async function realEdit($: Host, path: string, worktree: string, root: string): Promise<{ path: string; worktree: string[]; root: string[] } | null> {
-  const asIs = { path, worktree: [worktree], root: [root] }
+async function realEdit($: Host, path: string, worktree: string, roots: readonly string[]): Promise<{ path: string; worktree: string[]; root: string[] } | null> {
+  const asIs = { path, worktree: [worktree], root: [...roots] }
   const p = editTarget(path)
+  const root = roots[0] ?? ''
   if (!p || !worktree.startsWith('/') || !root.startsWith('/')) return asIs
   const look = diskLook($)
-  const [file, wt, top] = await Promise.all([realPathOf(worktree, p, look), realPathOf('/', worktree, look), realPathOf('/', root, look)])
+  const [file, wt, top, others] = await Promise.all([realPathOf(worktree, p, look), realPathOf('/', worktree, look), realPathOf('/', root, look), Promise.all(roots.slice(1).map(r => bothNames(look, r)))])
   if (file === null) return null
   if (!file || !wt || !top) return asIs
   // the real names first: blockedEdit reads the path from the first
-  return { path: file, worktree: [wt, worktree], root: [top, root] }
+  return { path: file, worktree: [wt, worktree], root: [top, root, ...others.flat()] }
 }
 
 /**
- * Why worker shell `command` is refused for naming the project `root` outside its own folder `worktree`, or for a
- * `..` path piece (bashOutsideFolder, both folders by both their names: as written and where links lead). Undefined: allowed.
+ * T-1198: every folder the guards protect: the board folder first, then each project's repo path from the board's
+ * project table (a repo anywhere on disk, T-1196), so a worker, checker or scout can't change a project repo outside
+ * the board either. Only absolute paths count, and never `/` itself (that would refuse every path, /tmp too).
  */
-async function bashOutside($: Host, command: string, worktree: string, root: string): Promise<Refusal | undefined> {
-  if (!root) return undefined
+export const guardedRoots = (): string[] => {
+  const out = [S.root]
+  for (const p of Object.values(S.projects ?? {})) if (typeof p === 'string' && p.startsWith('/') && p.replace(/\/+$/, '') !== '' && !out.includes(p)) out.push(p)
+  return out
+}
+
+/**
+ * Why worker shell `command` is refused for naming a protected folder of `roots` (the board, every project:
+ * guardedRoots) outside its own folder `worktree`, or for a `..` path piece (bashOutsideFolder, all folders by both
+ * their names: as written and where links lead). Undefined: allowed.
+ */
+async function bashOutside($: Host, command: string, worktree: string, roots: readonly string[]): Promise<Refusal | undefined> {
+  if (!roots[0]) return undefined
   const look = diskLook($)
-  const [wts, tops] = await Promise.all([bothNames(look, worktree), bothNames(look, root)])
+  const [wts, tops] = await Promise.all([bothNames(look, worktree), Promise.all(roots.map(r => bothNames(look, r))).then(x => x.flat())])
   const rel = bashOutsideFolder(command, wts, tops, S.home || undefined)
   if (rel === undefined) return undefined
   return { text: bashOutsideText(rel, worktree), guard: 'path', ...(rel === BASH_DOTDOT || rel === BASH_ABOVE ? {} : { what: rel }) }
@@ -175,7 +188,7 @@ async function judgeEdit($: Host, agentId: string, touch: FileTouch, who: Who, c
   if (!w) return unknownAgentCheck($, agentId, kindOf)
   Object.assign(who, { role: 'worker', task: w.task })
   if ('command' in touch) return (await outsideOwnFolder($, touch, w.worktree)) ?? workerGitWrite($, w, touch.command, cwd)
-  const real = await realEdit($, touch.path, w.worktree, S.root)
+  const real = await realEdit($, touch.path, w.worktree, guardedRoots())
   // realEdit gives null only for an edit with a path
   if (real === null) return { text: brokenLinkText(editTarget(touch.path)!), guard: 'link' }
   const outside = real.root.length ? editOutsideFolder(real.path, real.worktree, real.root) : undefined
@@ -287,7 +300,7 @@ async function scoutCheck($: Host, touch: FileTouch): Promise<Refusal | undefine
     const git = gitWrite($, touch.command)
     return git ? { text: scoutGitWriteText(git), guard: 'git', what: git } : undefined
   }
-  const real = await realEdit($, touch.path, S.root, S.root)
+  const real = await realEdit($, touch.path, S.root, guardedRoots())
   if (real === null) return { text: brokenLinkText(editTarget(touch.path)!), guard: 'link' }
   const rel = editInProject(real.path, real.root)
   return rel !== undefined ? { text: scoutEditText(rel), guard: 'scout-edit', what: rel } : undefined
@@ -298,8 +311,8 @@ async function scoutCheck($: Host, touch: FileTouch): Promise<Refusal | undefine
  * that folder (the owner's copy, the board, another worker's folder). Undefined: allowed.
  */
 async function outsideOwnFolder($: Host, touch: FileTouch, worktree: string): Promise<Refusal | undefined> {
-  if ('command' in touch) return bashOutside($, touch.command, worktree, S.root)
-  const real = await realEdit($, touch.path, worktree, S.root)
+  if ('command' in touch) return bashOutside($, touch.command, worktree, guardedRoots())
+  const real = await realEdit($, touch.path, worktree, guardedRoots())
   if (real === null) return { text: brokenLinkText(editTarget(touch.path)!), guard: 'link' }
   const outside = real.root.length ? editOutsideFolder(real.path, real.worktree, real.root) : undefined
   return outside !== undefined ? { text: outsideFolderText(outside, worktree, S.N.dir), guard: 'path', what: outside } : undefined
