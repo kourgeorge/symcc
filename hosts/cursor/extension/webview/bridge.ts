@@ -1,5 +1,5 @@
-// The webview's line to the extension: its messages in, and requests out that resolve with the engine's reply. The
-// browser preview (../preview/) puts a stand-in for acquireVsCodeApi on window before this file runs.
+// The webview's line to serve, through the extension: its messages in, and requests out that resolve with serve's
+// reply. The browser preview (../preview/) puts a stand-in for acquireVsCodeApi on window before this file runs.
 import type { FromWebview, ToWebview } from '../../protocol'
 
 type Api = { postMessage: (m: FromWebview) => void }
@@ -21,6 +21,11 @@ window.addEventListener('message', (e: MessageEvent<ToWebview>) => {
     waiting.delete(m.id)
     return
   }
+  // a serve that stopped or restarted answers nothing it was asked before
+  if (m?.type === 'engine' && m.engine.state !== 'ready') {
+    for (const w of waiting.values()) w({ ok: false, text: m.engine.state === 'starting' ? 'symcc restarted; try again.' : 'symcc stopped.' })
+    waiting.clear()
+  }
   for (const l of listeners) l(m)
 })
 
@@ -40,7 +45,7 @@ export function ask(m: Ask): Promise<string> {
   })
 }
 
-export const tell = (m: Extract<FromWebview, { type: 'ready' | 'restart' | 'log' | 'session' | 'lead-set' | 'lead-stop' | 'open-file' | 'worktrees' | 'open-board' }>) => api.postMessage(m)
+export const tell = (m: Extract<FromWebview, { type: 'ready' | 'restart' | 'log' | 'session' | 'lead-set' | 'lead-stop' | 'agents-set' | 'open-file' | 'worktrees' | 'open-board' }>) => api.postMessage(m)
 
-/** Which view this webview is: the board panel, or the sidebar in the activity bar (the extension's boardHtml says). */
+/** Which view this webview is: the board panel, or the sidebar in the activity bar (the extension's page says). */
 export const surface: 'panel' | 'side' = document.body.dataset.surface === 'side' ? 'side' : 'panel'

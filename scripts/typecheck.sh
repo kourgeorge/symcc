@@ -84,3 +84,13 @@ if [ -f tests/host-free.sh ] && ! SYMCC_TSC="$tsc" SYMCC_TSC_RUN="$run" sh tests
   echo "typecheck: host-bound code found in hooks/app/ or hooks/core/ (see above)" >&2
   exit 1
 fi
+
+# The contract between serve and the editor extension changes only with its number reconsidered.
+if [ -f tests/editor-contract.sh ] && ! sh tests/editor-contract.sh "$root"; then
+  exit 1
+fi
+# editor/ is built from the engine and hosts/cursor/, and rebuilt before a release: only a note here, since every engine
+# change would otherwise rebuild it (and parallel tasks would clash on the built file).
+if [ -f scripts/build-editor.sh ] && [ -d hosts/cursor/node_modules ] && [ -d hosts/cursor/extension/node_modules ]; then
+  sh scripts/build-editor.sh --check >/dev/null 2>&1 || echo "typecheck: note: editor/ is out of date; run sh scripts/build-editor.sh before a release"
+fi

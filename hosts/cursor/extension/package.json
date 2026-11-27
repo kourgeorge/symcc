@@ -1,20 +1,45 @@
 {
-  "name": "symcc-cursor",
+  "name": "symcc",
   "displayName": "symcc",
-  "description": "Run a team of coding agents from one chat: the symcc board and its lead, inside Cursor",
+  "description": "Lead a team of coding agents from one chat: the symcc board and its lead, in VS Code and Cursor. Runs the symcc you install with Claude Code, Copilot CLI or OpenCode.",
   "version": "0.1.0",
-  "publisher": "symcc",
-  "private": true,
+  "publisher": "kourgeorge",
   "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kourgeorge/symcc.git",
+    "directory": "hosts/cursor/extension"
+  },
+  "homepage": "https://github.com/kourgeorge/symcc#readme",
+  "bugs": {
+    "url": "https://github.com/kourgeorge/symcc/issues"
+  },
+  "keywords": [
+    "agents",
+    "ai",
+    "cursor",
+    "copilot",
+    "task board",
+    "worktrees"
+  ],
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.101.0"
   },
   "categories": [
-    "Other"
+    "AI",
+    "Chat"
   ],
   "extensionKind": [
     "workspace"
   ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "symcc runs coding agents that change files and run commands in the workspace."
+    },
+    "virtualWorkspaces": false
+  },
   "main": "./dist/extension.js",
   "activationEvents": [
     "onStartupFinished"
@@ -36,10 +61,45 @@
           "id": "symcc.side",
           "name": "Board",
           "icon": "media/activity.svg",
-          "contextualTitle": "symcc"
+          "contextualTitle": "symcc",
+          "when": "symcc.found"
+        },
+        {
+          "id": "symcc.setup",
+          "name": "Set up",
+          "icon": "media/activity.svg",
+          "contextualTitle": "symcc",
+          "when": "!symcc.found"
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "symcc.setup",
+        "when": "symcc.problem == none",
+        "contents": "This extension runs the symcc you install with Claude Code, Copilot CLI or OpenCode, and none is installed on this machine yet.\nIn a terminal, install it with Claude Code:\nclaude plugin install symcc --marketplace kourgeorge/symcc\nor with Copilot CLI:\ncopilot plugin marketplace add kourgeorge/symcc\ncopilot plugin install symcc@symcc\nThen:\n[Look again](command:symcc.findPlugin)\nA clone of symcc works too:\n[Choose the symcc folder](command:symcc.choosePlugin)\n[How to install symcc](https://github.com/kourgeorge/symcc#install)"
+      },
+      {
+        "view": "symcc.setup",
+        "when": "symcc.problem == old",
+        "contents": "The symcc on this machine is too old for this extension. Update it in the harness you installed it with, then look again. The log says which copy and the command.\n[Look again](command:symcc.findPlugin)\n[Show the log](command:symcc.showLog)\n[Choose another symcc folder](command:symcc.choosePlugin)"
+      },
+      {
+        "view": "symcc.setup",
+        "when": "symcc.problem == new",
+        "contents": "The symcc on this machine is newer than this extension. Update the symcc extension, then look again.\n[Look again](command:symcc.findPlugin)\n[Show the log](command:symcc.showLog)"
+      },
+      {
+        "view": "symcc.setup",
+        "when": "symcc.problem == node",
+        "contents": "symcc needs Node 22.13 or newer, and this editor's own Node is older. Update the editor, or set symcc.nodePath to a newer Node.\n[Open the setting](command:workbench.action.openSettings?%5B%22symcc.nodePath%22%5D)\n[Look again](command:symcc.findPlugin)"
+      },
+      {
+        "view": "symcc.setup",
+        "when": "symcc.problem == path",
+        "contents": "The folder in symcc.pluginPath holds no symcc.\n[Choose the symcc folder](command:symcc.choosePlugin)\n[Open the setting](command:workbench.action.openSettings?%5B%22symcc.pluginPath%22%5D)"
+      }
+    ],
     "menus": {
       "view/title": [
         {
@@ -59,7 +119,7 @@
         },
         {
           "command": "symcc.showLog",
-          "when": "view == symcc.side",
+          "when": "view == symcc.side || view == symcc.setup",
           "group": "engine@2"
         }
       ]
@@ -84,12 +144,22 @@
       },
       {
         "command": "symcc.restart",
-        "title": "Restart the engine",
+        "title": "Restart symcc",
         "category": "symcc"
       },
       {
         "command": "symcc.showLog",
-        "title": "Show the engine log",
+        "title": "Show the log",
+        "category": "symcc"
+      },
+      {
+        "command": "symcc.findPlugin",
+        "title": "Look for the installed symcc again",
+        "category": "symcc"
+      },
+      {
+        "command": "symcc.choosePlugin",
+        "title": "Choose the symcc folder",
         "category": "symcc"
       }
     ],
@@ -98,16 +168,8 @@
       "properties": {
         "symcc.agents": {
           "type": "string",
-          "enum": [
-            "cursor",
-            "copilot"
-          ],
-          "enumDescriptions": [
-            "Cursor's agents (the Cursor SDK), on your Cursor account.",
-            "GitHub Copilot's agents (the Copilot SDK), on your GitHub account: sign in once with `copilot login` in a terminal, or set GH_TOKEN."
-          ],
           "default": "cursor",
-          "markdownDescription": "Whose agents run the lead chat and the workers. Changing it restarts symcc: running workers stop and their tasks go back to the board."
+          "markdownDescription": "Whose agents run the lead chat and the workers, for example `cursor` or `copilot`. The board's model menu lists the ones your symcc knows. Changing it restarts symcc: running workers stop and their tasks go back to the board."
         },
         "symcc.leadModel": {
           "type": "string",
@@ -119,20 +181,23 @@
           "default": "",
           "description": "The model for workers whose role names none (empty: the default of the agents in use, Composer 2.5 on Cursor, Auto on Copilot)."
         },
-        "symcc.enginePath": {
+        "symcc.pluginPath": {
           "type": "string",
           "default": "",
-          "description": "The engine to run (empty: the one next to this extension, hosts/cursor/dist/engine.mjs)."
+          "scope": "machine",
+          "markdownDescription": "The symcc folder to run (a clone, or an installed copy). Empty: the newest symcc that Claude Code, Copilot CLI or OpenCode installed."
         },
         "symcc.nodePath": {
           "type": "string",
           "default": "",
-          "description": "The Node.js to run the engine with (empty: the editor's own)."
+          "scope": "machine",
+          "description": "The Node.js to run symcc with, 22.13 or newer (empty: the editor's own)."
         },
         "symcc.proxy": {
           "type": "string",
           "default": "",
-          "description": "The proxy the engine reaches Cursor through, e.g. http://proxy.example.com:912 (empty: the editor's http.proxy setting, then HTTPS_PROXY)."
+          "scope": "machine",
+          "description": "The proxy symcc reaches its agents' servers through, e.g. http://proxy.example.com:912 (empty: the editor's http.proxy setting, then HTTPS_PROXY)."
         },
         "symcc.notify": {
           "type": "boolean",
@@ -145,22 +210,22 @@
   "scripts": {
     "build": "node build.mjs",
     "watch": "node build.mjs --watch",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
-  },
-  "dependencies": {
-    "@assistant-ui/react": "0.15.38",
-    "@vscode/codicons": "0.0.36",
-    "react": "19.1.1",
-    "react-dom": "19.1.1",
-    "react-markdown": "10.1.0",
-    "remark-gfm": "4.0.1"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "vscode:prepublish": "node build.mjs",
+    "package": "npx -y @vscode/vsce@4.1.1 package"
   },
   "devDependencies": {
+    "@assistant-ui/react": "0.15.38",
     "@types/node": "^22.10.0",
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
     "@types/vscode": "1.90.0",
+    "@vscode/codicons": "0.0.36",
     "esbuild": "^0.25.0",
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
+    "react-markdown": "10.1.0",
+    "remark-gfm": "4.0.1",
     "typescript": "5.9.3"
   }
 }

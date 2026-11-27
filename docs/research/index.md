@@ -2,6 +2,7 @@
 
 Answers from symcc investigation tasks, kept as notes. Some are about ideas that were never built, or were built differently. Newest first. The site build adds any note missing from this list at the top, with its first long paragraph as the summary; write a better line by hand when you can.
 
+- [Research: can the editor extension use an installed symcc, with serve running from one built file?](editor-extension.md): whether the VS Code and Cursor extension can run the symcc a harness installed, with serve built into one file.
 - [Design: symcc as a general command center, not just for code](design-symcc-as-a-general-command-center-not-just-for-code.md): how symcc could handle work that isn't only code changes, and the smallest steps to get there.
 - [Investigate: working with symcc from a plain chat (no panel)](investigate-working-with-symcc-from-a-plain-chat-no-panel-wh.md): what reads well and what breaks when the owner uses symcc from Telegram, Slack, Discord or iMessage.
 - [Investigation: trust numbers on the board](investigation-trust-numbers-on-the-board-first-try-rate-toke.md): showing the first-try merge rate, tokens per merged task and how often the owner steps in.

@@ -428,6 +428,8 @@ export const DOC_GROUPS: { name: string; pages: Page[] }[] = [
     { src: 'docs/workspace-model.md', out: 'workspace-model.html', title: 'Workspace design' },
     RESEARCH_INDEX,
     { src: 'docs/demo.md', out: 'demo.html', title: 'The demo' },
+    { src: 'docs/releasing.md', out: 'releasing.html', title: 'Releasing' },
+    { src: 'docs/editor-pictures.md', out: 'editor-pictures.html', title: 'Editor pictures' },
     { src: 'docs/built-with-symcc.md', out: 'built-with-symcc.html', title: 'Built with symcc' },
   ] },
 ]

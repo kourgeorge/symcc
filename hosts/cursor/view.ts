@@ -3,13 +3,16 @@
 // the scouts, in the board's own words. The webview only draws it; every rule about what a task needs lives in core/.
 import type { SymccTask } from '../../types'
 import type { PaneView } from '../../hooks/app/state'
-import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isFinished, needsYou, newestFirst, taskAsks, taskActions, whyFailed, liveLanes, liveFinishedLanes, onDemand, everyText, shownStatus, roleOf, HISTORY_KINDS, isHistoryKind, MODE_NAME, MODE_MEANING } from '../../hooks/board'
+import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isFinished, needsYou, newestFirst, taskAsks, taskActions, whyFailed, liveLanes, liveFinishedLanes, onDemand, everyText, shownStatus, roleOf, HISTORY_KINDS, isHistoryKind, MODE_NAME, MODE_MEANING, driveNoticeParts, showsDriveButton, DRIVE_HERE_LABEL, sizeText, type ChangeSize, type Seg, historyEvent, historyTime, taskReports } from '../../hooks/board'
+import { DEFAULT_NAME } from '../../hooks/name'
+import { sizeSegs } from '../../hooks/core/page-header'
+import { checkerReportOf } from '../../hooks/core/task-sections'
 import { isOpenQuestion } from '../../hooks/core/questions'
 import { viewMarks } from '../../hooks/core/board-parts'
 import { byRunOrder } from '../../hooks/core/board-file'
 import { liveIdle, liveIdleFacts } from '../../hooks/core/live'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, ORG_MEM_SUBTITLE, ORG_MEM_TITLE, orgMemAbout, orgMemDeleteAsk, orgMemNoteHead, orgMemNoteKey, orgMemTopicCounts, type OrgMemNote } from '../../hooks/core/org-mem'
-import type { PanelAction, PanelActionId, PanelIdle, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelScout, PanelSession, PanelTask, PanelView } from './protocol'
+import type { PanelAction, PanelActionId, PanelChecker, PanelFollows, PanelHistory, PanelIdle, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelScout, PanelSession, PanelSize, PanelTask, PanelView } from './protocol'
 
 const ms = (iso: unknown): number | undefined => {
   const n = typeof iso === 'string' ? Date.parse(iso) : NaN
@@ -85,7 +88,46 @@ export function taskSessions(t: BoardTask): PanelSession[] {
   return out.reverse()
 }
 
-function panelTask(t: BoardTask, nowMs: number): PanelTask {
+/** The board's pieces of a size as the panel's: its added lines and its removed lines marked. */
+const sizePieces = (segs: readonly Seg[]): PanelSize => segs.map(s => ({ text: s.text, ...(s.color === 'success' ? { tone: 'added' as const } : s.color === 'error' ? { tone: 'removed' as const } : {}) }))
+
+/** A merged lane's size as the Live row ends with it: the lines added and removed, no files part. */
+function laneSize(z: ChangeSize): PanelSize {
+  const [added = '', removed = ''] = sizeText(z, false).split(' ')
+  return sizePieces([{ text: added, color: 'success' }, { text: ' ', color: 'text' }, { text: removed, color: 'error' }])
+}
+
+/** The most history lines of a task the panel gets, newest first. */
+export const HISTORY_SHOWN = 30
+/** The most of a checker's report the panel gets; the rest is in its file. */
+export const CHECKER_SHOWN_CHARS = 12_000
+
+/** A task's history, newest first, each line with who wrote it, as the task page draws it (core/task-sections.ts historyLines). */
+function panelHistory(t: BoardTask, nowMs: number): PanelHistory[] {
+  return t.history
+    .slice(-HISTORY_SHOWN)
+    .reverse()
+    .map(h => {
+      const e = historyEvent(h)
+      const at = historyTime(e.at, nowMs)
+      return { mark: e.mark, tone: e.tone, said: e.said, ...(at ? { at } : {}), ...(e.by ? { by: e.by } : {}), ...(e.label ? { label: e.label } : {}), ...(e.result ? { result: e.result } : {}) }
+    })
+}
+
+/** The checker's report a task's page shows: the latest checker's of the try its latest report is about. */
+export const checkerOf = (t: SymccTask) => checkerReportOf(t, taskReports(t).at(-1)?.try ?? t.attempts)
+
+function panelChecker(t: BoardTask, texts: Record<string, string>): PanelChecker | undefined {
+  const c = checkerOf(t)
+  if (!c) return undefined
+  const text = texts[c.file]?.trimEnd()
+  const cut = text !== undefined && text.length > CHECKER_SHOWN_CHARS
+  return { title: `Checker (try ${c.try})${c.agent ? ` · ${c.agent}` : ''}`, ok: c.ok, file: c.file, text: text === undefined ? null : cut ? text.slice(0, CHECKER_SHOWN_CHARS) : text, ...(cut ? { cut } : {}) }
+}
+
+function panelTask(t: BoardTask, nowMs: number, checkers: Record<string, string> = {}): PanelTask {
+  const size = sizeSegs(t)
+  const checker = panelChecker(t, checkers)
   return {
     id: t.id,
     title: t.title,
@@ -97,6 +139,10 @@ function panelTask(t: BoardTask, nowMs: number): PanelTask {
     ...(ms(t.updated_at) !== undefined ? { updatedMs: ms(t.updated_at)! } : {}),
     ...(t.note?.trim() ? { note: t.note.trim() } : {}),
     ...(t.details?.trim() ? { details: t.details.trim() } : {}),
+    ...(t.done?.trim() ? { done: t.done.trim() } : {}),
+    ...(size ? { size: sizePieces(size) } : {}),
+    ...(t.history?.length ? { history: panelHistory(t, nowMs), historyCount: t.history.length } : {}),
+    ...(checker ? { checker } : {}),
     needsYou: needsYou(t, nowMs),
     actions: actionsOf(t),
     sessions: taskSessions(t),
@@ -143,6 +189,7 @@ function panelLane(l: ReturnType<typeof liveLanes>[number], t: BoardTask | undef
     agent: l.agent,
     ...(now ? { agentId: now.agent } : {}),
     ...(l.done ? { doneMs: l.done.atMs } : {}),
+    ...(l.done && l.size ? { size: laneSize(l.size) } : {}),
   }
 }
 
@@ -165,6 +212,13 @@ function panelIdle(view: Parameters<typeof liveIdleFacts>[0], nowMs: number): Pa
   return { kind: f.kind, text: f.text, ...(hint ? { hint } : {}), next: f.next, more: f.more }
 }
 
+/** Another window drives the board and this one is on: the board's notice and its Drive here button; none while this
+ *  window drives, and none before the first publish says (driving unknown). */
+function followsOf(v: PaneView, name: string, nowMs: number): PanelFollows | undefined {
+  if (!showsDriveButton(v, v.driving ?? true)) return undefined
+  return { parts: driveNoticeParts(v.tasks ?? [], nowMs, name, Infinity, v.driver), button: DRIVE_HERE_LABEL.replace(/\s*\(\w\)$/, ''), command: `${name}-drive` }
+}
+
 const startOfDay = (nowMs: number) => {
   const d = new Date(nowMs)
   d.setHours(0, 0, 0, 0)
@@ -173,11 +227,13 @@ const startOfDay = (nowMs: number) => {
 
 /**
  * The panel's view of published view `v` at `nowMs`. `changes` holds the changed files of each task in review (read
- * with git by the caller, see session.ts); `project` is the project folder's name; `orgMem` org-mem's notes and file
- * (hooks/app/org-mem.ts orgMemNow, also read by the caller).
+ * with git by the caller, see session.ts); `project` is the project folder's name; `name` the plugin's (its commands'
+ * prefix); `orgMem` org-mem's notes and file (hooks/app/org-mem.ts orgMemNow, also read by the caller); `checkers` the
+ * texts of the checker reports (checkerOf) read so far, by file.
  */
-export function panelView(v: PaneView, o: { project: string; dir: string; nowMs: number; changes?: Record<string, DiffFile[]>; orgMem?: { notes: OrgMemNote[]; file: string } }): PanelView {
+export function panelView(v: PaneView, o: { project: string; dir: string; nowMs: number; name?: string; changes?: Record<string, DiffFile[]>; orgMem?: { notes: OrgMemNote[]; file: string }; checkers?: Record<string, string> }): PanelView {
   const nowMs = o.nowMs
+  const follows = followsOf(v, o.name ?? DEFAULT_NAME, nowMs)
   const tasks = (v.tasks ?? []) as BoardTask[]
   const questions = (v.questions ?? []).filter(q => isOpenQuestion(q))
   const needs: PanelNeed[] = [
@@ -213,8 +269,8 @@ export function panelView(v: PaneView, o: { project: string; dir: string; nowMs:
     maxParallel: v.max_parallel ?? 0,
     needs,
     lanes,
-    next: next.map(t => panelTask(t, nowMs)),
-    tasks: open.map(t => panelTask(t, nowMs)),
+    next: next.map(t => panelTask(t, nowMs, o.checkers)),
+    tasks: open.map(t => panelTask(t, nowMs, o.checkers)),
     news: newsOf(tasks, nowMs),
     scouts,
     counts: {
@@ -227,6 +283,7 @@ export function panelView(v: PaneView, o: { project: string; dir: string; nowMs:
     idle: panelIdle(view, nowMs),
     orgMem: panelOrgMem(o.orgMem?.notes ?? [], o.orgMem?.file ?? `${o.dir}/org-mem.md`),
     ...(v.branch_note ? { note: v.branch_note } : {}),
+    ...(follows ? { follows } : {}),
     dir: o.dir,
     nowMs,
   }

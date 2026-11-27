@@ -34,6 +34,16 @@ declare module 'node:child_process' {
   export function spawnSync(cmd: string, args: readonly string[], options: { cwd?: string; encoding: 'utf8' }): { status: number | null; stdout: string; stderr: string }
 }
 
+declare module 'node:path' {
+  export function basename(path: string): string
+  export function dirname(path: string): string
+  export function resolve(...paths: string[]): string
+}
+
+declare module 'node:url' {
+  export function fileURLToPath(url: string): string
+}
+
 declare module 'bun:test' {
   export function test(name: string, fn: () => unknown | Promise<unknown>, timeoutMs?: number): void
   export function expect(value: unknown): {

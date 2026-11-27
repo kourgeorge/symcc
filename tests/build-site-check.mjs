@@ -129,7 +129,7 @@ for (const p of pagesAll) {
 // the documentation list: on the index, every doc page and every research note, in this order, the page itself marked;
 // on no other page. Every doc page in the build is in it.
 const DOCS = ['board.html', 'tasks.html', 'scouts.html', 'running-on-its-own.html', 'clients.html', 'troubleshooting.html', 'reference.html',
-  'architecture.html', 'workspace-model.html', 'research/index.html', 'demo.html', 'built-with-symcc.html']
+  'architecture.html', 'workspace-model.html', 'research/index.html', 'demo.html', 'releasing.html', 'editor-pictures.html', 'built-with-symcc.html']
 const docPages = ['docs.html', ...DOCS]
 for (const p of pagesAll) {
   const t = read(p)
@@ -168,7 +168,7 @@ for (const p of ['get-started.html', 'how-it-works.html', ...docPages]) {
 // the previous / next boxes run through Get started, How it works and the documentation list
 const order = [['get-started.html', 'Get started'], ['how-it-works.html', 'How it works'], ['docs.html', 'Documentation'], ['board.html', 'The board'], ['tasks.html', 'Tasks'],
   ['scouts.html', 'Scouts'], ['running-on-its-own.html', 'Running on its own'], ['clients.html', 'Clients'], ['troubleshooting.html', 'Troubleshooting'], ['reference.html', 'Reference'],
-  ['architecture.html', 'Architecture'], ['workspace-model.html', 'Workspace design'], ['research/index.html', 'Research notes'], ['demo.html', 'The demo'], ['built-with-symcc.html', 'Built with symcc']]
+  ['architecture.html', 'Architecture'], ['workspace-model.html', 'Workspace design'], ['research/index.html', 'Research notes'], ['demo.html', 'The demo'], ['releasing.html', 'Releasing'], ['editor-pictures.html', 'Editor pictures'], ['built-with-symcc.html', 'Built with symcc']]
 order.forEach(([p], k) => {
   const t = read(p)
   const pn = /<nav class="prev-next"[\s\S]*?<\/nav>/.exec(t)?.[0] ?? ''

@@ -1,11 +1,18 @@
 // GitHub Copilot's agents (@microsoft/copilot-sdk) behind the host's Sdk (./sdk.ts), so the engine, the lead chat and
 // the board run on them as on Cursor's: each agent is one Copilot session in its folder, symcc's tools are served to it
 // from this process, its events are the board's steps, and symcc's guard (./guard.ts, given in as `guard`) is its
-// onPreToolUse hook, so each tool call is judged before it runs. copilotSdk() starts the Copilot runtime on first use (the
-// SDK's own, or COPILOT_CLI_PATH's), signed in as the copilot CLI is (`copilot login`, or GH_TOKEN). The SDK isn't
-// bundled, nor typed here: it ships the runtime (some 200 MB), so it is an optional dependency the engine loads by name.
+// onPreToolUse hook, so each tool call is judged before it runs. copilotSdk() starts the Copilot runtime on first use
+// (COPILOT_CLI_PATH's, else the SDK's own, else the owner's copilot CLI), signed in as the copilot CLI is (`copilot
+// login`, or GH_TOKEN). The SDK isn't typed here, and dist/engine.mjs loads it by name: its own runtime is some 200 MB,
+// so it is an optional dependency. editor/serve.mjs bundles the SDK without that runtime and runs the owner's CLI.
+import { existsSync, readFileSync, realpathSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { posix, win32 } from 'node:path'
+import { copilotModels, type CopilotModel } from './copilot-models'
 import type { Sdk, SdkAgent, SdkAgentOptions, SdkModel, SdkModelInfo, SdkRun, SdkRunResult, SdkSendOptions, SdkStep, SdkToolGuard, SdkUsage } from './sdk'
 import { argWords, short } from './steps'
+
+export { copilotModels, type CopilotModel }
 
 /** A session event: `agentId` is set on a sub-agent's. */
 export type CopilotEvent = { type: string; agentId?: string; data?: Record<string, unknown> }
@@ -48,15 +55,6 @@ export type CopilotSession = {
   rpc: { history: { compact: () => Promise<{ success: boolean; summaryContent?: string }> } }
 }
 
-export type CopilotModel = {
-  id: string
-  name: string
-  supportedReasoningEfforts?: string[]
-  defaultReasoningEffort?: string
-  policy?: { state: string }
-  billing?: { multiplier?: number }
-}
-
 export type CopilotClient = {
   start: () => Promise<void>
   stop: () => Promise<unknown>
@@ -68,7 +66,7 @@ export type CopilotClient = {
 /** The parts of the SDK's module copilotSdk() uses. */
 export type CopilotModule = {
   CopilotClient: new (o: { mode: 'coding-agent'; runtime: unknown }) => CopilotClient
-  RuntimeConnection: { forSpawnedStdio: () => unknown }
+  RuntimeConnection: { forSpawnedStdio: (o?: { path?: string }) => unknown }
 }
 
 const COPILOT_SDK = '@microsoft/copilot-sdk'
@@ -80,6 +78,55 @@ async function loadCopilot(): Promise<CopilotModule> {
     throw new Error(`symcc on Copilot needs ${COPILOT_SDK}: run npm install in hosts/cursor (${(err as Error).message})`)
   }
 }
+
+export type CliFs = { exists: (p: string) => boolean; real: (p: string) => string; read: (p: string) => string }
+const nodeFs: CliFs = { exists: existsSync, real: p => realpathSync(p), read: p => readFileSync(p, 'utf8') }
+
+/**
+ * The owner's copilot CLI: `copilot` on the PATH, else where its installers put it (an editor started from the desktop
+ * may have a short PATH). An npm install answers its JavaScript entry, which the SDK runs with this Node.
+ */
+export function copilotCli(env: Record<string, string | undefined> = process.env, os: string = process.platform, fs: CliFs = nodeFs): string | undefined {
+  const win = os === 'win32'
+  const { join } = win ? win32 : posix
+  const home = env.HOME || env.USERPROFILE || homedir()
+  const known = win ? [join(env.LOCALAPPDATA || join(home, 'AppData', 'Local'), 'Microsoft', 'WinGet', 'Links'), join(env.APPDATA || join(home, 'AppData', 'Roaming'), 'npm')] : [join(home, '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin']
+  const dirs = [...(env.PATH ?? env.Path ?? '').split(win ? ';' : ':').filter(Boolean), ...known]
+  // an npm install on Windows is a copilot.cmd beside node_modules/@github/copilot, whose package names the entry
+  const npmEntry = (dir: string) => {
+    const pkg = join(dir, 'node_modules', '@github', 'copilot')
+    try {
+      const bin = (JSON.parse(fs.read(join(pkg, 'package.json'))) as { bin?: string | Record<string, string> }).bin
+      const entry = typeof bin === 'string' ? bin : bin?.copilot
+      return entry && fs.exists(join(pkg, entry)) ? join(pkg, entry) : undefined
+    } catch {
+      return undefined
+    }
+  }
+  for (const dir of dirs) {
+    if (!win && fs.exists(join(dir, 'copilot'))) return fs.real(join(dir, 'copilot'))
+    if (win && fs.exists(join(dir, 'copilot.exe'))) return join(dir, 'copilot.exe')
+    if (win && fs.exists(join(dir, 'copilot.cmd'))) {
+      const entry = npmEntry(dir)
+      if (entry) return entry
+    }
+  }
+  return undefined
+}
+
+const UPDATE_SYMCC = 'In Claude Code: claude plugin marketplace update symcc && claude plugin update symcc@symcc. In Copilot CLI: copilot plugin marketplace update symcc && copilot plugin update symcc@symcc. From a clone: git pull.'
+
+/** The SDK's protocol mismatch in the owner's words, with what to update (undefined: `message` is another error). */
+export function protocolWords(message: string, cli: string): string | undefined {
+  const m = /SDK supports versions (\d+)-(\d+), but server (?:reports version (\d+)|does not report)/.exec(message)
+  if (!m) return undefined
+  const [low, high, theirs] = [Number(m[1]), Number(m[2]), m[3] === undefined ? undefined : Number(m[3])]
+  const ours = low === high ? `${high}` : `${low} to ${high}`
+  if (theirs !== undefined && theirs > high) return `The copilot CLI at ${cli} is newer than this symcc: it speaks protocol ${theirs}, and symcc speaks ${ours}. Update symcc, then restart it. ${UPDATE_SYMCC}`
+  return `The copilot CLI at ${cli} is older than this symcc: it speaks protocol ${theirs ?? 'none'}, and symcc speaks ${ours}. Update it with copilot update (or npm install -g @github/copilot), then restart symcc.`
+}
+
+const NO_CLI = 'symcc on Copilot runs your copilot CLI, and found none. Install it (npm install -g @github/copilot), sign in with copilot login, then restart symcc. Or set COPILOT_CLI_PATH to it.'
 
 /** The Cursor SDK's tool names, as the host disallows them, in Copilot's built-in tools (a name not here is its own). */
 export const COPILOT_TOOLS: Record<string, readonly string[]> = {
@@ -117,27 +164,6 @@ export function readOnlyRefusal(r: CopilotPermissionRequest): string | undefined
   if (r.kind === 'shell') return !r.hasWriteFileRedirection && r.commands?.length && r.commands.every(c => c.readOnly) ? undefined : `${why}: run only commands that change nothing.`
   if (r.kind === 'mcp' && !r.readOnly) return `${why}: ${r.toolName ?? 'that tool'} may change things.`
   return undefined
-}
-
-const EFFORT_WORDS: Record<string, string> = { none: 'None', minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max' }
-
-/** Copilot's model list as the host's: the ones the account may use, each with its reasoning efforts (medium by default). */
-export function copilotModels(list: readonly CopilotModel[]): SdkModelInfo[] {
-  return list
-    .filter(m => !m.policy || m.policy.state === 'enabled')
-    .map(m => {
-      const efforts = m.supportedReasoningEfforts ?? []
-      const fallback = efforts.includes('medium') ? 'medium' : efforts[0]
-      const def = m.defaultReasoningEffort && efforts.includes(m.defaultReasoningEffort) ? m.defaultReasoningEffort : fallback
-      const cost = m.billing?.multiplier
-      return {
-        id: m.id,
-        label: m.name || m.id,
-        ...(cost !== undefined ? { description: cost === 0 ? 'included' : `${cost}× premium requests` } : {}),
-        options: efforts.length ? [{ id: 'reasoning', label: 'Reasoning', values: efforts.map(v => ({ value: v, label: EFFORT_WORDS[v] ?? v })) }] : [],
-        variants: efforts.length ? efforts.map(v => ({ params: { reasoning: v }, ...(v === def ? { isDefault: true } : {}) })) : [{ params: {}, isDefault: true }],
-      }
-    })
 }
 
 const text = (v: unknown) => (typeof v === 'string' ? v : '')
@@ -240,17 +266,37 @@ function copilotAgent(session: CopilotSession, model: string, turn: { readOnly: 
   }
 }
 
-/** `load`: the SDK's module (a test's fake; the real one when absent). */
-export type CopilotSdkOptions = { load?: () => Promise<CopilotModule>; defaultModel?: string; guard?: Sdk['guard'] }
+/** `load`: the SDK's module (a test's fake; the real one when absent). `cli`: finds the owner's copilot CLI. */
+export type CopilotSdkOptions = { load?: () => Promise<CopilotModule>; defaultModel?: string; guard?: Sdk['guard']; cli?: () => string | undefined; env?: Record<string, string | undefined> }
 
 /** GitHub Copilot's agents as the host's Sdk. One runtime serves every agent; it starts on first use. */
 export function copilotSdk(o: CopilotSdkOptions = {}): Sdk {
   let client: Promise<CopilotClient> | undefined
+  const env = o.env ?? process.env
   const started = () =>
     (client ??= (async () => {
       const m = await (o.load ?? loadCopilot)()
-      const c = new m.CopilotClient({ mode: 'coding-agent', runtime: m.RuntimeConnection.forSpawnedStdio() })
-      await c.start()
+      const start = async (path?: string) => {
+        const c = new m.CopilotClient({ mode: 'coding-agent', runtime: m.RuntimeConnection.forSpawnedStdio(path ? { path } : undefined) })
+        try {
+          await c.start()
+          return c
+        } catch (err) {
+          await c.stop().catch(() => undefined)
+          const words = protocolWords((err as Error).message, path ?? env.COPILOT_CLI_PATH ?? 'COPILOT_CLI_PATH')
+          throw words ? new Error(words) : err
+        }
+      }
+      let c: CopilotClient
+      if (env.COPILOT_CLI_PATH) c = await start()
+      else
+        c = await start().catch(async (own: Error) => {
+          // no runtime of the SDK's own (editor/serve.mjs has none): the owner's CLI
+          if (/protocol/.test(own.message)) throw own
+          const cli = (o.cli ?? (() => copilotCli(env)))()
+          if (!cli) throw new Error(NO_CLI)
+          return start(cli)
+        })
       const auth = await c.getAuthStatus()
       if (!auth.isAuthenticated) {
         await c.stop().catch(() => undefined)

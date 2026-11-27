@@ -19,7 +19,7 @@ import {
   type TriggerAdapter,
   type TriggerItem,
 } from '@assistant-ui/react'
-import type { ChatImage, ChatItem, LeadSettings, ModelInfo, PanelLane, PanelNews, PanelStep, SlashItem } from '../../protocol'
+import type { AgentChoice, ChatImage, ChatItem, LeadSettings, ModelInfo, PanelLane, PanelNews, PanelStep, SlashItem } from '../../protocol'
 import { LEAD_AGENT, turnSteps } from '../../steps'
 import { ask, tell } from './bridge'
 import { Icon, Linked, Mark, Markdown, clock, dayWord, duration, tokensWord, useNow } from './parts'
@@ -79,12 +79,14 @@ export type LeadChatProps = {
   settings: LeadSettings
   models: ModelInfo[]
   slash: SlashItem[]
+  /** Whose agents symcc can run (serve's list), and which run now. */
+  agents: { list: AgentChoice[]; current: string }
   onSay: Say
   onTask: (id: string) => void
 }
 
 /** The stream and the composer, as one assistant-ui thread. */
-export function LeadChat({ chat, news, lanes, busy, lead, ready, settings, models, slash, onSay, onTask }: LeadChatProps) {
+export function LeadChat({ chat, news, lanes, busy, lead, ready, settings, models, slash, agents, onSay, onTask }: LeadChatProps) {
   const now = useNow(60_000)
   const turn = useMemo(() => turnSteps(lead), [lead])
   const messages = useMemo<ThreadMessageLike[]>(() => {
@@ -142,7 +144,7 @@ export function LeadChat({ chat, news, lanes, busy, lead, ready, settings, model
             )}
             <ThreadPrimitive.Messages>{renderMessage}</ThreadPrimitive.Messages>
           </ThreadPrimitive.Viewport>
-          <Composer ready={ready} busy={busy} settings={settings} models={models} slash={slash} onSay={onSay} />
+          <Composer ready={ready} busy={busy} settings={settings} models={models} slash={slash} agents={agents} onSay={onSay} />
         </ThreadPrimitive.Root>
       </ChatCtx.Provider>
     </AssistantRuntimeProvider>
@@ -462,7 +464,9 @@ function useDismiss(open: boolean, box: React.RefObject<HTMLElement | null>, clo
   }, [open, box, close])
 }
 
-function ModelPicker({ settings, models }: { settings: LeadSettings; models: ModelInfo[] }) {
+type Agents = LeadChatProps['agents']
+
+function ModelPicker({ settings, models, agents }: { settings: LeadSettings; models: ModelInfo[]; agents: Agents }) {
   const [open, setOpen] = useState(false)
   const [find, setFind] = useState('')
   const box = useRef<HTMLDivElement>(null)
@@ -541,6 +545,21 @@ function ModelPicker({ settings, models }: { settings: LeadSettings; models: Mod
               {variant?.maxMode && <p className="pick-note">Max mode: this choice costs more per turn.</p>}
             </div>
           )}
+          {agents.list.length > 1 && (
+            <div className="pick-options" aria-label="Agents">
+              <div className="pick-option">
+                <span>Agents</span>
+                <div className="seg" role="radiogroup" aria-label="Whose agents run the lead and the workers">
+                  {agents.list.map(a => (
+                    <button key={a.id} type="button" role="radio" aria-checked={a.id === agents.current} onClick={() => a.id !== agents.current && (tell({ type: 'agents-set', agents: a.id }), close())}>
+                      {a.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="pick-note">symcc restarts with the agents you choose.</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -607,7 +626,7 @@ function SlashList({ items }: { items: readonly TriggerItem[] }) {
   )
 }
 
-function Composer({ ready, busy, settings, models, slash, onSay }: { ready: boolean; busy: boolean; settings: LeadSettings; models: ModelInfo[]; slash: SlashItem[]; onSay: Say }) {
+function Composer({ ready, busy, settings, models, slash, agents, onSay }: { ready: boolean; busy: boolean; settings: LeadSettings; models: ModelInfo[]; slash: SlashItem[]; agents: Agents; onSay: Say }) {
   const aui = useAui()
   const adapter = useMemo(() => slashAdapter([...CHAT_COMMANDS, ...slash]), [slash])
   const run = (item: TriggerItem) => {
@@ -632,7 +651,7 @@ function Composer({ ready, busy, settings, models, slash, onSay }: { ready: bool
         <ComposerPrimitive.Input id="composer" className="composer-input" rows={1} maxRows={10} submitMode="enter" placeholder={settings.mode === 'plan' ? 'Ask the lead to plan something… (it changes no files)' : 'Tell the lead what you want next… / for commands and skills'} />
         <div className="composer-bar">
           <ModeSwitch settings={settings} />
-          <ModelPicker settings={settings} models={models} />
+          <ModelPicker settings={settings} models={models} agents={agents} />
           <ComposerPrimitive.AddAttachment className="icon-btn" aria-label="Add a picture" title="Add a picture (or paste one)">
             <Icon name="file-media" />
           </ComposerPrimitive.AddAttachment>

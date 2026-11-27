@@ -2,7 +2,7 @@
 // what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
 // with the message box under it, and the running work beside it.
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
+import type { AgentChoice, BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelChecker, PanelFollows, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelSize, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
 import { LEAD_AGENT, addStep } from '../../steps'
 import { ask, onMessage, tell } from './bridge'
 import { Icon, IdleNote, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
@@ -14,13 +14,13 @@ type Page = BoardPage
 type Notice = { text: string; bad: boolean; at: number }
 export type Say = (text: string, bad?: boolean) => void
 export type Steps = Record<string, PanelStep[]>
-/** The lead chat's model and mode, the account's models, and the slash commands. */
-type Lead = { settings: LeadSettings; models: ModelInfo[]; slash: SlashItem[] }
+/** The lead chat's model and mode, the account's models, the slash commands, and whose agents run. */
+type Lead = { settings: LeadSettings; models: ModelInfo[]; slash: SlashItem[]; agents: { list: AgentChoice[]; current: string } }
 
 /** The words of the board's empty list (hooks/core/panel.ts ALL_CLEAR). */
 const ALL_CLEAR = ['All clear. Nothing running or waiting.', 'Tell the lead what you want next.'] as const
 
-/** What the extension sends, kept as it comes: the board, the lead's chat, the engine, every agent's steps. */
+/** What serve and the extension send, kept as it comes: the board, the lead's chat, serve's state, every agent's steps. */
 export function useSymcc(onGo?: (page: Page, task?: string) => void) {
   const [view, setView] = useState<PanelView | null>(null)
   const [chat, setChat] = useState<ChatItem[]>([])
@@ -28,7 +28,7 @@ export function useSymcc(onGo?: (page: Page, task?: string) => void) {
   const [engine, setEngine] = useState<EngineState>({ state: 'starting' })
   const [network, setNetwork] = useState<NetworkProblem | null>(null)
   const [steps, setSteps] = useState<Steps>({})
-  const [lead, setLead] = useState<Lead>({ settings: { mode: 'agent' }, models: [], slash: [] })
+  const [lead, setLead] = useState<Lead>({ settings: { mode: 'agent' }, models: [], slash: [], agents: { list: [], current: '' } })
   const [trees, setTrees] = useState<WorktreeList | null>(null)
   const go = useRef(onGo)
   go.current = onGo
@@ -44,6 +44,7 @@ export function useSymcc(onGo?: (page: Page, task?: string) => void) {
       else if (m.type === 'lead') setLead(l => ({ ...l, settings: m.settings }))
       else if (m.type === 'models') setLead(l => ({ ...l, models: m.models }))
       else if (m.type === 'slash') setLead(l => ({ ...l, slash: m.items }))
+      else if (m.type === 'agents') setLead(l => ({ ...l, agents: { list: m.list, current: m.current } }))
       else if (m.type === 'worktrees') setTrees({ list: m.list, atMs: m.atMs, ...(m.error ? { error: m.error } : {}) })
       else if (m.type === 'go') go.current?.(m.page, m.task)
     })
@@ -170,7 +171,39 @@ function Header({ view, onSay }: { view: PanelView | null; onSay: Say }) {
           <Icon name="warning" /> {view.note}
         </p>
       )}
+      {view?.follows && <DriveNotice follows={view.follows} onSay={onSay} />}
     </header>
+  )
+}
+
+/** Another window drives the board: the board's notice, its slash command and the Drive here button both make this window drive. */
+export function DriveNotice({ follows, onSay }: { follows: PanelFollows; onSay: Say }) {
+  const [busy, setBusy] = useState(false)
+  const drive = () => {
+    setBusy(true)
+    ask({ type: 'command', name: follows.command })
+      .then(t => t && onSay(t), (e: Error) => onSay(e.message, true))
+      .finally(() => setBusy(false))
+  }
+  return (
+    <div className="head-note drive-note" role="status">
+      <p>
+        <Icon name="warning" />{' '}
+        {follows.parts.map((p, i) =>
+          p.command ? (
+            <button key={i} type="button" className="link" disabled={busy} onClick={drive}>
+              {p.text}
+            </button>
+          ) : (
+            <span key={i}>{p.text}</span>
+          ),
+        )}
+      </p>
+      <button type="button" className="btn" disabled={busy} onClick={drive}>
+        {busy ? <Icon name="loading" /> : null}
+        {follows.button}
+      </button>
+    </div>
   )
 }
 
@@ -348,7 +381,7 @@ function Now({ view, chat, busy, steps, lead, ready, onSay, onTask, onMemory }: 
     <div className="now">
       <div className="center">
         <Needs needs={view.needs} tasks={view.tasks} onSay={onSay} onTask={onTask} />
-        <LeadChat chat={chat} news={view.news} lanes={view.lanes} busy={busy} lead={steps[LEAD_AGENT] ?? []} ready={ready} settings={lead.settings} models={lead.models} slash={lead.slash} onSay={onSay} onTask={onTask} />
+        <LeadChat chat={chat} news={view.news} lanes={view.lanes} busy={busy} lead={steps[LEAD_AGENT] ?? []} ready={ready} settings={lead.settings} models={lead.models} slash={lead.slash} agents={lead.agents} onSay={onSay} onTask={onTask} />
       </div>
       <Side view={view} steps={steps} onTask={onTask} onMemory={onMemory} />
     </div>
@@ -620,6 +653,7 @@ export function LaneCard({ lane, step, onTask }: { lane: PanelLane; step?: Panel
           </span>
         )}
         {!!lane.tokens && <span>{tokensWord(lane.tokens)} tokens</span>}
+        {done && lane.size && <Size size={lane.size} />}
       </span>
       {step && !done && (
         <span className="lane-step" title={stepWords(step)}>
@@ -628,6 +662,19 @@ export function LaneCard({ lane, step, onTask }: { lane: PanelLane; step?: Panel
         </span>
       )}
     </button>
+  )
+}
+
+/** A change's size in the board's words, its added lines green and its removed lines red. */
+export function Size({ size }: { size: PanelSize }) {
+  return (
+    <span className="size">
+      {size.map((p, i) => (
+        <span key={i} className={p.tone === 'added' ? 'add' : p.tone === 'removed' ? 'del' : undefined}>
+          {p.text}
+        </span>
+      ))}
+    </span>
   )
 }
 
@@ -714,13 +761,22 @@ function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; ste
           <p className="task-facts">
             <span>role {task.role}</span>
             {task.attempts > 0 && <span>{task.attempts === 1 ? '1 try' : `${task.attempts} tries`}</span>}
+            {task.size && <Size size={task.size} />}
           </p>
+          {task.done && (
+            <div className="task-part">
+              <h4>Done</h4>
+              <Markdown text={task.done} onTask={onTask} />
+            </div>
+          )}
           {task.note && <p className="task-note">{task.note}</p>}
           {task.details && (
             <div className="task-details">
               <Markdown text={task.details} onTask={onTask} />
             </div>
           )}
+          {!!task.history?.length && <TaskHistory task={task} />}
+          {task.checker && <CheckerReport checker={task.checker} onTask={onTask} />}
           <TaskSession task={task} steps={steps} />
           {box ? (
             <form
@@ -758,6 +814,52 @@ function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; ste
         </div>
       )}
     </li>
+  )
+}
+
+/** A task's history, newest first: each line's mark in its tone, when, who wrote it, its try, what was said and the try's result. */
+function TaskHistory({ task }: { task: PanelTask }) {
+  const lines = task.history ?? []
+  const older = (task.historyCount ?? lines.length) - lines.length
+  return (
+    <details className="report">
+      <summary>
+        History <span className="count">{task.historyCount ?? lines.length}</span>
+      </summary>
+      <ol className="history">
+        {lines.map((h, i) => (
+          <li key={i} className={`is-${h.tone}`}>
+            <span className="history-mark">{h.mark}</span>
+            <span>
+              {h.at && <span className="history-dim">{h.at} </span>}
+              {h.by && <span className="history-dim">{h.by}: </span>}
+              {h.label && <b>{h.label}: </b>}
+              <span className={h.tone === 'bad' && !h.result ? 'history-bad' : 'history-dim'}>{h.said}</span>
+              {h.result && <span className="history-result"> → {h.result}</span>}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {older > 0 && <p className="quiet">and {older} older</p>}
+    </details>
+  )
+}
+
+/** The checker's saved report of the task's latest try, and its file to open. */
+function CheckerReport({ checker, onTask }: { checker: PanelChecker; onTask: (id: string) => void }) {
+  return (
+    <details className="report checker">
+      <summary>
+        <Icon name={checker.ok ? 'pass' : 'warning'} /> {checker.title}
+      </summary>
+      {checker.text === null ? <p className="quiet">Could not read the checker report file.</p> : <Markdown text={checker.text} onTask={onTask} />}
+      <p className="checker-file">
+        {checker.cut ? 'The rest is in ' : ''}
+        <button type="button" className="link" onClick={() => tell({ type: 'open-file', path: checker.file })}>
+          {checker.file}
+        </button>
+      </p>
+    </details>
   )
 }
 

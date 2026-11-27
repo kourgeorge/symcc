@@ -11,6 +11,8 @@
 import { type Host, type HostFeatures, type HostWords, noUi } from '../host'
 import { viewFilePanel } from './view'
 import { writeSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { nodeFs, runCommand, nodeClock, nodeProcesses } from '../../hosts/node/host'
 
 /**
@@ -29,7 +31,7 @@ export const OPENCODE_WORDS: HostWords = {
 }
 
 /** The symcc folder this file ships in (where roles/, kinds/, examples/ and .claude-plugin/plugin.json are). */
-export const PLUGIN_ROOT = decodeURIComponent(import.meta.url.replace(/^file:\/\//, '')).replace(/\/hooks\/opencode\/[^/]*$/, '')
+export const PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..')
 
 /** One id for this OpenCode server process (kept on globalThis, which every copy of the plugin shares). */
 export function serverId(): string {
