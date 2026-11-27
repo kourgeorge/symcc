@@ -117,6 +117,11 @@ export const register: Register = on => {
   // Only the message's own opening frame counts (a report that quotes the starter's frame must still arrive).
   const starterFrame = (text: string) => text.replace(/^\s*Another Claude session sent a message:\s*/, '').trimStart().startsWith(`<agent-message from="${S.N.name}-starter"`)
 
+  const agentReportFrame = (text: string) => {
+    const name = S.N.name.replace(/[^\w-]/g, '\\$&')
+    return new RegExp(`^\\s*(?:Another Claude session sent a message:\\s*)?<agent-message from="${name}-(?:T-\\d+(?:-checker)?|scout-[\\w-]+)"`).test(text)
+  }
+
   // The owner's typed prompt (terminal or phone/web bridge); slash commands, hidden prompts and symcc's own board updates are left out.
   on('prompt.submit', async ($, e, next) => {
     useName(claudeHost($))
@@ -125,6 +130,9 @@ export const register: Register = on => {
     const owners = kind === 'composer' || kind === 'bridge' || kind === 'channel' || (kind === 'sdk' && !isOwnUpdate(e.text) && !/^\s*(Another Claude session sent a message:\s*)?<agent-message /.test(e.text))
     // T-837: the hidden starter's end ("OK") reaches the lead's chat as a message; dropped here so it wakes no turn
     if (!owners && !e.command && starterFrame(e.text)) return { drop: '▸ agent started' }
+    // T-1173: a symcc agent's report (worker, checker, scout, also a debrief answer) is muted while symcc is on: the board
+    // updates, Meanwhile lines and the digest tell the lead what it needs. Matched by the agent's name, before turn.complete.
+    if (S.enabledNow && !owners && !e.command && agentReportFrame(e.text)) return { drop: '▸ agent report' }
     // T-968: the owner's board actions waiting as "Meanwhile" lines go beside their prompt (its context, kept in the chat
     // once, not in the system prompt); attached on the way down, as context added after next() is not
     // (put back on the queue when the prompt never reaches the chat: a drop, or a later hook throws)

@@ -566,16 +566,23 @@ ${lines.board}
 - End with a short plain report of your findings. If there is nothing worth reporting, answer exactly: NOTHING`
 }
 
+const LEAD_REPORT_CHARS = 3000
+/** T-1173: an agent's report as the board update carries it (agent reports are muted): the text, cut when long. */
+export const reportPart = (text: string | undefined): string => {
+  const t = (text ?? '').trim()
+  return t.length > LEAD_REPORT_CHARS ? `${t.slice(0, LEAD_REPORT_CHARS - 1)}… (cut)` : t
+}
+
 /**
- * What the lead is told when a scout finishes, or null for a NOTHING report. Only the outcome: the
- * report itself already reached the lead as the scout's hand-back, so it is not repeated here.
+ * What the lead is told when a scout finishes, or null for a NOTHING report. The scout's report is muted
+ * (it never reaches the lead as a message), so it is carried here.
  */
 export function scoutLeadMessage(scout: string, answer: string | undefined, paused = false): string | null {
   if (isNothing(answer)) return null
   const n = countFindings(answer)
   const found = n ? `found ${n} thing${n > 1 ? 's' : ''}` : 'found something'
   const note = paused ? `\nThe owner has paused "${scout}": it doesn't run on its timer until the owner resumes it (run now still runs it once).` : ''
-  return `Scout "${scout}" ${found} (its report is the scout's own message to you). Add tasks for anything worth doing, tell the owner what matters, or ignore it.${note}`
+  return `Scout "${scout}" ${found}. Its report:\n${reportPart(answer)}\n\nAdd tasks for anything worth doing, tell the owner what matters, or ignore it.${note}`
 }
 
 /** The how-to shown when there are no scouts. */

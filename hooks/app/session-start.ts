@@ -17,6 +17,7 @@ import { openPane } from './open'
 import { check, pump } from './workers'
 import { cleanLeftoverTmp } from './cleanup'
 import { isDamSession } from './dam'
+import { digestTick } from './digest'
 
 /** Counts sessionStart runs, so a late claimLead of an earlier start doesn't end a newer one's wait. */
 let starts = 0
@@ -37,6 +38,7 @@ export function watchdogTick(host: Host) {
   // running the /usr/bin/git stand-in opens Apple's install pop-up each time; Check again or a new session looks then
   if (!S.fresh && !allGitReady() && S.gitState !== 'no-git') void recheckGit(host).catch(() => undefined)
   void check(host).catch(() => undefined)
+  void digestTick(host).catch(() => undefined)
 }
 
 /** The lead heartbeat's timer went off: the driver refreshes its heartbeat; the others look whether it went stale and take over. */

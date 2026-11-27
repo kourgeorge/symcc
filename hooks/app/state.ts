@@ -155,6 +155,8 @@ export const startS = () => ({
   gitInstall: '',
   /** T-1136: the workspace text while the folder (no repo, or no commit yet) holds repos of its own; '' otherwise */
   gitWorkspace: '',
+  /** T-1173: when the last digest was sent to the lead (ms); 0 = none yet (the first tick sets it, so a restart sends none at once) */
+  lastDigest: 0,
   /** the git state the lead was last told about, so it is told once, not every check */
   toldGit: 'ok' as GitState,
   /** set while setupGit runs, so a second press waits */

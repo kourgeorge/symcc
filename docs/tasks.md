@@ -485,9 +485,13 @@ task's details how it will be tested ("Done when: tests show …").
 The lead (the main chat) gets a "[symcc] Board update" message only when something needs it:
 a worker finished, failed or is ready for review, a task waits for you (a question or
 a file request), you answered one of its questions on the board, a scout found something, a conflict or failing tests need a decision, or the
-board file is broken. The worker's or scout's own report already reaches the chat as that
-agent's message, so the board update gives just the outcome ("T-3 merged into main (abc12345);
-tests passed") and doesn't repeat it. A scout that answers `NOTHING` sends nothing.
+board file is broken. Agents' own reports no longer reach the chat as messages (symcc drops them
+while it is on, to save the lead's tokens): the board update gives the outcome ("T-3 merged into
+main (abc12345); tests passed"), and carries the report itself where the lead needs it (an answered
+investigation, an errand, a scout's findings). The lead reads any report with `symcc board task T-n`.
+A scout that answers `NOTHING` sends nothing. At most every 2 hours, and only when there is
+something to say, the lead also gets a short digest: tasks on try 3 or more, tests that failed in
+2 or more tries, the checker sending work back, and tasks stuck for a long time.
 
 What you do yourself on the board (approve, reject, drop, move to todo, stash, mode and
 settings changes, answering a task) and merges you approved don't wake the lead. They are
@@ -522,7 +526,7 @@ always says what happened ("T-743 merged", not "Good news: …").
   one message (a `prompt.submit` hook, matched on the helper's name). To avoid even that dropped
   line, symcc stops the helper right after it starts (the TaskStop tool); its end still starts
   the waiting agents, and the drop stays as a fallback if the stop comes too late. Workers', checkers'
-  and scouts' hand-backs still arrive. OpenCode and the Node client start
+  and scouts' hand-backs are dropped the same way while symcc is on (see the board updates above). OpenCode and the Node client start
   agents at once and need none of this.
 - **A new task:** "Added T-n  <short title>", then one line for what waits on what, if anything.
 - **A question for you:** the question in one sentence, the choices numbered, then "(or answer on

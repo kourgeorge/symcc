@@ -340,6 +340,30 @@ test("T-837: the starter's hand-back is dropped before the lead sees it; a worke
   expect(typeof prefixed.drop).toBe('string')
 })
 
+test('T-1173: a symcc agent report is muted while symcc is on; owner and other messages are not', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify(emptyBoard()))
+  await $.session.start({ cwd: '/repo' } as never)
+  const frame = (name: string) => `<agent-message from="${name}">\n[Subagent hand-back] done\n</agent-message>`
+  const peer = (text: string) => $.prompt.submit({ text, isMeta: true, origin: { kind: 'peer' } } as never) as Promise<{ drop?: string }>
+  for (const name of ['symcc-T-5', 'symcc-T-5-checker', 'symcc-scout-board-review']) expect((await peer(frame(name))).drop).toBe('▸ agent report')
+  expect((await peer(`Another Claude session sent a message:\n${frame('symcc-T-5')}`)).drop).toBe('▸ agent report')
+  // the name decides, not a claim inside the text; a real cross-session message passes
+  expect((await peer(frame('other-session'))).drop).toBeUndefined()
+  expect((await peer(`<agent-message from="symcc-T-5x">\nhi\n</agent-message>`)).drop).toBeUndefined()
+  const owner = (await say($, frame('symcc-T-5'))) as { drop?: string }
+  expect(owner.drop).toBeUndefined()
+  expect(((await say($, 'what is stuck?')) as { drop?: string }).drop).toBeUndefined()
+})
+
+test('T-1173: with symcc off, an agent report is not muted', async ($, on) => {
+  const w = world(on)
+  w.files.set(BOARD, JSON.stringify({ ...emptyBoard(), enabled: false }))
+  await $.session.start({ cwd: '/repo' } as never)
+  const r = (await $.prompt.submit({ text: '<agent-message from="symcc-T-5">\n[Subagent hand-back] done\n</agent-message>', isMeta: true, origin: { kind: 'peer' } } as never)) as { drop?: string }
+  expect(r.drop).toBeUndefined()
+})
+
 /** The lead adds a task from the owner's request; returns the evidence the plugin put next to it. */
 async function ownerAdd($: Eng, w: ReturnType<typeof world>, request: string): Promise<string> {
   const r = (await $.tool.call({ tool: 'mcp__symcc__add', title: `Do: ${request.slice(0, 40)}`, why: 'the owner asked', origin_by: 'owner', request, files: ['src/'] } as never)) as { result?: string }
