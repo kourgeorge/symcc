@@ -42,7 +42,7 @@ symcc is an **agent organization**: agents with clear jobs, run by the lead.
 - **Workers** each build one task, side by side. Each works in its own copy of the project (a git worktree) on its own branch, with a list of the files it may change. An edit outside that list is refused and becomes a question for you, not a surprise in the diff.
 - **The checker** (a board setting, off by default) is a fresh agent that did not write the change. It tries to break it, judges it against the task's "Done when", and sends it back only for what is worse than main. After 2 send-backs the task waits for you: Merge as is, Keep fixing, or Drop.
 - **The merge queue** runs your project's tests. Finished tasks take turns, and a change merges only when the tests pass.
-- **Scouts** look for problems and ideas on a timer: bugs, missing tests, outdated packages. They only read. What they find goes to the lead, who decides whether it becomes a task.
+- **Scouts** look for problems and ideas on a timer: bugs, missing tests, outdated packages. They don't change your project. What they find goes to the lead, who decides whether it becomes a task.
 
 Not every task is code. An **investigation** brings back an answer for you to read. An **errand** does work outside the project, like tidying a folder on your Desktop.
 
