@@ -264,3 +264,12 @@ main.home > section.install { max-width: 46rem; }
 .bars .bb { grid-column: 1 / -1; display: block; height: .5rem; background: var(--soft); border-radius: 4px; overflow: hidden; }
 .bars .bb i { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
 main.home > section.built { max-width: 46rem; text-align: center; }
+
+/* T-1163: the "What's new" timeline: one entry per release down a vertical line */
+.timeline { list-style: none; margin: 1.5rem 0 0; padding: 0 0 0 1.4rem; border-left: 2px solid var(--line); }
+.timeline .release { position: relative; margin: 0 0 2rem; min-width: 0; overflow-wrap: anywhere; }
+.timeline .release::before { content: ""; position: absolute; left: calc(-1.4rem - 7px); top: .9rem; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); border: 2px solid var(--bg); }
+.timeline .release h2 { margin: 0 0 .4rem; padding: 0; border: 0; font-size: 1.3rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: .1rem .8rem; }
+.timeline .rel-date { font-size: .9rem; font-weight: 400; color: var(--dim); }
+.timeline .release h3 { font-size: 1rem; margin: .8rem 0 .2rem; color: var(--dim); }
+.timeline .release pre { max-width: 100%; }

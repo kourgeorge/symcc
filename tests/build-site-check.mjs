@@ -128,7 +128,7 @@ for (const p of pagesAll) {
 
 // the documentation list: on the index, every doc page and every research note, in this order, the page itself marked;
 // on no other page. Every doc page in the build is in it.
-const DOCS = ['board.html', 'tasks.html', 'scouts.html', 'running-on-its-own.html', 'clients.html', 'troubleshooting.html', 'reference.html',
+const DOCS = ['board.html', 'tasks.html', 'scouts.html', 'running-on-its-own.html', 'clients.html', 'troubleshooting.html', 'reference.html', 'whats-new.html',
   'architecture.html', 'workspace-model.html', 'research/index.html', 'demo.html', 'releasing.html', 'editor-pictures.html', 'built-with-symcc.html']
 const docPages = ['docs.html', ...DOCS]
 for (const p of pagesAll) {
@@ -167,7 +167,7 @@ for (const p of ['get-started.html', 'how-it-works.html', ...docPages]) {
 
 // the previous / next boxes run through Get started, How it works and the documentation list
 const order = [['get-started.html', 'Get started'], ['how-it-works.html', 'How it works'], ['docs.html', 'Documentation'], ['board.html', 'The board'], ['tasks.html', 'Tasks'],
-  ['scouts.html', 'Scouts'], ['running-on-its-own.html', 'Running on its own'], ['clients.html', 'Clients'], ['troubleshooting.html', 'Troubleshooting'], ['reference.html', 'Reference'],
+  ['scouts.html', 'Scouts'], ['running-on-its-own.html', 'Running on its own'], ['clients.html', 'Clients'], ['troubleshooting.html', 'Troubleshooting'], ['reference.html', 'Reference'], ['whats-new.html', "What's new"],
   ['architecture.html', 'Architecture'], ['workspace-model.html', 'Workspace design'], ['research/index.html', 'Research notes'], ['demo.html', 'The demo'], ['releasing.html', 'Releasing'], ['editor-pictures.html', 'Editor pictures'], ['built-with-symcc.html', 'Built with symcc']]
 order.forEach(([p], k) => {
   const t = read(p)
@@ -218,6 +218,27 @@ if (existsSync(join(out, 'style.css'))) {
   const css = readFileSync(join(out, 'style.css'), 'utf8')
   if (!/main\.home h2\s*\{[^}]*margin-top:\s*1\.6em/.test(css)) bad('style.css: main.home h2 does not set margin-top 1.6em')
   if (!/main\.home tbody tr:nth-child\(even\) td\s*\{\s*background:\s*none/.test(css)) bad('style.css: main.home tables still get zebra rows')
+}
+
+// (T-1163) whats-new.html: one entry per "## " release of CHANGELOG.md, same order (newest first), no header paragraph,
+// no outside scripts, and a style that keeps it inside 375 px
+{
+  const log = readFileSync(join(root, 'CHANGELOG.md'), 'utf8').replace(/\r\n?/g, '\n').split('\n').filter(l => l.startsWith('## ')).map(l => l.slice(3).split(' ')[0])
+  const t = readFileSync(join(out, 'whats-new.html'), 'utf8')
+  const got = [...t.matchAll(/<li class="release" id="[^"]*"><h2><span class="rel-version">([^<]*)<\/span>/g)].map(m => m[1])
+  if (!log.length) bad('CHANGELOG.md has no releases')
+  if (got.join() !== log.join()) bad(`whats-new.html lists ${got.length} releases (${got.slice(0, 3)}...), CHANGELOG.md has ${log.length} (${log.slice(0, 3)}...)`)
+  if (t.includes('When a set of user-facing changes')) bad('whats-new.html shows the changelog header paragraph')
+  const wl = existsSync(llmsFile) ? readFileSync(llmsFile, 'utf8').split('\n').find(l => l.includes('/whats-new.md')) : ''
+  if (!wl || !wl.startsWith("- [What's new](") || wl.includes('When a set of user-facing changes')) bad(`llms.txt line for whats-new.md is wrong: ${wl}`)
+  if (!t.includes(`<p>${log.length} releases from `)) bad('whats-new.html has no release count and date range')
+  if (!/<h3>Added<\/h3>/.test(t)) bad('whats-new.html has no Added lists')
+  if (/<script/.test(t)) bad('whats-new.html has a script')
+  if (!t.includes('<aside class="docs-side">') || !t.includes('<li><a href="whats-new.html"')) bad('whats-new.html is not in the documentation list')
+  if (!read('built-with-symcc.html').includes('href="whats-new.html"')) bad('built-with-symcc.html does not link What\'s new')
+  const css = readFileSync(join(out, 'style.css'), 'utf8')
+  if (!/\.timeline \.release \{[^}]*overflow-wrap: anywhere/.test(css) || !/\.timeline \.release \{[^}]*min-width: 0/.test(css)) bad('style.css: timeline entries can push the page wider than 375 px')
+  if (!css.includes('.timeline') || !/\.timeline \.release pre \{ max-width: 100%/.test(css)) bad('style.css: timeline code blocks are not held to the page width')
 }
 
 for (const f of fails) console.log(`FAIL: ${f}`)
