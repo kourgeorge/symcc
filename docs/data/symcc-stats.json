@@ -3,23 +3,23 @@
   "to": "2026-11-27",
   "days": 19,
   "tasks": {
-    "done": 993,
+    "done": 995,
     "dropped": 59,
     "answered": 48,
     "errands": 3,
-    "total": 1149
+    "total": 1155
   },
   "tries": {
-    "total": 2287,
-    "firstTry": 528,
-    "changeTasksWithData": 986,
+    "total": 2292,
+    "firstTry": 529,
+    "changeTasksWithData": 988,
     "firstTryRate": 53.5
   },
   "endedHow": [
     {
       "key": "merged-on-its-own",
       "label": "merged on its own",
-      "n": 913
+      "n": 915
     },
     {
       "key": "approved-by-you",
@@ -51,7 +51,7 @@
     {
       "key": "checker",
       "label": "sent back by checker",
-      "n": 576
+      "n": 578
     },
     {
       "key": "changed",
@@ -94,89 +94,89 @@
       "n": 36
     }
   ],
-  "workMs": 881426366,
+  "workMs": 882979625,
   "tokens": {
     "workers": {
-      "all": 2456536130,
-      "billed": 532508109
+      "all": 2465214201,
+      "billed": 534147271
     },
     "lead": {
-      "all": 3527325509,
-      "billed": 506798428
+      "all": 3543930882,
+      "billed": 509213953
     },
     "scouts": {
-      "all": 308827608,
-      "billed": 84217805
+      "all": 314384539,
+      "billed": 85091851
     },
     "total": {
-      "all": 6292689247,
-      "billed": 1123524342
+      "all": 6323529622,
+      "billed": 1128453075
     }
   },
   "perDone": {
     "medianMs": 440887,
-    "avgMs": 801493,
+    "avgMs": 800961,
     "medianTokens": 1189158,
-    "avgTokens": 3089250,
+    "avgTokens": 3090979,
     "medianBilled": 269735,
-    "avgBilled": 673513
+    "avgBilled": 673508
   },
   "stages": [
     {
       "stage": "free",
       "label": "waiting to start",
-      "avgMs": 779027
+      "avgMs": 775408
     },
     {
       "stage": "blocked",
       "label": "waiting on tasks",
-      "avgMs": 2294716
+      "avgMs": 2283892
     },
     {
       "stage": "backlog",
       "label": "in the backlog",
-      "avgMs": 2099498
+      "avgMs": 2089595
     },
     {
       "stage": "work",
       "label": "work",
-      "avgMs": 867755
+      "avgMs": 866204
     },
     {
       "stage": "prep",
       "label": "prep",
-      "avgMs": 24371
+      "avgMs": 24278
     },
     {
       "stage": "check",
       "label": "check",
-      "avgMs": 381767
+      "avgMs": 381115
     },
     {
       "stage": "queue",
       "label": "merge queue",
-      "avgMs": 121848
+      "avgMs": 121273
     },
     {
       "stage": "tests",
       "label": "tests",
-      "avgMs": 312792
+      "avgMs": 314580
     },
     {
       "stage": "merge",
       "label": "merge",
-      "avgMs": 3282
+      "avgMs": 3278
     },
     {
       "stage": "owner",
       "label": "waiting for you",
-      "avgMs": 89197
+      "avgMs": 88776
     }
   ],
   "roles": [
     {
       "role": "general",
-      "n": 797
+      "n": 801
     },
     {
       "role": "docs",
@@ -191,12 +191,12 @@
       "n": 61
     },
     {
-      "role": "tester",
+      "role": "security",
       "n": 56
     },
     {
-      "role": "security",
-      "n": 54
+      "role": "tester",
+      "n": 56
     },
     {
       "role": "writer",
@@ -207,12 +207,12 @@
     {
       "key": "owner",
       "label": "the owner",
-      "n": 612
+      "n": 617
     },
     {
       "key": "scout",
       "label": "scouts",
-      "n": 298
+      "n": 299
     },
     {
       "key": "lead",
@@ -229,10 +229,10 @@
     {
       "name": "gaps-bot",
       "found": 89,
-      "merged": 85,
+      "merged": 86,
       "dropped": 3,
-      "open": 1,
-      "tokens": 113234760
+      "open": 0,
+      "tokens": 113925097
     },
     {
       "name": "test-gaps",
@@ -292,11 +292,11 @@
     },
     {
       "name": "board-parity",
-      "found": 3,
+      "found": 4,
       "merged": 3,
       "dropped": 0,
-      "open": 0,
-      "tokens": 8659214
+      "open": 1,
+      "tokens": 13525808
     },
     {
       "name": "speed",
@@ -406,7 +406,7 @@
     },
     {
       "day": "2026-11-27",
-      "done": 6
+      "done": 8
     }
   ]
 }

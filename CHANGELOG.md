@@ -2,6 +2,25 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here. Before a release, rerun `bun scripts/site-stats.ts` and commit `docs/data/symcc-stats.json`: it feeds the "Built with symcc" numbers on the website.
 
+## 0.5.48 (2026-11-27)
+
+### Added
+- VS Code and Cursor extension (PR #2, by Pierre Kour): the extension is a client of the installed symcc. The plugin ships a built editor entry (`editor/`), and the extension finds the installed copy and runs it; it is ready for the VS Code Marketplace and Open VSX (not published yet). The Cursor board also shows when another window drives (with Drive here), a task's change size and Done line, and its history with who wrote each line.
+- Projects (first steps toward one board over several repos): on a board in a folder of repos, a task can name its repo (`project`), shown as a `[client]` tag on rows, task pages and Live; each project can store its own test command. Git, merges and tests still run in the board's own repo for now.
+- Errands can name outside folders (for example `~/Desktop/talk/`) in their files, and their worker may write there; the project, the board and your home folder itself are refused.
+- The website is simpler: the top bar is Overview · Get started · How it works · Blog · GitHub, and the old 3,000-line guide is split into short documentation pages with a sidebar. A "Built with symcc" page shows symcc's own numbers.
+
+### Changed
+- Task types are described by their result: "change" is a general coding task; "errand" is work outside the project or with nothing to merge. The lead picks errands for "make it on my Desktop" or "no need to merge".
+- New boards chime with "sound 2" by default instead of the spoken voice.
+- Task page: ▍Runs sits right above ▍Report.
+
+### Fixed
+- The git guard refuses a git command whose name is built by the shell (`git $(echo push)`, `git $X`) and catches `{`/`}` written right after a redirect.
+- A worker's copy of a repo below a board is recognised and guarded; "Set up git" refuses a folder of repos instead of committing them as empty pointers, and the board banner explains why.
+- Changing only a task's project keeps its running worker and its status.
+- A failed git read no longer hides a done task's Changes or ▍Branch section until symcc restarts.
+
 ## 0.5.47 (2026-11-26)
 
 ### Added

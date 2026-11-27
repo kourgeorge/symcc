@@ -1419,10 +1419,11 @@ var NEW_ROLE_TEMPLATE = {
 
 // hooks/core/history.ts
 var ANSWER_LINE_CHARS = 300;
-var CHANGE_FIELDS = ["title", "details", "files", "after", "priority", "role", "needs_review", "merge_into"];
+var CHANGE_FIELDS = ["title", "details", "files", "after", "priority", "role", "needs_review", "merge_into", "project", "kind"];
 var same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 function changedFields(t, patch) {
-  return CHANGE_FIELDS.filter((k) => patch[k] !== undefined && !same(patch[k], t[k]));
+  const x = t, y = patch;
+  return CHANGE_FIELDS.filter((k) => y[k] !== undefined && !same(y[k], x[k]));
 }
 var changeRestartWhy = (fields) => `restarted: the task was changed${fields.length ? ` (${fields.join(", ")})` : ""}`;
 function changeRestartLine(t, fields) {
@@ -1492,6 +1493,9 @@ function changeLines(t, patch, wasDoing, answer, note) {
     lines.push(["answer", ownerAnsweredLine(answer)]);
   if (note?.trim())
     lines.push(["note", noteAddedLine(note)]);
+  const pj = patch.project;
+  if (pj !== undefined && pj !== (t.project ?? ""))
+    lines.push(["project", `project: ${pj || "none"} (was ${t.project || "none"})`]);
   if (patch.merge_into !== undefined && patch.merge_into !== (t.merge_into ?? "main"))
     lines.push(["merge-into", `now merges into ${patch.merge_into} (was ${t.merge_into ?? "main"})`]);
   return lines;
@@ -1518,6 +1522,7 @@ var HISTORY_KINDS = {
   retried: "other",
   resumed: "other",
   "run-now": "other",
+  project: "other",
   "merge-into": "other",
   asked: "step",
   answered: "step",
@@ -1906,7 +1911,8 @@ var SETTING_OK = {
   archive_days: (v) => isNum(v) && v >= 0,
   scout_findings: (v) => isScoutFindings(v),
   tests_with_changes: (v) => isTestsWithChanges(v),
-  checker: (v) => typeof v === "boolean"
+  checker: (v) => typeof v === "boolean",
+  projects: (v) => isObj(v) && Object.values(v).every((p) => isObj(p) && (p.test_commands === undefined || Array.isArray(p.test_commands) && p.test_commands.every((c) => typeof c === "string")))
 };
 function cleanArchived(v) {
   if (!isObj(v))
@@ -1972,6 +1978,8 @@ function cleanTask(t, fixed2 = []) {
     else
       delete x.ask;
   }
+  if ("project" in x && !(typeof x.project === "string" && x.project.trim()))
+    delete x.project;
   if ("merge_into" in x && !(typeof x.merge_into === "string" && x.merge_into.trim()))
     delete x.merge_into;
   if ("kind" in x) {
@@ -2096,13 +2104,35 @@ var normId = (id) => {
   return m ? `T-${m[1]}` : String(id ?? "").trim();
 };
 var find = (b, id) => b.tasks.find((t) => t.id === normId(id));
-function cleanFiles(files, dir = DATA_DIR) {
+function cleanFiles(files, dir = DATA_DIR, outside = false) {
   if (!Array.isArray(files))
     return [];
   const all = files.map((f) => String(f).trim().replace(/\\/g, "/"));
   if (all.some((f) => f === "." || f === "./"))
     return [];
-  return all.map((f) => f.replace(/^\.\//, "")).filter((f) => f && !f.startsWith("/") && !f.split("/").includes("..") && !f.startsWith(dir) && !f.startsWith(".git/") && f !== ".git");
+  return all.map((f) => f.replace(/^\.\//, "")).filter((f) => f && (outside || !f.startsWith("/")) && !f.split("/").includes("..") && !f.startsWith(dir) && !f.startsWith(".git/") && f !== ".git");
+}
+function errandFolders(files, root, home) {
+  const norm = (p) => {
+    const parts = p.replace(/\\/g, "/").split("/").filter((s) => s && s !== ".");
+    return parts.includes("..") ? null : `/${parts.join("/")}`;
+  };
+  const r = norm(root)?.toLowerCase() ?? "";
+  const h = home ? norm(home)?.toLowerCase() ?? "" : "";
+  const out = [];
+  for (const f0 of files ?? []) {
+    const f = f0.startsWith("~/") && home ? `${home}/${f0.slice(2)}` : f0;
+    if (!f.startsWith("/"))
+      continue;
+    const n = norm(f);
+    if (n === null || n === "/")
+      continue;
+    const p = n.toLowerCase();
+    if (h && p === h || r && r !== "/" && (p === r || p.startsWith(`${r}/`)))
+      continue;
+    out.push(f.endsWith("/") ? `${n}/` : n);
+  }
+  return out;
 }
 var MODES = ["paused", "review", "auto"];
 var isMode = (m) => typeof m === "string" && MODES.includes(m);
@@ -2733,7 +2763,7 @@ function addTask(b, f, now, dir = DATA_DIR) {
     id: `T-${b.next_id}`,
     title,
     details: clean(f.details ?? title, DETAILS_MAX),
-    files: cleanFiles(f.files, dir),
+    files: cleanFiles(f.files, dir, isErrand({ kind: f.kind })),
     status: f.backlog === true ? "backlog" : "todo",
     note: "",
     priority: isPriority(f.priority) ? f.priority : 0,
@@ -2746,6 +2776,7 @@ function addTask(b, f, now, dir = DATA_DIR) {
     created_at: now,
     updated_at: now,
     ...f.needs_review === true ? { needs_review: true } : {},
+    ...clean(f.project, 255) ? { project: clean(f.project, 255) } : {},
     ...cleanRole(f.role) ? { role: cleanRole(f.role) } : {},
     ...kindFor(f.kind, f.role) !== DEFAULT_KIND ? { kind: kindFor(f.kind, f.role) } : {}
   };
@@ -2796,7 +2827,7 @@ function patchTask(b, id, patch, now, dir = DATA_DIR) {
   if (patch.details !== undefined)
     next.details = clean(patch.details, DETAILS_MAX);
   if (patch.files !== undefined)
-    next.files = cleanFiles(patch.files, dir);
+    next.files = cleanFiles(patch.files, dir, isErrand(patch.kind !== undefined ? { kind: patch.kind } : t));
   if (patch.role !== undefined) {
     const role = cleanRole(patch.role);
     if (role)
@@ -2810,6 +2841,15 @@ function patchTask(b, id, patch, now, dir = DATA_DIR) {
       next.kind = kind;
     else
       delete next.kind;
+    if (!isErrand({ kind }) && next.files?.some((f) => f.startsWith("/")))
+      next.files = next.files.filter((f) => !f.startsWith("/"));
+  }
+  if (patch.project !== undefined) {
+    const project = clean(patch.project, 255);
+    if (project)
+      next.project = project;
+    else
+      delete next.project;
   }
   if (patch.needs_review !== undefined) {
     if (patch.needs_review === true)
@@ -3296,6 +3336,16 @@ var SETTING = /^\w+\+?=/;
 var NUMBER = /^\d[\w.]*$/;
 var REDIRECTS = ["&>>", "&>", "<<<", "<<-", "<<", "<>", "<&", "<(", ">>", ">&", ">|", ">(", "<", ">"];
 var TOO_COMPLEX = "a command too complex to read";
+var BUILT = "a git command built by the shell";
+var BUILT_AT = new WeakMap;
+var sliceWords = (words, a, b = words.length) => {
+  const part = words.slice(a, b);
+  const at = BUILT_AT.get(words);
+  if (at)
+    BUILT_AT.set(part, new Set([...at].filter((k) => k >= a && k <= b).map((k) => k - a)));
+  return part;
+};
+var isVar = (s, p) => /[A-Za-z_0-9{@*#?$!-]/.test(s[p + 1] ?? "");
 var nameOf = (w) => w.slice(w.lastIndexOf("/") + 1).toLowerCase();
 var isGit = (w) => {
   const n = nameOf(w);
@@ -3338,6 +3388,7 @@ function splitCommands(s, out, budget) {
     docs.length = 0;
   };
   let subst = false;
+  let built = false;
   const doubleQuoted = () => {
     let v = "";
     p++;
@@ -3354,6 +3405,8 @@ function splitCommands(s, out, budget) {
         list(true);
         subst = true;
       } else {
+        if (c === "$" && isVar(s, p))
+          built = true;
         v += c;
         p++;
       }
@@ -3363,6 +3416,7 @@ function splitCommands(s, out, budget) {
   };
   const word = () => {
     subst = false;
+    built = false;
     let v = "";
     let plain = true;
     let braces = 0;
@@ -3404,27 +3458,35 @@ function splitCommands(s, out, budget) {
         p++;
         plain = false;
       } else if (c === "$" && s[p + 1] === "{") {
+        built = true;
         braces++;
         v += "${";
         p += 2;
       } else {
         if (c === "}" && braces > 0)
           braces--;
+        if (c === "$" && isVar(s, p))
+          built = true;
         v += c;
         p++;
       }
     }
-    return { v, plain, subst };
+    return { v, plain, subst, built: subst || built };
   };
   function list(nested) {
     let cmd = [];
+    let at = new Set;
     let depth = 0;
     let target = false;
     let docEnd;
     const end = () => {
-      if (cmd.length)
+      if (cmd.length) {
+        if (at.size)
+          BUILT_AT.set(cmd, at);
         out.push(cmd);
+      }
       cmd = [];
+      at = new Set;
       target = false;
     };
     while (p < s.length) {
@@ -3449,7 +3511,7 @@ function splitCommands(s, out, budget) {
         end();
         depth += c === "(" ? 1 : depth > 0 ? -1 : 0;
         p++;
-      } else if (c === ";" || c === "|" || (c === "{" || c === "}") && ` 	\r
+      } else if (c === ";" || c === "|" || !target && (c === "{" || c === "}") && ` 	\r
 ;&|()<>`.includes(s[p + 1] ?? " ") || c === "&" && s[p + 1] !== ">") {
         end();
         p++;
@@ -3466,7 +3528,7 @@ function splitCommands(s, out, budget) {
             docEnd = op === "<<-";
         }
       } else {
-        const { v, plain, subst: had } = word();
+        const { v, plain, subst: had, built: built2 } = word();
         if (plain && /^\d+$/.test(v) && (s[p] === "<" || s[p] === ">"))
           continue;
         if (docEnd !== undefined) {
@@ -3475,8 +3537,12 @@ function splitCommands(s, out, budget) {
         }
         if (target)
           target = false;
-        else if (!(had && v === ""))
-          cmd.push(v);
+        else {
+          if (built2)
+            at.add(cmd.length);
+          if (!(had && v === ""))
+            cmd.push(v);
+        }
       }
     }
     end();
@@ -3501,7 +3567,7 @@ function checkCommand(words, who, budget, findExec) {
       let e = j + 1;
       while (e < words.length && words[e] !== ";" && words[e] !== "+" && !FIND_EXEC.has(words[e]))
         e++;
-      const bad = checkCommand(words.slice(j + 1, e), who, budget, false);
+      const bad = checkCommand(sliceWords(words, j + 1, e), who, budget, false);
       if (bad)
         return bad;
     }
@@ -3528,7 +3594,7 @@ function checkCommand(words, who, budget, findExec) {
         j++;
       if (words.slice(i + 1, j).some((o) => /^-[a-zA-Z]*c/.test(o)))
         return;
-      const rest = words.slice(j);
+      const rest = sliceWords(words, j);
       budget.left -= rest.length + 1;
       if (budget.left < 0)
         throw new Error(TOO_COMPLEX);
@@ -3562,11 +3628,12 @@ function checkCommand(words, who, budget, findExec) {
           split = words[i];
         i++;
       } else if (takes && i < words.length && SHELLS.has(nameOf(words[i]))) {
-        const rest = words.slice(i + 1);
-        budget.left -= rest.length + 1;
+        const rest = sliceWords(words, i);
+        rest[0] = wrapper;
+        budget.left -= rest.length;
         if (budget.left < 0)
           throw new Error(TOO_COMPLEX);
-        const bad = checkCommand([wrapper, ...rest], who, budget, false);
+        const bad = checkCommand(rest, who, budget, false);
         if (bad)
           return bad;
         valueShell = true;
@@ -3584,7 +3651,11 @@ function checkCommand(words, who, budget, findExec) {
         budget.left -= rest.length + 1;
         if (budget.left < 0)
           throw new Error(TOO_COMPLEX);
-        words = [...parts[0] ?? [], ...rest];
+        const first = parts[0] ?? [];
+        const at = [...BUILT_AT.get(first) ?? [], ...[...BUILT_AT.get(words) ?? []].filter((k) => k >= i).map((k) => k - i + first.length)];
+        words = [...first, ...rest];
+        if (at.length)
+          BUILT_AT.set(words, new Set(at));
         i = 0;
       }
     }
@@ -3598,9 +3669,15 @@ function gitCall(words, i, who) {
   let sub;
   let j = i + 1;
   if (n === "git") {
-    for (;words[j]?.startsWith("-"); j++)
+    const at = BUILT_AT.get(words);
+    for (;words[j]?.startsWith("-"); j++) {
+      if (at?.has(j))
+        return BUILT;
       if (!GIT_OPTION_OK.has(words[j]))
         return `git ${words[j].split("=")[0]}`;
+    }
+    if (at?.has(j))
+      return BUILT;
     sub = words[j++]?.toLowerCase();
   } else if (n.startsWith("git-") && GIT_ALL.includes(n.slice(4)))
     sub = n.slice(4);
@@ -4268,8 +4345,8 @@ function testTail(output, n = TEST_OUTPUT_CHARS) {
 `);
 }
 var openOnStart = (b) => b.open_on_start !== false;
-var bestNotify = (can, root = "") => can.voice ? "voice" : can.sound ? soundNotify(soundSetFor(root)) : "off";
-var notifyOf = (b, can, root = "") => isNotify(b.notify) ? b.notify : can ? bestNotify(can, root) : "voice";
+var bestNotify = (can) => can.sound ? "sound 2" : can.voice ? "voice" : "off";
+var notifyOf = (b, can) => isNotify(b.notify) ? b.notify : can ? bestNotify(can) : "sound 2";
 var readNotify = (x) => {
   const w = typeof x === "string" ? x.trim().toLowerCase().replace(/^sound\s*([123])$/, "sound $1") : x;
   return isNotify(w) ? w : null;
@@ -4349,7 +4426,7 @@ var SETTINGS = [
   { name: "auto_retries", label: "Retries on failure", kind: "number", min: 0, max: 10, default: String(DEFAULT_AUTO_RETRIES), range: "0-10" },
   { name: "archive_days", label: "Archive after", kind: "number", min: 0, max: 3650, default: String(DEFAULT_ARCHIVE_DAYS), range: "0-3650 (0 = never)" },
   { name: "open_on_start", label: "Open on start", kind: "onoff", default: "on", range: "on / off" },
-  { name: "notify", label: "Alert", kind: "notify", default: "voice (else sound N, N picked from the project name, else off)", range: "voice / sound 1 / sound 2 / sound 3 / off" },
+  { name: "notify", label: "Alert", kind: "notify", default: "sound 2 (else voice if this computer can only speak, else off)", range: "voice / sound 1 / sound 2 / sound 3 / off" },
   { name: "scout_findings", label: "Scout findings", kind: "findings", default: "auto", range: "auto / backlog" },
   { name: "tests_with_changes", label: "Code without tests", kind: "untested", default: "ask", range: "off / ask / review" },
   { name: "checker", label: "Checker", kind: "onoff", default: "off", range: "off / on" },
@@ -4406,7 +4483,7 @@ function settingValue(b, name, root = "") {
     case "open_on_start":
       return openOnStart(b) ? "on" : "off";
     case "notify":
-      return notifyOf(b, undefined, root);
+      return notifyOf(b);
     case "enabled":
       return symccOn(b) ? "on" : "off";
     case "mode":
@@ -4461,6 +4538,21 @@ function applySettings(b, a) {
   if (checker !== undefined)
     y.checker = checker, add("checker", checker ? "a checker tries to break each change before it merges" : "changes merge without a checker");
   return { board: y, changes };
+}
+function applyProjectSettings(b, project, a) {
+  if (!Array.isArray(a.test_commands))
+    return { board: b, text: "" };
+  const all = a.test_commands.map((x) => String(x).trim()).filter(Boolean);
+  const cmds = all.slice(0, MAX_TEST_COMMANDS);
+  const projects = { ...b.projects ?? {} };
+  if (cmds.length)
+    projects[project] = { ...projects[project] ?? {}, test_commands: cmds };
+  else
+    delete projects[project];
+  const { projects: _old, ...rest } = b;
+  const board = Object.keys(projects).length ? { ...rest, projects } : rest;
+  const cut = all.length > MAX_TEST_COMMANDS ? ` (only the first ${MAX_TEST_COMMANDS} kept)` : "";
+  return { board, text: `${project}: tests: ${testCommandsText(cmds)}${cut}` };
 }
 var findingToBacklog = (b, originBy, own) => originBy === "scout" && (own ?? scoutFindingsOf(b)) === "backlog";
 var settingSetText = (c) => `${c.name} set to ${c.value}${c.cut}`;
@@ -4553,13 +4645,14 @@ function leadSettingsText(b, can, root = "") {
     ...SETTING_GROUPS.flatMap((g) => [
       `## ${g.title}`,
       ...groupSettings(g).map((s) => {
-        const value = s.name === "notify" ? notifyOf(b, can, root) : settingValue(b, s.name, root);
+        const value = s.name === "notify" ? notifyOf(b, can) : settingValue(b, s.name, root);
         const extra = s.name === "notify" ? `; this machine can play: ${notifyChoices(can).join(", ")}` : s.name === "enabled" ? "; only the owner can change it" : "";
         const stored = s.name === "mode" ? { default: "auto", range: "paused / review / auto", words: settingWords(s.name, true) + ' (the owner reads review as "approve merge" and auto as "auto merge")' } : s;
         return `${s.name}: ${value} (default ${stored.default}, can be ${stored.range}) ${"words" in stored ? stored.words : settingWords(s.name, true)}${extra}`;
       }),
       ...g.items.some(isSettingPage) ? ["roles and task types: use the roles and kinds tools (the owner sees roles and task types as pages in the Settings view)", "org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board's Live tab, and may delete them there)"] : []
-    ])
+    ]),
+    ...Object.entries(b.projects ?? {}).filter(([, v]) => v?.test_commands?.length).map(([name, v]) => `project ${name}: test_commands: ${testCommandsText(v.test_commands ?? [])} (stored for now, not used yet)`)
   ].join(`
 `);
 }
@@ -4812,9 +4905,9 @@ function boardSections(tasks, nowMs, offsetMin) {
 }
 // kinds/change.ts
 var change_default2 = `---
-description: a general change when no other task type fits (the default)
+description: a general coding task (code, tests, config) when no other task type fits (the default)
 ---
-The worker changes files, which are committed, tested and merged.
+The worker changes project files, which are committed, tested and merged.
 `;
 
 // kinds/bug.ts
@@ -4854,9 +4947,9 @@ The worker finds the answer and hands it back in full; nothing is committed, tes
 
 // kinds/errand.ts
 var errand_default = `---
-description: general work that isn't a change to the project; ends done with a report, nothing merged
+description: work outside the project or with nothing to merge (make or tidy files elsewhere such as ~/Desktop, gather, write, run something); ends done with a report
 ---
-This is an errand, not an investigation: do the work the task asks for (for example tidy a folder outside the project, gather files, write something outside the project), then hand back a short report of what you did and where (paths, results). Changes inside your project copy are thrown away; nothing is committed, tested or merged. The task ends done on its own with your report kept.
+This is an errand, not an investigation: do the work the task asks for (for example tidy a folder outside the project, gather files, write something outside the project), then hand back a short report of what you did and where (paths, results). You may write outside the project where the task says (for example a folder on ~/Desktop). Changes inside your project copy are thrown away; nothing is committed, tested or merged. The task ends done on its own with your report kept.
 `;
 
 // kinds/index.ts
@@ -6574,6 +6667,8 @@ function rowCell(t, nowMs, since, form = "total") {
   return form === "none" ? "" : rowTime(t, nowMs, since);
 }
 var ANSWER_CELL = "answer";
+var projectTag = (t) => typeof t.project === "string" && t.project.trim() ? `[${t.project.trim()}]` : "";
+var rowTitle = (t) => [projectTag(t), t.title].filter(Boolean).join(" ");
 function fileWaitText(t) {
   if (!waitsForFiles(t))
     return "";
@@ -6843,7 +6938,7 @@ var noticeText = formText;
 // hooks/core/board-parts.ts
 var PARTS_DIR = "tasks";
 var PARTS_PER_FILE = 50;
-var STUB_KEYS = ["id", "title", "status", "priority", "after", "kind", "role", "attempts", "branch", "merge_into", "merged", "size", "created_at", "updated_at"];
+var STUB_KEYS = ["id", "title", "status", "priority", "after", "kind", "role", "project", "attempts", "branch", "merge_into", "merged", "size", "created_at", "updated_at"];
 var PARTS_KEY = "parts";
 var SIZE_WARN_BYTES = 3 * 1024 * 1024;
 var READ_LIMIT_BYTES = 4 * 1024 * 1024;
@@ -7833,7 +7928,7 @@ function liveIdle(view, nowMs, width = 80) {
   const backlog = items.length;
   const first = last ? `${LIVE_IDLE.done} · last merged ${last.t.id}, ${idleAgo(nowMs - last.at)} ago` : LIVE_IDLE.done;
   const second = `${LIVE_IDLE.next}${backlog ? `, or move ${backlog === 1 ? "the backlog item" : `one of ${backlog} backlog items`} to todo` : ""}.`;
-  const next = items.slice(0, IDLE_BACKLOG).map((t) => fitText(`  ${STATUS_MARK.backlog} ${t.id}  ${t.title}`, w));
+  const next = items.slice(0, IDLE_BACKLOG).map((t) => fitText(`  ${STATUS_MARK.backlog} ${t.id}  ${rowTitle(t)}`, w));
   const more = backlog - next.length;
   return [fitText(first, w), ...wrap(second), ...next, ...more > 0 ? [fitText(`  … ${more} more in the backlog`, w)] : []];
 }
@@ -7940,7 +8035,7 @@ function liveLanes(view, nowMs) {
     const total = tokenCount(sumTokens(runs.map(tryTokens)));
     return {
       id: t.id,
-      title: t.title,
+      title: rowTitle(t),
       kind: kindOf(t),
       stations,
       station,
@@ -7985,7 +8080,7 @@ function liveFinishedLanes(view, nowMs) {
     const total = tokenCount(sumTokens((t.runs ?? []).map(tryTokens)));
     return {
       id: t.id,
-      title: t.title,
+      title: rowTitle(t),
       kind: kindOf(t),
       stations,
       station: stations[at],
@@ -8273,7 +8368,7 @@ function liveTrains(view, nowMs, lanes = liveLanes(view, nowMs)) {
         parent.set(t.id, best), changed = true;
     }
   }
-  const build = (id) => todo.filter((t) => parent.get(t.id) === id).map((t) => ({ id: t.id, title: t.title, also: open.get(t.id).filter((a) => a !== id), trains: build(t.id) }));
+  const build = (id) => todo.filter((t) => parent.get(t.id) === id).map((t) => ({ id: t.id, title: rowTitle(t), also: open.get(t.id).filter((a) => a !== id), trains: build(t.id) }));
   const next = [];
   let more = 0;
   for (const t of todo) {
@@ -8282,7 +8377,7 @@ function liveTrains(view, nowMs, lanes = liveLanes(view, nowMs)) {
     const waits = open.get(t.id);
     const stuck2 = waits.every((a) => !laneOf.has(a) && byId2.get(a)?.status !== "todo");
     if (stuck2)
-      next.push({ id: t.id, title: t.title, stuck: waits.map((a) => ({ id: a, status: STUCK_WORD[byId2.get(a)?.status ?? "done"] ?? (byId2.has(a) ? byId2.get(a).status : "not found") })) });
+      next.push({ id: t.id, title: rowTitle(t), stuck: waits.map((a) => ({ id: a, status: STUCK_WORD[byId2.get(a)?.status ?? "done"] ?? (byId2.has(a) ? byId2.get(a).status : "not found") })) });
     else
       more++;
   }
@@ -9042,7 +9137,7 @@ function askChoices(t, a) {
 }
 function taskLines(t, all, nowMs, running = false) {
   const detail = running ? runningState(t, nowMs) : "";
-  const head = `${t.id} ${running ? "running" : stateWord2(t, all)}: ${detail ? `${detail}: ` : ""}${cut(t.title, TITLE_MAX2)}`;
+  const head = `${t.id} ${running ? "running" : stateWord2(t, all)}: ${detail ? `${detail}: ` : ""}${cut(rowTitle(t), TITLE_MAX2)}`;
   const out = [head];
   if (needsYou(t, nowMs) && (t.status === "waiting" || asksMoreTime(t))) {
     const a = taskAsks(t);
@@ -9105,6 +9200,8 @@ function chatTaskText(t, report, nowMs, page = 1) {
   const L = [`${t.id}: ${plain(t.title)}`];
   const changed = historyLineText({ at: t.updated_at }, nowMs).split("  ")[0];
   L.push(`Status: ${STATUS_WORD[t.status]}${Number(t.attempts) > 0 ? `, try ${t.attempts}` : ""}${changed ? `, changed ${changed}` : ""}`);
+  if (t.project)
+    L.push(`Project: ${plain(t.project)}`);
   L.push(t.origin?.why ? `Why: ${plain(t.origin.why)}` : plain(fromText(t, 100)));
   if (t.status === "waiting" && t.ask?.text)
     L.push(...askLines(taskAsks(t)?.text ?? t.ask.text, askChoices(t, taskAsks(t))));
@@ -9236,7 +9333,7 @@ function boardRow(t, autoRetries, nowMs, driving = true) {
   const asks = (phase.waitsFor === "answer" || phase.waitsFor === "files") && askText(t.ask) ? "asks: " : "";
   const extra = end2 ? ` — ${asks}${end2}` : t.status === "review" ? ` — ${STATUS_WORD.review}` : "";
   const after = t.after.length && (t.status === "todo" || t.status === "backlog") ? ` (after ${t.after.join(", ")})` : "";
-  const tag = [kindMark(t), roleMark(t), isFinished(t) ? "" : priorityMark(t.priority)].filter(Boolean).join(" · ");
+  const tag = [t.project ? `project: ${t.project}` : "", kindMark(t), roleMark(t), isFinished(t) ? "" : priorityMark(t.priority)].filter(Boolean).join(" · ");
   const role = tag ? ` [${tag}]` : "";
   const mark = tryMark(t, autoRetries);
   const step = checkStepNow(t, nowMs);
@@ -9434,6 +9531,7 @@ var startS = () => ({
   settingsOpen: [],
   gitState: "ok",
   gitInstall: "",
+  gitWorkspace: "",
   toldGit: "ok",
   settingUp: false,
   startupDone: false,
@@ -11930,6 +12028,9 @@ async function mainRoot(host, dir) {
   if (!dir)
     return "";
   const clean3 = dir.replace(/\/+$/, "") || "/";
+  const board = await boardAbove(host, clean3);
+  if (board)
+    return board;
   const r = await host.run(["git", "rev-parse", "--git-common-dir"], { cwd: clean3, timeoutMs: 15000 }).catch(() => null);
   const common = r && r.exitCode === 0 ? r.stdout.trim().replace(/\/+$/, "") : "";
   if (common && /(^|[\\/])\.git$/.test(common)) {
@@ -11963,6 +12064,26 @@ async function isWorkerFolder(host, dir, main) {
     return false;
   const [d, w] = await Promise.all([realOf(host, dir), realOf(host, `${main}/${S.N.worktrees}`)]);
   return d !== w && within(d, w);
+}
+async function boardAbove(host, dir) {
+  if (!dir)
+    return "";
+  const clean3 = normalPath(dir);
+  const slashed = clean3.replace(/\\/g, "/");
+  const mark = `/${S.N.worktrees}/`;
+  let at = slashed.indexOf(mark);
+  while (at > 0) {
+    const id = slashed.slice(at + mark.length).split("/")[0];
+    const top = clean3.slice(0, at);
+    if (id) {
+      const sep = clean3.includes("\\") && !clean3.includes("/") ? "\\" : "/";
+      const has2 = await host.fs.exists(`${top}${sep}${S.N.boardFile.split("/").join(sep)}`).catch(() => false);
+      if (has2)
+        return top;
+    }
+    at = slashed.indexOf(mark, at + 1);
+  }
+  return "";
 }
 var isAbsolute = (p) => /^([\\/]|[A-Za-z]:[\\/])/.test(p);
 function normalPath(p) {
@@ -14053,7 +14174,7 @@ async function playsFor(host, wanted, items) {
     return [];
   const p = await players(host);
   const can = await playable(host);
-  const n = notifyOf({ notify: wanted ?? undefined }, can, S.root);
+  const n = notifyOf({ notify: wanted ?? undefined }, can);
   if (n === "off")
     return [];
   if (!canPlay(n, can)) {
@@ -14323,7 +14444,7 @@ main{max-width:720px;margin:0 auto;padding:12px}h1{font-size:1.3rem;margin:.2em 
 .muted{color:var(--muted)}code{font-family:ui-monospace,Menlo,monospace}`;
 function card2(t, all, nowMs, opts = {}) {
   const state = opts.running ? `${STATUS_WORD.doing}: ${runningState(t, nowMs)}` : t.status === "waiting" || t.status === "failed" || t.status === "review" || t.status === "done" ? STATUS_WORD[t.status] : stateWord2(t, all);
-  const meta = [state, t.kind ? `kind: ${t.kind}` : "", plain(fromText(t, 80))].filter(Boolean).join(" · ");
+  const meta = [state, projectTag(t), t.kind ? `kind: ${t.kind}` : "", plain(fromText(t, 80))].filter(Boolean).join(" · ");
   const a = opts.ask ? taskAsks(t) : null;
   const ask2 = a ? `<div class="ask">${escapeHtml(a.text)}</div><ol>${askChoices(t, a).map((c) => `<li>${escapeHtml(c)}</li>`).join("")}</ol>` : "";
   const why = opts.why && t.note ? `<div class="meta">why: ${escapeHtml(t.note)}</div>` : "";
@@ -15268,7 +15389,7 @@ function tasksListText(b, nowMs, name = DEFAULT_NAME, width2 = 80, offsetMin = l
     out.push(`${g.label} (${g.tasks.length})`);
     for (const r of rows.filter((r2) => r2.g === g.key)) {
       const lead2 = `  ${rowMark(r.t, nowMs)} ${r.t.id.padEnd(idW)}  ${padWidth(r.state, stateW)}  `;
-      out.push(lead2 + cutTitle(r.t.title, Math.max(8, width2 - textWidth(lead2))));
+      out.push(lead2 + cutTitle(rowTitle(r.t), Math.max(8, width2 - textWidth(lead2))));
     }
   }
   if (!rows.length) {
@@ -15387,6 +15508,8 @@ function taskText(t, running, all = [], report, archivedDone = []) {
 `).map((l) => l.trim() ? `  ${l}` : "") : ["  (no details)"]);
   L.push("", "May change:", ...t.files.length ? t.files.map((f) => `  ${f}`) : ["  anywhere in the project"]);
   L.push("", `merges into: ${intoOf(t)}`);
+  if (t.project)
+    L.push(`project: ${t.project}`);
   if (t.after.length) {
     L.push("", "Waits for:");
     for (const id of t.after) {
@@ -15591,8 +15714,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   session is shown, on by default), `}notify (voice, sound 1, sound 2, sound 3 or off: when a task is merged or a worker
   asks you something, say "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project's name first), or play a chime
   from sound set 1, 2 or 3, so you can tell projects apart (on macOS 1: Glass / Ping, 2: Hero / Pop, 3: Submarine / Funk);
-  only the session driving the board plays; voice by default where this machine can speak, else the sound set
-  picked from the project's folder name, else off; picking a sound plays its chime; a choice this machine can't play
+  only the session driving the board plays; default sound 2 where this machine can play sounds, else voice where it can only speak, else off; picking a sound plays its chime; a choice this machine can't play
   is refused), scout_findings (the default for scouts without their own findings choice; auto, the default:
   the lead decides and a scout finding it adds goes to todo and runs; backlog: every task
   added from a scout finding goes to the backlog and waits for you), tests_with_changes (a change
@@ -15703,6 +15825,7 @@ var leadGuide = (features = ALL_FEATURES) => `## ${S.N.name}: you are the lead (
 This section is for the main conversation only. If you are a subagent (a ${S.N.name} worker or scout, or any other), ignore it and do the job you were given.
 
 The project has a shared task board (${S.N.dir}/board.json) that you and the owner manage together by talking. You decide how the work runs:
+- Pick the task type by the result wanted: project files to merge → change (or bug, feature, refactor, docs); an answer to read → investigation; anything else, including work outside the project or "don't merge" / "just make it on my Desktop" → errand. Never use a plain background agent for work the board can do as an errand.
 - Turn what the owner wants into tasks with ${S.N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes. Every change task's details say how the change will be tested, e.g. "Done when: tests show …" (the test that will check it). A change task whose commit edits code but no test file is flagged before merging (setting tests_with_changes: ask, the default, merges it and tells you "T-5 changed code but no test", so follow up with a test task or ask the owner; review makes it wait for the owner's review; off does nothing). Test files: in a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder (or a folder ending .Test/.Tests), or with test/spec/e2e/cy as a name part split by . _ or - (a.test.ts, a-test.ts, a.cy.ts), or a name ending in Test/Tests (FooTest.java); latest.ts and run-tests.sh are not tests. Docs: .md/.mdx, README/CHANGELOG/LICENSE names, images/video/audio/fonts, non-code files under docs/ (not docs/build.ts or Notice.tsx). A docs-only change is never flagged.
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly (when those words are a short reply like "yes", quote “<the owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<the reply>”); for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
@@ -15710,7 +15833,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
 - Keeping the board in order (triage): older tasks go first unless the owner says a task is urgent; bugs and safety fixes go before features. Use priority for urgency: lower runs first; every task starts at 0; give urgent work -1, -2…, later work 1, 2… (a whole number from -20 to 19; ties go to the older task). Use it, not only after. Chain tasks with after only when they really share files; tasks with different files should run side by side. Never leave a task waiting forever. When a new task shares files with an older task that is still waiting, the new one goes behind it (the new one gets after: the older one), not the other way round.
 - ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / priority, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
-- Workers start by themselves on ready tasks, each in its own copy of the code. When one finishes, its change is tested and, if it passes, merged. Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
+- Workers start by themselves on ready tasks, each in its own copy of the code. When a change task finishes, its change is tested and, if it passes, merged (investigations and errands are not merged). Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers to a task) and merges they approved don't send you a message: they come as "Meanwhile" lines (also quiet retries, reload restarts and plain merges): at the top of the next board update, or beside the owner's next message if that comes first. They need no reply; just take them into account. Only the owner setting up git, or allowing or refusing a task's files on the board, wakes you at once with a board update.
 ${popup() ? `- Ask every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") with ${popup()} (2 to 4 short options). ${S.N.name} puts each such question on the board by itself as a Q-n, so don't also add a ${S.N.name} question for it. Whichever the owner answers first closes the other: a board answer comes back as the pop-up's answer, and a pop-up answer closes the Q-n (the tool result says so). If the owner closes the pop-up without answering, the Q-n stays on the board, and a later board answer wakes you with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it." (already closed: act on it and don't ask again). Only for a question with 5 or 6 options, first add it with ${S.N.name} question (action add), then ask it with ${popup()} with the same question text and the first 3 options plus "the rest on the board": the pop-up is tied to that Q-n. Drop a question that no longer matters (${S.N.name} question action drop). A question about one task stays ${S.N.name} ask.
 - Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask in the chat with ${popup()}, with the same options (where a line here says numbered plain chat text, use ${popup()} with those options), with the question's header set to exactly the task id (T-5; an id only mentioned in the question text doesn't tie it). ${S.N.name} ties that pop-up to the task's own board question (no Q-n is added): whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into the task for you (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a note), and the tool result says what was done and what is left for you (e.g. a reject's reason: then ${S.N.name} reject yourself). ${popup()} takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board" (or the owner types one under Other); when the owner picks "the rest on the board", the board question stays open and a board update brings their answer. Don't stack two questions under the same numbers: ask one at a time.` : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "${answerTail()}". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
@@ -15722,7 +15845,7 @@ ${popup() ? `- Ask every question for the owner that isn't about one task (a set
 - Moving a task to a stage: ${S.N.name} change T-5 with stage (work, check, tests or review) moves it, with its branch as it is, to that stage of its run. Use it when the owner wants a step skipped or repeated, e.g. "no need to check again, just test" is stage tests (the merge queue now, no checker; it merges if its tests pass); check starts a fresh checker; work is a new worker try; review waits for the owner. A running worker or checker is stopped first. It uses no automatic retry.
 - A task that failed for good: don't retry it on your own (even though a retry is possible). Ask the owner first, unless they already said to retry that task. A task the checker sent back twice waits for the owner on its own with "Merge as is / Keep fixing / Drop"; put their answer in with ${S.N.name} change answer: their words.
 - Work merged by hand: when a task's branch was merged outside the board (by the owner, or by you on the owner's word, e.g. its only failure was the merge tests timing out), don't drop it and don't let a new worker redo it: ${S.N.name} merged T-5 marks it done. ${S.N.name} checks with git that all its commits are in the branch it merges into and refuses with the reason if not; nothing is merged or tested, its folder and branch are cleaned up, and tasks waiting on it start. It works for a task that is to do, running, failed, waiting, paused, in review or dropped. Use it only after the owner's word or a rule the owner set.
-- Investigation or change (the kind parameter of ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself. Add an errand (kind: errand) when the owner wants something done that is not a change to the project (tidy a folder outside the repo, gather files, write something outside the project): the worker's report is its result and the task ends done on its own, in every mode. Investigation: the owner wants an answer to read; errand: the owner wants something done.
+- Investigation or change (the kind parameter of ${S.N.name} add / change): add an investigation when the owner wants an answer, or input for a decision they will make: "is it possible ...", "should we ...", "how does X work", "why is Y slow". Add a change when a lasting result is needed: code, or a document that stays in the project because later tasks or people will read it. A researcher task is an investigation unless you give kind: change. An investigation always waits for the owner to read its answer, even in mode auto; never mark it done yourself. Add an errand (kind: errand) when the owner wants something done that is not a change to the project (tidy a folder outside the repo, gather files, build something on ~/Desktop): the worker's report is its result and the task ends done on its own, in every mode. Investigation: the owner wants an answer to read; errand: the owner wants something done.
 - An answered investigation ("T-5 is answered") waits in review for the owner to read its answer; it has nothing to merge. Tell the owner the answer in the chat, short and plain (read it with ${S.N.name} board task T-5), and offer the three choices as numbered plain chat text (1 Done, 2 Keep as a note, 3 Ask more), plus "${answerTail()}". On the owner's word: ${S.N.name} approve T-5 is Done (it ends done; its folder is removed, and its branch too unless it has commits from earlier tries, which are kept; the reply says so), ${S.N.name} approve T-5 with keep_note: true is Keep as a note (Done, plus a new docs task that writes docs/research/<topic>.md from the answer and merges as usual), and ${S.N.name} reject T-5 with their follow-up question is Ask more (a fresh try gets the question and the earlier answer).
 - A worker that tries to edit a file outside its task's files is refused (${S.N.name} records the path as a request) and stops; the task then waits for the owner, asking to allow those files. The owner can allow the files from the board (Allow on the task's page: the files are added and it goes back to work; you are told at once) or not allow them (you are told: then drop it or narrow the plan). If they allow it here in the chat, ${S.N.name} change the task with the wider files (it goes back to work); otherwise ${S.N.name} drop it or change it to a narrower plan. A worker that changes such files another way (e.g. a shell command) fails its try at the merge's scope check.
 - A worker that needs the owner to decide something calls its own question tool, ${toolName("ask_owner")} (maybe with options, which the board shows as buttons), and stops; that tool is for workers only: you never call it (to make a task wait with your own question, use ${S.N.name} ask). The task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "symcc: T-5 needs you" (the project's name first) (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as numbered plain chat text, plus "${answerTail()}". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
@@ -15759,7 +15882,7 @@ Talk like a team lead about the board. News first: the first line says what happ
 - Question for the owner (in chat text): the question in one sentence, then the choices numbered, then "(${answerTail()})".
 - A worker's or checker's report: at most 3 short bullets of what matters to the owner (what changed for them, any limit or risk), not its file list.
 - Longer explanations (the owner asks how, why, WDYT): plain English, short sentences, a table or a sketch when it helps.`;
-var KIND_PARAM = () => ({ type: "string", description: `The task type: ${[...new Set([...BUILT_IN_KINDS.filter((n) => !S.kinds.some((k) => k.name === n && k.off)), ...kindNames(S.kinds)])].join(", ")}, or the owner's own (see your instructions for what each is for); change when unsure. Every task type but investigation and errand runs like change (the default): the worker changes files, which are committed, tested and merged. investigation: the worker finds an answer and hands it back; nothing is committed, tested or merged, and it always waits for the owner to read it (even in mode auto). errand: general work that isn't a change to the project; the task ends done on its own after the worker hands back, and nothing is merged. A researcher task is an investigation unless you give kind; use change (or docs) for a researcher when the owner wants a lasting document that later tasks will read.` });
+var KIND_PARAM = () => ({ type: "string", description: `The task type: ${[...new Set([...BUILT_IN_KINDS.filter((n) => !S.kinds.some((k) => k.name === n && k.off)), ...kindNames(S.kinds)])].join(", ")}, or the owner's own (see your instructions for what each is for); change when unsure. Every task type but investigation and errand runs like change (the default, a general coding task): the worker changes project files, which are committed, tested and merged. investigation: the worker finds an answer and hands it back; nothing is committed, tested or merged, and it always waits for the owner to read it (even in mode auto). errand: work outside the project or with nothing to merge (make or tidy files elsewhere such as ~/Desktop, gather, write, run something); name an outside folder in its files (an absolute path) so the worker may write there; the task ends done on its own after the worker hands back, and nothing is merged. A researcher task is an investigation unless you give kind; use change (or docs) for a researcher when the owner wants a lasting document that later tasks will read.` });
 var TOOLS = () => [
   {
     name: "board",
@@ -15769,12 +15892,12 @@ var TOOLS = () => [
   {
     name: "add",
     description: `Add a task to the ${S.N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: "object", required: ["title", "details", "why", "origin_by"], properties: { title: { type: "string" }, details: { type: "string", description: "What to build and how we know it works." }, files: { type: "array", items: { type: "string" }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: "array", items: { type: "string" }, description: "Task IDs that must be done first." }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Like Unix nice: lower runs first. Every task starts at 0; give urgent work -1, -2…, later work 1, 2… A whole number from -20 to 19." }, needs_review: { type: "boolean", description: "Wait for the owner to approve before merging, even when the board merges on its own (mode auto)." }, backlog: { type: "boolean", description: "Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo." }, role: { type: "string", description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, kind: KIND_PARAM(), why: { type: "string", description: "Required. One line: why this task exists." }, origin_by: { type: "string", enum: ["owner", "scout", "worker", "lead"], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: "string", description: `For an owner request: the owner's words, quoted exactly. When they are a short reply ("yes"), write: “<owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<reply>”.` }, scout: { type: "string", description: `For a scout finding: the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs").` }, from_task: { type: "string", description: "For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12." }, how: { type: "string", enum: ["split", "follow-up"], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } }
+    inputSchema: { type: "object", required: ["title", "details", "why", "origin_by"], properties: { title: { type: "string" }, details: { type: "string", description: "What to build and how we know it works." }, files: { type: "array", items: { type: "string" }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: "array", items: { type: "string" }, description: "Task IDs that must be done first." }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Like Unix nice: lower runs first. Every task starts at 0; give urgent work -1, -2…, later work 1, 2… A whole number from -20 to 19." }, project: { type: "string", description: "The project (a folder below the board folder that holds its own .git) the task belongs to; only on a board over several repos. Empty on a change clears it." }, needs_review: { type: "boolean", description: "Wait for the owner to approve before merging, even when the board merges on its own (mode auto)." }, backlog: { type: "boolean", description: "Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo." }, role: { type: "string", description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, kind: KIND_PARAM(), why: { type: "string", description: "Required. One line: why this task exists." }, origin_by: { type: "string", enum: ["owner", "scout", "worker", "lead"], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: "string", description: `For an owner request: the owner's words, quoted exactly. When they are a short reply ("yes"), write: “<owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<reply>”.` }, scout: { type: "string", description: `For a scout finding: the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs").` }, from_task: { type: "string", description: "For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12." }, how: { type: "string", enum: ["split", "follow-up"], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } }
   },
   {
     name: "change",
     description: "Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version (except when only priority, after or needs_review change: those are saved and its worker keeps running); a waiting, failed or in-review one goes back to work; a paused one stays paused with the change saved (only resume or retry starts it again); a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.",
-    inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, title: { type: "string" }, stage: { type: "string", enum: ["work", "check", "tests", "review"], description: "Move the task, with its branch as it is, to this stage of its run (only on its own, nothing else changes): work = a new worker try; check = a fresh checker now, then the merge line; tests = the merge line now, no checker (merges if its tests pass); review = ready for the owner (approve then runs the tests). A running worker or checker is stopped first. Works from todo, doing, failed, waiting and review; uses no automatic retry." }, details: { type: "string", description: "The new details: replaces the whole text. To add a line, use add_details instead." }, add_details: { type: "string", description: `A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task's history too. Not together with details.` }, files: { type: "array", items: { type: "string" } }, after: { type: "array", items: { type: "string" } }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Lower runs first; 0 is normal (urgent: -1, -2…; later: 1, 2…). A whole number from -20 to 19." }, needs_review: { type: "boolean" }, backlog: { type: "boolean", description: "true: stash in the backlog (never starts); false: move from the backlog to todo." }, role: { type: "string", description: `The worker role for the task (${BUILT_IN_ROLES.join(", ")} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: "string", description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: "string", description: "Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made)." } } }
+    inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, title: { type: "string" }, stage: { type: "string", enum: ["work", "check", "tests", "review"], description: "Move the task, with its branch as it is, to this stage of its run (only on its own, nothing else changes): work = a new worker try; check = a fresh checker now, then the merge line; tests = the merge line now, no checker (merges if its tests pass); review = ready for the owner (approve then runs the tests). A running worker or checker is stopped first. Works from todo, doing, failed, waiting and review; uses no automatic retry." }, details: { type: "string", description: "The new details: replaces the whole text. To add a line, use add_details instead." }, add_details: { type: "string", description: `A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task's history too. Not together with details.` }, files: { type: "array", items: { type: "string" } }, after: { type: "array", items: { type: "string" } }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Lower runs first; 0 is normal (urgent: -1, -2…; later: 1, 2…). A whole number from -20 to 19." }, project: { type: "string", description: "The project (a folder below the board folder that holds its own .git) the task belongs to; only on a board over several repos. Empty on a change clears it." }, needs_review: { type: "boolean" }, backlog: { type: "boolean", description: "true: stash in the backlog (never starts); false: move from the backlog to todo." }, role: { type: "string", description: `The worker role for the task (${BUILT_IN_ROLES.join(", ")} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: "string", description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: "string", description: "Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made)." } } }
   },
   { name: "approve", description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review". For an answered investigation it is Done: the task ends done, nothing is merged, its folder is removed, and its branch too unless it has commits from earlier tries, which are kept (the reply says so); with keep_note: true (Keep as a note) a new small docs task is added too that writes docs/research/<topic>.md from the saved answer and merges as usual.', inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, keep_note: { type: "boolean", description: "Only for an answered investigation: also add a docs task that keeps its answer as docs/research/<topic>.md." } } } },
   { name: "reject", description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review". For an answered investigation it is Ask more: the reason is the follow-up question; it goes back to "todo" and the fresh try gets the question and the earlier answer in its details.', inputSchema: { type: "object", required: ["task", "reason"], properties: { task: { type: "string" }, reason: { type: "string", description: "What is wrong and what to change, for the next worker (for an answered investigation: the follow-up question)." } } } },
@@ -15818,8 +15941,8 @@ var TOOLS = () => [
   },
   {
     name: "settings",
-    description: "Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line, under the same category headings as the Settings view (Work, Checks before merging, Workers, Scouts, Board and alerts; notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), docs_test_commands (shell commands, same shape and limit as test_commands, default none: run instead of test_commands when a task of a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test), test_minutes (how many minutes each test command may run before merging, a whole number 1-120, default 10; a test command past it fails like a failing test: a new worker try starts with the output, using one of the auto_retries; anything else is refused), max_parallel (workers at once), max_minutes (a worker running longer makes symcc ask the owner for more time: +N min or Stop it), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify (\"voice\", \"sound 1\", \"sound 2\", \"sound 3\" or \"off\": what plays when a task is merged or a question from a worker waits for the owner: \"voice\" says \"symcc: T-3 done\" / \"symcc: T-5 needs you\" out loud (the project name first), \"sound N\" a short chime from sound set N, each set with its own \"done\" and \"needs you\" chime so the owner can tell which project chimed (on macOS 1: Glass / Ping, 2: Hero / Pop, 3: Submarine / Funk); only the session driving the board plays; default voice where this machine can speak, else the sound set picked from the project folder name, else off; a choice this machine cannot play is refused with the reason; there is no sound_set setting), scout_findings (\"auto\", the default: you decide, and a scout finding you add goes to todo and runs; \"backlog\": every task added with origin_by scout goes to the backlog, whatever you ask, and starts only when the owner moves it to todo), tests_with_changes (\"ask\", the default: a change task whose commit edits code but no test file still merges and you are told \"T-3 changed code but no test\"; \"review\": such a task waits for the owner to review it instead of merging; \"off\": not checked; docs-only changes are never flagged), checker (\"off\", the default, or \"on\": after the prep step and before a change task joins the merge queue (its tests run once in the queue, after the checker), a fresh checker agent tries to break it; OK goes on as usual, a list of problems sends the task back to its worker with the report, using one of its auto_retries (no test run for that try); after 2 send-backs the task waits for the owner with Merge as is / Keep fixing / Drop instead of a new try; investigations and docs-only changes skip it), mode (\"paused\": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; \"review\": work runs and every finished task that passes waits for the owner to approve or reject it; \"auto\", the default: work runs and finished work that passes merges on its own; going from paused to review or auto starts work again, and going from review to auto does not merge tasks already in review).",
-    inputSchema: { type: "object", properties: { test_commands: { type: "array", items: { type: "string" } }, docs_test_commands: { type: "array", items: { type: "string" }, description: "Run instead of test_commands when a prose-only role (code: false) changed only prose; [] for none (such a change then runs no test)." }, test_minutes: { type: "number", description: "Minutes each test command may run before merging: a whole number 1-120 (default 10)." }, max_parallel: { type: "number" }, max_minutes: { type: "number" }, auto_retries: { type: "number" }, archive_days: { type: "number", description: "Done and dropped tasks older than this many days move to archive.json; 0 = never." }, open_on_start: { type: "boolean" }, notify: { type: "string", enum: ["voice", "sound 1", "sound 2", "sound 3", "off"] }, scout_findings: { type: "string", enum: ["auto", "backlog"], description: "auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog." }, tests_with_changes: { type: "string", enum: ["off", "ask", "review"], description: "A change task that edits code but no test file: ask (default) merges and tells you; review waits for the owner; off does nothing." }, checker: { type: "string", enum: ["off", "on"], description: "on: a fresh checker tries to break each change before it joins the merge queue, where its tests run; off (default): no checker." }, mode: { type: "string", enum: ["paused", "review", "auto"] } } }
+    description: "Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line, under the same category headings as the Settings view (Work, Checks before merging, Workers, Scouts, Board and alerts; notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), docs_test_commands (shell commands, same shape and limit as test_commands, default none: run instead of test_commands when a task of a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test), test_minutes (how many minutes each test command may run before merging, a whole number 1-120, default 10; a test command past it fails like a failing test: a new worker try starts with the output, using one of the auto_retries; anything else is refused), max_parallel (workers at once), max_minutes (a worker running longer makes symcc ask the owner for more time: +N min or Stop it), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify (\"voice\", \"sound 1\", \"sound 2\", \"sound 3\" or \"off\": what plays when a task is merged or a question from a worker waits for the owner: \"voice\" says \"symcc: T-3 done\" / \"symcc: T-5 needs you\" out loud (the project name first), \"sound N\" a short chime from sound set N, each set with its own \"done\" and \"needs you\" chime so the owner can tell which project chimed (on macOS 1: Glass / Ping, 2: Hero / Pop, 3: Submarine / Funk); only the session driving the board plays; default sound 2 where this machine can play sounds, else voice where it can only speak, else off; a choice this machine cannot play is refused with the reason; there is no sound_set setting), scout_findings (\"auto\", the default: you decide, and a scout finding you add goes to todo and runs; \"backlog\": every task added with origin_by scout goes to the backlog, whatever you ask, and starts only when the owner moves it to todo), tests_with_changes (\"ask\", the default: a change task whose commit edits code but no test file still merges and you are told \"T-3 changed code but no test\"; \"review\": such a task waits for the owner to review it instead of merging; \"off\": not checked; docs-only changes are never flagged), checker (\"off\", the default, or \"on\": after the prep step and before a change task joins the merge queue (its tests run once in the queue, after the checker), a fresh checker agent tries to break it; OK goes on as usual, a list of problems sends the task back to its worker with the report, using one of its auto_retries (no test run for that try); after 2 send-backs the task waits for the owner with Merge as is / Keep fixing / Drop instead of a new try; investigations and docs-only changes skip it), mode (\"paused\": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; \"review\": work runs and every finished task that passes waits for the owner to approve or reject it; \"auto\", the default: work runs and finished work that passes merges on its own; going from paused to review or auto starts work again, and going from review to auto does not merge tasks already in review).",
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "A project folder name: with test_commands, sets that project's own test commands (stored for now, not used yet); nothing else is set per project." }, test_commands: { type: "array", items: { type: "string" } }, docs_test_commands: { type: "array", items: { type: "string" }, description: "Run instead of test_commands when a prose-only role (code: false) changed only prose; [] for none (such a change then runs no test)." }, test_minutes: { type: "number", description: "Minutes each test command may run before merging: a whole number 1-120 (default 10)." }, max_parallel: { type: "number" }, max_minutes: { type: "number" }, auto_retries: { type: "number" }, archive_days: { type: "number", description: "Done and dropped tasks older than this many days move to archive.json; 0 = never." }, open_on_start: { type: "boolean" }, notify: { type: "string", enum: ["voice", "sound 1", "sound 2", "sound 3", "off"] }, scout_findings: { type: "string", enum: ["auto", "backlog"], description: "auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog." }, tests_with_changes: { type: "string", enum: ["off", "ask", "review"], description: "A change task that edits code but no test file: ask (default) merges and tells you; review waits for the owner; off does nothing." }, checker: { type: "string", enum: ["off", "on"], description: "on: a fresh checker tries to break each change before it joins the merge queue, where its tests run; off (default): no checker." }, mode: { type: "string", enum: ["paused", "review", "auto"] } } }
   },
   {
     name: "doctor",
@@ -15888,7 +16011,7 @@ async function taskOrThrow($, id) {
 function alreadyAnsweredText(t, a) {
   const earlier = [...t.history].reverse().find((l) => l.text.startsWith("the owner answered: "))?.text;
   const quoted = earlier ? `, ${earlier}` : "";
-  const others = ["title", "details", "add_details", "files", "after", "priority", "needs_review", "backlog", "role", "kind", "merge_into"].filter((k) => a[k] !== undefined);
+  const others = ["title", "details", "add_details", "files", "after", "priority", "needs_review", "backlog", "role", "kind", "merge_into", "project"].filter((k) => a[k] !== undefined);
   const also = others.length ? ` The other changes (${others.join(", ")}) were not made either; send them again without answer.` : "";
   return `${t.id} was already answered (it is ${STATUS_WORD[t.status]} now${quoted}); nothing changed. To add something, use add_details.${also}`;
 }
@@ -15906,6 +16029,17 @@ async function kindIn($, a) {
   if (a.kind === undefined)
     return;
   return checkKind(await loadKinds($).catch(() => S.kinds), a.kind);
+}
+async function projectIn($, a) {
+  if (a.project === undefined || a.project === null)
+    return;
+  const name = str(a.project)?.trim() ?? "";
+  if (!name)
+    return "";
+  const refusal = projectRefusal(name, await projectNames($));
+  if (refusal)
+    throw new Error(`Nothing changed: ${refusal}`);
+  return name;
 }
 var TASK_TOOLS = ["change", "approve", "reject", "retry", "ask", "drop", "merged", "pause", "resume", "run"];
 async function defChanged($, a, said) {
@@ -15969,6 +16103,7 @@ async function runTool($, name, a) {
       priorityIn(a);
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)) : undefined;
       const kind = await kindIn($, a);
+      const project = await projectIn($, a);
       if (!str(a.why)?.trim())
         throw new Error("why is missing: say in one line why this task exists (and fill origin_by, plus request, scout or from_task)");
       const known = await knownScouts($);
@@ -15985,8 +16120,8 @@ async function runTool($, name, a) {
         reviewMode = modeOf(b) === "review";
         const o = makeOrigin(said, now(), b);
         forced = findingToBacklog(b, a.origin_by, own) && a.backlog !== true;
-        const [y, added] = addTask(b, { title: str(a.title) ?? "", details: str(a.details), files: a.files, after: a.after, priority: priorityIn(a), needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true || forced, S.plan), role, kind, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into }, now(), S.N.dir);
-        const first = b.tasks.find((x) => x.status !== "dropped" && x.status !== "done" && Date.parse(now()) - Date.parse(x.created_at) < ADD_AGAIN_MS && x.title === added.title && x.details === added.details && sameJson(x.files, added.files) && sameJson(x.after, added.after) && x.priority === added.priority && x.status === "backlog" === (added.status === "backlog") && (x.needs_review ?? false) === (added.needs_review ?? false) && (x.role ?? "") === (added.role ?? "") && (x.kind ?? "") === (added.kind ?? "") && x.merge_into === added.merge_into && sameJson({ ...x.origin, evidence: undefined, at: undefined }, { ...added.origin, evidence: undefined, at: undefined }));
+        const [y, added] = addTask(b, { title: str(a.title) ?? "", details: str(a.details), files: a.files, after: a.after, priority: priorityIn(a), needs_review: a.needs_review === true, backlog: planBacklog(a.backlog === true || forced, S.plan), role, kind, origin: { ...said, evidence: evidenceText(o, heard) }, merge_into, project }, now(), S.N.dir);
+        const first = b.tasks.find((x) => x.status !== "dropped" && x.status !== "done" && Date.parse(now()) - Date.parse(x.created_at) < ADD_AGAIN_MS && x.title === added.title && x.details === added.details && sameJson(x.files, added.files) && sameJson(x.after, added.after) && x.priority === added.priority && x.status === "backlog" === (added.status === "backlog") && (x.needs_review ?? false) === (added.needs_review ?? false) && (x.role ?? "") === (added.role ?? "") && (x.kind ?? "") === (added.kind ?? "") && x.merge_into === added.merge_into && (x.project ?? "") === (added.project ?? "") && sameJson({ ...x.origin, evidence: undefined, at: undefined }, { ...added.origin, evidence: undefined, at: undefined }));
         if (first) {
           again = true;
           return [b, [first, b.tasks]];
@@ -16015,7 +16150,7 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
       if (t.status === "done")
         throw new Error(`${t.id} is done; add a new task instead`);
       if (a.stage !== undefined) {
-        const own = ["title", "details", "add_details", "answer", "files", "after", "priority", "role", "kind", "needs_review", "backlog", "merge_into"];
+        const own = ["title", "details", "add_details", "answer", "files", "after", "priority", "role", "kind", "needs_review", "backlog", "merge_into", "project"];
         const extra = Object.keys(a).filter((k) => own.includes(k) && a[k] !== undefined && a[k] !== null);
         if (extra.length)
           throw new Error(`stage moves a task on its own; nothing was saved. Send ${extra.join(", ")} in a separate change call`);
@@ -16040,6 +16175,7 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
       if (str(a.answer)?.trim() && t.status !== "waiting")
         return alreadyAnsweredText(t, a);
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)) : undefined;
+      const project = await projectIn($, a);
       const kind = await kindIn($, a) ?? (role && role !== t.role && isInvestigation(kindFor(undefined, role)) ? kindFor(undefined, role) : undefined);
       let into = str(a.merge_into)?.trim();
       if (a.merge_into !== undefined && !(into && await branchExists($, into))) {
@@ -16086,6 +16222,8 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
           p.kind = kind;
         if (into)
           p.merge_into = into;
+        if (project !== undefined)
+          p.project = project;
         return p;
       };
       if (a.backlog === true) {
@@ -16113,12 +16251,20 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
         await change($, (x) => patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir));
         return `${t.id} ${note2 ? "note added" : "updated"} (still in the backlog)`;
       }
-      const flagOnly = typeof a.needs_review === "boolean" && ["title", "details", "add_details", "files", "after", "priority", "role", "kind", "answer", "merge_into"].every((k) => a[k] === undefined);
+      if (project !== undefined && ["title", "details", "add_details", "files", "after", "priority", "needs_review", "role", "kind", "answer", "merge_into"].every((k) => a[k] === undefined)) {
+        const p = fields();
+        await change($, (x) => {
+          const lines = leadLines(changeLines(t, p, false));
+          return patchTask(x, t.id, { ...p, ...lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {} }, now(), S.N.dir);
+        });
+        return `${t.id} updated (its worker keeps running if it has one; its status stays ${t.status})`;
+      }
+      const flagOnly = typeof a.needs_review === "boolean" && ["title", "details", "add_details", "files", "after", "priority", "role", "kind", "answer", "merge_into", "project"].every((k) => a[k] === undefined);
       if (flagOnly) {
         await change($, (x) => patchTask(x, t.id, { needs_review: a.needs_review }, now(), S.N.dir));
         return `${t.id} ${a.needs_review ? "will wait for review before merging" : "no longer needs its own review"}`;
       }
-      const queueOnly = t.status === "doing" && ["priority", "after", "needs_review"].some((k) => a[k] !== undefined) && ["title", "details", "add_details", "files", "role", "kind", "answer", "merge_into"].every((k) => a[k] === undefined);
+      const queueOnly = t.status === "doing" && ["priority", "after", "needs_review"].some((k) => a[k] !== undefined) && ["title", "details", "add_details", "files", "role", "kind", "answer", "merge_into", "project"].every((k) => a[k] === undefined);
       if (queueOnly) {
         const p = fields();
         await change($, (x) => {
@@ -16273,6 +16419,8 @@ Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answer}`;
     case "settings": {
       if (a.sound_set !== undefined)
         return SOUND_SET_GONE;
+      if (a.project !== undefined && typeof a.project !== "string")
+        return "Nothing changed: project must be a project folder name (text)";
       if (!SETTING_NAMES.some((k) => a[k] !== undefined))
         return leadSettingsText(await load($), await playable($), S.root);
       const r = await saveSettings($, a, "the lead");
@@ -16353,6 +16501,24 @@ async function saveSettings($, a, who) {
     const refused = notifyRefusal(n, await playable($));
     if (refused)
       return { error: refused, changes: [] };
+  }
+  if (a.project !== undefined) {
+    const name = str(a.project)?.trim() ?? "";
+    const refusal = projectRefusal(name, await projectNames($));
+    if (refusal)
+      return { error: refusal, changes: [] };
+    const other = SETTING_NAMES.filter((k) => k !== "test_commands" && a[k] !== undefined);
+    if (other.length)
+      return { error: `Nothing changed: with a project only test_commands can be set (not ${other.join(", ")}); set those without project.`, changes: [] };
+    if (!Array.isArray(a.test_commands))
+      return { error: "Nothing changed: give test_commands (a list) with the project.", changes: [] };
+    let text = "";
+    await change($, (b) => {
+      const r = applyProjectSettings(b, name, a);
+      text = r.text;
+      return [r.board, null];
+    });
+    return { changes: [{ name: "test_commands", value: text, said: text, cut: "" }] };
   }
   const changes = await change($, (b) => {
     const r = applySettings(b, a);
@@ -16584,7 +16750,10 @@ async function queueWorker(host, id) {
       const cur = find(await load(host), id);
       return cur?.status === "doing" && cur.live?.session === S.me && cur.attempts === t.attempts;
     };
-    const spawn = startAgent(host, { kind: "worker", prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince2(host, t, dir, Date.parse(now()))) + reportsNote(reports2, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...role?.tools ? { tools: role.tools } : {}, ...isProseRole(role) && !isInvestigation(t) ? { prose: true } : {}, ...!isInvestigation(t) && t.files?.length ? { files: t.files } : {}, cwd: dir, ...role?.model ? { model: role.model } : {} }, still);
+    const errandOut = (x) => isErrand(x) ? errandFolders(x.files, S.root, S.home) : [];
+    const spawn = startAgent(host, { kind: "worker", prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince2(host, t, dir, Date.parse(now()))) + (errandOut(t).length ? `
+
+You may write here (outside the project): ${errandOut(t).join(", ")}` : "") + reportsNote(reports2, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...role?.tools ? { tools: role.tools } : {}, ...isProseRole(role) && !isInvestigation(t) ? { prose: true } : {}, ...errandOut(t).length || !isInvestigation(t) && t.files?.length ? { files: isErrand(t) ? errandOut(t) : t.files } : {}, cwd: dir, ...role?.model ? { model: role.model } : {} }, still);
     queued = true;
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() });
     return { started: workerStarted(host, id, before, dir, branch, spawn, t.attempts).finally(() => (starting.delete(id), queuedWorkers.delete(id))) };
@@ -18166,8 +18335,10 @@ async function gitReady($, b) {
     S.gitInstall = await installStepOf($).catch(() => "");
   if (s !== "no-git")
     S.gitInstall = "";
-  if (s !== S.gitState) {
+  const ws = (s === "no-repo" || s === "no-commits") && await holdsRepos($) ? workspaceText() : "";
+  if (s !== S.gitState || ws !== S.gitWorkspace) {
     S.gitState = s;
+    S.gitWorkspace = ws;
     await publish($, b ?? await load($));
   }
   if (s === "ok") {
@@ -18176,10 +18347,33 @@ async function gitReady($, b) {
     S.toldGit = "ok";
   } else if (S.driving && S.toldGit !== s) {
     S.toldGit = s;
-    tellLead($, s === "no-git" ? noGitText(S.N.name, S.gitInstall) : setupAskText(s, S.N.name));
+    tellLead($, s === "no-git" ? noGitText(S.N.name, S.gitInstall) : ws ? ws : setupAskText(s, S.N.name));
   }
   return s === "ok";
 }
+var workspaceText = () => `This looks like a workspace of several repos; ${S.N.name} can't run a board over several repos yet. Open ${S.W.app} in one repo instead.`;
+async function holdsRepos($) {
+  const dirs = async (path2) => (await $.fs.list(path2).catch(() => [])).filter((e) => e.kind === "dir" && !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== S.N.dir).map((e) => e.name);
+  for (const a of await dirs(S.root)) {
+    if (await $.fs.exists(`${S.root}/${a}/.git`))
+      return true;
+    for (const b of await dirs(`${S.root}/${a}`))
+      if (await $.fs.exists(`${S.root}/${a}/${b}/.git`))
+        return true;
+  }
+  return false;
+}
+async function projectNames($) {
+  if (await $.fs.exists(`${S.root}/.git`))
+    return [];
+  const dirs = (await $.fs.list(S.root).catch(() => [])).filter((e) => e.kind === "dir" && !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== S.N.dir).map((e) => e.name);
+  const found = [];
+  for (const d of dirs)
+    if (await $.fs.exists(`${S.root}/${d}/.git`))
+      found.push(d);
+  return found.sort();
+}
+var projectRefusal = (name, names) => names.includes(name) ? "" : names.length ? `'${name}' is not a project here. The project folders are: ${names.join(", ")}.` : `'${name}' is not a project: this board has no project folders (a project is a folder below the board folder with its own .git).`;
 async function setupGit($, who) {
   if (S.settingUp)
     return "git is being set up already";
@@ -18188,6 +18382,8 @@ async function setupGit($, who) {
     return "git is set up already: this folder is a git repo with commits";
   if (s === "no-git")
     return noGitText(S.N.name, S.gitInstall);
+  if ((s === "no-repo" || s === "no-commits") && await holdsRepos($))
+    return workspaceText();
   S.settingUp = true;
   try {
     const init = s === "no-repo";
@@ -19250,12 +19446,12 @@ async function publishView(host, b) {
   const working = [...workers.values()].map((w) => ({ task: w.task, since: w.since }));
   const branch = S.gitState === "ok" ? await homeBranch(host) : "";
   const size_note = [...sizeNotes.values()].join("; ");
-  const branch_note = [gitNote(S.gitState), size_note].filter(Boolean).join("; ");
+  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), size_note].filter(Boolean).join("; ");
   const can = await playable(host);
   const branches = branchFacts(host, b, branch || "main").facts;
   const team = todayTeam(host, [...scoutState.keys()]).team;
   const task_branches = taskBranchesView(host, b).facts;
-  const v = { tasks: b.tasks, working, scouts: [...scoutState.values()].map((s) => s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s), mode: modeOf(b), test_commands: b.test_commands, ...b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}, home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...b.archived ? { archived: b.archived } : {}, ...b.archived_done?.length ? { archived_done: b.archived_done } : {}, open_on_start: openOnStart(b), notify_now: notifyOf(b, can, S.root), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...!S.driving && S.driver ? { driver: S.driver } : {}, ...S.offHere ? { off_here: "off" } : S.fresh ? { off_here: "new" } : {}, driving: S.driving, branch_note, ...size_note ? { size_note } : {}, git_state: S.gitState, ...S.gitInstall ? { git_install: S.gitInstall } : {}, plan_mode: inPlan(S.plan), ...branches ? { branches } : {}, ...team ? { today_team: team } : {}, ...Object.keys(task_branches).length ? { task_branches } : {}, ...openQuestions(b).length ? { questions: openQuestions(b) } : {} };
+  const v = { tasks: b.tasks, working, scouts: [...scoutState.values()].map((s) => s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s), mode: modeOf(b), test_commands: b.test_commands, ...b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}, home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...b.archived ? { archived: b.archived } : {}, ...b.archived_done?.length ? { archived_done: b.archived_done } : {}, open_on_start: openOnStart(b), notify_now: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...!S.driving && S.driver ? { driver: S.driver } : {}, ...S.offHere ? { off_here: "off" } : S.fresh ? { off_here: "new" } : {}, driving: S.driving, branch_note, ...size_note ? { size_note } : {}, git_state: S.gitState, ...S.gitInstall ? { git_install: S.gitInstall } : {}, ...S.gitWorkspace ? { git_workspace: S.gitWorkspace } : {}, plan_mode: inPlan(S.plan), ...branches ? { branches } : {}, ...team ? { today_team: team } : {}, ...Object.keys(task_branches).length ? { task_branches } : {}, ...openQuestions(b).length ? { questions: openQuestions(b) } : {} };
   const fit = fitView(host, v);
   if (fit.note)
     sizeNotes.set("the board view", fit.note);
@@ -19264,7 +19460,7 @@ async function publishView(host, b) {
   const size_now = [...sizeNotes.values()].join("; ");
   if (size_now !== size_note) {
     for (const x of new Set([v, fit.view])) {
-      x.branch_note = [gitNote(S.gitState), size_now].filter(Boolean).join("; ");
+      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), size_now].filter(Boolean).join("; ");
       if (size_now)
         x.size_note = size_now;
       else
@@ -19965,7 +20161,7 @@ ${skipped}` : "") };
       const placed = await openPane(host, { tab: "settings" }).then((r) => r?.isPlaced ?? false).catch(() => false);
       if (placed)
         return say(`Settings opened: Enter on a row changes it, t tasks, s scouts, b goes back to the tasks.`);
-      return say(settingsText({ ...b, notify: notifyOf(b, await playable(host), S.root) }, S.N.name, S.root));
+      return say(settingsText({ ...b, notify: notifyOf(b, await playable(host)) }, S.N.name, S.root));
     }
     case "set":
       return say(await ownerSettings(host, cmd.input, `with /${S.N.name}-settings`));
@@ -20788,16 +20984,18 @@ async function startCopilot(o) {
 // hosts/node/host.ts
 import { readFile as readFile2, writeFile, mkdir, readdir, lstat, stat, realpath, access } from "node:fs/promises";
 import { spawn, spawnSync } from "node:child_process";
-var PLUGIN_ROOT = decodeURIComponent(import.meta.url.replace(/^file:\/\//, "")).replace(/\/hosts\/node\/[^/]*$/, "");
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+var PLUGIN_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 function runCommand2(argv, init = {}) {
-  return new Promise((resolve) => {
+  return new Promise((resolve2) => {
     const [cmd, ...args] = argv;
     if (!cmd)
-      return resolve({ exitCode: 127, stdout: "", stderr: "no command" });
+      return resolve2({ exitCode: 127, stdout: "", stderr: "no command" });
     let stdout = "";
     let stderr = "";
     let done = false;
-    const finish = (r) => void (done || (done = true, timer && clearTimeout(timer), resolve(r)));
+    const finish = (r) => void (done || (done = true, timer && clearTimeout(timer), resolve2(r)));
     const child = spawn(cmd, args, { cwd: init.cwd, env: { ...process.env, ...init.env }, stdio: ["ignore", "pipe", "pipe"] });
     const timer = init.timeoutMs ? setTimeout(() => (child.kill("SIGKILL"), finish({ exitCode: 124, stdout, stderr: `${stderr}
 timed out after ${init.timeoutMs} ms` })), init.timeoutMs) : null;
@@ -20895,7 +21093,10 @@ var nodeClock = {
 };
 
 // copilot/entry.ts
-var PLUGIN_ROOT2 = decodeURIComponent(import.meta.url.replace(/^file:\/\//, "")).replace(/\/copilot\/(extensions\/[^/]+\/)?[^/]+$/, "");
+import { basename, dirname as dirname2, resolve as resolve2 } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
+var HERE = dirname2(fileURLToPath2(import.meta.url));
+var PLUGIN_ROOT2 = resolve2(HERE, basename(dirname2(HERE)) === "extensions" ? "../../.." : "..");
 var execPath = process.execPath;
 await startCopilot({
   joinSession,
