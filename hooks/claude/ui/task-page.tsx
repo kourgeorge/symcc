@@ -470,6 +470,8 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
       {pageHeader(pane, header)}
       {mergeStatus}
 
+      {asks && answerBox(pane, { id: t.id, redraw: () => $.ui.invalidate('ui.render'), question: asks.text, choices, typing, onChoice: choicePress, onSubmit: value => sendAnswer(value)(), onCancel: cancelAnswer })}
+
       {sectionEl('done')}
       {sectionEl('why')}
 
@@ -488,8 +490,6 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
           {merging ? null : <Text color={C('inactive')}>r merges it now</Text>}
         </Box>
       )}
-
-      {asks && answerBox(pane, { id: t.id, redraw: () => $.ui.invalidate('ui.render'), question: asks.text, choices, typing, onChoice: choicePress, onSubmit: value => sendAnswer(value)(), onCancel: cancelAnswer })}
 
       {sectionEl('what')}
       {sectionEl('history')}

@@ -368,6 +368,10 @@ test('the panel: the banner, then the list grouped by state (NEEDS YOU, what run
   const asks = panelLines(f, { opened: 'T-3', cursor: 0 }, NOW, 100).lines.map(lineText)
   expect(asks.some(l => l.includes('asks: Which database?'))).toBe(true)
   expect(asks).toContain('  2. postgres')
+  // T-1164: the question comes right after the header, before every section
+  const askAt = asks.findIndex(l => l.includes('asks: Which database?'))
+  const firstSection = asks.findIndex(l => l.startsWith('▍'))
+  expect(firstSection === -1 || askAt < firstSection).toBe(true)
   expect(answerOptions(f, 'T-3')).toEqual(['mysql', 'postgres', OWN_ANSWER])
   expect(panelKeys(f, 'T-3').map(k => k.word)).toEqual(['answer', 'drop', 'needs review', 'back'])
   // a running worker whose time is up: its page asks for more time, with Claude's +30 min / +60 min / Stop it

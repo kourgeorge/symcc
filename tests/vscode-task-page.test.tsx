@@ -198,6 +198,21 @@ test('in VS Code a waiting question shows plainly, with its answers as numbered 
   await ui.unmount()
 })
 
+test('T-1164: a waiting task\'s question box comes right after the header, before every section, on the terminal and in VS Code', async ($, on) => {
+  seedRich(on, 'T-503')
+  for (const surface of ['terminal', 'vscode'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface })
+    const all = texts(drawnData(await ui.drawn())).join('\n')
+    const q = all.indexOf('Should the report show all of its lines')
+    expect(q > 0, surface).toBe(true)
+    for (const heading of ['What to do', 'History']) {
+      const at = all.indexOf(heading, 0)
+      expect(at === -1 || q < at, `${surface} ${heading}`).toBe(true)
+    }
+    await ui.unmount()
+  }
+})
+
 test('in VS Code a file request shows the files, with Allow files and Don\'t allow', async ($, on) => {
   seedRich(on, 'T-511')
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
