@@ -70,3 +70,11 @@ test('a folder name with quotes or $ is passed as one argument on every system, 
   expect(speak!.argv.join(' ')).not.toContain('rm')
   expect(speak!.argv.join(' ')).not.toContain('HOME')
 })
+
+test('nothing plays while SYMCC_MUTE is set, and it plays when it is not (T-1186)', async () => {
+  const $ = await voiceOn('mac', '/work/symcc')
+  expect((await playsFor($, 'voice', ['T-1'])).length).toBe(1)
+  const muted = fakeHost({ run: async () => ({ exitCode: 0, stdout: '', stderr: '' }), env: async n => (n === 'SYMCC_MUTE' ? '1' : undefined) }).host
+  expect(await playsFor(muted, 'voice', ['T-1'])).toEqual([])
+  expect(await playsFor(muted, 'sound 2', ['T-1'])).toEqual([])
+})
