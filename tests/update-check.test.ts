@@ -58,6 +58,12 @@ test('a patch release, a bad answer or a failing fetch adds nothing', async () =
   }
 })
 
+test('the host fetch is used when there is no global fetch (Claude Code)', async () => {
+  const host = { ...ready(), httpFetch: async () => ({ ok: true, text: JSON.stringify({ version: '0.6.3' }) }) }
+  await withFetch(undefined, () => checkForUpdate(host))
+  expect(leadQueue.filter(t => t.includes('0.6.3 is out')).length).toBe(1)
+})
+
 test('a window that does not drive does not check', async () => {
   const host = ready()
   S.driving = false

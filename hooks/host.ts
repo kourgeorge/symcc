@@ -328,6 +328,8 @@ export interface Host {
   processes?: HostProcesses
   /** runs a command (no shell) and answers its exit code and output */
   run:(argv: readonly string[], init?: { cwd?: string; env?: Record<string, string>; timeoutMs?: number }) => Promise<HostRunResult>
+  /** fetches a URL through the host (Claude Code has no global fetch); without it the update check uses the global fetch */
+  httpFetch?: (url: string) => Promise<{ ok: boolean; text: string }>
   clock: {
     after: (ms: number, fn: () => void) => HostTimer
     every: (ms: number, fn: () => void) => HostTimer

@@ -42,12 +42,20 @@ export async function checkForUpdate(host: Host): Promise<void> {
   try {
     if (checked || !S.version || S.guardOnly || S.fresh || !S.driving) return
     checked = true
-    const f = (globalThis as { fetch?: Fetch }).fetch
-    if (typeof f !== 'function') return
+    const g = (globalThis as { fetch?: Fetch }).fetch
+    const f: ((url: string) => Promise<string>) | undefined = host.httpFetch
+      ? async url => {
+          const r = await host.httpFetch!(url)
+          return r.ok ? r.text : ''
+        }
+      : typeof g === 'function'
+        ? url => g(url).then(r => (r.ok ? r.text() : ''))
+        : undefined
+    if (!f) return
     const timeout = new Promise<never>((_, no) => {
       timer = host.clock.after(TIMEOUT_MS, () => no(new Error('slow')))
     })
-    const answer = await Promise.race([f(PLUGIN_URL).then(async r => (r.ok ? r.text() : '')), timeout])
+    const answer = await Promise.race([f(PLUGIN_URL), timeout])
     const published = (JSON.parse(answer) as { version?: unknown }).version
     if (typeof published !== 'string' || !newerMinor(S.version, published)) return
     tellLead(host, updateLine(S.version, published, S.W.updateSteps))

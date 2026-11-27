@@ -216,6 +216,7 @@ export function claudeHost($: EngineInterface): ClaudeHost {
     // moves (into a task's worktree that is later removed: then every command fails to start); the project root stays
     run: async (argv, init) => $.process.run(argv, init?.cwd ? init : { ...init, cwd: await $.session.root() }),
     processes: claudeProcesses($),
+    httpFetch: url => $.http.fetch(url),
     clock: { after: (ms, fn) => $.clock.after(ms, fn), every: (ms, fn) => $.clock.every(ms, fn), sleep: ms => $.clock.sleep(ms) },
     ui: {
       toast: text => $.ui.toast(text),
