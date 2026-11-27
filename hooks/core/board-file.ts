@@ -6,8 +6,32 @@ import { isNum, isObj, parseStamp } from './text'
 import { historyEntryOk } from './history'
 import { type OwnerQuestion, cleanAsk, cleanQuestions } from './questions'
 
-/** T-1137: the optional settings of one project. */
-export type ProjectSettings = { test_commands?: string[] }
+/** T-1137: the optional settings of one project. T-1153: docs_test_commands too (read, not set by the settings tool yet). */
+export type ProjectSettings = { test_commands?: string[]; docs_test_commands?: string[] }
+
+/**
+ * T-1153: whether `p` can be a project: one plain folder name right below the board folder (letters, digits, . _ -),
+ * never "." or "..", a hidden name, or anything with a slash, so a task's git work can't leave the board folder.
+ */
+export const isProjectName = (p: unknown): p is string => typeof p === 'string' && /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(p) && p !== '..' && p.length <= 200
+
+/** T-1153: the settings of task `t`'s project on board `b` (none for a task with no project, or a project with none set). */
+const projectOf = (b: { projects?: Record<string, ProjectSettings> }, t?: object | null): ProjectSettings | undefined => {
+  const p = (t as { project?: unknown } | null | undefined)?.project
+  return isProjectName(p) && b.projects && Object.prototype.hasOwnProperty.call(b.projects, p) ? b.projects[p] : undefined
+}
+
+/** T-1153: the test commands task `t`'s merge runs: its project's test_commands when set, else the board's. */
+export const testCommandsOf = (b: { test_commands: string[]; projects?: Record<string, ProjectSettings> }, t?: object | null): string[] => {
+  const own = projectOf(b, t)?.test_commands
+  return own?.length ? own : b.test_commands
+}
+
+/** T-1153: the docs test commands task `t`'s prose-only change runs: its project's docs_test_commands when set, else the board's. */
+export const docsTestCommandsOf = (b: { docs_test_commands?: string[]; projects?: Record<string, ProjectSettings> }, t?: object | null): string[] => {
+  const own = projectOf(b, t)?.docs_test_commands
+  return own?.length ? own : (b.docs_test_commands ?? [])
+}
 
 export type Board = {
   version: 1
@@ -51,7 +75,7 @@ export type Board = {
    * joins the merge line where its tests run (see core/checker.ts); absent or false: off, the default
    */
   checker?: boolean
-  /** T-1137: the settings of a project (a repo folder below the board folder), by folder name; only test_commands for now (stored, not used yet) */
+  /** T-1137: the settings of a project (a repo folder below the board folder), by folder name; only test_commands for now (T-1153: used by that project's merges) */
   projects?: Record<string, ProjectSettings>
   tasks: BoardTask[]
   /** what was moved to archive.json: counts and the tries' totals, so views don't read the archive */
@@ -286,7 +310,7 @@ export const testMinutesOf = (b: { test_minutes?: unknown }): number => (typeof 
  * code: false role runs docs_test_commands instead of test_commands (T-908), and the limit is set before that is known,
  * so it counts the longer of the two lists.
  */
-export const mergeTestCount = (b: { test_commands: string[]; docs_test_commands?: string[] }): number => Math.max(b.test_commands.length, b.docs_test_commands?.length ?? 0)
+export const mergeTestCount = (b: { test_commands: string[]; docs_test_commands?: string[]; projects?: Record<string, ProjectSettings> }, t?: object | null): number => Math.max(testCommandsOf(b, t).length, docsTestCommandsOf(b, t).length)
 
 /**
  * The project-wide merge line (<data folder>/merge-line.json, T-546): every way into a merge (a hand-back, an approve, a
@@ -392,7 +416,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   scout_findings: v => isScoutFindings(v),
   tests_with_changes: v => isTestsWithChanges(v),
   checker: v => typeof v === 'boolean',
-  projects: v => isObj(v) && Object.values(v).every(p => isObj(p) && (p.test_commands === undefined || (Array.isArray(p.test_commands) && p.test_commands.every(c => typeof c === 'string')))),
+  projects: v => isObj(v) && Object.values(v).every(p => isObj(p) && [p.test_commands, p.docs_test_commands].every(l => l === undefined || (Array.isArray(l) && l.every(c => typeof c === 'string')))),
 }
 
 /**
@@ -457,7 +481,8 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
     if (ask) x.ask = ask
     else delete x.ask
   }
-  if ('project' in x && !(typeof x.project === 'string' && x.project.trim())) delete x.project
+  // T-1153: a project must be a plain folder name ("../x", "/abs", "a/b" are dropped): its git work runs in that folder
+  if ('project' in x && !isProjectName(x.project)) delete x.project
   if ('merge_into' in x && !(typeof x.merge_into === 'string' && x.merge_into.trim())) delete x.merge_into
   if ('kind' in x) {
     if (kindOf(x) === DEFAULT_KIND) delete x.kind
