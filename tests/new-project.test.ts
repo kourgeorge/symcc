@@ -583,6 +583,8 @@ test('T-1136: a folder whose subfolders are their own repos: the view carries th
     w.files.set('/home/me/proj/b/.git', '')
     await sessionStart(w.host)
     await runCommand(w.host, 'symcc-init', '')
+    // T-1196: the repos below the folder are in the project table (the one-time move writes them for an old board)
+    await change(w.host, bb => ({ ...bb, projects: { a: { path: '/home/me/proj/a' }, b: { path: '/home/me/proj/b' } } }))
     // T-1154: with no repo at the top and repos directly below, each task needs only its own repo: the folder counts as ready
     if (!noCommit) {
       expect(await gitReady(w.host)).toBe(true)
