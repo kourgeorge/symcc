@@ -259,7 +259,7 @@ async function queueScout(host: Host, s: ScoutDef, misses = 0, byHand = false): 
   // st.paused is brought up to date from scouts.json so the board and the lead's note show it.
   if (!st.running) await pausedNow(host, st)
   const b = await load(host)
-  const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: onHere(b), plan: inPlan(S.plan) }, S.N.name)
+  const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: onHere(b), plan: inPlan(S.plan), newerData: S.newerData }, S.N.name)
   if (why) return why
   // T-1200: a scout that names a project the board doesn't have is not run
   const badProject = scoutProjectsError(s.projects ?? [], S.projects)
@@ -379,6 +379,7 @@ export async function migrateScoutOrigins(host: Host): Promise<string[]> {
 export function changeScoutMemory(host: Host, fn: (old: string | null) => string | null): Promise<void> {
   const file = scoutMemoryFile()
   return oneAtATime(file, async () => {
+    if (S.newerData) return // T-1206: the board's data is newer than this symcc: read-only
     const old = await host.fs.read(file).catch(() => null)
     const next = fn(typeof old === 'string' ? old : null)
     if (next === null) return
@@ -636,7 +637,7 @@ export async function runScoutNow(host: Host, name: string): Promise<string> {
   const st = scoutState.get(s.name)
   if (st) await pausedNow(host, st)
   const cur = await load(host)
-  const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: onHere(cur), plan: inPlan(S.plan) }, S.N.name)
+  const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: onHere(cur), plan: inPlan(S.plan), newerData: S.newerData }, S.N.name)
   if (why) return why
   // not waited for: it is asked from a tool call, a slash command or the panel, and starts at the next turn's start or end (see starts.ts)
   const q = await queueScout(host, s, 0, true)
