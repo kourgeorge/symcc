@@ -6,7 +6,7 @@ the later build tasks follow this page.
 
 Written 2026-11-24 (task T-978). It rests on the owner's decisions of that day and on the
 T-974 probe: [Probe: one workspace board over several repos](research/probe-one-workspace-board-over-several-repos-what-breaks-wha.md).
-Nothing here is built yet, unless it says so. Line numbers and counts come from that probe and
+Parts that are built say so. Line numbers and counts come from that probe and
 may have moved.
 
 ## Words used here
@@ -123,7 +123,7 @@ Each step depends on the one before. The probe has the files and tests for each.
      commits the repos as broken pointers, so a worker would see empty folders.
 2. **Projects (built, T-1137: data and display only; git, merges and tests still run in the board's own repo).** The `project` field on tasks, optional per-project settings, and the lead's
    `add` taking a project.
-3. **Per-project git and tests.** Every git call runs in the task's repo (the probe counts
+3. **Per-project git and tests (built, T-1152 to T-1155).** Every git call runs in the task's repo (the probe counts
    about 110), git readiness is checked per project, the merge runs in the task's repo, and
    each repo uses its own test command.
 4. **Tasks with no project.** Research and notes that need no repo.

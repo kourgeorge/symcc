@@ -124,6 +124,12 @@ Each part is there for a reason. Knowing it makes the rest of the documentation 
 | `dropped` | Cancelled. It never runs on its own; retry brings it back to todo on purpose |
 | `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog  N" row below the active tasks |
 
+## Working with several repos
+
+One board can sit in a folder that holds several repos. Each task names the repo it belongs to (its project). The worker
+gets a copy of that repo, the checks and the tests run there with that repo's own test command, and the change merges
+into that repo only. See [Projects: a folder with several repos](running-on-its-own.md#projects-a-folder-with-several-repos).
+
 ## Scouts at work
 
 Examples of what scouts do while you are away:

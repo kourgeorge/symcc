@@ -524,6 +524,8 @@ export function scoutPrompt(o: {
   web?: boolean
   /** T-600: organizational memory (org-mem) as a prompt shows it (orgMemSection), '' or left out for none */
   guide?: string
+  /** T-1155: on a workspace board, the project folders (each its own repo) below `root`; none for a board in one repo */
+  projects?: readonly string[]
 }): string {
   const name = o.name ?? DEFAULT_NAME
   const lines = scoutToolLines(name, o)
@@ -533,7 +535,7 @@ export function scoutPrompt(o: {
   const since = runAt
     ? `You last ran at ${runAt}. Start with what changed since then, since new code is where new bugs are:\n  git log --since=${runAt} --stat`
     : 'This is your first run (or the time of your last run is not known). Look at the whole project, starting with the most recent changes (git log --stat -n 20).'
-  return `You are the ${name} scout "${o.scout}". The project is in ${o.root}. Your job, from your scout file:
+  return `You are the ${name} scout "${o.scout}". The project is in ${o.root}.${o.projects?.length ? ` That folder is not a repo itself: it holds several projects, each its own git repo, in these folders: ${o.projects.map(p => `${o.root.replace(/\/+$/, '')}/${p}`).join(', ')}. Look in each (run git commands inside a project folder), and for a suggested task name its project (the folder name) and give its files relative to that repo.` : ''} Your job, from your scout file:
 
 ${o.instructions.trim()}
 
