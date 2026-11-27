@@ -119,7 +119,7 @@ export const register: Register = on => {
 
   const agentReportFrame = (text: string) => {
     const name = S.N.name.replace(/[^\w-]/g, '\\$&')
-    return new RegExp(`^\\s*(?:Another Claude session sent a message:\\s*)?<agent-message from="${name}-(?:T-\\d+(?:-checker)?|scout-[\\w-]+)"`).test(text)
+    return new RegExp(`^\\s*(?:Another Claude session sent a message:\\s*)?<agent-message from="${name}-(?:T-\\d+(?:-checker)?(?:-\\d+)?|scout-[\\w-]+)"`).test(text)
   }
 
   // The owner's typed prompt (terminal or phone/web bridge); slash commands, hidden prompts and symcc's own board updates are left out.

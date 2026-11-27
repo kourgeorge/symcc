@@ -5,7 +5,7 @@ How a task moves along, what happens when its worker finishes, how you approve a
 ## States, stages and the queue
 
 A task has one **state**. While it is `doing`, it also moves through **stages**. Finished tasks
-then take turns in **one merge queue**. This section explains all three.
+then take turns in a **merge queue** (one per repo). This section explains all three.
 
 **States: what moves a task on.** What each state means is in the table under
 [A task's life](how-it-works.md#a-tasks-life). This table adds what changes it next:
@@ -56,7 +56,7 @@ for the whole way, such as `worker ✓ → prep ✓ → ● checker → queue �
 [What a task shows on its way to the merge](#what-a-task-shows-on-its-way-to-the-merge)). A task
 in review or waiting shows as `doing` while its approve or merge runs.
 
-**The queue.** There is one merge queue for the whole project (all sessions, all target
+**The queue.** There is one merge queue per repo (on a one-repo board, the whole project; all sessions, all target
 branches), oldest first. Only the task at the front has its turn. In its turn, in one go, it
 catches up with the target branch, runs the tests (skipped when this exact code already passed),
 and then merges (or stops in `review` when you want to approve first). Any failure on the way
@@ -326,7 +326,7 @@ The steps, in this order:
    never joins the queue, so no tests run for that try (see [The checker](#the-checker)).
 4. **Queue.** The task joins the merge queue and waits for its turn. The queue is kept in
    `.symcc/merge-line.json`; it survives a reload (a task that was in the queue just joins again), and
-   a stale entry is cleared by itself, so you never need to edit it. Merges go one at a time.
+   a stale entry is cleared by itself, so you never need to edit it. Merges go one at a time per repo.
 5. **Catch up.** At its turn, if the target branch has moved since the worker started (another
    task was merged), symcc brings those changes into the task's copy first. If they clash, that
    try failed like failing tests do: it uses one of the `auto_retries`, and the next worker is told
