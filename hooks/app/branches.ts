@@ -61,7 +61,9 @@ export async function readBranches(host: Host, into: string, b: Pick<Board, 'tas
     const cwd = project ? projectPath(project) : S.root
     if (!cwd) continue
     const mine = b.tasks.filter(t => projectOfTask(t) === project)
-    const repoInto = project ? (mine.map(t => intoOf(t)).find(i => i && safe(i)) ?? '') : into
+    // the branch the repo's open (then just-merged) tasks merge into, never an old done task's
+    const live = [...openBranches({ tasks: mine }).map(t => t.into), ...mine.filter(t => merged.includes(t.id)).map(t => intoOf(t))]
+    const repoInto = project ? (live.find(i => i && safe(i)) ?? '') : into
     const f = repoInto ? await readRepo(host, cwd, repoInto, { tasks: mine }, nowMs) : null
     if (f) repos.push({ project, name: project || S.root.split('/').filter(Boolean).pop() || 'board', into: f.into, commits: f.commits, tasks: f.tasks })
   }

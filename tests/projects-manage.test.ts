@@ -6,6 +6,7 @@ import { test } from './reset'
 import { change, load } from '../hooks/app/store'
 import { saveSettings } from '../hooks/app/tools'
 import { addProject } from '../hooks/app/projects'
+import { readBranches } from '../hooks/app/branches'
 import { S } from '../hooks/app/state'
 import { addTask, emptyBoard, settingWithProjects } from '../hooks/board'
 import { liveBranchBlocks, segText, LIVE_INDENT } from '../hooks/core/live'
@@ -130,4 +131,23 @@ test('the Branches section draws one block per repo, each task hanging off its o
   expect(blocks.every(b => segText(b.main).trim().length > 0)).toBe(true)
   void LIVE_INDENT
   void sha
+})
+
+test('readBranches: a repo block reads its open tasks branch, not an old done task one', async () => {
+  const w = fakeHost({
+    run: async ([cmd, ...a], o) => {
+      if (cmd !== 'git') return done()
+      const branches = o?.cwd === '/r/client' ? ['dev'] : ['main']
+      if (a[0] === 'log') return branches.includes(a.find(x => x === 'dev' || x === 'main' || x === 'old-feature') ?? '') ? done({ stdout: `${sha('c1')} 1700000000\n` }) : done({ exitCode: 128 })
+      if (a[0] === 'rev-list') return done({ stdout: '0\t1\n' })
+      if (a[0] === 'merge-base') return done({ stdout: `${sha('c1')}\n` })
+      return done()
+    },
+  })
+  S.root = '/ws'
+  S.projects = { client: '/r/client', server: '/r/server' }
+  const t = (id: string, project: string, into: string, x: Record<string, unknown> = {}) => ({ id, title: id, status: 'doing', branch: `symcc/${id}`, project, merge_into: into, timeline: [], ...x })
+  const tasks = [t('T-1', 'client', 'old-feature', { status: 'done', branch: null }), t('T-3', 'client', 'dev'), t('T-4', 'server', 'main')]
+  const f = await readBranches(w.host, 'main', { tasks: tasks as never[] }, Date.now())
+  expect(f?.repos?.map(r => `${r.project}:${r.into}`)).toEqual(['client:dev', 'server:main'])
 })
