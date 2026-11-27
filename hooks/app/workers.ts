@@ -421,7 +421,7 @@ async function workerFinishedNow(host: Host, agentId: string, answer: string, en
         const runs = t.runs?.length ? withAgentUsed(t.runs, 'worker', agentId, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }) : t.runs
         return [putTask(x, backToTodo({ ...t, ...(runs ? { runs } : {}) }, SYMCC_STOPPED_NOTE, ended)), null] as [Board, null]
       }
-      limitMs = finishLimitMs(mergeTestCount(x), testMinutesOf(x))
+      limitMs = finishLimitMs(mergeTestCount(x, t), testMinutesOf(x))
       // T-723: its history says the worker handed back (its own line, just before the "prep started" the check writes)
       return [patchTask(x, w.task, { live: { checking: { step: 'prep', at: ended }, phase: undefined, time_ask: undefined }, history: withHistory(t.history, ended, workerHandedBackEntry(t, workerName(S.N.name, t.id))), ...(t.runs?.length ? { runs: endRun(withAgentUsed(t.runs, 'worker', agentId, ended, { tokens, ...(cost !== undefined ? { cost } : {}) }), ended) } : {}) }, ended), t.attempts] as [Board, number]
     })
@@ -1164,7 +1164,7 @@ export async function checkAgain(host: Host, t0: BoardTask, moved = false) {
     if (!go) await endFinishing(host, id, tryNo)
   }
   const { b, t, dir } = go
-  await finishUnderLimit(host, id, tryNo, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, true, gaveUp, over, limit, moved))
+  await finishUnderLimit(host, id, tryNo, finishLimitMs(mergeTestCount(b, t), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, true, gaveUp, over, limit, moved))
 }
 
 /**
@@ -1234,7 +1234,7 @@ async function mergeAgain(host: Host, t0: BoardTask) {
     if (!go) await endFinishing(host, id, tryNo)
   }
   const { b, t, dir } = go
-  await finishUnderLimit(host, id, tryNo, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, false, gaveUp, over, limit))
+  await finishUnderLimit(host, id, tryNo, finishLimitMs(mergeTestCount(b, t), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, false, gaveUp, over, limit))
 }
 
 /** The worker's report of task `t`'s current try, cut short (from its report file), for the history line. */
@@ -1635,7 +1635,7 @@ export async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'a
   // The same time limit as a finished worker's check (finishLimitMs): past it the merge is
   // given up (mergeRanOver), so it no longer holds the task, its id or the branch's merge turn.
   // It may still wake up later, but then it merges nothing and writes nothing (gaveUp).
-  const limitMs = finishLimitMs(mergeTestCount(b), testMinutesOf(b))
+  const limitMs = finishLimitMs(mergeTestCount(b, t), testMinutesOf(b))
   // The step shown on the board (BoardTask.live?.checking) is refreshed like a finishing mark, and removed when the merge ends or is given up.
   const beat = everyMs(host, FINISH_BEAT_MS, () => void markChecking(host, t.id, t.status, t.attempts).catch(() => undefined))
   try {

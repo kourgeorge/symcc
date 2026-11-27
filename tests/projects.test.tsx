@@ -6,8 +6,8 @@ import { test } from './reset'
 import { change, load } from '../hooks/app/store'
 import { runTool } from '../hooks/app/tools'
 import { S } from '../hooks/app/state'
-import { projectNames } from '../hooks/app/git'
-import { rowTitle, readBoard } from '../hooks/board'
+import { projectNames, repoOf } from '../hooks/app/git'
+import { rowTitle, readBoard, parseBoard, isProjectName, testCommandsOf, docsTestCommandsOf, mergeTestCount } from '../hooks/board'
 import { chatTasksText } from '../hooks/core/chat-text'
 import { tasksListText } from '../hooks/core/task-list'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -59,6 +59,14 @@ test('add with a project stores it; a wrong name is refused with the project fol
   expect(boardOf(files).tasks[0]!.project).toBe('server')
   await runTool(w.host, 'change', { task: 'T-1', project: '' })
   expect(boardOf(files).tasks[0]!.project).toBe(undefined)
+})
+
+test('a repo folder whose name is not a safe project name (like "my app") is not offered as a project', async () => {
+  const { w, files } = await world(['client', 'my app'])
+  expect(await projectNames(w.host)).toEqual(['client'])
+  const err = await runTool(w.host, 'add', { ...WISH, title: 'Nope', project: 'my app' }).catch((e: Error) => e.message)
+  expect(err).toContain('The project folders are: client.')
+  expect(boardOf(files).tasks.length).toBe(0)
 })
 
 test('a board inside one repo has no projects: add without project works, and a project name is refused', async () => {
@@ -134,4 +142,36 @@ test('T-1146: a running task in VS Code Live shows its tag', async ($, on) => {
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode', props: { ...PANE.props, bodyColumns: 100 } })
   expect(JSON.stringify(await ui.drawn())).toMatch(/\[client\\*\] Keep search open/)
   await ui.unmount()
+})
+
+test('T-1153: a project that is not one plain folder name is dropped on load, and repoOf refuses it', async () => {
+  const task = (id: string, project: unknown) => ({ id, title: id, status: 'todo', priority: 0, attempts: 0, branch: null, files: [], depends_on: [], created_at: '2026-01-01T00:00:00Z', updated_at: '2026-01-01T00:00:00Z', project })
+  const names = ['../evil', '/etc', 'a/b', '..', '.hidden', 'a\\b', ' client', 'client']
+  const b = parseBoard(JSON.stringify({ version: 1, next_id: 9, mode: 'auto', test_commands: [], max_parallel: 1, max_minutes: 1, auto_retries: 0, open_on_start: true, tasks: names.map((p, i) => task(`T-${i + 1}`, p)) }))
+  expect(b.tasks.map(t => (t as { project?: string }).project ?? null)).toEqual([null, null, null, null, null, null, null, 'client'])
+  for (const p of ['client', 'my-app.v2', 'x_1']) expect(isProjectName(p)).toBe(true)
+  for (const p of names.slice(0, 7)) expect(isProjectName(p)).toBe(false)
+  S.root = '/ws'
+  expect(repoOf({ project: 'client' })).toBe('/ws/client')
+  expect(repoOf({})).toBe('/ws')
+  let err = ''
+  try {
+    repoOf({ project: '../evil' })
+  } catch (e) {
+    err = (e as Error).message
+  }
+  expect(err).toContain('not a project folder name')
+})
+
+test("T-1153: a task of a project runs its own test commands (and docs ones) when set, else the board's", async () => {
+  const b = { test_commands: ['npm test'], docs_test_commands: ['lint docs'], projects: { client: { test_commands: ['test -f ok'] }, docs: { docs_test_commands: ['vale .'] } } }
+  expect(testCommandsOf(b, { project: 'client' })).toEqual(['test -f ok'])
+  expect(testCommandsOf(b, { project: 'server' })).toEqual(['npm test'])
+  expect(testCommandsOf(b, {})).toEqual(['npm test'])
+  expect(testCommandsOf(b, { project: 'constructor' })).toEqual(['npm test'])
+  expect(docsTestCommandsOf(b, { project: 'client' })).toEqual(['lint docs'])
+  expect(docsTestCommandsOf(b, { project: 'docs' })).toEqual(['vale .'])
+  expect(mergeTestCount({ ...b, test_commands: ['a', 'b', 'c'] }, { project: 'client' })).toBe(1)
+  // boards with no projects work as before
+  expect(testCommandsOf({ test_commands: ['x'] }, { project: 'client' })).toEqual(['x'])
 })
