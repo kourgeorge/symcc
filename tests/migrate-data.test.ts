@@ -1,6 +1,6 @@
 // T-804: /symcc-doctor's migrate-data item. The doctor counts what is still in an old shape (read-only); `fix
 // migrate-data` keeps a dated backup of the data files and saves every file once in today's shape; after that, loading
-// needs no migration (the old-shape code is gone from board-file, history, archive, stats, scouts and org-mem).
+// needs no migration (the old-shape code is gone from board-file, timeline, archive, stats, scouts and org-mem).
 import { expect } from 'claude-code/testing'
 import { emptyBoard, readBoard, readArchive, tryTokens, tryCost, checkerTokensOf, workerIdOf, checkerIdOf } from '../hooks/board'
 import { doctor } from '../hooks/app/doctor'
@@ -28,12 +28,12 @@ function world() {
   const old = {
     ...emptyBoard(), mode: 'off', notify: 'sound', sound_set: 2, target_branch: 'dev', archived: { done: 1, dropped: 0, tries: 1, ms: 1000, tokens: 300 },
     tasks: [
-      { ...base, id: 'T-1', title: 'one', status: 'todo', note: 'queue (2)', attempts: 3, role: 'tests', history: ['created by the lead because x', 'try 1: did it → tests failed: y'],
+      { ...base, id: 'T-1', title: 'one', status: 'todo', note: 'queue (2)', attempts: 3, role: 'tests', timeline: ['created by the lead because x', 'try 1: did it → tests failed: y'],
         runs: [{ started: T, ended: E, tokens: 5000 }, { started: E }] },
-      { ...base, id: 'T-2', title: 'two', status: 'done', note: 'merged', attempts: 1, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', history: [{ at: T, kind: 'created', text: 'created by the lead because w' }], runs: [{ started: T, ended: E, tokens: { unsplit: 7 } }] },
+      { ...base, id: 'T-2', title: 'two', status: 'done', note: 'merged', attempts: 1, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', timeline: [{ at: T, kind: 'created', text: 'created by the lead because w' }], runs: [{ started: T, ended: E, tokens: { unsplit: 7 } }] },
     ],
   }
-  const archive = { version: 1, tasks: [{ ...base, id: 'T-3', title: 'three', status: 'done', note: '', attempts: 1, merge_into: 'main', origin: { by: 'lead', why: 'w', at: T }, stage: 'code', conflict_tries: 1, history: ['try 1: did it → merged into main (abc1234)'], runs: [{ started: T, ended: E, tokens: 90 }] }] }
+  const archive = { version: 1, tasks: [{ ...base, id: 'T-3', title: 'three', status: 'done', note: '', attempts: 1, merge_into: 'main', origin: { by: 'lead', why: 'w', at: T }, stage: 'code', conflict_tries: 1, timeline: ['try 1: did it → merged into main (abc1234)'], runs: [{ started: T, ended: E, tokens: 90 }] }] }
   files.set(`${D}/board.json`, JSON.stringify(old, null, 2))
   files.set(`${D}/archive.json`, JSON.stringify(archive, null, 2))
   files.set(`${D}/scouts.json`, JSON.stringify({ scouts: { bugs: { last_run: E, last_report: '1. Old crash.' } }, usage: { bugs: { runs: 1, tokens: 900, ms: 10, days: {} } } }))
@@ -95,7 +95,7 @@ test('T-804: the doctor lists what is still in an old shape, and changes nothing
   const before = new Map(w.files)
   const text = await doctor(w.host, '')
   expect(text).toContain('migrate-data  old data shapes:')
-  for (const part of ['tries with tokens saved as one number', 'history entries that are plain strings', 'tasks whose note is "queue (n)"', 'tasks with an old role', 'tasks with the removed stage engine', 'old board settings', 'scouts whose last report is not yet in a runs file', 'field-guide.md not yet moved', 'archived totals with tokens saved as one number', 'scout usage totals', 'tasks with a try left open', 'tasks with a conflict_tries field'])
+  for (const part of ['tries with tokens saved as one number', 'timeline entries that are plain strings', 'tasks whose note is "queue (n)"', 'tasks with an old role', 'tasks with the removed stage engine', 'old board settings', 'scouts whose last report is not yet in a runs file', 'field-guide.md not yet moved', 'archived totals with tokens saved as one number', 'scout usage totals', 'tasks with a try left open', 'tasks with a conflict_tries field'])
     expect(text).toContain(part)
   expect(text).toContain('tries with `unsplit` tokens')
   // nothing is changed (reading the old board may keep its usual before-fix copy of board.json)
@@ -129,7 +129,7 @@ test('T-804: fix migrate-data keeps a backup and saves every file in the current
   expect(t1.merge_into).toBe('dev')
   expect(t1.role).toBe('tester')
   expect(t1.origin?.why).toBe('made before origins were kept')
-  expect(t1.history.map(h => h.kind)).toEqual(['created', 'failed'])
+  expect(t1.timeline.map(h => h.kind)).toEqual(['created', 'failed'])
   expect(t1.runs!.map(r => tryTokens(r))).toEqual([{ unsplit: 5000 }, undefined])
   expect(t1.runs!.every(r => !!r.ended)).toBe(true)
   expect(t1.note).not.toMatch(/^queue/)
@@ -137,7 +137,7 @@ test('T-804: fix migrate-data keeps a backup and saves every file in the current
   const arch = readArchive(w.files.get(`${D}/archive.json`)!)
   const t3 = arch.archive.tasks[0]! as unknown as Record<string, unknown>
   expect('stage' in t3 || 'conflict_tries' in t3).toBe(false)
-  expect((arch.archive.tasks[0]!.history[0] as { kind: string }).kind).toBe('merged')
+  expect((arch.archive.tasks[0]!.timeline[0] as { kind: string }).kind).toBe('merged')
   expect(tryTokens(arch.archive.tasks[0]!.runs![0]!)).toEqual({ unsplit: 90 })
   // scouts.json and the scout's runs file, org-mem
   expect(JSON.parse(w.files.get(`${D}/scouts.json`)!).usage.bugs.tokens).toEqual({ unsplit: 900 })
@@ -162,10 +162,10 @@ test('T-804: a change on an old board migrates it first (with a backup), never w
   expect('target_branch' in board).toBe(false)
   const t1 = (await load(w.host)).tasks.find(t => t.id === 'T-1')!
   expect(t1.merge_into).toBe('dev')
-  expect(t1.history.length).toBe(2)
+  expect(t1.timeline.length).toBe(2)
 })
 
-test('T-804: migrateIfOld at session start migrates once, tells once, and keeps string history lines as records', async () => {
+test('T-804: migrateIfOld at session start migrates once, tells once, and keeps string timeline lines as records', async () => {
   const w = world()
   S.enabledNow = true
   leadQueue.length = 0
@@ -305,7 +305,7 @@ test('T-805: fix migrate-data gives an old try its agent entries (worker: tokens
   const w = world()
   const old = JSON.parse(w.files.get(`${D}/board.json`)!)
   old.tasks.push({
-    ...base, id: 'T-5', title: 'five', status: 'doing', note: 'worker on it', attempts: 2, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', history: [], session: 'me', agent: 'ag5', checker: 'chk5',
+    ...base, id: 'T-5', title: 'five', status: 'doing', note: 'worker on it', attempts: 2, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', timeline: [], session: 'me', agent: 'ag5', checker: 'chk5',
     runs: [
       { started: T, ended: E, tokens: { input: 1000, output: 50 }, checker_tokens: { input: 300 }, cost: 0.5, agent: 'ag4', checkers: ['chk4'], ended_by: 'finished', ended_note: 'checker found problems' },
       { started: E, tokens: { input: 70 }, agent: 'ag5', checkers: ['chk5'], restarts: [{ at: E, why: 'after a reopen', agent: 'ag3', started: E }], agents: [{ id: 'ag5', kind: 'worker' as const, started: E, tokens: { input: 20 } }] },
@@ -342,10 +342,10 @@ test('T-807: fix migrate-data moves a task\'s try-only fields into live, drops a
   const old = JSON.parse(w.files.get(`${D}/board.json`)!)
   const origin = { by: 'lead', why: 'w', at: T }
   old.tasks.push(
-    { ...base, id: 'T-5', title: 'five', status: 'doing', note: 'worker on it', attempts: 1, origin, merge_into: 'main', history: [], session: 'me', time_ask: E, extra_minutes: 10, try_refused: ['a.ts'], try_question: { question: 'Which?' }, merge_main: false, runs: [{ started: T }] },
-    { ...base, id: 'T-6', title: 'six', status: 'doing', note: 'worker starting', attempts: 1, origin, merge_into: 'main', history: [], session: 'me', finishing: E, runs: [{ started: T, ended: E }] },
-    { ...base, id: 'T-8', title: 'eight', status: 'doing', note: 'a checker agent is trying to break it before it merges', attempts: 1, origin, merge_into: 'main', history: [], session: 'me', checking: { step: 'checker', at: E }, runs: [{ started: T, ended: E }] },
-    { ...base, id: 'T-7', title: 'seven', status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', attempts: 3, origin, merge_into: 'main', history: [], runs: [] },
+    { ...base, id: 'T-5', title: 'five', status: 'doing', note: 'worker on it', attempts: 1, origin, merge_into: 'main', timeline: [], session: 'me', time_ask: E, extra_minutes: 10, try_refused: ['a.ts'], try_question: { question: 'Which?' }, merge_main: false, runs: [{ started: T }] },
+    { ...base, id: 'T-6', title: 'six', status: 'doing', note: 'worker starting', attempts: 1, origin, merge_into: 'main', timeline: [], session: 'me', finishing: E, runs: [{ started: T, ended: E }] },
+    { ...base, id: 'T-8', title: 'eight', status: 'doing', note: 'a checker agent is trying to break it before it merges', attempts: 1, origin, merge_into: 'main', timeline: [], session: 'me', checking: { step: 'checker', at: E }, runs: [{ started: T, ended: E }] },
+    { ...base, id: 'T-7', title: 'seven', status: 'failed', note: 'conflicts with the latest main (after 2 automatic retries)', attempts: 3, origin, merge_into: 'main', timeline: [], runs: [] },
   )
   w.files.set(`${D}/board.json`, JSON.stringify(old, null, 2))
   expect(await doctor(w.host, '')).toContain('try-only fields outside `live`')
@@ -389,11 +389,11 @@ test('T-808: fix migrate-data makes a task\'s question fields one `ask` record, 
   const w = world()
   const board = JSON.parse(w.files.get(`${D}/board.json`)!)
   const origin = { by: 'lead', why: 'w', at: T }
-  const mk = (id: string, x: Record<string, unknown>) => ({ ...base, id, title: id, status: 'waiting', note: 'waiting for you', attempts: 1, origin, merge_into: 'main', history: [], runs: [], question: null, ...x })
+  const mk = (id: string, x: Record<string, unknown>) => ({ ...base, id, title: id, status: 'waiting', note: 'waiting for you', attempts: 1, origin, merge_into: 'main', timeline: [], runs: [], question: null, ...x })
   board.tasks.push(
-    mk('T-10', { question: 'Red or blue?', options: ['Red', 'Blue'], question_lead: 'Which colour do you want?', options_lead: ['Crimson', 'Navy'], history: [{ at: T, kind: 'asked', text: 'worker asked: Red or blue?' }] }),
+    mk('T-10', { question: 'Red or blue?', options: ['Red', 'Blue'], question_lead: 'Which colour do you want?', options_lead: ['Crimson', 'Navy'], timeline: [{ at: T, kind: 'asked', text: 'worker asked: Red or blue?' }] }),
     mk('T-11', { question: 'T-11 needs to change files outside its list: a.ts. Allow them?', asked_files: ['a.ts'] }),
-    mk('T-12', { question: 'Which one?', history: [{ at: T, kind: 'asked', text: 'the lead asked the owner a question' }] }),
+    mk('T-12', { question: 'Which one?', timeline: [{ at: T, kind: 'asked', text: 'the lead asked the owner a question' }] }),
     mk('T-13', { status: 'doing', note: '', question: null, live: { session: 'me', phase: 'worker', question: { question: 'Left or right?', options: ['Left', 'Right'] } }, runs: [{ started: T }] }),
   )
   board.questions = [{ id: 'Q-1', text: 'Raise the version?', options: ['Yes', 'No'], asked_at: T }]
@@ -436,7 +436,7 @@ test('T-854: a board written by today\'s code (empty question fields from a writ
   S.enabledNow = true
   leadQueue.length = 0
   const origin = { by: 'lead', why: 'w', at: T }
-  const mk = (id: string, x: Record<string, unknown>) => ({ ...base, id, title: id, status: 'todo', note: '', attempts: 0, origin, merge_into: 'main', history: [], runs: [], ...x })
+  const mk = (id: string, x: Record<string, unknown>) => ({ ...base, id, title: id, status: 'todo', note: '', attempts: 0, origin, merge_into: 'main', timeline: [], runs: [], ...x })
   const nulls = { question: null, options: [], asked_files: [], question_lead: '', options_lead: [], conflict_tries: null, test_rerun: null, rerun_minutes: null }
   const board = { ...emptyBoard(), tasks: [
     mk('T-1', { ...nulls }),
@@ -458,7 +458,7 @@ test('T-854: after one migration of truly old data, a second migrateIfOld makes 
   S.enabledNow = true
   leadQueue.length = 0
   const board = JSON.parse(w.files.get(`${D}/board.json`)!)
-  board.tasks.push({ ...base, id: 'T-10', title: 'ten', status: 'waiting', note: 'waiting for you', attempts: 1, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', history: [], runs: [], question: 'Red or blue?', options: ['Red', 'Blue'] })
+  board.tasks.push({ ...base, id: 'T-10', title: 'ten', status: 'waiting', note: 'waiting for you', attempts: 1, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', timeline: [], runs: [], question: 'Red or blue?', options: ['Red', 'Blue'] })
   w.files.set(`${D}/board.json`, JSON.stringify(board, null, 2))
   expect(await migrateIfOld(w.host)).toBe('')
   expect(backups(w).size).toBe(1)
@@ -604,7 +604,7 @@ test('T-886: a task already in the queue step with a leftover "queue (n)" note m
   const w = world()
   S.enabledNow = true
   const board = JSON.parse(w.files.get(`${D}/board.json`)!)
-  board.tasks.push({ ...base, id: 'T-9', title: 'nine', status: 'doing', note: 'queue (2)', attempts: 1, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', history: [], runs: [{ started: T }], live: { session: 'me', phase: 'checker', checking: { step: 'queue', place: 2, at: E } } })
+  board.tasks.push({ ...base, id: 'T-9', title: 'nine', status: 'doing', note: 'queue (2)', attempts: 1, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', timeline: [], runs: [{ started: T }], live: { session: 'me', phase: 'checker', checking: { step: 'queue', place: 2, at: E } } })
   w.files.set(`${D}/board.json`, JSON.stringify(board, null, 2))
   expect(await migrateIfOld(w.host)).toBe('')
   expect((await oldDataFound(w.host)).rows.filter(r => r.fix).length).toBe(0)
@@ -619,7 +619,7 @@ test('T-967: the old order number becomes a priority once (order 10 or less: -1,
   leadQueue.length = 0
   const origin = { by: 'lead', why: 'w', at: T }
   const { priority: _p, ...noPriority } = base
-  const mk = (id: string, order: number, x: Record<string, unknown> = {}) => ({ ...noPriority, id, title: id, status: 'todo', note: '', attempts: 0, origin, merge_into: 'main', history: [], runs: [], order, ...x })
+  const mk = (id: string, order: number, x: Record<string, unknown> = {}) => ({ ...noPriority, id, title: id, status: 'todo', note: '', attempts: 0, origin, merge_into: 'main', timeline: [], runs: [], order, ...x })
   const board = { ...emptyBoard(), next_id: 7, tasks: [mk('T-1', 3), mk('T-2', 10), mk('T-3', 11), mk('T-4', 966), mk('T-5', 0, { status: 'backlog' })] }
   const archived = mk('T-6', 2, { status: 'done' })
   w.files.set(`${D}/board.json`, JSON.stringify(board, null, 2))
@@ -640,4 +640,37 @@ test('T-967: the old order number becomes a priority once (order 10 or less: -1,
   expect(await migrateIfOld(w.host)).toBe('')
   expect(backups(w).size).toBe(1)
   expect((await load(w.host)).tasks.map(t => t.priority)).toEqual([-1, -1, 0, 0, -1])
+})
+
+test('T-1192: a task timeline still named `history` (board, its parts file, the archive) is old data; migrateIfOld renames it `timeline` with a backup, the same entries, and no `history` is left', async () => {
+  const w = world()
+  S.enabledNow = true
+  leadQueue.length = 0
+  const origin = { by: 'lead', why: 'w', at: T }
+  const entries = [{ at: T, kind: 'created', text: 'created by the lead because w' }, { at: E, kind: 'note', text: 'the lead added a note: n' }]
+  const mk = (id: string, x: Record<string, unknown> = {}) => ({ ...base, id, title: id, status: 'todo', note: '', attempts: 0, origin, merge_into: 'main', history: entries, runs: [], ...x })
+  // T-2 is done: board.json keeps a stub, its history is in the parts file tasks/T-0.json
+  const { history: doneHistory, ...doneRest } = mk('T-2', { status: 'done' })
+  const stub = { id: 'T-2', title: 'T-2', status: 'done', priority: 1, after: [], attempts: 0, branch: null, merge_into: 'main', created_at: T, updated_at: E, parts: 'tasks/T-0.json' }
+  const { id: _id, title: _t, status: _s, priority: _p, after: _a, attempts: _n, branch: _b, merge_into: _m, created_at: _c, updated_at: _u, ...partFields } = doneRest
+  const board = { ...emptyBoard(), next_id: 4, tasks: [mk('T-1'), stub] }
+  const archived = mk('T-3', { status: 'done' })
+  w.files.set(`${D}/board.json`, JSON.stringify(board, null, 2))
+  w.files.set(`${D}/tasks/T-0.json`, JSON.stringify({ version: 1, tasks: { 'T-2': { ...partFields, history: doneHistory } } }))
+  w.files.set(`${D}/archive.json`, JSON.stringify({ version: 1, tasks: [archived] }))
+  w.files.set(`${D}/scouts.json`, JSON.stringify({ scouts: {}, usage: {} }))
+  w.files.delete(`${D}/field-guide.md`)
+  // detected as old data
+  expect((await oldDataFound(w.host)).rows.find(r => r.text.includes('still named `history`'))?.n).toBe(3)
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(backups(w).size).toBe(1)
+  // saved without `history`, anywhere
+  for (const f of [`${D}/board.json`, `${D}/tasks/T-0.json`, `${D}/archive.json`]) expect(w.files.get(f)!.includes('"history"')).toBe(false)
+  const loaded = await load(w.host)
+  expect(loaded.tasks.map(t => [t.id, t.timeline])).toEqual([['T-1', entries], ['T-2', entries]])
+  expect(readArchive(w.files.get(`${D}/archive.json`)!).archive.tasks[0]!.timeline).toEqual(entries as never)
+  // nothing old is left: a second run makes no new backup
+  expect((await oldDataFound(w.host)).rows.filter(r => r.fix)).toEqual([])
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(backups(w).size).toBe(1)
 })

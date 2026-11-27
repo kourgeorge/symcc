@@ -17,7 +17,7 @@ const PANE = {
   props: { title: `${ICON} symcc board · symcc`, isFocused: false, bodyColumns: 60, placement: 'dock', scroll: { offset: 0, bodyRows: 40 }, view: {} },
 } as const
 
-const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 1, history: [], branch: `symcc/${id}`, merge_into: 'main', origin: { by: 'lead', why: 'a test', at: '' }, created_at: '', updated_at: '', ...extra })
+const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: `symcc/${id}`, merge_into: 'main', origin: { by: 'lead', why: 'a test', at: '' }, created_at: '', updated_at: '', ...extra })
 
 /** Holds the next read of board.json (the merge's first step) while `wait` is set and `hold` is on; `reads` counts the held ones. */
 type Gate = { wait?: Promise<void>; hold?: boolean; reads: number }

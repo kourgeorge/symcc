@@ -4,7 +4,7 @@ import { expect } from 'claude-code/testing'
 import { FINISHED, isFinished } from '../hooks/board'
 import { splits } from '../hooks/core/board-parts'
 import { asBlockers } from '../hooks/core/board-file'
-import { historyEntryOk } from '../hooks/core/history'
+import { timelineEntryOk } from '../hooks/core/timeline'
 import { originOf } from '../hooks/core/origin'
 import { cleanAsk } from '../hooks/core/questions'
 import { cleanTokens } from '../hooks/core/runs'
@@ -36,7 +36,7 @@ test('T-839: readers that now use isObj still turn away null, arrays and plain v
     expect(asBlockers(x)).toBe(undefined)
     expect(cleanAsk(x)).toBe(undefined)
     expect(cleanTokens(x)).toBe(undefined)
-    expect(historyEntryOk(x)).toBe(false)
+    expect(timelineEntryOk(x)).toBe(false)
     expect(originOf({ origin: x })).toBe(undefined)
   }
 })

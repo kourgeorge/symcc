@@ -1,7 +1,7 @@
-// The "Earlier tries" table of a worker's prompt (T-851), built from the try facts on the task's history lines
+// The "Earlier tries" table of a worker's prompt (T-851), built from the try facts on the task's timeline lines
 // (T-805, T-806: the try, result and reason of each line). One row per try, the last few tries, no notes of the lead.
-import type { SymccHistoryEntry, SymccTask } from '../../types'
-import { tryParts } from './history'
+import type { SymccTimelineEntry, SymccTask } from '../../types'
+import { tryParts } from './timeline'
 
 /** How many tries the table lists. */
 export const TRIES_SHOWN = 5
@@ -50,20 +50,20 @@ export function firstFinding(line: string): string {
   return text ? firstSentence(text) : ''
 }
 
-const tryNo = (e: SymccHistoryEntry): number => e.try ?? tryParts(e.text)?.[1] ?? 0
-const bodyOf = (e: SymccHistoryEntry): string => tryParts(e.text)?.[2] ?? e.text
+const tryNo = (e: SymccTimelineEntry): number => e.try ?? tryParts(e.text)?.[1] ?? 0
+const bodyOf = (e: SymccTimelineEntry): string => tryParts(e.text)?.[2] ?? e.text
 
 /** What the worker said, from a result line "try 2: <said> → <result>"; '' when the line has no such part. */
-function saidOf(e: SymccHistoryEntry): string {
+function saidOf(e: SymccTimelineEntry): string {
   const body = bodyOf(e)
   const arrow = e.result !== undefined && body.endsWith(` → ${e.result}`) ? body.length - e.result.length - 3 : body.lastIndexOf(' → ')
   return arrow > 0 ? body.slice(0, arrow) : ''
 }
 
 /** The result words of an ending line: its result fact, else what follows the kind's own words. */
-const resultOf = (e: SymccHistoryEntry): string => e.result ?? bodyOf(e).replace(/^(?:stopped|restarted|rejected(?: by the owner)?):\s*/, '')
+const resultOf = (e: SymccTimelineEntry): string => e.result ?? bodyOf(e).replace(/^(?:stopped|restarted|rejected(?: by the owner)?):\s*/, '')
 
-function endedWord(e: SymccHistoryEntry): string {
+function endedWord(e: SymccTimelineEntry): string {
   if (e.kind === 'merged' || e.kind === 'done') return 'merged'
   if (e.kind === 'checker-problems') return REASON_WORDS.checker!
   if (e.kind === 'restarted') return 'restarted'
@@ -76,9 +76,9 @@ function endedWord(e: SymccHistoryEntry): string {
 }
 
 /** The rows of `t`'s last tries, oldest first. */
-export function triesRows(t: Pick<SymccTask, 'history'>, max = TRIES_SHOWN): TryRow[] {
-  const byTry = new Map<number, SymccHistoryEntry[]>()
-  for (const e of t.history ?? []) {
+export function triesRows(t: Pick<SymccTask, 'timeline'>, max = TRIES_SHOWN): TryRow[] {
+  const byTry = new Map<number, SymccTimelineEntry[]>()
+  for (const e of t.timeline ?? []) {
     const n = tryNo(e)
     if (!n || e.kind === 'stage' || e.kind === 'created' || e.kind === 'note' || e.kind === 'answer') continue
     byTry.set(n, [...(byTry.get(n) ?? []), e])
@@ -101,7 +101,7 @@ export function triesRows(t: Pick<SymccTask, 'history'>, max = TRIES_SHOWN): Try
 const cell = (s: string): string => (s.replace(/\|/g, '\\|').replace(/\s+/g, ' ').trim() || '-')
 
 /** The table of the last tries as markdown; null when no try has ended. The finding column is there only when some try was sent back. */
-export function triesTable(t: Pick<SymccTask, 'history'>, max = TRIES_SHOWN): string | null {
+export function triesTable(t: Pick<SymccTask, 'timeline'>, max = TRIES_SHOWN): string | null {
   const rows = triesRows(t, max)
   if (!rows.length) return null
   const finds = rows.some(r => r.finding)

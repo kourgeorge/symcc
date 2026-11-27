@@ -10,18 +10,18 @@ import { splitLeadNotes, leadNotesText } from '../hooks/core/lead-notes'
 import { checkerEntry, checkerProblems } from '../hooks/core/checker'
 import checkerText from '../prompts/checker'
 import { firstFinding,triesRows,triesTable } from '../hooks/core/tries-table'
-import { addDetailsText } from '../hooks/core/history'
-import { hist } from './history-fixture'
+import { addDetailsText } from '../hooks/core/timeline'
+import { hist } from './timeline-fixture'
 
 const task = (over: Partial<SymccTask> = {}): SymccTask =>
-  ({ id: 'T-7', title: 'Do it', details: 'Make it work.', files: ['src/a.ts', 'src/b.ts'], status: 'doing', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '', origin: { by: 'owner', why: 'the owner wants it', request: 'please make it work\nand fast', at: '' }, ...over }) as SymccTask
+  ({ id: 'T-7', title: 'Do it', details: 'Make it work.', files: ['src/a.ts', 'src/b.ts'], status: 'doing', note: '', priority: 1, after: [], attempts: 1, timeline: [], branch: null, created_at: '', updated_at: '', origin: { by: 'owner', why: 'the owner wants it', request: 'please make it work\nand fast', at: '' }, ...over }) as SymccTask
 
 const values = (t: SymccTask): Record<string, string> => ({ name: 'symcc', task_id: t.id, title: t.title, details: t.details, branch: 'symcc/T-7', folder: '/w/T-7', kind: '\nThe task type is change.\n', kind_name: 'change', role_name: 'general', role: '', org_mem: '', learned: '', ask: 'ASK', files: 'F', test_command: 'TESTS', file_tools: 'Edit' })
 
 const headings = (p: string) => [...p.matchAll(/^#{1,2} (.*)$/gm)].map(m => m[1]!)
 
 test('(a) a change prompt has its sections in the fixed order, and an empty section is left out', () => {
-  const t = task({ history: hist('try 1: Fixed it. → tests failed: 2 failed') , test_output: '$ npm test (exit 1)\nboom' })
+  const t = task({ timeline: hist('try 1: Fixed it. → tests failed: 2 failed') , test_output: '$ npm test (exit 1)\nboom' })
   const p = fillPrompt('change', { ...values(t), org_mem: 'Organizational memory (org-mem): notes\n- a', role: '## Your role: tester\n- check' }, t)
   expect(headings(p)).toEqual(['Task T-7: Do it', "Why, in the owner's words", 'What to do', 'Your role: tester', 'Files you may change', 'Where you work', 'Earlier tries', 'Last failure in full', 'Tests', 'Rules', 'Notes from earlier agents', "When you're done"])
   // no lead notes, no commits, no org-mem, no failure, no tries, no role: those sections are not there at all (no empty heading)
@@ -34,7 +34,7 @@ test('(a) a change prompt has its sections in the fixed order, and an empty sect
 test('(b) the tries table gives one row per try with its ending and reason, and has no lead note', () => {
   const t = task({
     attempts: 3,
-    history: [
+    timeline: [
       ...hist('created by the lead because x', 'try 1: Added the parser. Then more words. → the checker found problems: the save button is never enabled'),
       { kind: 'checker-problems', text: 'try 1: checker found problems: Problem: the save button is never enabled. Also no test.', try: 1 },
       ...hist('try 2: Fixed the button. → tests failed: 2 failed in a.test.ts', 'try 3: Merged main by hand. → conflicts with the latest main (after 1 automatic retry)'),
@@ -53,7 +53,7 @@ test('(b) the tries table gives one row per try with its ending and reason, and 
   expect(table).not.toContain('NOTE-SECRET')
   expect(table).not.toContain('…')
   // only the last 5 tries
-  const many = task({ history: hist(...[1, 2, 3, 4, 5, 6, 7].map(n => `try ${n}: said ${n}. → tests failed: x${n}`)) })
+  const many = task({ timeline: hist(...[1, 2, 3, 4, 5, 6, 7].map(n => `try ${n}: said ${n}. → tests failed: x${n}`)) })
   expect(triesRows(many).map(r => r.try)).toEqual([3, 4, 5, 6, 7])
   expect(triesTable(task())).toBeNull()
 })
@@ -110,7 +110,7 @@ test('(e) {{task.<path>}} fills any task field in a prompt and in a role checkli
 })
 
 test('(f) a section added to the registry shows up in its place', () => {
-  const t = task({ history: [] })
+  const t = task({ timeline: [] })
   const extra: PromptSection = { name: 'priority', kinds: ['change'], heading: 'How urgent', about: 'urgency', template: () => '{{task.priority}}', text: c => `priority ${c.task?.priority}` }
   const order = { ...PROMPT_ORDER, change: PROMPT_ORDER.change.flatMap(n => (n === 'files' ? ['priority', n] : [n])) }
   const p = buildPrompt({ kind: 'change', values: values(t), task: t }, [...PROMPT_SECTIONS, extra], order)
@@ -142,25 +142,25 @@ test('T-851: an owner follow-up question after a lead note stays in the text; a 
   const s = splitLeadNotes(d)
   expect(s.notes).toEqual([{ day: '2026-11-21', text: 'look in hooks/y.ts first' }])
   expect(s.text).toContain('Follow-up question (owner, 2026-11-22)')
-  const t = task({ history: [({ kind: 'checker-problems', text: 'try 1: checker found problems: I probed it carefully. Problems:\n- hooks/a.ts:12 crashes on empty input; run X.', try: 1 }), ({ kind: 'stopped', text: 'try 2: stopped before finishing', try: 2, reason: 'stopped' })] as never })
+  const t = task({ timeline: [({ kind: 'checker-problems', text: 'try 1: checker found problems: I probed it carefully. Problems:\n- hooks/a.ts:12 crashes on empty input; run X.', try: 1 }), ({ kind: 'stopped', text: 'try 2: stopped before finishing', try: 2, reason: 'stopped' })] as never })
   const rows = triesRows(t)
   expect(rows[0]!.finding).toBe('hooks/a.ts:12 crashes on empty input; run X.')
   expect(rows[1]!.reason).toBe('stopped before finishing')
 })
 
 test('T-859: the old-line fallback strips all list and bold marks after "problems:"', () => {
-  const t = task({ history: [({ kind: 'checker-problems', text: 'try 1: checker found problems: x **Problems:** - a.ts:1 bad', try: 1 })] as never })
+  const t = task({ timeline: [({ kind: 'checker-problems', text: 'try 1: checker found problems: x **Problems:** - a.ts:1 bad', try: 1 })] as never })
   expect(triesRows(t)[0]!.finding).toBe('a.ts:1 bad')
-  const u = task({ history: [({ kind: 'checker-problems', text: 'try 1: checker found problems: x Problems: 1. * b.ts:2 worse', try: 1 })] as never })
+  const u = task({ timeline: [({ kind: 'checker-problems', text: 'try 1: checker found problems: x Problems: 1. * b.ts:2 worse', try: 1 })] as never })
   expect(triesRows(u)[0]!.finding).toBe('b.ts:2 worse')
 })
 
 test('T-859: an old squashed line with only list items and no problem text gives an empty finding; abbreviations do not cut a sentence', () => {
   const report = 'I read the diff and ran probes in /tmp.\n\n**What works:**\n- **Band line:** `bandSummary` gives the right text\n- hooks/core/b.ts:4 is fine'
   const squashed = report.replace(/\s+/g, ' ')
-  const t = task({ history: [({ kind: 'checker-problems', text: `try 1: checker found problems: ${squashed}`, try: 1 })] as never })
+  const t = task({ timeline: [({ kind: 'checker-problems', text: `try 1: checker found problems: ${squashed}`, try: 1 })] as never })
   expect(triesRows(t)[0]!.finding).toBe('')
-  const u = task({ history: [({ kind: 'failed', text: 'try 1: Changed X (e.g. the Y part) and Z. Then more. → tests failed: x', try: 1, result: 'tests failed: x', reason: 'tests' })] as never })
+  const u = task({ timeline: [({ kind: 'failed', text: 'try 1: Changed X (e.g. the Y part) and Z. Then more. → tests failed: x', try: 1, result: 'tests failed: x', reason: 'tests' })] as never })
   expect(triesRows(u)[0]!.said).toBe('Changed X (e.g. the Y part) and Z.')
 })
 
@@ -169,7 +169,7 @@ const T800 = 'I found one real problem: the /symcc-settings text still shows the
 test('T-859: a T-800 shaped report gives its problem, not a "what works" bullet', () => {
   expect(checkerProblems(T800)).toEqual(['src/settings.ts:40 still shows the stored mode value; run /symcc-settings'])
   const flat = `try 1: checker found problems: ${T800.replace(/\s+/g, ' ')}`
-  const t = task({ history: [({ kind: 'checker-problems', text: flat, try: 1 })] as never })
+  const t = task({ timeline: [({ kind: 'checker-problems', text: flat, try: 1 })] as never })
   expect(triesRows(t)[0]!.finding).toBe('the /symcc-settings text still shows the stored mode value.')
 })
 
@@ -178,7 +178,7 @@ test('T-859: a recorded checker result saves its problems on the entry and the t
   expect(kind).toBe('checker-problems')
   expect(facts!.problems).toEqual(['src/settings.ts:40 still shows the stored mode value; run /symcc-settings'])
   expect(checkerProblems('Looked.\n\nProblems:\n- a.ts:1 bad\n- b.ts:2 worse')).toEqual(['a.ts:1 bad', 'b.ts:2 worse'])
-  const t = task({ history: [({ kind, text, try: 1, ...facts })] as never })
+  const t = task({ timeline: [({ kind, text, try: 1, ...facts })] as never })
   expect(triesRows(t)[0]!.finding).toBe('src/settings.ts:40 still shows the stored mode value; run /symcc-settings')
 })
 

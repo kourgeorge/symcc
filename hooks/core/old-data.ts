@@ -2,8 +2,8 @@
 // /<name>-doctor's `migrate-data` item (app/migrate-data.ts) counts them (oldDataRows) and, when the owner says fix,
 // brings every file to today's shape (upgradeBoard, upgradeArchiveTask, upgradeScoutUsage, migratedScoutRun) once.
 // Pure functions on parsed JSON. Delete this file when the owner has run the fix.
-import type { SymccHistoryEntry, SymccRun } from '../../types'
-import { type FailReason, type HistoryFacts, type HistoryKind, AFTER_CHANGED, historyEntryOk, isHistoryKind, onPurposeStop, tryParts, withHistory } from './history'
+import type { SymccTimelineEntry, SymccRun } from '../../types'
+import { type FailReason, type TimelineFacts, type TimelineKind, AFTER_CHANGED, timelineEntryOk, isTimelineKind, onPurposeStop, tryParts, withTimeline } from './timeline'
 import { addTokens, cleanTokens, isAgentId, sumTokens, tokenCount } from './runs'
 import { isPriority, isSoundSet, soundNotify, soundSetFor } from './board-file'
 import { parseGoneBranch } from './git-setup'
@@ -34,6 +34,16 @@ export function withoutStages<T extends object>(t: T): T | null {
     return rest
   })
   return out as T
+}
+
+/**
+ * Task `t` with its old `history` list named `timeline` (T-1192), in the same place among its fields; null when it has
+ * no `history` key. A task that already has a `timeline` keeps it and only loses `history`.
+ */
+export function withTimelineName(t: Raw): Raw | null {
+  if (!('history' in t)) return null
+  const keep = 'timeline' in t
+  return Object.fromEntries(Object.entries(t).flatMap(([k, v]): [string, unknown][] => (k !== 'history' ? [[k, v]] : keep ? [] : [['timeline', v]])))
 }
 
 /** Tries whose tokens were saved as one number become { unsplit: n }. Null when no try needs it. */
@@ -157,8 +167,8 @@ export function withoutTestRerun(t: Raw): Raw | null {
   const { test_rerun, rerun_minutes: _m, ...rest } = t
   if (test_rerun === undefined || test_rerun === null || (t.status !== 'waiting' && t.status !== 'doing')) return rest
   const { session: _s, finishing: _f, checking: _c, live: _l, options: _o, asked_files: _a, question: _q, ask: _k, ...todo } = rest
-  const hist = Array.isArray(t.history) ? (t.history as SymccHistoryEntry[]) : []
-  return { ...todo, status: 'todo', note: TEST_RERUN_GONE_NOTE, history: withHistory(hist, typeof t.updated_at === 'string' ? t.updated_at : '', ['step', TEST_RERUN_GONE_NOTE]) }
+  const hist = Array.isArray(t.timeline) ? (t.timeline as SymccTimelineEntry[]) : []
+  return { ...todo, status: 'todo', note: TEST_RERUN_GONE_NOTE, timeline: withTimeline(hist, typeof t.updated_at === 'string' ? t.updated_at : '', ['step', TEST_RERUN_GONE_NOTE]) }
 }
 
 /** The old loose try-only fields of a task, now kept in `live` (T-807): the old name, and the name in `live`. */
@@ -201,10 +211,10 @@ export function withLive(t: Raw): Raw | null {
 
 const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [])
 
-/** Who asked, for an old question that did not say: read from its words and the task's last history line. */
-function oldAskBy(text: string, files: readonly string[], opts: readonly string[], history: unknown): 'worker' | 'lead' | 'symcc' {
+/** Who asked, for an old question that did not say: read from its words and the task's last timeline line. */
+function oldAskBy(text: string, files: readonly string[], opts: readonly string[], timeline: unknown): 'worker' | 'lead' | 'symcc' {
   if (files.length || parseGoneBranch(text) || /secret/i.test(text)) return 'symcc'
-  const last = Array.isArray(history) ? history.at(-1) : undefined
+  const last = Array.isArray(timeline) ? timeline.at(-1) : undefined
   const said = isObj(last) && typeof last.text === 'string' ? last.text : typeof last === 'string' ? last : ''
   if (/the lead asked the owner a question/.test(said)) return 'lead'
   if (/worker asked/.test(said) || opts.length) return 'worker'
@@ -228,7 +238,7 @@ export function withAsk(t: Raw): Raw | null {
   const lead = typeof question_lead === 'string' ? question_lead.trim() : ''
   const lopts = strs(options_lead)
   if (!isObj(t.ask) && t.status === 'waiting' && (text || files.length)) {
-    out.ask = { by: oldAskBy(text, files, opts, t.history), text, asked_at: at, ...(opts.length ? { options: opts } : {}), ...(files.length ? { files } : {}), ...(lead ? { lead: { text: lead, ...(lopts.length ? { options: lopts } : {}) } } : {}) }
+    out.ask = { by: oldAskBy(text, files, opts, t.timeline), text, asked_at: at, ...(opts.length ? { options: opts } : {}), ...(files.length ? { files } : {}), ...(lead ? { lead: { text: lead, ...(lopts.length ? { options: lopts } : {}) } } : {}) }
   } else if (!isObj(t.ask) && t.status === 'doing' && lead && isObj(t.live) && typeof t.live.time_ask === 'string') {
     out.ask = { by: 'symcc', text: 'more time?', asked_at: t.live.time_ask, lead: { text: lead } }
   }
@@ -246,7 +256,7 @@ export function withAsk(t: Raw): Raw | null {
 }
 
 /** Old lines that are not about a try, by how they start: [kind, start]. */
-const PLAIN_KINDS: [HistoryKind, RegExp][] = [
+const PLAIN_KINDS: [TimelineKind, RegExp][] = [
   ['created', /^created by /],
   ['note', /^the lead added a note:/],
   ['answer', /^the owner answered:/],
@@ -273,7 +283,7 @@ function oldResultArrow(body: string): number | undefined {
 }
 
 /**
- * Where the try's result starts in history line `l` (its " → "). When the line has " → the checker found problems:", that
+ * Where the try's result starts in timeline line `l` (its " → "). When the line has " → the checker found problems:", that
  * is the result and nothing after it counts. Otherwise it is the last " → " followed by an outcome word symcc writes there; else the last one.
  */
 const OLD_OUTCOME_WORDS = /^(tests failed\b|conflicts with the latest\b|changed files outside the task\b|the checker found problems\b|tests ran out of time\b|the worker made no change\b|not merged\b|checking failed\b|symcc could not\b|could not\b|the worker ended its turn before\b|your files on \S+ can't be updated\b|merged into\b|already merged into\b|checks passed\b)/
@@ -292,7 +302,7 @@ function oldNotMergedOnPurpose(outcome: string): boolean {
   return onPurposeStop(why.replace(/^stopped because\s+/, ''))
 }
 
-/** Why a try failed, read from one old history line; null when the line is not a clear failure. */
+/** Why a try failed, read from one old timeline line; null when the line is not a clear failure. */
 export function oldFailReason(line: string): FailReason | null {
   const l = String(line ?? '')
   if (!/^try \d+\b/.test(l)) return null
@@ -325,16 +335,16 @@ export function oldFailReason(line: string): FailReason | null {
 const RESULT_LINE_KINDS: readonly string[] = ['merged', 'done', 'failed', 'try-result', 'not-merged', 'approved', 'approve-failed']
 
 /** The stage words of a 'stage' line and the step each means. */
-const STAGE_STEPS: [RegExp, NonNullable<HistoryFacts['step']>][] = [
+const STAGE_STEPS: [RegExp, NonNullable<TimelineFacts['step']>][] = [
   [/^worker started\b/, 'worker-start'], [/^worker handed back\b/, 'handed-back'], [/^prep started\b/, 'prep'], [/^checker started\b/, 'checker'],
   [/^waits in the merge queue\b/, 'queue'], [/^tests started\b/, 'tests'], [/^merge started\b/, 'merge'],
 ]
 
-/** The facts (T-806) of an old history line, read out of its kind and text with the old patterns, one last time. */
-export function oldHistoryFacts(e: { kind: string; text: string }): HistoryFacts {
+/** The facts (T-806) of an old timeline line, read out of its kind and text with the old patterns, one last time. */
+export function oldTimelineFacts(e: { kind: string; text: string }): TimelineFacts {
   const parts = tryParts(e.text)
   const body = parts ? parts[2] : e.text
-  const out: HistoryFacts = {}
+  const out: TimelineFacts = {}
   if (parts) out.try = parts[1]
   if (e.kind === 'stage') {
     const step = STAGE_STEPS.find(([re]) => re.test(body))?.[1]
@@ -355,8 +365,8 @@ export function oldHistoryFacts(e: { kind: string; text: string }): HistoryFacts
   return out
 }
 
-/** The kind of an old history line (a plain string from before T-522), guessed from how it starts and from its result words. */
-export function guessHistoryKind(line: string): HistoryKind {
+/** The kind of an old timeline line (a plain string from before T-522), guessed from how it starts and from its result words. */
+export function guessTimelineKind(line: string): TimelineKind {
   const parts = tryParts(line)
   if (!parts) return PLAIN_KINDS.find(([, re]) => re.test(line))?.[0] ?? 'other'
   const body = parts[2]
@@ -380,40 +390,40 @@ export function guessHistoryKind(line: string): HistoryKind {
   return 'step'
 }
 
-/** The fact fields of a history entry (T-806): one of them set means today's code wrote the line. */
+/** The fact fields of a timeline entry (T-806): one of them set means today's code wrote the line. */
 const FACT_FIELDS = ['try', 'step', 'place', 'result', 'reason', 'how', 'owner', 'backlog']
 
 /** Whether entry `e` is from before the facts: it has no fact field at all, and the old patterns find a fact in its text. Never true for a line today's code wrote (T-806). */
-function lacksFacts(e: SymccHistoryEntry): boolean {
+function lacksFacts(e: SymccTimelineEntry): boolean {
   if (FACT_FIELDS.some(k => (e as Record<string, unknown>)[k] !== undefined)) return false
-  return Object.keys(oldHistoryFacts(e)).length > 0
+  return Object.keys(oldTimelineFacts(e)).length > 0
 }
 
-/** An old history line (a plain string) as a record: kind guessed (guessHistoryKind), time guessed from the try it names or the task's created_at. */
-export function oldHistoryEntry(line: string, t: { runs?: readonly SymccRun[]; created_at?: string } = {}): SymccHistoryEntry {
-  const kind = guessHistoryKind(line)
+/** An old timeline line (a plain string) as a record: kind guessed (guessTimelineKind), time guessed from the try it names or the task's created_at. */
+export function oldTimelineEntry(line: string, t: { runs?: readonly SymccRun[]; created_at?: string } = {}): SymccTimelineEntry {
+  const kind = guessTimelineKind(line)
   const n = tryParts(line)?.[1]
   const run = n ? t.runs?.[n - 1] : undefined
   const at = run ? run.ended ?? run.started : kind === 'created' ? t.created_at : undefined
-  return { ...(typeof at === 'string' && at ? { at } : {}), kind, text: line, ...oldHistoryFacts({ kind, text: line }) }
+  return { ...(typeof at === 'string' && at ? { at } : {}), kind, text: line, ...oldTimelineFacts({ kind, text: line }) }
 }
 
 /**
- * A task's history in the current shape: string lines become records, a record with a kind symcc doesn't know gets
+ * A task's timeline in the current shape: string lines become records, a record with a kind symcc doesn't know gets
  * "other", anything else is dropped. Null when there is nothing to convert.
  */
-export function migrateHistory(t: { history?: unknown; runs?: readonly SymccRun[]; created_at?: string }): SymccHistoryEntry[] | null {
-  const h = t.history
-  if (!Array.isArray(h) || h.every(e => typeof e !== 'string' && historyEntryOk(e) && isHistoryKind((e as SymccHistoryEntry).kind) && !lacksFacts(e as SymccHistoryEntry))) return null
-  const out: SymccHistoryEntry[] = []
+export function migrateTimeline(t: { timeline?: unknown; runs?: readonly SymccRun[]; created_at?: string }): SymccTimelineEntry[] | null {
+  const h = t.timeline
+  if (!Array.isArray(h) || h.every(e => typeof e !== 'string' && timelineEntryOk(e) && isTimelineKind((e as SymccTimelineEntry).kind) && !lacksFacts(e as SymccTimelineEntry))) return null
+  const out: SymccTimelineEntry[] = []
   for (const e of h) {
-    if (typeof e === 'string') { out.push(oldHistoryEntry(e, t)); continue }
-    if (!isObj(e) || typeof (e as SymccHistoryEntry).text !== 'string') continue
-    const r = e as SymccHistoryEntry
-    const kind = r.kind === 'approved' ? 'approve-failed' : isHistoryKind(r.kind) ? r.kind : 'other'
+    if (typeof e === 'string') { out.push(oldTimelineEntry(e, t)); continue }
+    if (!isObj(e) || typeof (e as SymccTimelineEntry).text !== 'string') continue
+    const r = e as SymccTimelineEntry
+    const kind = r.kind === 'approved' ? 'approve-failed' : isTimelineKind(r.kind) ? r.kind : 'other'
     // the facts the old patterns read out of the line fill the ones it doesn't have (never replacing a saved one)
     const { at: _at, ...saved } = r
-    const old = lacksFacts({ ...r, kind }) ? oldHistoryFacts({ kind, text: r.text }) : {}
+    const old = lacksFacts({ ...r, kind }) ? oldTimelineFacts({ kind, text: r.text }) : {}
     out.push({ ...(typeof r.at === 'string' && r.at ? { at: r.at } : {}), ...old, ...saved, kind, text: r.text })
   }
   return out
@@ -422,9 +432,10 @@ export function migrateHistory(t: { history?: unknown; runs?: readonly SymccRun[
 /**
  * A board task (parsed JSON) from an older board brought to the current shape, or null when it already has it:
  * no origin, old roles, tries left open, no merge_into (gets `into`, the board's old target_branch), the stage engine's
- * fields, string history lines, test_rerun, conflict_tries, and the "queue (n)" note.
+ * fields, string timeline lines, test_rerun, conflict_tries, and the "queue (n)" note.
  */
-export function upgradeTask(t: Raw, into = 'main'): Raw | null {
+export function upgradeTask(t0: Raw, into = 'main'): Raw | null {
+  const t = withTimelineName(t0) ?? t0
   let out: Raw = withoutStages(t) ?? t
   if (!(typeof t.merge_into === 'string' && t.merge_into.trim())) out = { ...out, merge_into: into }
   const split = migrateRunTokens(out.runs)
@@ -434,8 +445,8 @@ export function upgradeTask(t: Raw, into = 'main'): Raw | null {
   if (!('origin' in t)) out = { ...out, origin: { by: 'lead', why: 'made before origins were kept', at: typeof t.created_at === 'string' ? t.created_at : '' } }
   const role = typeof t.role === 'string' ? OLD_ROLES[t.role.trim().toLowerCase()] : undefined
   if (role) out = { ...out, role }
-  const history = migrateHistory(out as Parameters<typeof migrateHistory>[0])
-  if (history) out = { ...out, history }
+  const timeline = migrateTimeline(out as Parameters<typeof migrateTimeline>[0])
+  if (timeline) out = { ...out, timeline }
   const rs = (Array.isArray(out.runs) ? out.runs : []) as SymccRun[]
   const open = (r: SymccRun, i: number) => isObj(r) && typeof r.started === 'string' && !r.ended && !(i === rs.length - 1 && t.status === 'doing')
   if (rs.some(open)) {
@@ -463,20 +474,21 @@ export function upgradeTask(t: Raw, into = 'main'): Raw | null {
   const checking = lv.checking as Raw | undefined
   // the note always goes (it is counted as old); a checking step not yet 'queue' takes the place from it (T-886)
   if (queue) out = isObj(checking) && checking.step !== 'queue' ? { ...out, note: '', live: { ...lv, checking: { ...checking, step: 'queue', place: Number(queue[1]) } } } : { ...out, note: '' }
-  return out === t ? null : out
+  return out === t0 ? null : out
 }
 
-/** An archived task (parsed JSON) without the stage engine's fields and conflict_tries, tokens as numbers made unsplit, string history made records; null when current. */
+/** An archived task (parsed JSON) without the stage engine's fields and conflict_tries, tokens as numbers made unsplit, string timeline made records; null when current. */
 export function upgradeArchiveTask(t0: Raw): Raw | null {
-  const stageless = withoutStages(t0) ?? t0
+  const named = withTimelineName(t0) ?? t0
+  const stageless = withoutStages(named) ?? named
   const clash = withoutConflictTries(stageless) ?? stageless
   const split = migrateRunTokens(clash.runs)
-  const history = migrateHistory(clash as Parameters<typeof migrateHistory>[0])
+  const timeline = migrateTimeline(clash as Parameters<typeof migrateTimeline>[0])
   const agents = migrateRunAgents({ ...clash, ...(split ? { runs: split } : {}) })
   const asked = withAsk(clash)
   const ordered = 'order' in clash
-  if (clash === t0 && !split && !history && !agents && !asked && !ordered) return null
-  let out: Raw = { ...(agents ?? clash), ...(split && !agents ? { runs: split } : {}), ...(history ? { history } : {}) }
+  if (clash === t0 && !split && !timeline && !agents && !asked && !ordered) return null
+  let out: Raw = { ...(agents ?? clash), ...(split && !agents ? { runs: split } : {}), ...(timeline ? { timeline } : {}) }
   out = withPriority(out) ?? out
   if (!asked) return out
   const { question: _q, options: _o, asked_files: _a, question_lead: _l, options_lead: _p, ...kept } = out
@@ -592,7 +604,7 @@ export type OldInput = {
 
 /** The count of everything in old shape, as lines; rows with n = 0 are left out. */
 export function oldDataRows(i: OldInput): OldRow[] {
-  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0, live: 0, ask: 0, qBy: 0, order: 0 }
+  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, histName: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0, live: 0, ask: 0, qBy: 0, order: 0 }
   const task = (t: Raw, board: boolean) => {
     const runs = (Array.isArray(t.runs) ? t.runs : []).filter(isObj) as Raw[]
     for (const r of runs) {
@@ -605,11 +617,12 @@ export function oldDataRows(i: OldInput): OldRow[] {
     if (withoutStages(t)) c.stage++
     if (withoutConflictTries(t)) c.conflict++
     if ('order' in t) c.order++
-    for (const e of Array.isArray(t.history) ? t.history : []) {
+    if ('history' in t) c.histName++
+    for (const e of Array.isArray(t.timeline) ? t.timeline : []) {
       if (typeof e === 'string' || !isObj(e) || typeof e.text !== 'string') c.strHist++
-      else if (!isHistoryKind(e.kind)) c.badKind++
+      else if (!isTimelineKind(e.kind)) c.badKind++
       else if (e.kind === 'other') c.other++
-      else if (lacksFacts(e as unknown as SymccHistoryEntry)) c.facts++
+      else if (lacksFacts(e as unknown as SymccTimelineEntry)) c.facts++
     }
     if (!board) return
     if (withLive(t)) c.live++
@@ -640,10 +653,11 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: c.numTok, text: 'tries with tokens saved as one number', fix: true },
     { n: archTok, text: 'archived totals with tokens saved as one number', fix: true },
     { n: usage, text: 'scout usage totals with tokens saved as one number', fix: true },
-    { n: c.strHist, text: 'history entries that are plain strings or not records', fix: true },
-    { n: c.badKind, text: 'history entries with a kind symcc does not know', fix: true },
-    { n: c.facts, text: 'history entries without their facts (try, step, result, reason ...)', fix: true },
-    { n: c.other, text: 'history entries of kind `other` (shown as they are)', fix: false },
+    { n: c.histName, text: 'tasks with their timeline still named `history`', fix: true },
+    { n: c.strHist, text: 'timeline entries that are plain strings or not records', fix: true },
+    { n: c.badKind, text: 'timeline entries with a kind symcc does not know', fix: true },
+    { n: c.facts, text: 'timeline entries without their facts (try, step, result, reason ...)', fix: true },
+    { n: c.other, text: 'timeline entries of kind `other` (shown as they are)', fix: false },
     { n: c.attempts, text: 'tasks where attempts is not the number of tries (shown as they are)', fix: false },
     { n: c.chk, text: 'tasks whose tries keep tokens, cost or agent ids outside their agent entries (agent, checker, tokens, checker_tokens, cost, checkers)', fix: true },
     { n: c.queue, text: 'tasks whose note is "queue (n)"', fix: true },

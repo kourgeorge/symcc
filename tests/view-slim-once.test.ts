@@ -49,7 +49,7 @@ function bigBoard() {
       status: finished ? (i % 10 === 0 ? 'dropped' : 'done') : 'todo',
       details: text(2500),
       origin: { why: 't', by: 'owner', request: text(500) },
-      history: Array.from({ length: 10 }, (_, k) => ({ at: iso(ago + (10 - k) * 60_000), kind: k === 9 && finished ? 'merged' : 'step', text: text(220) })),
+      timeline: Array.from({ length: 10 }, (_, k) => ({ at: iso(ago + (10 - k) * 60_000), kind: k === 9 && finished ? 'merged' : 'step', text: text(220) })),
       runs: [run(ago + 50 * 60_000, ago + 30 * 60_000), run(ago + 20 * 60_000, ago + 5 * 60_000)],
       attempts: 2,
       updated_at: iso(ago),
@@ -108,10 +108,10 @@ test('T-891: 200 tasks finished in the last 2 days give a view at most a third o
   for (const word of String(t1.details).split(/[\s.,]+/).filter(x => x.length > 8).slice(0, 20)) expect(JSON.stringify(JSON.parse(w.seen.stored).tasks.find((t: { id: string }) => t.id === 'T-1')).includes(word)).toBe(false)
   // the open tasks stay whole
   expect(w.seen.stored.includes(`"id":"T-201"`)).toBe(true)
-  const stored = JSON.parse(w.seen.stored) as { tasks: { id: string; details: string; history: unknown[] }[] }
+  const stored = JSON.parse(w.seen.stored) as { tasks: { id: string; details: string; timeline: unknown[] }[] }
   expect(stored.tasks.find(t => t.id === 'T-201')?.details.length).toBe(2500)
   expect(stored.tasks.find(t => t.id === 'T-1')?.details).toBe('')
-  expect(stored.tasks.find(t => t.id === 'T-1')?.history).toEqual([])
+  expect(stored.tasks.find(t => t.id === 'T-1')?.timeline).toEqual([])
 })
 
 test('T-891: publish slims the view once and writes that same view', async () => {
@@ -137,7 +137,7 @@ test('T-891: ▍Today, yesterday and last 7 days show the same numbers from the 
   const t0 = Date.now()
   const today = todayTasks(t0)
   const slimToday = slimView(view(today)).tasks
-  expect((slimToday as unknown as { history: unknown[] }[]).every(t => t.history.length === 0)).toBe(true)
+  expect((slimToday as unknown as { timeline: unknown[] }[]).every(t => t.timeline.length === 0)).toBe(true)
   expect(lines(slimToday, t0)).toEqual(lines(today, t0))
   expect(lines(today, t0).join('\n')).toContain('3')
   const n = inToday(Date.now(), 0.5)
@@ -147,14 +147,14 @@ test('T-891: ▍Today, yesterday and last 7 days show the same numbers from the 
   for (const days of [1, 7]) expect(pastDays(slimPast as never[], n, days)).toEqual(pastDays(past as never[], n, days))
 })
 
-test('T-891: slimming an already slim view again (a non-publish panel update) keeps the history marks', () => {
+test('T-891: slimming an already slim view again (a non-publish panel update) keeps the timeline marks', () => {
   const view = (tasks: unknown[]) => ({ tasks, working: [], scouts: [], mode: 'auto', test_commands: [] }) as unknown as SymccView
   const lines = (tasks: unknown[], at: number) => liveTodayLines({ tasks: tasks as never[], today_team: undefined }, at, 140, 0).map(segText)
   const t0 = Date.now()
   const today = todayTasks(t0)
   const once = slimView(view(today))
   const twice = slimView({ ...once, branches: {} } as SymccView)
-  const marks = (v: SymccView) => JSON.stringify(v.tasks.map(t => (t as unknown as { history_marks?: unknown }).history_marks))
+  const marks = (v: SymccView) => JSON.stringify(v.tasks.map(t => (t as unknown as { timeline_marks?: unknown }).timeline_marks))
   expect(marks(twice)).toBe(marks(once))
   expect(lines(twice.tasks, t0)).toEqual(lines(today, t0))
   const n = inToday(Date.now(), 0.5)

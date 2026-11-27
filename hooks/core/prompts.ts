@@ -18,7 +18,7 @@ export const PROMPT_KINDS: readonly PromptKind[] = ['change', 'investigation']
 
 /**
  * A table whose values are made the first time each is read, then kept (T-853). The tables below are built from
- * prompt-sections.ts, which (through board-file.ts, history.ts and roles.ts) imports this file, so building them at load
+ * prompt-sections.ts, which (through board-file.ts, timeline.ts and roles.ts) imports this file, so building them at load
  * would read PROMPT_SECTIONS before it exists when prompt-sections.ts is the first module loaded.
  */
 const lazyTable = <K extends string, V>(keys: readonly K[], make: (k: K) => V): Record<K, V> => {

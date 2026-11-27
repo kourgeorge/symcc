@@ -12,15 +12,15 @@ const HOUR = 3_600_000
 export function pastTasks(nowMs: number) {
   const y = dayStartOf(nowMs) // today's midnight: yesterday is the day before it
   const iso = (at: number) => new Date(at).toISOString()
-  const task = (id: string, x: Record<string, unknown>) => ({ id, title: id, details: '', files: [], status: 'done', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: iso(y - 10 * 24 * HOUR), updated_at: iso(nowMs), ...x })
+  const task = (id: string, x: Record<string, unknown>) => ({ id, title: id, details: '', files: [], status: 'done', note: '', priority: 1, after: [], attempts: 1, timeline: [], branch: null, created_at: iso(y - 10 * 24 * HOUR), updated_at: iso(nowMs), ...x })
   const run = (from: number, to: number, tokens: number) => ({ started: iso(from), ended: iso(to), agents: [{ kind: 'worker' as const, started: iso(from), ended: iso(to), tokens: { input: tokens } }] })
   const merged = (at: number) => [{ kind: 'merged', at: iso(at), text: 'try 1 → merged into main' }]
   const t0 = inToday(nowMs, 0.2)
   return [
-    task('T-1', { runs: [run(y - 14 * HOUR, y - 12 * HOUR, 3_000_000)], history: merged(y - 11 * HOUR) }),
-    task('T-2', { runs: [run(y - 74 * HOUR, y - 73 * HOUR, 2_000_000)], history: merged(y - 72 * HOUR) }),
-    task('T-3', { runs: [run(t0, inToday(nowMs, 0.3), 5_000_000)], history: merged(inToday(nowMs, 0.4)) }),
-    task('T-4', { runs: [run(y - 9 * 24 * HOUR, y - 9 * 24 * HOUR + HOUR, 7_000_000)], history: merged(y - 9 * 24 * HOUR + 2 * HOUR) }),
+    task('T-1', { runs: [run(y - 14 * HOUR, y - 12 * HOUR, 3_000_000)], timeline: merged(y - 11 * HOUR) }),
+    task('T-2', { runs: [run(y - 74 * HOUR, y - 73 * HOUR, 2_000_000)], timeline: merged(y - 72 * HOUR) }),
+    task('T-3', { runs: [run(t0, inToday(nowMs, 0.3), 5_000_000)], timeline: merged(inToday(nowMs, 0.4)) }),
+    task('T-4', { runs: [run(y - 9 * 24 * HOUR, y - 9 * 24 * HOUR + HOUR, 7_000_000)], timeline: merged(y - 9 * 24 * HOUR + 2 * HOUR) }),
     task('T-5', { status: 'failed', runs: [{ started: iso(y - 5 * HOUR), ended: iso(y - 4.5 * HOUR), restarts: [{ at: iso(y - 4.9 * HOUR), why: 'reload', started: iso(y - (4.9 - 1 / 6) * HOUR) }] }] }),
   ]
 }

@@ -7,7 +7,7 @@ import { test } from './reset'
 import type { SymccTask } from '../types'
 import { taskSections, detailsLines, type TaskSection } from '../hooks/core/task-sections'
 import { when } from '../hooks/core/days'
-import { hist } from './history-fixture'
+import { hist } from './timeline-fixture'
 
 const NOW = Date.parse('2026-11-19T12:00:00.000Z')
 const iso = (ms: number) => new Date(ms).toISOString()
@@ -17,7 +17,7 @@ const R2 = '.symcc/reports/T-1-try-2.md'
 const task = (status: SymccTask['status'], extra: Partial<SymccTask> & Record<string, unknown> = {}): SymccTask =>
   ({
     id: 'T-1', title: 'Fix the login', details: '## Goal\n- Check `hooks/a.ts`\nDone when: T-2 passes', files: ['hooks/'], status, note: '', priority: 1, after: [], attempts: 0,
-    history: [], branch: null, created_at: iso(NOW - 3_600_000), updated_at: iso(NOW - 60_000), ...extra,
+    timeline: [], branch: null, created_at: iso(NOW - 3_600_000), updated_at: iso(NOW - 60_000), ...extra,
   }) as SymccTask
 
 const run = (report: string, ended = true) => ({ started: iso(NOW - 600_000), ...(ended ? { ended: iso(NOW - 300_000) } : {}), report })
@@ -46,7 +46,7 @@ test('T-580: a todo task shows Details and What to do (its details, headings and
 })
 
 test('T-580: a doing task shows its Timeline (newest first, as a timeline), its Report "reading" until read, and its Runs', () => {
-  const t = task('doing', { attempts: 1, history: hist('try 1: started'), runs: [run(R1, false)] })
+  const t = task('doing', { attempts: 1, timeline: hist('try 1: started'), runs: [run(R1, false)] })
   const s = taskSections(t, facts())
   expect(titles(s)).toEqual(['Details', 'What to do', 'Timeline (1, newest first)', 'Runs   1 try · 10m', 'Report · try 1 · worker'])
   expect(text(sec(s, 'report'))).toEqual([`  ${R1}`, '  (reading the report…)'])
@@ -60,9 +60,9 @@ test('T-580: a doing task shows its Timeline (newest first, as a timeline), its 
 })
 
 test('T-580: a failed task starts with Why it failed (the reason, what its report asks, what to do next)', () => {
-  const t = task('failed', { attempts: 1, note: 'tests failed', history: hist('try 1: changed it → tests failed'), runs: [run(R1)] })
+  const t = task('failed', { attempts: 1, note: 'tests failed', timeline: hist('try 1: changed it → tests failed'), runs: [run(R1)] })
   const s = taskSections(t, facts({ texts: { [R1]: 'NEED FILES: docs/guide.md' } }))
-  expect(ids(s)).toEqual(['why', 'details', 'what', 'history', 'runs', 'report'])
+  expect(ids(s)).toEqual(['why', 'details', 'what', 'timeline', 'runs', 'report'])
   expect(sec(s, 'why')!.title).toBe('Why it failed')
   const why = text(sec(s, 'why'))
   expect(why.some(l => l.includes('docs/guide.md'))).toBe(true)
@@ -88,14 +88,14 @@ test('T-580: a task in review shows its Changes: the folder, each file (a press 
 })
 
 test('T-580: a done task with two tries shows the latest report (2 of 2) and its tries to pick, with number keys unless a question takes them', () => {
-  const t = task('done', { attempts: 2, history: hist('try 1: x → tests failed', 'try 2: y → merged into main'), runs: [run(R1), run(R2)] })
+  const t = task('done', { attempts: 2, timeline: hist('try 1: x → tests failed', 'try 2: y → merged into main'), runs: [run(R1), run(R2)] })
   const s = taskSections(t, facts({ texts: { [R2]: 'Second.' } }))
-  expect(ids(s)).toEqual(['details', 'what', 'history', 'runs', 'report'])
+  expect(ids(s)).toEqual(['details', 'what', 'timeline', 'runs', 'report'])
   expect(sec(s, 'report')!.title).toBe('Report · try 2 · worker')
   expect(sec(s, 'report')!.tries).toEqual([{ try: 1, shown: false, key: '1' }, { try: 2, shown: true, key: '2' }])
   expect(sec(taskSections(t, facts({ shown: { try: 1, kind: 'worker' }, numberKeysTaken: true })), 'report')!.tries).toEqual([{ try: 1, shown: true }, { try: 2, shown: false }])
-  // the history newest first, a connector between events
-  const h = text(sec(s, 'history'))
+  // the timeline newest first, a connector between events
+  const h = text(sec(s, 'timeline'))
   expect(h[0]).toContain('merged into main')
   expect(h[1]).toBe('│')
   expect(h.at(-1)).toContain('tests failed')
@@ -118,8 +118,8 @@ const rp = (n: number) => `.symcc/reports/T-1-try-${n}.md`
 const AGENTS = [['aa0b1c2d3e4f5a6b7c8d815', 'a6f0b1c2d3e4f5a6b7c853d'], ['bb0b1c2d3e4f5a6b7c8d816', 'b6f0b1c2d3e4f5a6b7c853e'], ['cc0b1c2d3e4f5a6b7c8d817', 'c6f0b1c2d3e4f5a6b7c853f']]
 const threeTries = (extra: Partial<SymccTask> = {}) => {
   const runs = [1, 2, 3].map(n => ({ started: iso(NOW - 900_000), ended: iso(NOW - 300_000), report: rp(n), agents: [{ id: AGENTS[n - 1]![0]!, kind: 'worker' as const, started: iso(NOW - 900_000), ended: iso(NOW - 600_000) }, { id: AGENTS[n - 1]![1]!, kind: 'checker' as const, started: iso(NOW - 600_000), ended: iso(NOW - 300_000) }] }))
-  const history = [1, 2, 3].map(n => ({ at: iso(NOW), kind: 'checker-problems', text: `try ${n}: checker found problems`, try: n, agent: 'symcc-T-1-checker', report: ck(n) }))
-  return task('todo', { attempts: 3, history: history as SymccTask['history'], runs, ...extra })
+  const timeline = [1, 2, 3].map(n => ({ at: iso(NOW), kind: 'checker-problems', text: `try ${n}: checker found problems`, try: n, agent: 'symcc-T-1-checker', report: ck(n) }))
+  return task('todo', { attempts: 3, timeline: timeline as SymccTask['timeline'], runs, ...extra })
 }
 const texts3 = { [rp(1)]: 'W1', [rp(2)]: 'W2', [rp(3)]: 'W3', [ck(1)]: 'C1 said this', [ck(2)]: 'C2', [ck(3)]: 'C3' }
 
@@ -158,7 +158,7 @@ test('T-1104: picking try 1\'s checker shows its heading, its file\'s text and m
 test('T-1104: an agent with no report file is plain text; a worker restarted on the same try has two lines that open the same file; an old try with no agent lines is one "try N" button', () => {
   const base = threeTries()
   // try 3 had no checker report: its checker line is plain
-  const noChecker = task('todo', { ...base, history: base.history.filter(h => (h as { try?: number }).try !== 3) })
+  const noChecker = task('todo', { ...base, timeline: base.timeline.filter(h => (h as { try?: number }).try !== 3) })
   const lines = sec(taskSections(noChecker, facts()), 'runs')!.lines
   const checker3 = lines.find(l => l.key === 'run-2-agent-1')!
   expect(checker3.segs[0]!.text).toContain('checker')
@@ -183,7 +183,7 @@ test('T-1104: an agent with no report file is plain text; a worker restarted on 
 })
 
 test('T-1104: an answered one-try investigation still shows its checker report when that is picked', () => {
-  const t = task('review', { kind: 'investigation', answer: 'Short answer.', attempts: 1, runs: [{ started: iso(NOW - 900_000), ended: iso(NOW - 300_000), report: rp(1), agents: [{ id: AGENTS[0]![0]!, kind: 'worker' as const, started: iso(NOW - 900_000) }, { id: AGENTS[0]![1]!, kind: 'checker' as const, started: iso(NOW - 600_000) }] }], history: [{ at: iso(NOW), kind: 'checker-problems', text: 'x', try: 1, agent: 'symcc-T-1-checker', report: ck(1) }] as unknown as SymccTask['history'] })
+  const t = task('review', { kind: 'investigation', answer: 'Short answer.', attempts: 1, runs: [{ started: iso(NOW - 900_000), ended: iso(NOW - 300_000), report: rp(1), agents: [{ id: AGENTS[0]![0]!, kind: 'worker' as const, started: iso(NOW - 900_000) }, { id: AGENTS[0]![1]!, kind: 'checker' as const, started: iso(NOW - 600_000) }] }], timeline: [{ at: iso(NOW), kind: 'checker-problems', text: 'x', try: 1, agent: 'symcc-T-1-checker', report: ck(1) }] as unknown as SymccTask['timeline'] })
   expect(ids(taskSections(t, facts({ texts: texts3 })))).not.toContain('report')
   const s = taskSections(t, facts({ texts: texts3, shown: { try: 1, kind: 'checker', id: AGENTS[0]![1] } }))
   expect(text(sec(s, 'report'))).toContain('  C1 said this')

@@ -59,7 +59,7 @@ function board(asked = true): Board {
   let b = emptyBoard()
   let t
   ;[b, t] = addTask(b, { origin: { why: 'a test' }, title: 'Old', details: 'Done when: done.', files: ['src/'] }, ISO)
-  b = patchTask(b, t.id, { status: 'done', history: [{ at: ISO, kind: 'step', text: 'merged' }] }, ISO)
+  b = patchTask(b, t.id, { status: 'done', timeline: [{ at: ISO, kind: 'step', text: 'merged' }] }, ISO)
   ;[b, t] = addTask(b, { origin: { why: 'a test' }, title: 'Now', details: 'Do it.\nDone when: done.', files: ['src/'] }, ISO)
   const run = { started: ISO, agents: [{ id: 'w1', kind: 'worker' as const, started: ISO }] }
   return patchTask(b, t.id, { status: 'doing', attempts: 1, branch: 'symcc/T-2', runs: [run], live: { session: 'me', ...(asked ? { ask: { text: 'Which one?', asked_at: ISO, by: 'worker' } as never } : {}) } }, ISO)

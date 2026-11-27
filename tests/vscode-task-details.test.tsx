@@ -5,10 +5,10 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { PANE, T0, seedBoard } from './board-fixture'
-import { historyEntry, historyEvent, HISTORY_COLOR } from '../hooks/core/history'
+import { timelineEntry, timelineEvent, TIMELINE_COLOR } from '../hooks/core/timeline'
 import { detailRows, type DetailRow } from '../hooks/core/details'
 import { when } from '../hooks/core/days'
-import { HISTORY_FIRST, vsRowKeys } from '../hooks/claude/ui/vscode-task'
+import { TIMELINE_FIRST, vsRowKeys } from '../hooks/claude/ui/vscode-task'
 import { VS_LABEL_W } from '../hooks/claude/ui/vscode'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { RICH_TASKS, seedRich } from './task-page-fixture'
@@ -37,7 +37,7 @@ const keyOf = (n: Node) => n.key ?? (n.props?.key as string | undefined)
 
 const iso = (ms: number) => new Date(ms).toISOString()
 const fresh = iso(T0 - 10_000)
-const DEP = { id: 'T-690', title: 'The task it waits for', details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(T0), updated_at: iso(T0) }
+const DEP = { id: 'T-690', title: 'The task it waits for', details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: iso(T0), updated_at: iso(T0) }
 /** A bug in doing, with a role, two tries and a checker step now. */
 const BUG = {
   id: 'T-691', title: 'The history timeline is broken', kind: 'bug', role: 'tester', details: 'Fix it.', files: ['hooks/a.ts', 'tests/'], status: 'doing', note: 'a checker agent is trying to break it before it merges',
@@ -45,10 +45,10 @@ const BUG = {
   origin: { by: 'owner', request: 'fix the history timeline', why: 'the owner sees loose bars between the events' },
   runs: [{ started: iso(T0 - 3_600_000), ended: iso(T0 - 3_000_000) }, { started: iso(T0 - 900_000), ended: fresh, checkers: [{ started: fresh }] }],
   live: { checking: { step: 'checker', at: fresh } }, 
-  history: [historyEntry('created', 'created by the owner because the timeline is broken', iso(T0 - 86_400_000)), historyEntry('failed', 'try 1: first fix → tests failed: x', iso(T0 - 3_000_000))],
+  timeline: [timelineEntry('created', 'created by the owner because the timeline is broken', iso(T0 - 86_400_000)), timelineEntry('failed', 'try 1: first fix → tests failed: x', iso(T0 - 3_000_000))],
 }
 /** A plain change in to do. */
-const TODO = { id: 'T-692', title: 'A plain change', details: '', files: [], status: 'todo', note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(T0 - 60_000), updated_at: iso(T0 - 60_000), origin: { by: 'lead', why: 'tidy up' } }
+const TODO = { id: 'T-692', title: 'A plain change', details: '', files: [], status: 'todo', note: '', priority: 0, after: [], attempts: 0, timeline: [], branch: null, created_at: iso(T0 - 60_000), updated_at: iso(T0 - 60_000), origin: { by: 'lead', why: 'tidy up' } }
 
 const seed = (on: Parameters<typeof seedBoard>[0], opened: string, tasks: unknown[]) => {
   seedBoard(on, { opened, view: { shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', checker: true, home_branch: 'main', test_commands: ['claude plugin test .'] } } })
@@ -114,26 +114,26 @@ for (const [name, t] of [['a bug in doing with a role, tries and a checker step'
     await ui.unmount()
   })
 
-/** A long history: 14 events, oldest first, the last one merged. */
+/** A long timeline: 14 events, oldest first, the last one merged. */
 const LONG = Array.from({ length: 14 }, (_, i) =>
-  i === 13 ? historyEntry('merged', `try ${i}: done → merged into main`, iso(T0 - 60_000)) : historyEntry(i % 3 ? 'note' : 'failed', i % 3 ? `the lead added a note: “note ${i}”` : `try ${i}: tried → tests failed: number ${i}`, iso(T0 - (20 - i) * 60_000)),
+  i === 13 ? timelineEntry('merged', `try ${i}: done → merged into main`, iso(T0 - 60_000)) : timelineEntry(i % 3 ? 'note' : 'failed', i % 3 ? `the lead added a note: “note ${i}”` : `try ${i}: tried → tests failed: number ${i}`, iso(T0 - (20 - i) * 60_000)),
 )
 
 test('VS Code\'s Timeline is one rail: each event\'s mark on it, no "│" rows, newest first; "Show all" past 10 events', async ($, on) => {
-  seed(on, 'T-691', [{ ...BUG, history: LONG }, DEP])
+  seed(on, 'T-691', [{ ...BUG, timeline: LONG }, DEP])
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  const events = [...LONG].reverse().map(historyEvent)
-  const rail = async () => kids((await ui.find({ key: 'vs-history' })) as Node)
+  const events = [...LONG].reverse().map(timelineEvent)
+  const rail = async () => kids((await ui.find({ key: 'vs-timeline' })) as Node)
   let rows = await rail()
-  expect(rows.length).toBe(HISTORY_FIRST)
-  expect(HISTORY_FIRST).toBe(10)
+  expect(rows.length).toBe(TIMELINE_FIRST)
+  expect(TIMELINE_FIRST).toBe(10)
   for (const [i, row] of rows.entries()) {
-    expect(keyOf(row)).toBe(`vs-history-${i}`)
+    expect(keyOf(row)).toBe(`vs-timeline-${i}`)
     const [left, body] = kids(row)
     expect(keyOf(left!)).toBe('rail')
     // the mark at the top of the rail, the line under it growing to the event's whole height
     const [mark, line] = kids(left)
-    expect([mark?.type, textOf(mark), mark?.props?.color]).toEqual(['Text', events[i]!.mark, HISTORY_COLOR[events[i]!.tone]])
+    expect([mark?.type, textOf(mark), mark?.props?.color]).toEqual(['Text', events[i]!.mark, TIMELINE_COLOR[events[i]!.tone]])
     expect([line?.type, line?.props?.flexGrow, line?.props?.width]).toEqual(['Box', 1, 1])
     expect(kids(line)).toEqual([])
     // the time and the words to the right, wrapped whole
@@ -142,28 +142,28 @@ test('VS Code\'s Timeline is one rail: each event\'s mark on it, no "│" rows, 
   // newest first: the merge on top
   expect(textOf(rows[0])).toContain('merged into main')
   // no "│" Text anywhere in the Timeline
-  const section = (await ui.find({ key: 'vs-sec-history' })) as Node
+  const section = (await ui.find({ key: 'vs-sec-timeline' })) as Node
   expect(elements(section).filter(n => n.type === 'Text' && /│/.test(textOf(n)))).toEqual([])
   // Show all: every event; the oldest has no line below it
-  const button = (await ui.find({ key: 'history-all' })) as Node
-  expect(button?.props?.label).toBe(`Show all (${LONG.length - HISTORY_FIRST} more)`)
-  await ui.press({ key: 'history-all' })
+  const button = (await ui.find({ key: 'timeline-all' })) as Node
+  expect(button?.props?.label).toBe(`Show all (${LONG.length - TIMELINE_FIRST} more)`)
+  await ui.press({ key: 'timeline-all' })
   rows = await rail()
   expect(rows.length).toBe(LONG.length)
   expect(textOf(rows.at(-1))).toContain('number 0')
   expect(kids(kids(rows.at(-1))[0]).length).toBe(1)
-  expect(((await ui.find({ key: 'history-all' })) as Node)?.props?.label).toBe('Show less')
+  expect(((await ui.find({ key: 'timeline-all' })) as Node)?.props?.label).toBe('Show less')
   await ui.unmount()
 })
 
 test('VS Code\'s Timeline with 10 events or fewer has no "Show all", and its oldest event no line below it', async ($, on) => {
   seed(on, 'T-691', [BUG, DEP])
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  const rows = kids((await ui.find({ key: 'vs-history' })) as Node)
+  const rows = kids((await ui.find({ key: 'vs-timeline' })) as Node)
   expect(rows.length).toBe(2)
   expect(kids(kids(rows[0])[0]).length).toBe(2)
   expect(kids(kids(rows[1])[0]).length).toBe(1)
-  expect(await ui.find({ key: 'history-all' })).toBeUndefined()
+  expect(await ui.find({ key: 'timeline-all' })).toBeUndefined()
   await ui.unmount()
 })
 

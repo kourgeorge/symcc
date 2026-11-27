@@ -9,9 +9,9 @@ import { trackSvg } from '../hooks/claude/ui/vscode-live'
 import { PANE, T0, seedBoard } from './board-fixture'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
-const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
+const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
 const merged = (id: string, title: string, minAgo: number) =>
-  task(id, title, { status: 'done', runs: [{ started: iso(minAgo + 20), ended: iso(minAgo + 2), agents: [{ kind: 'worker' as const, started: iso(minAgo + 20), ended: iso(minAgo + 2), tokens: { input: 900_000 } }] }], history: [{ kind: 'merged', at: iso(minAgo), text: 'try 1 → merged into main' }] })
+  task(id, title, { status: 'done', runs: [{ started: iso(minAgo + 20), ended: iso(minAgo + 2), agents: [{ kind: 'worker' as const, started: iso(minAgo + 20), ended: iso(minAgo + 2), tokens: { input: 900_000 } }] }], timeline: [{ kind: 'merged', at: iso(minAgo), text: 'try 1 → merged into main' }] })
 
 const TASKS = [
   task('T-760', 'A running one', { runs: [{ started: iso(4) }] }),
@@ -19,7 +19,7 @@ const TASKS = [
   merged('T-740', 'Merged a while ago', 11),
   task('T-741', 'A failed one', { status: 'failed', updated_at: iso(2), runs: [{ started: iso(10), ended: iso(2) }] }),
   task('T-742', 'A dropped one', { status: 'dropped', updated_at: iso(2), runs: [{ started: iso(10), ended: iso(2) }] }),
-  task('T-743', 'An answered question', { status: 'done', kind: 'investigation', runs: [{ started: iso(9), ended: iso(6) }], history: [] }),
+  task('T-743', 'An answered question', { status: 'done', kind: 'investigation', runs: [{ started: iso(9), ended: iso(6) }], timeline: [] }),
 ]
 const view = (tasks: unknown[]) => ({ tasks: tasks as never[], checker: true, mode: 'auto' as const, max_parallel: 3 })
 const liveView = (tasks: unknown[]) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', home_branch: 'main', test_commands: ['npm test'], driving: true, checker: true, max_parallel: 3 } })
@@ -48,10 +48,10 @@ test('T-771: a task merged 3m ago keeps a finished lane under the running ones; 
   expect(liveTaskLanes(view(TASKS), T0 + 8 * 60_000).map(l => l.id)).toEqual(['T-760'])
 })
 
-test('T-771: an answered investigation gets no finished lane, whether its board has the full history or the slim one', () => {
-  // answered 6m ago, and (full history) read by the owner 2m ago: a 'done' line
-  const answered = task('T-743', 'An answered question', { status: 'done', kind: 'investigation', runs: [{ started: iso(9), ended: iso(6) }], history: [] })
-  const read = { ...answered, history: [{ kind: 'done', at: iso(2), text: 'try 1: the owner read the answer → done (nothing merged)' }] }
+test('T-771: an answered investigation gets no finished lane, whether its board has the full timeline or the slim one', () => {
+  // answered 6m ago, and (full timeline) read by the owner 2m ago: a 'done' line
+  const answered = task('T-743', 'An answered question', { status: 'done', kind: 'investigation', runs: [{ started: iso(9), ended: iso(6) }], timeline: [] })
+  const read = { ...answered, timeline: [{ kind: 'done', at: iso(2), text: 'try 1: the owner read the answer → done (nothing merged)' }] }
   expect(liveFinishedLanes(view([answered]), T0)).toEqual([])
   expect(liveFinishedLanes(view([read]), T0)).toEqual([])
   expect(liveTaskLanes(view([task('T-760', 'A running one', { runs: [{ started: iso(4) }] }), read]), T0).map(l => l.id)).toEqual(['T-760'])

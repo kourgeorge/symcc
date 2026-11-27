@@ -95,7 +95,7 @@ for (const id of RICH_IDS) {
     expect(await ui.find({ key: 'vs-header-rule' }), id).toBeUndefined()
     // T-774: the folded Time and cost row sums the task's own tries on one line (no tries: its count, 0)
     const want = ['Details', 'What to do', 'runs' in t && t.runs.length ? `▸ Time and cost ${t.runs.length} tries · ${t.id === 'T-504' ? '25m · 4.6k tokens (0.4×' : '40m · 11.6k tokens (1×'} the usual task)` : '▸ Time and cost 0']
-    if (t.history.length) want.push('Timeline (2, newest first)')
+    if (t.timeline.length) want.push('Timeline (2, newest first)')
     for (const h of want) expect(all, `${id} ${h}`).toContain(h)
     // T-1104: one Report section naming whose report it shows (the running try has no report yet: try 1)
     if (t.attempts) expect(all.some(x => x.startsWith(t.status === 'doing' ? 'Report · try 1 · worker' : 'Report · try 2 · worker')), `${id} Report`).toBe(true)
@@ -324,11 +324,11 @@ for (const [id, want] of Object.entries(CARDS))
         const order = (top.children ?? []).map(n => (n as Node)?.props?.key)
         expect(order.indexOf(key), at).toBeGreaterThan(order.indexOf('vs-page-header'))
       }
-      // the history: newest first, a mark in its tone, the merge in the success color, the words whole
-      const first = await ui.find({ key: 'vs-history-0' })
+      // the timeline: newest first, a mark in its tone, the merge in the success color, the words whole
+      const first = await ui.find({ key: 'vs-timeline-0' })
       expect(first?.text, at).toContain('merged into main')
       expect(elements(first!.children).some(n => n.props?.color === 'success'), at).toBe(true)
-      const second = await ui.find({ key: 'vs-history-1' })
+      const second = await ui.find({ key: 'vs-timeline-1' })
       expect(elements(second!.children).some(n => n.props?.color === 'error'), at).toBe(true)
       expect(second?.text, at).toContain('two tests did not find the new section headings')
       // at most one primary button, no "…", no key hints

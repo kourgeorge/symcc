@@ -108,7 +108,7 @@ test('answering on the board closes the question and wakes the lead at once with
   const q = w.board().questions![0]!
   expect(q).toMatchObject({ answer: 'Yes', answered_by: 'board' })
   expect(openQuestions(w.board())).toEqual([])
-  // gone from the panel's list and the status line, kept in the file as history
+  // gone from the panel's list and the status line, kept in the file as timeline
   expect((w.panel.view() as { questions?: unknown[] }).questions).toBeUndefined()
   expect(w.status.at(-1) ?? '').not.toContain('question')
   // with nothing else happening on the board: one board update right away, the answer in its own block
@@ -185,7 +185,7 @@ const BAND = {
   props: { hasSurvey: false, isWorking: false, maxRows: 8, bodyColumns: 100, scroll: { offset: 0, bodyRows: 8 }, view: {} },
 } as const
 
-const task = (id: string, status: string, title: string) => ({ id, title, origin: { by: 'owner', why: 'x', at: '' }, merge_into: 'main', details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '' })
+const task = (id: string, status: string, title: string) => ({ id, title, origin: { by: 'owner', why: 'x', at: '' }, merge_into: 'main', details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, timeline: [], branch: null, created_at: '', updated_at: '' })
 
 /** Seeds the plugin's state values; once the plugin writes one, the kit's own store answers it. */
 function stateOf(on: On, seed: Record<string, unknown>) {

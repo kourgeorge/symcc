@@ -1,5 +1,5 @@
 // The lead's notes in a task's details (T-851). "change add_details" adds "Note (lead, <date>): ..." as a new paragraph at
-// the end (addDetailsText in history.ts). A worker's prompt lists them apart from the task text. Pure.
+// the end (addDetailsText in timeline.ts). A worker's prompt lists them apart from the task text. Pure.
 
 /** One note the lead added: its day ('' when it has none) and its text. */
 export type LeadNote = { day: string; text: string }

@@ -9,7 +9,7 @@ import { PANE, T0, seedBoard } from './board-fixture'
 import { vsHref } from '../hooks/claude/ui/vscode'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
-const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
+const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
 const worker = { kind: 'worker' as const, started: iso(20), ended: iso(2), tokens: { input: 300_000 } }
 const handed = { runs: [{ started: iso(20), ended: iso(2), agents: [worker] }] }
 
@@ -17,9 +17,9 @@ const INVESTIGATION = task('T-801', 'Why is the board slow', { kind: 'investigat
 const DOCS_RUNNING = task('T-802', 'Docs: write the guide', { files: ['docs/guide.md'], runs: [{ started: iso(4) }] })
 const handedDocs = { runs: [{ started: iso(20), ended: iso(2), agents: [worker], docs_only: true as const }] }
 const DOCS_HANDED = task('T-803', 'Docs: fix the readme', { files: ['README.md'], ...handedDocs, live: { checking: { step: 'prep', at: iso(0) } } })
-const REVIEW_TESTS = task('T-804', 'Needs a look', { needs_review: true, ...handed, live: { checking: { step: 'testing', at: iso(0) } }, history: [{ kind: 'stage', at: iso(1), text: 'try 1: tests started', try: 1, step: 'tests' }] })
+const REVIEW_TESTS = task('T-804', 'Needs a look', { needs_review: true, ...handed, live: { checking: { step: 'testing', at: iso(0) } }, timeline: [{ kind: 'stage', at: iso(1), text: 'try 1: tests started', try: 1, step: 'tests' }] })
 const REVIEW_WAITING = task('T-805', 'Waits for you', { needs_review: true, status: 'review', ...handed })
-const NORMAL = task('T-806', 'A normal change', { files: ['hooks/a.ts'], ...handed, live: { checking: { step: 'testing', at: iso(0) } }, history: [{ kind: 'stage', at: iso(1), text: 'try 1: tests started', try: 1, step: 'tests' }] })
+const NORMAL = task('T-806', 'A normal change', { files: ['hooks/a.ts'], ...handed, live: { checking: { step: 'testing', at: iso(0) } }, timeline: [{ kind: 'stage', at: iso(1), text: 'try 1: tests started', try: 1, step: 'tests' }] })
 const ALL = [INVESTIGATION, DOCS_RUNNING, DOCS_HANDED, REVIEW_TESTS, REVIEW_WAITING, NORMAL]
 const view = (tasks: unknown[], mode: 'auto' | 'review' = 'auto') => ({ tasks: tasks as never[], checker: true, mode, max_parallel: 3 })
 const lane = (id: string, mode: 'auto' | 'review' = 'auto') => liveLanes(view(ALL, mode), T0).find(l => l.id === id)!

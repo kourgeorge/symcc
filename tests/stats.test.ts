@@ -11,7 +11,7 @@ import { plural } from '../hooks/core/text'
 import { leadCalls, leadUsage, projectFolderName } from '../hooks/claude/lead-usage'
 import type { LeadUsage } from '../hooks/host'
 import { fakeHost } from './fake-host'
-import { hist } from './history-fixture'
+import { hist } from './timeline-fixture'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
@@ -19,7 +19,7 @@ const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
 /** A task made `ageMin` minutes ago; `tries` are [minutes, tokens] per try (the tokens as plain input), each starting at the task's creation. */
 function task(id: string, over: Partial<SymccTask> = {}, tries: [number, number?][] = [], ageMin = 60): SymccTask {
   const runs = tries.map(([min, tokens]) => ({ started: iso(ageMin), ended: iso(ageMin - min), ...(tokens !== undefined ? { agents: [{ kind: 'worker' as const, started: iso(ageMin), ended: iso(ageMin - min), tokens: { input: tokens } }] } : {}) }))
-  return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: tries.length, history: [], branch: null, created_at: iso(ageMin), updated_at: iso(0), ...(runs.length ? { runs } : {}), ...over }
+  return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: tries.length, timeline: [], branch: null, created_at: iso(ageMin), updated_at: iso(0), ...(runs.length ? { runs } : {}), ...over }
 }
 
 test('stats: averages and medians', () => {
@@ -93,21 +93,21 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
   expect(failReason('try 1: restarted: the plugin reloaded and the old worker was gone')).toBe(null)
   expect(failReason('try 2: restarted after Claude Code was reopened')).toBe(null)
   expect(failReason('try 2: worker restarted after Claude Code was reopened')).toBe(null)
-  const rep = statsReport({ tasks: [{ ...knownTasks()[0]!, history: [{ at: '2026-01-01T00:00:00Z', kind: 'restarted', text: 'try 1: restarted: the task was changed (details)', reason: 'changed' as const }] }], nowMs: NOW })
+  const rep = statsReport({ tasks: [{ ...knownTasks()[0]!, timeline: [{ at: '2026-01-01T00:00:00Z', kind: 'restarted', text: 'try 1: restarted: the task was changed (details)', reason: 'changed' as const }] }], nowMs: NOW })
   // T-806: a reason with fewer than 3 tries is folded into "other", which names it
   expect(rep.replace(/\s+/g, ' ')).toMatch(/other ▇+ 1 \(restarted by a change 1\)/)
   expect(rep).not.toMatch(/ stopped +0/)
   expect(failReason('try 1: rejected by the owner: too long')).toBe('rejected')
   expect(failReason('try 1: tests failed → merged into main (abc)')).toBe(null)
   expect(failReason('moved to the backlog')).toBe(null)
-  expect(mergedHow({ history: hist('try 1: x → merged into main (abc)') })).toBe('own')
-  expect(mergedHow({ history: hist('try 1: x → checks passed; ready for review', 'try 1: approved by the owner → merged into main (abc); approved by the owner') })).toBe('approved')
-  expect(mergedHow({ history: [] })).toBe(null)
+  expect(mergedHow({ timeline: hist('try 1: x → merged into main (abc)') })).toBe('own')
+  expect(mergedHow({ timeline: hist('try 1: x → checks passed; ready for review', 'try 1: approved by the owner → merged into main (abc); approved by the owner') })).toBe('approved')
+  expect(mergedHow({ timeline: [] })).toBe(null)
   expect(originKey({ origin: { by: 'scout', scout: 'bugs', why: '', at: '' } })).toBe('scout bugs')
   expect(originKey({})).toBe('unknown')
   const tasks = [
-    task('T-1', { history: hist('try 1: a → tests failed: x', 'try 2: b → merged into main (1)'), origin: { by: 'owner', why: 'w', at: iso(60) } }, [[10, 100], [10, 100]]),
-    task('T-2', { role: 'docs', history: hist('try 1: approved by the owner → merged into main (2); approved by the owner') }, [[5, 50]]),
+    task('T-1', { timeline: hist('try 1: a → tests failed: x', 'try 2: b → merged into main (1)'), origin: { by: 'owner', why: 'w', at: iso(60) } }, [[10, 100], [10, 100]]),
+    task('T-2', { role: 'docs', timeline: hist('try 1: approved by the owner → merged into main (2); approved by the owner') }, [[5, 50]]),
   ]
   const text = statsReport({ tasks, nowMs: NOW })
   expect(text).toMatch(/merged on its own +▇+ +1 +50%/)
@@ -119,7 +119,7 @@ test('stats: outcomes, origins and days are read from what the board keeps', () 
   expect(text).toMatch(/docs +▇+ +1 +50%  avg +50 tok/)
   expect(text).toMatch(/Today +▇+ +2 +25m/)
   // T-719: these histories carry no times, so the stage part leaves them out and says so
-  expect(text).toContain('Time per stage (0 done tasks; 2 without timed history, left out)')
+  expect(text).toContain('Time per stage (0 done tasks; 2 without timed timeline, left out)')
   expect(statsReport({ tasks, nowMs: NOW, full: true })).toContain('Stages: read from each done task')
 })
 
@@ -388,12 +388,12 @@ test('stats: a long line is wrapped under its text, within 80 columns', () => {
 /** Five tasks with known origins, roles, outcomes and days, for the bar charts. */
 function knownTasks(): SymccTask[] {
   const scout = (s: string) => ({ origin: { by: 'scout' as const, scout: s, why: '', at: '' } })
-  const merged = { history: hist('try 1: x → merged into main (1)') }
+  const merged = { timeline: hist('try 1: x → merged into main (1)') }
   return [
     task('T-1', { ...merged, origin: { by: 'lead', why: '', at: '' } }, [[10, 1000]]),
     task('T-2', { ...merged, origin: { by: 'lead', why: '', at: '' } }, [[20, 2000]]),
     task('T-3', { ...merged, origin: { by: 'owner', why: '', at: '' }, role: 'docs' }, [[30, 4000]]),
-    task('T-4', { history: hist('try 1: x → tests failed: y', 'try 2: approved by the owner → merged into main (2); approved by the owner'), ...scout('gaps-bot') }, [[40, 8000], [5, 0]]),
+    task('T-4', { timeline: hist('try 1: x → tests failed: y', 'try 2: approved by the owner → merged into main (2); approved by the owner'), ...scout('gaps-bot') }, [[40, 8000], [5, 0]]),
     task('T-5', { status: 'todo', ...scout('test-gaps'), updated_at: iso(60 * 24 * 2) }),
   ]
 }
@@ -431,7 +431,7 @@ test('stats: the summary keeps every figure of the full view; full only adds the
   const full = statsReport({ ...input, full: true })
   for (const want of ['4 done', 'to do ', 'worker time  1h 45m', 'with data    4 of 5 tasks', '1 call · 3 sessions', '5 tries', '1 run · 1m', 'per merged', '$2.25',
     'avg 26m · median 25m · total 1h 45m', 'avg 3.8k · median 3k · total 15k (in all)', 'avg 1.3 per task', '75% of done tasks (3 of 4)', 'lead time    avg 1h 00m · median 1h 00m · total 4h 00m (made to done, 4 tasks)',
-    'avg 21m · total 1h 45m', 'avg 3k in all · total 15k', 'Most time', 'input 4k · output 10 · cache write 50 · cache read 90k', 'Failed tries (1, from history)']) {
+    'avg 21m · total 1h 45m', 'avg 3k in all · total 15k', 'Most time', 'input 4k · output 10 · cache write 50 · cache read 90k', 'Failed tries (1, from timeline)']) {
     expect(short).toContain(want)
     expect(full).toContain(want)
   }
@@ -476,11 +476,11 @@ test('stats: investigations end "answered", are counted on their own, and stay o
     const t = task(id, { kind: 'investigation', role: 'researcher', ...over } as Partial<SymccTask>, tries)
     return { ...t, runs: t.runs?.map(r => ({ ...r, ended_by: 'finished' as const, ended_note: 'answered' })) }
   }
-  expect(mergedHow({ kind: 'investigation', history: hist('try 1: the owner read the answer → done (nothing merged)') })).toBe('answered')
+  expect(mergedHow({ kind: 'investigation', timeline: hist('try 1: the owner read the answer → done (nothing merged)') })).toBe('answered')
   const tasks = [
     ...knownTasks(),
-    inv('T-6', { history: hist('try 1: answered: x', 'try 1: the owner read the answer → done (nothing merged)') }, [[10, 3000], [20, 5000]]),
-    inv('T-7', { status: 'review', history: hist('try 1: answered: y') }, [[30, 2000]]),
+    inv('T-6', { timeline: hist('try 1: answered: x', 'try 1: the owner read the answer → done (nothing merged)') }, [[10, 3000], [20, 5000]]),
+    inv('T-7', { status: 'review', timeline: hist('try 1: answered: y') }, [[30, 2000]]),
   ]
   for (const full of [false, true]) {
     const text = statsReport({ tasks, nowMs: NOW, full, team: { leadProblem: 'no logs' } })
@@ -495,7 +495,7 @@ test('stats: investigations end "answered", are counted on their own, and stay o
     expect(text).toContain('Per done task (4 done tasks with data, investigations left out)')
     expect(text).toMatch(/How tasks ended \(5 done tasks\)/)
     expect(text).toMatch(/answered \(investigation\) +[▇▅▂]+ +1 +20%/)
-    expect(text).not.toContain('not clear from history')
+    expect(text).not.toContain('not clear from timeline')
     // the most tokens list is of change tasks only
     expect(text).not.toMatch(/Most tokens[^]*T-6/)
     for (const l of text.split('\n')) expect(l.length).toBeLessThanOrEqual(80)
@@ -506,9 +506,9 @@ test('stats: investigations end "answered", are counted on their own, and stay o
 })
 
 test('stats: a done errand is counted as its own outcome, not as an investigation read by you', () => {
-  const mk = (id: string, kind: string) => task(id, { kind, status: 'done', history: hist('try 1: done') } as Partial<SymccTask>, [[10, 1000]])
+  const mk = (id: string, kind: string) => task(id, { kind, status: 'done', timeline: hist('try 1: done') } as Partial<SymccTask>, [[10, 1000]])
   const tasks = [mk('T-1', 'investigation'), mk('T-2', 'errand')]
-  expect(mergedHow({ kind: 'errand', history: [] })).toBe('errand')
+  expect(mergedHow({ kind: 'errand', timeline: [] })).toBe('errand')
   const d = statsData({ tasks, nowMs: NOW, range: { kind: 'all' } })
   expect(d.invCount).toBe(1)
   expect(d.inv.readByOwner).toBe(1)
@@ -526,7 +526,7 @@ test('stats: a done errand is counted as its own outcome, not as an investigatio
 function scoutTasks(): SymccTask[] {
   const scout = (s: string) => ({ origin: { by: 'scout' as const, scout: s, why: '', at: '' } })
   return [
-    task('T-1', { ...scout('bugs'), history: hist('try 1: x → merged into main (1)') }, [[10, 4000]]),
+    task('T-1', { ...scout('bugs'), timeline: hist('try 1: x → merged into main (1)') }, [[10, 4000]]),
     task('T-2', { ...scout('bugs'), status: 'dropped' }, [[5, 500]]),
     task('T-3', { ...scout('bugs'), status: 'backlog' }),
     task('T-4', { ...scout('bugs'), status: 'todo' }),
@@ -555,7 +555,7 @@ test('stats: each scout shows its tasks merged / dropped / open, its tokens and 
 })
 
 test("stats: a scout's page Results line gives the same numbers for the last 7 days and in all (T-622)", () => {
-  const old = task('T-0', { origin: { by: 'scout', scout: 'bugs', why: '', at: '' }, history: hist('try 1: x → merged into main (1)'), updated_at: iso(60 * 24 * 30) }, [[10, 2000]], 60 * 24 * 31)
+  const old = task('T-0', { origin: { by: 'scout', scout: 'bugs', why: '', at: '' }, timeline: hist('try 1: x → merged into main (1)'), updated_at: iso(60 * 24 * 30) }, [[10, 2000]], 60 * 24 * 31)
   const tasks = [old, ...scoutTasks()]
   const u = scoutUsage()
   const week = statsReport({ tasks, nowMs: NOW, range: { kind: 'days', days: 7 }, team: { scouts: u } })
@@ -653,17 +653,17 @@ test('T-735: tries stopped on purpose (paused, dropped, backlog, turned off) are
   const stop = (min: number, note: string) => ({ started: iso(min + 5), ended: iso(min), ended_by: 'stopped' as const, ended_note: note })
   const failed = { started: iso(65), ended: iso(60), ended_by: 'finished' as const, ended_note: 'tests failed', failed_command: 'npm test', failed_tests: ['real one'] }
   const tasks = [
-    task('T-1', { status: 'todo', runs: [failed], history: hist('try 1: did it → tests failed: `npm test` (exit 1)') }),
-    task('T-2', { status: 'paused', runs: [stop(50, 'paused: run only T-1')], history: hist('try 1: stopped: paused: run only T-1') }),
-    task('T-3', { status: 'todo', runs: [stop(45, 'the owner paused the board')], history: hist('try 1: stopped: the owner paused the board') }),
+    task('T-1', { status: 'todo', runs: [failed], timeline: hist('try 1: did it → tests failed: `npm test` (exit 1)') }),
+    task('T-2', { status: 'paused', runs: [stop(50, 'paused: run only T-1')], timeline: hist('try 1: stopped: paused: run only T-1') }),
+    task('T-3', { status: 'todo', runs: [stop(45, 'the owner paused the board')], timeline: hist('try 1: stopped: the owner paused the board') }),
     task('T-4', { status: 'dropped', runs: [stop(40, 'dropped')] }),
     task('T-5', { status: 'backlog', runs: [stop(35, 'moved to the backlog')] }),
     task('T-6', { status: 'todo', runs: [stop(30, 'symcc was disabled')] }),
-    task('T-7', { status: 'todo', runs: [stop(25, 'symcc was turned off')], history: hist('try 1: stopped: symcc was turned off') }),
+    task('T-7', { status: 'todo', runs: [stop(25, 'symcc was turned off')], timeline: hist('try 1: stopped: symcc was turned off') }),
   ]
   for (const t of tasks) t.created_at = iso(day / 2)
   const text = statsReport({ tasks, nowMs: NOW, range: { kind: 'days', days: 7 }, full: true })
-  expect(text).toContain('Failed tries (1, from history)')
+  expect(text).toContain('Failed tries (1, from timeline)')
   expect(text).toContain('Each failed try (1: task · try · reason · failing command · first failing test)')
   expect(text).toMatch(/T-1 +try 1 +tests failed · `npm test` · real one/)
   for (const id of ['T-2', 'T-3', 'T-4', 'T-5', 'T-6', 'T-7']) expect(text).not.toMatch(new RegExp(`${id} +try 1`))
@@ -678,15 +678,15 @@ test('T-735: tries stopped on purpose (paused, dropped, backlog, turned off) are
   const t2 = statsReport({ tasks: other, nowMs: NOW, full: true })
   expect(t2).toMatch(/T-8 +try 1 +the worker ended without a result/)
   const flat = t2.replace(/\s+/g, ' ')
-  expect(flat).toContain('2 here, 1 under "Failed tries": this list reads each saved try\'s own end; that count reads the history lines, which also count tries rejected by you and restarts')
+  expect(flat).toContain('2 here, 1 under "Failed tries": this list reads each saved try\'s own end; that count reads the timeline lines, which also count tries rejected by you and restarts')
   expect(flat).not.toContain('older tries with no end saved')
 })
 
-test('T-735: with no failed try in the list but a failed history line, both reports still say why the counts differ', () => {
-  const tasks = [task('T-1', { status: 'todo', history: hist('try 1: did it → tests failed: `npm test` (exit 1)') })]
+test('T-735: with no failed try in the list but a failed timeline line, both reports still say why the counts differ', () => {
+  const tasks = [task('T-1', { status: 'todo', timeline: hist('try 1: did it → tests failed: `npm test` (exit 1)') })]
   const note = '0 here, 1 under "Failed tries"'
   const text = statsReport({ tasks, nowMs: NOW }).replace(/\s+/g, ' ')
-  expect(text).toContain('Failed tries (1, from history)')
+  expect(text).toContain('Failed tries (1, from timeline)')
   expect(text).toContain('Each failed try (0)')
   expect(text).toContain(note)
   const html = statsHtml(statsData({ tasks, nowMs: NOW }), 'p').replace(/\s+/g, ' ')
@@ -698,15 +698,15 @@ test('T-735: with no failed try in the list but a failed history line, both repo
 test('T-736: checker send-backs, time-outs, no result, no change and not merged have their own reasons, so both failed-tries counts agree', () => {
   const run = (by: 'finished' | 'stopped' | 'timed out', note: string) => [{ started: iso(30), ended: iso(20), ended_by: by, ended_note: note }]
   const tasks = [
-    task('T-1', { status: 'todo', runs: run('finished', 'checker found problems'), history: hist('try 1: checker found problems: a → b is wrong', 'try 1: did it → the checker found problems: a → b is wrong') }),
-    task('T-2', { status: 'failed', runs: run('timed out', 'ran over 30 min'), history: hist('try 1: out of time; handed back: half (its work so far is kept in its folder and branch)') }),
-    task('T-3', { status: 'failed', runs: run('stopped', 'the worker ended without a result'), history: hist('try 1: the worker ended without a result') }),
-    task('T-4', { status: 'failed', runs: run('finished', 'no change'), history: hist('try 1: nothing to do → the worker made no change') }),
-    task('T-5', { status: 'failed', runs: run('finished', 'not merged'), history: hist('try 1: x → not merged: something else') }),
-    task('T-6', { status: 'todo', runs: run('stopped', 'its checking and merging ran over 15 min and was stopped'), history: hist('try 1: its checking and merging ran over 15 min and was stopped; a new try will look at it (1 of 2)') }),
-    task('T-7', { status: 'failed', runs: run('stopped', "the worker's turn ended on an error"), history: hist("try 1: the worker's turn ended on an error (retries used up or the context limit); nothing was checked or merged") }),
+    task('T-1', { status: 'todo', runs: run('finished', 'checker found problems'), timeline: hist('try 1: checker found problems: a → b is wrong', 'try 1: did it → the checker found problems: a → b is wrong') }),
+    task('T-2', { status: 'failed', runs: run('timed out', 'ran over 30 min'), timeline: hist('try 1: out of time; handed back: half (its work so far is kept in its folder and branch)') }),
+    task('T-3', { status: 'failed', runs: run('stopped', 'the worker ended without a result'), timeline: hist('try 1: the worker ended without a result') }),
+    task('T-4', { status: 'failed', runs: run('finished', 'no change'), timeline: hist('try 1: nothing to do → the worker made no change') }),
+    task('T-5', { status: 'failed', runs: run('finished', 'not merged'), timeline: hist('try 1: x → not merged: something else') }),
+    task('T-6', { status: 'todo', runs: run('stopped', 'its checking and merging ran over 15 min and was stopped'), timeline: hist('try 1: its checking and merging ran over 15 min and was stopped; a new try will look at it (1 of 2)') }),
+    task('T-7', { status: 'failed', runs: run('stopped', "the worker's turn ended on an error"), timeline: hist("try 1: the worker's turn ended on an error (retries used up or the context limit); nothing was checked or merged") }),
     // an approve that could not merge is not a try of its own
-    task('T-8', { status: 'review', history: hist('try 1: approved by the owner → not merged: symcc was disabled while it was being merged; it stays in review') }),
+    task('T-8', { status: 'review', timeline: hist('try 1: approved by the owner → not merged: symcc was disabled while it was being merged; it stays in review') }),
   ]
   expect(failReason('try 1: did it → the checker found problems: x')).toBe('checker')
   expect(failReason('try 1: checker found problems: x')).toBe(null)
@@ -724,24 +724,24 @@ test('T-736: checker send-backs, time-outs, no result, no change and not merged 
   // an arrow inside the checker's report never moves the result
   expect(failReason('try 1: did it → the checker found problems: running the suite → tests failed on b.test.ts')).toBe('checker')
   expect(failReason('try 1: did it → the checker found problems: step a → not merged when x')).toBe('checker')
-  const paused = task('T-9', { status: 'todo', runs: run('stopped', 'the board was paused while its work was being checked'), history: hist('try 1: did it → not merged: the task was stopped because the board was paused while it was being checked (not used: the board was paused)') })
+  const paused = task('T-9', { status: 'todo', runs: run('stopped', 'the board was paused while its work was being checked'), timeline: hist('try 1: did it → not merged: the task was stopped because the board was paused while it was being checked (not used: the board was paused)') })
   const pd = statsData({ tasks: [paused], nowMs: NOW })
   expect([pd.failedTries.length, pd.failedTotal]).toEqual([0, 0])
   // checker round 3: a check that ends after its try was stopped ("not used: …") is the same try, counted once by its "stopped:" line
   expect(failReason('try 1: did it → not merged: the task was stopped because the command line stopped waiting while it was being checked (not used: the command line stopped waiting)')).toBe(null)
-  const quit = task('T-10', { status: 'todo', runs: run('stopped', 'the command line stopped waiting while its work was being checked'), history: hist('try 1: stopped: the command line stopped waiting while its work was being checked; nothing merged, its files are kept', 'try 1: did it → not merged: the task was stopped because the command line stopped waiting while it was being checked (not used: the command line stopped waiting)') })
+  const quit = task('T-10', { status: 'todo', runs: run('stopped', 'the command line stopped waiting while its work was being checked'), timeline: hist('try 1: stopped: the command line stopped waiting while its work was being checked; nothing merged, its files are kept', 'try 1: did it → not merged: the task was stopped because the command line stopped waiting while it was being checked (not used: the command line stopped waiting)') })
   const qd = statsData({ tasks: [quit], nowMs: NOW })
   expect([qd.failedTries.length, qd.failedTotal]).toEqual([1, 1])
   // checker round 4: a try that only left out secret-looking files waits for the owner; one whose owner's files can't be updated failed
-  const secret = task('T-11', { status: 'todo', runs: [{ started: iso(30), ended: iso(20), ended_by: 'asked', ended_note: 'only secret-looking files' }], history: hist('try 1: did it → not merged: left out .env: the name looks like a secret, so it was not committed or merged (T-11/), and the task changed nothing else') })
+  const secret = task('T-11', { status: 'todo', runs: [{ started: iso(30), ended: iso(20), ended_by: 'asked', ended_note: 'only secret-looking files' }], timeline: hist('try 1: did it → not merged: left out .env: the name looks like a secret, so it was not committed or merged (T-11/), and the task changed nothing else') })
   const sd = statsData({ tasks: [secret], nowMs: NOW })
   expect([sd.failedTries.length, sd.failedTotal]).toEqual([0, 0])
-  const blocked = task('T-12', { status: 'failed', runs: run('finished', 'not merged'), history: hist("try 1: did it → your files on main can't be updated (x); fix that, then symcc retry T-12") })
+  const blocked = task('T-12', { status: 'failed', runs: run('finished', 'not merged'), timeline: hist("try 1: did it → your files on main can't be updated (x); fix that, then symcc retry T-12") })
   expect(failReason("try 1: did it → your files on main can't be updated (x); fix that, then symcc retry T-12")).toBe('notmerged')
   const bd = statsData({ tasks: [blocked], nowMs: NOW })
   expect([bd.failedTries.length, bd.failedTotal]).toEqual([1, 1])
   const text = statsReport({ tasks, nowMs: NOW, full: true })
-  expect(text).toContain('Failed tries (7, from history)')
+  expect(text).toContain('Failed tries (7, from timeline)')
   // T-806: every reason has fewer than 3 tries here, so all fold into "other" (7), named after it
   expect(text).toMatch(/other +▇+ +7/)
   expect(text.replace(/\s+/g, ' ')).toContain('(ran out of time 2, sent back by checker 1, no result 1, no change 1, not merged 1)')
@@ -750,7 +750,7 @@ test('T-736: checker send-backs, time-outs, no result, no change and not merged 
   const d = statsData({ tasks, nowMs: NOW })
   expect([d.failedTries.length, d.failedTotal]).toEqual([7, 7])
   const html = statsHtml(d, 'p')
-  expect(html).toContain('Failed tries by reason (7, from history)')
+  expect(html).toContain('Failed tries by reason (7, from timeline)')
   expect(html).toContain('aria-label="other: 7"')
   expect(html).toContain('ran out of time 2, sent back by checker 1')
   expect(html).not.toContain('under &quot;Failed tries&quot;')
@@ -772,13 +772,13 @@ test('T-721: a try waiting for the owner\'s files is not a failed try, and with 
 
 test('T-806: "why tries were sent back" lists the biggest count first and folds reasons with fewer than 3 tries into "other"', () => {
   const line = (reason: string, n: number) => Array.from({ length: n }, (_, i) => ({ at: iso(50 - i), kind: 'failed', text: `try ${i + 1}: x → y`, try: i + 1, result: 'y', reason }))
-  const history = [...line('tests', 4), ...line('clash', 5), ...line('scope', 2), ...line('nochange', 1), ...line('other', 1)] as unknown as SymccTask['history']
-  const d = statsData({ tasks: [task('T-1', { status: 'failed', history })], nowMs: NOW })
+  const timeline = [...line('tests', 4), ...line('clash', 5), ...line('scope', 2), ...line('nochange', 1), ...line('other', 1)] as unknown as SymccTask['timeline']
+  const d = statsData({ tasks: [task('T-1', { status: 'failed', timeline })], nowMs: NOW })
   // 5 clash, 4 tests; scope 2 + no change 1 + other 1 fold into "other" (4), its folded names after it, biggest first
   expect(d.failed.map(f => [f.key, f.n])).toEqual([['clash', 5], ['tests', 4], ['other', 4]])
   expect(d.failed.at(-1)!.folded).toBe('files out of scope 2, no change 1')
   expect(d.failedTotal).toBe(13)
-  const text = statsReport({ tasks: [task('T-1', { status: 'failed', history })], nowMs: NOW })
+  const text = statsReport({ tasks: [task('T-1', { status: 'failed', timeline })], nowMs: NOW })
   const at = (label: string) => text.indexOf(`  ${label} `)
   expect(at('clash with main')).toBeGreaterThan(0)
   expect(at('clash with main')).toBeLessThan(at('tests failed'))

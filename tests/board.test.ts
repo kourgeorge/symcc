@@ -605,7 +605,7 @@ test('the board list shows "→ branch" only for a task that merges into another
 })
 
 test("a task waiting only for the owner's files: its row and keys say to commit or stash them; a question is unchanged", () => {
-  const base: SymccTask = { id: 'T-2', title: 'x', details: '', files: [], status: 'waiting', note: 'waiting for your files on dev: a.ts; commit or stash them', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: '', updated_at: '' }
+  const base: SymccTask = { id: 'T-2', title: 'x', details: '', files: [], status: 'waiting', note: 'waiting for your files on dev: a.ts; commit or stash them', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: '', updated_at: '' }
   const files = { ...base, live: { merge_wait: { dirty: ['a.ts'], untracked: [], ignored: [] } }, merge_into: 'dev' } as SymccTask
   expect(fileWaitText(files)).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
   expect(rowExtra(files, [files])).toBe('waiting for your files on dev: a.ts; commit or stash them, it merges on its own')
@@ -627,7 +627,7 @@ test("a task waiting only for the owner's files: its row and keys say to commit 
 })
 
 test('an old board: each task without its own branch gets the old target_branch, and target_branch is dropped', () => {
-  const task = (id: string, extra: object = {}) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T, origin: { by: 'lead', why: 'x', at: T }, ...extra })
+  const task = (id: string, extra: object = {}) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', priority: 0, after: [], attempts: 0, timeline: [], branch: null, created_at: T, updated_at: T, origin: { by: 'lead', why: 'x', at: T }, ...extra })
   const old = { version: 1, next_id: 3, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, tasks: [task('T-1'), task('T-2', { merge_into: 'feature-x' })] }
   const r = readOld(JSON.stringify(old))
   expect(r.board.tasks.map(t => t.merge_into)).toEqual(['main', 'feature-x'])
@@ -644,7 +644,7 @@ test('an old board: each task without its own branch gets the old target_branch,
 // ---------------- today in full, older days folded ----------------
 
 const at = (id: string, status: string, updated: string, created = updated) =>
-  ({ id, title: id, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: created, updated_at: updated }) as SymccTask
+  ({ id, title: id, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, timeline: [], branch: null, created_at: created, updated_at: updated }) as SymccTask
 const NOW = Date.parse('2026-11-11T12:00:00Z')
 
 test('open tasks from old days stay on top, today in full, older days grouped newest day first', () => {
@@ -912,7 +912,7 @@ test('T-748: the status line says the mode, who drives, the branch, the next sco
   // T-792: today's noon, so the runs 30 minutes back stay inside today whatever the real time
   const now = todayAt(12)
   const ago = (min: number) => new Date(now - min * 60_000).toISOString()
-  const merged = (id: string) => ({ id, status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(5), cost: 150.4 }] }] })
+  const merged = (id: string) => ({ id, status: 'done' as const, timeline: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(5), cost: 150.4 }] }] })
   const tasks = [merged('T-1'), merged('T-2'), { id: 'T-740', status: 'doing' as const, attempts: 3, runs: [{ started: ago(4), agents: [{ kind: 'worker' as const, started: ago(4), cost: 11.2 }] }] }, { id: 'T-743', status: 'todo' as const }]
   const scouts = [{ name: 'bugs', running: false, next_run: new Date(now + 38.2 * 60_000).toISOString() }, { name: 'docs', running: false, next_run: new Date(now + 90 * 60_000).toISOString() }]
   const b = { tasks, scouts, home_branch: 'main', mode: 'auto' as const }
@@ -951,7 +951,7 @@ test('T-748: on a narrow line the status line drops parts from the end, cleanly;
   // T-792: today's noon, so the merge and the run (30 minutes back) stay inside today whatever the real time
   const now = todayAt(12)
   const ago = (min: number) => new Date(now - min * 60_000).toISOString()
-  const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(5), cost: 312 }] }] }]
+  const tasks = [{ id: 'T-1', status: 'done' as const, timeline: [{ kind: 'merged', at: ago(1), text: 'merged' }], runs: [{ started: ago(30), ended: ago(5), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(5), cost: 312 }] }] }]
   const b = { tasks, scouts: [{ name: 'bugs', running: false, next_run: new Date(now + 38.2 * 60_000).toISOString() }], home_branch: 'main' }
   const full = '⏵ auto merge · drives here · main · next scout bugs in 38m · today ✓ 1 · $312'
   expect(statusLine(b, true, { nowMs: now })).toBe(full)
@@ -970,7 +970,7 @@ test('T-792: the status line counts today\'s merge and cost just after midnight 
     const now = todayAt(h, m)
     // the run and the merge between local midnight and now: always today
     const at = (share: number) => new Date(inToday(now, share)).toISOString()
-    const tasks = [{ id: 'T-1', status: 'done' as const, history: [{ kind: 'merged', at: at(0.9), text: 'merged' }], runs: [{ started: at(0.1), ended: at(0.5), agents: [{ kind: 'worker' as const, started: at(0.1), ended: at(0.5), cost: 312 }] }] }]
+    const tasks = [{ id: 'T-1', status: 'done' as const, timeline: [{ kind: 'merged', at: at(0.9), text: 'merged' }], runs: [{ started: at(0.1), ended: at(0.5), agents: [{ kind: 'worker' as const, started: at(0.1), ended: at(0.5), cost: 312 }] }] }]
     expect([`${h}:${m}`, statusLine({ tasks, home_branch: 'main' }, true, { nowMs: now })]).toEqual([`${h}:${m}`, '⏵ auto merge · drives here · main · today ✓ 1 · $312'])
   }
 })
@@ -1052,15 +1052,15 @@ test('add and change set needs_review on a task', () => {
   expect(b3.tasks[0]!.needs_review).toBe(undefined)
 })
 
-test('reject sends a task in review back to "todo" with the reason in its history', () => {
+test('reject sends a task in review back to "todo" with the reason in its timeline', () => {
   let [b, t] = addTask(emptyBoard(), { origin: W, title: 'A' }, T)
-  b = patchTask(b, t.id, { status: 'review', attempts: 1, test_tries: 1, history: hist('try 1: did it → checks passed') }, T)
+  b = patchTask(b, t.id, { status: 'review', attempts: 1, test_tries: 1, timeline: hist('try 1: did it → checks passed') }, T)
   const r = rejectTask(b, 't-1', 'the button should be blue', '2026-11-09T01:00:00.000Z')
   const x = r.tasks[0]!
   expect(x.status).toBe('todo')
   expect(x.note).toContain('the button should be blue')
-  expect(x.history[x.history.length - 1]!.text).toContain('rejected by the owner: the button should be blue')
-  expect(x.history.length).toBe(2)
+  expect(x.timeline[x.timeline.length - 1]!.text).toContain('rejected by the owner: the button should be blue')
+  expect(x.timeline.length).toBe(2)
   expect(x.test_tries).toBe(0)
   expect(ready(r).map(y => y.id)).toEqual([t.id])
   const c = rejectTask(patchTask(b, t.id, { test_tries: 2, merge_main: true }, T), t.id, 'try again', T).tasks[0]!
@@ -1447,17 +1447,17 @@ test('a backlog task never starts until it is moved to todo', async () => {
   expect(OPEN).not.toContain('backlog')
   // modes do not change it
   for (const m of ['paused', 'review', 'auto'] as const) expect(ready(setMode(b, m)).map(t => t.id)).toEqual([])
-  // promote: backlog -> todo, with a history line
+  // promote: backlog -> todo, with a timeline line
   b = promoteTask(b, idea.id, T)
   const p = b.tasks.find(t => t.id === idea.id)!
   expect(p.status).toBe('todo')
-  expect(p.history[p.history.length - 1]!.text).toBe('moved from the backlog to todo')
+  expect(p.timeline[p.timeline.length - 1]!.text).toBe('moved from the backlog to todo')
   expect(ready(b).map(t => t.id)).toEqual([idea.id])
   expect(ready(b).map(t => t.id)).not.toContain(later.id)
   expect(() => promoteTask(b, idea.id, T)).toThrow()
 })
 
-test('stash: a todo, paused or failed task goes to the backlog with a history line', async () => {
+test('stash: a todo, paused or failed task goes to the backlog with a timeline line', async () => {
   let b = emptyBoard()
   const [b1, a] = addTask(b, { origin: W, title: 'A' }, T)
   const [b2, c] = addTask(b1, { origin: W, title: 'C' }, T)
@@ -1466,11 +1466,11 @@ test('stash: a todo, paused or failed task goes to the backlog with a history li
   b = stashTask(b, a.id, T, 'not clear yet')
   const x = b.tasks.find(t => t.id === a.id)!
   expect(x.status).toBe('backlog')
-  expect(x.history[x.history.length - 1]!.text).toBe('moved to the backlog (was todo): not clear yet')
+  expect(x.timeline[x.timeline.length - 1]!.text).toBe('moved to the backlog (was todo): not clear yet')
   expect(ready(b).map(t => t.id)).toEqual([])
   b = stashTask(stashTask(b, c.id, T), d.id, T)
   expect(b.tasks.every(t => t.status === 'backlog')).toBe(true)
-  expect(b.tasks.find(t => t.id === d.id)!.history.at(-1)?.text).toBe('moved to the backlog (was failed)')
+  expect(b.tasks.find(t => t.id === d.id)!.timeline.at(-1)?.text).toBe('moved to the backlog (was failed)')
   b = patchTask(b, a.id, { status: 'done' }, T)
   expect(() => stashTask(b, a.id, T)).toThrow()
 })
@@ -1925,7 +1925,7 @@ test('the worker prompt for a role with web tools has the web safety line; other
 })
 
 test('a board with old roles is migrated once: tests becomes tester, backend and frontend general', () => {
-  const task = (id: string, role?: string) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', priority: 1, after: [], attempts: 0, history: [], branch: null, origin: W, created_at: T, updated_at: T, ...(role ? { role } : {}) })
+  const task = (id: string, role?: string) => ({ id, title: id, details: '', files: [], status: 'todo', note: '', priority: 1, after: [], attempts: 0, timeline: [], branch: null, origin: W, created_at: T, updated_at: T, ...(role ? { role } : {}) })
   const r = readOld(JSON.stringify({ version: 1, next_id: 6, tasks: [task('T-1', 'tests'), task('T-2', 'backend'), task('T-3', 'Frontend'), task('T-4', 'docs'), task('T-5')] }))
   expect(r.board.tasks.map(t => t.role)).toEqual(['tester', 'general', 'general', 'docs', undefined])
   // saved and upgraded again, nothing more changes
@@ -2155,13 +2155,13 @@ test('runMs: bad times or an end before the start give 0', () => {
   expect(runMs({ started: '2026-11-09T00:00:00.000Z' }, NaN)).toBe(0)
 })
 
-test('a new task keeps where it came from, and its first history line says who and why', () => {
+test('a new task keeps where it came from, and its first timeline line says who and why', () => {
   const [b1, a] = addTask(emptyBoard(), { title: 'Search', origin: { by: 'owner', request: 'add a search command that finds tasks by word', why: 'the owner asked for search' } }, T)
   expect(a.origin).toEqual({ by: 'owner', request: 'add a search command that finds tasks by word', why: 'the owner asked for search', at: T })
-  expect(a.history[0]!.text).toBe('created by the owner because the owner asked for search')
+  expect(a.timeline[0]!.text).toBe('created by the owner because the owner asked for search')
   const [b2, s] = addTask(b1, { title: 'Fix crash', origin: { by: 'scout', scout: 'bugs', why: 'the bugs scout found a crash', evidence: 'scout bugs report at 2026-11-09 00:00 UTC' } }, T)
   expect(s.origin).toMatchObject({ by: 'scout', scout: 'bugs', evidence: 'scout bugs report at 2026-11-09 00:00 UTC' })
-  expect(s.history[0]!.text).toBe('created by scout bugs because the bugs scout found a crash')
+  expect(s.timeline[0]!.text).toBe('created by scout bugs because the bugs scout found a crash')
   const [b3, w] = addTask(b2, { title: 'Half of search', origin: { by: 'lead', task: 't1', how: 'split', why: 'search was too big' } }, T)
   expect(w.origin).toMatchObject({ by: 'lead', task: 'T-1', how: 'split' })
   // it survives a save and load, and a change keeps it even when a patch tries to replace it
@@ -2169,7 +2169,7 @@ test('a new task keeps where it came from, and its first history line says who a
   expect(back.tasks[0]!.origin).toEqual(a.origin)
   const changed = patchTask(back, a.id, { title: 'Search v2', origin: { by: 'lead', why: 'other', at: T } }, '2026-11-10T00:00:00.000Z')
   expect(changed.tasks[0]!.origin).toEqual(a.origin)
-  expect(changed.tasks[0]!.history[0]!.text).toBe('created by the owner because the owner asked for search')
+  expect(changed.tasks[0]!.timeline[0]!.text).toBe('created by the owner because the owner asked for search')
 })
 
 test('a task without a why, or with a wrong origin, is refused with a clear error', () => {
@@ -2190,7 +2190,7 @@ test('a task without a why, or with a wrong origin, is refused with a clear erro
 
 test('T-348: a task with the removed stage engine\'s stage, stages and backs loads without them, once (board.json and archive.json)', () => {
   const origin = { by: 'lead', why: 'w', at: T }
-  const base = { title: 'A', details: 'A', files: [], note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: T, updated_at: T, merge_into: 'main', origin }
+  const base = { title: 'A', details: 'A', files: [], note: '', priority: 1, after: [], attempts: 1, timeline: [], branch: null, created_at: T, updated_at: T, merge_into: 'main', origin }
   const staged = { stage: 'code', stages: [{ name: 'code', result: 'passed', at: T, try: 1 }], backs: { tests: 1 }, runs: [{ started: T, ended: T, stage: 'code' }] }
   const board = { version: 1, next_id: 3, mode: 'auto', test_commands: [], max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
     { ...base, id: 'T-1', status: 'todo', ...staged },
@@ -2213,7 +2213,7 @@ test('T-348: a task with the removed stage engine\'s stage, stages and backs loa
 
 test('a board whose tasks have no origin is migrated once: the lead made them before origins were kept', () => {
   const old = { version: 1, next_id: 2, mode: 'auto', test_commands: [], target_branch: 'main', max_parallel: 3, max_minutes: 45, auto_retries: 2, tasks: [
-    { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', priority: 1, after: [], attempts: 0, history: [], branch: null, created_at: T, updated_at: T },
+    { id: 'T-1', title: 'A', details: 'A', files: [], status: 'todo', note: '', priority: 1, after: [], attempts: 0, timeline: [], branch: null, created_at: T, updated_at: T },
   ] }
   const r = readOld(JSON.stringify(old))
   expect(r.board.tasks[0]!.origin).toEqual({ by: 'lead', why: 'made before origins were kept', at: T })
@@ -2227,7 +2227,7 @@ test('a board whose tasks have no origin is migrated once: the lead made them be
 test('the "from:" text is short: the owner\'s words, the scout, or the task it came from', () => {
   const o = (x: Record<string, unknown>) => ({ origin: makeOrigin(x, T) })
   expect(fromText(o({ by: 'owner', request: 'add a search command', why: 'w' }))).toBe('♟ from: owner — “add a search command”')
-  expect(fromText(o({ by: 'owner', request: 'add a search command that also looks in the details of every task and the history', why: 'w' }))).toBe('♟ from: owner — “add a search command that also looks in the details of ever…”')
+  expect(fromText(o({ by: 'owner', request: 'add a search command that also looks in the details of every task and the timeline', why: 'w' }))).toBe('♟ from: owner — “add a search command that also looks in the details of ever…”')
   expect(fromText(o({ by: 'owner', why: 'w' }))).toBe('♟ from: owner')
   expect(fromText(o({ by: 'scout', scout: 'bugs', why: 'w' }))).toBe('⌕ from: scout bugs')
   const b = addTask(emptyBoard(), { title: 'big', origin: W }, T)[0]
@@ -2453,7 +2453,7 @@ test('run.commits and merged are saved on the task and kept through a board save
 })
 
 test('broken commit fields are dropped, not fatal', () => {
-  const old = { version: 1, next_id: 2, tasks: [{ id: 'T-1', title: 'old', details: '', files: [], status: 'done', note: 'merged into main (47d4b71c)', priority: 1, after: [], attempts: 1, history: [], runs: [{ started: T, ended: T }], branch: null, created_at: T, updated_at: T }] }
+  const old = { version: 1, next_id: 2, tasks: [{ id: 'T-1', title: 'old', details: '', files: [], status: 'done', note: 'merged into main (47d4b71c)', priority: 1, after: [], attempts: 1, timeline: [], runs: [{ started: T, ended: T }], branch: null, created_at: T, updated_at: T }] }
   const t = parseBoard(JSON.stringify(old)).tasks[0]!
   expect(t.runs).toEqual([{ started: T, ended: T }])
   expect('merged' in t).toBe(false)
@@ -2543,8 +2543,8 @@ test('a task found already merged names its commit by the short sha', () => {
   const [, t] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
   const done = mergedDone(t, SHA1, 'sent back to todo', T)
   expect(done.note).toBe('merged into main (aaaaaaaa)')
-  expect(done.history!.at(-1)?.text).toBe(alreadyMergedLine(t, SHA1, 'sent back to todo'))
-  expect(done.history!.at(-1)?.text).toContain('(aaaaaaaa) when it was about to be sent back to todo, so it is done')
+  expect(done.timeline!.at(-1)?.text).toBe(alreadyMergedLine(t, SHA1, 'sent back to todo'))
+  expect(done.timeline!.at(-1)?.text).toContain('(aaaaaaaa) when it was about to be sent back to todo, so it is done')
 })
 
 import { symccOn, setEnabled, offAnswer, offStatusLine, offStatusParts } from '../hooks/board'
@@ -3199,11 +3199,11 @@ test('inside a readable board.json, a bad task entry is skipped and counted; the
   expect(r.board.next_id).toBe(3)
   // a task missing a list field gets an empty one, so the code that reads it never breaks
   const t = readBoard(JSON.stringify({ tasks: [{ id: 'T-4', status: 'todo', title: 'x' }] })).board
-  expect(t.tasks[0]!.history).toEqual([])
+  expect(t.tasks[0]!.timeline).toEqual([])
   expect(t.next_id).toBe(5)
 })
 
-test('readBoard drops bad entries inside files, after, history and runs, and names each fix', () => {
+test('readBoard drops bad entries inside files, after, timeline and runs, and names each fix', () => {
   const base = { id: 'T-1', status: 'doing', title: 'x' }
   // (1) files: only non-empty strings are kept, and the scope check works again
   const r1 = readBoard(JSON.stringify({ tasks: [{ ...base, files: ['src/a.ts', 3, null] }] }))
@@ -3226,13 +3226,13 @@ test('readBoard drops bad entries inside files, after, history and runs, and nam
   const r2b = readBoard(JSON.stringify({ tasks: [{ ...base, runs: [{ started: T }, 'x', 4] }] }))
   expect(r2b.board.tasks[0]!.runs).toHaveLength(1)
   expect(r2b.fixed).toContain('T-1: 2 bad tries dropped')
-  // (3) after keeps only task ids (normalised), history only records (an old string line is dropped; migrate-data converts it)
-  const r3 = readBoard(JSON.stringify({ tasks: [{ ...base, after: [5, null, 'T-2'], history: [7, { kind: 'note', text: 'made' }] }] }))
+  // (3) after keeps only task ids (normalised), timeline only records (an old string line is dropped; migrate-data converts it)
+  const r3 = readBoard(JSON.stringify({ tasks: [{ ...base, after: [5, null, 'T-2'], timeline: [7, { kind: 'note', text: 'made' }] }] }))
   expect(r3.board.tasks[0]!.after).toEqual(['T-2'])
-  expect(r3.board.tasks[0]!.history).toEqual([{ kind: 'note', text: 'made' }])
-  expect(r3.fixed).toEqual(['T-1: 2 bad after entries dropped', 'T-1: 1 bad history entry dropped'])
+  expect(r3.board.tasks[0]!.timeline).toEqual([{ kind: 'note', text: 'made' }])
+  expect(r3.fixed).toEqual(['T-1: 2 bad after entries dropped', 'T-1: 1 bad timeline entry dropped'])
   // a clean task reports nothing
-  expect(readBoard(JSON.stringify({ tasks: [{ ...base, files: ['a'], after: ['t2'], history: [{ kind: 'note', text: 'h' }], runs: [] }] })).fixed).toEqual([])
+  expect(readBoard(JSON.stringify({ tasks: [{ ...base, files: ['a'], after: ['t2'], timeline: [{ kind: 'note', text: 'h' }], runs: [] }] })).fixed).toEqual([])
 })
 
 test('fixText lists dropped task entries as they are and keeps "set to the default" for settings only', () => {
@@ -3472,7 +3472,7 @@ test('archive: the file is read safely; a broken one is reported, and an archive
   const back = bringBack(y, a.tasks[1]!, T)
   const t = find(back, 'T-2')!
   expect(t.status).toBe('todo')
-  expect(t.history.at(-1)?.text).toBe('brought back from the archive (was dropped)')
+  expect(t.timeline.at(-1)?.text).toBe('brought back from the archive (was dropped)')
   expect(back.archived).toEqual({ done: 1, dropped: 0, tries: 1, ms: 60_000, tokens: { input: 1000 } })
   expect(() => bringBack(y, a.tasks[0]!, T)).toThrow(/done/)
 })
@@ -3489,7 +3489,7 @@ test('archive_days is a setting like the others: shown, set and cut to its limit
   expect(settingsText(emptyBoard())).toMatch(/archive_days\s+14/)
 })
 
-// ---------------- history lines for restarts and answers ----------------
+// ---------------- timeline lines for restarts and answers ----------------
 
 import { changeLines, changedFields, filesWidenedLine, ownerAnsweredLine, stoppedLine, ANSWER_LINE_CHARS } from '../hooks/board'
 
@@ -3516,18 +3516,18 @@ test('addDetailsText keeps the old details and adds the note as a new paragraph;
   expect(detailsBothRefusal({ details: 'a' })).toBe(null)
 })
 
-test('backToTodo of a running task says in its history why it restarts', async () => {
+test('backToTodo of a running task says in its timeline why it restarts', async () => {
   const [b] = addTask(emptyBoard(), { origin: W, title: 'x' }, T)
   const t = { ...b.tasks[0]!, status: 'doing' as const, attempts: 1 }
-  expect(backToTodo(t, 'restarted: the plugin reloaded and the old worker was gone', T).history.at(-1)?.text).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
-  expect(backToTodo({ ...t, status: 'failed' }, 'x', T).history).toEqual(t.history)
+  expect(backToTodo(t, 'restarted: the plugin reloaded and the old worker was gone', T).timeline.at(-1)?.text).toBe('try 1: restarted: the plugin reloaded and the old worker was gone')
+  expect(backToTodo({ ...t, status: 'failed' }, 'x', T).timeline).toEqual(t.timeline)
 })
 
 // ---------------- saved reports and clean cuts ----------------
 
 import { cutLine, reportText, reportFile, taskReports, researchNotes, reportPreview, REPORT_MAX_CHARS } from '../hooks/board'
 import { fakeHost } from './fake-host'
-import { hist } from './history-fixture'
+import { hist } from './timeline-fixture'
 const CHECKER_NOTE = STEP_NOTE.checker
 
 test('cutLine keeps short text as it is and cuts long text at a word or sentence end, with "…"', () => {

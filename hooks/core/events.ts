@@ -1,7 +1,7 @@
 // Task events (T-616): every change of a task's state, stage or wait, worked out by comparing taskPhase before and
 // after a board write. Pure: the app side (hooks/app/events.ts) emits them to its listeners on every board write.
 import type { Board, BoardTask } from './board-file'
-import { type HistoryAdd, withHistory } from './history'
+import { type TimelineAdd, withTimeline } from './timeline'
 import { type PhaseStage, taskPhase } from './phase'
 import { tryLabel } from './roles'
 
@@ -56,22 +56,22 @@ export function boardEvents(before: Pick<Board, 'tasks'>, after: Pick<Board, 'ta
   return out
 }
 
-/** The history words of each check stage a task goes into (the worker's own stage gets no line). */
+/** The timeline words of each check stage a task goes into (the worker's own stage gets no line). */
 export const STAGE_LINE: Partial<Record<PhaseStage, string>> = { prep: 'prep started', checker: 'checker started', queue: 'waits in the merge queue', test: 'tests started', merge: 'merge started' }
 
-/** T-806: the history step of each check stage a task goes into. */
+/** T-806: the timeline step of each check stage a task goes into. */
 export const STAGE_STEP: Partial<Record<PhaseStage, 'prep' | 'checker' | 'queue' | 'tests' | 'merge'>> = { prep: 'prep', checker: 'checker', queue: 'queue', test: 'tests', merge: 'merge' }
 
-/** "try 1: checker started", "try 1: waits in the merge queue (place 2)": the history line of a stage event, or null for one that gets none. */
+/** "try 1: checker started", "try 1: waits in the merge queue (place 2)": the timeline line of a stage event, or null for one that gets none. */
 export function stageLine(e: TaskEvent, t: Pick<BoardTask, 'role'>): string | null {
   const words = e.kind === 'stage' && e.to ? STAGE_LINE[e.to as PhaseStage] : undefined
   if (!words) return null
   return `${tryLabel({ role: t.role, attempts: e.try })}: ${words}${e.place ? ` (place ${e.place})` : ''}`
 }
 
-/** Board `b` with a 'stage' history entry on its task for each stage event in `events` (see stageLine), at the event's time. */
-export function withStageHistory(b: Board, events: readonly TaskEvent[]): Board {
-  const lines = new Map<string, [string, HistoryAdd][]>()
+/** Board `b` with a 'stage' timeline entry on its task for each stage event in `events` (see stageLine), at the event's time. */
+export function withStageTimeline(b: Board, events: readonly TaskEvent[]): Board {
+  const lines = new Map<string, [string, TimelineAdd][]>()
   for (const e of events) {
     const t = b.tasks.find(x => x.id === e.task)
     const line = t ? stageLine(e, t) : null
@@ -83,7 +83,7 @@ export function withStageHistory(b: Board, events: readonly TaskEvent[]): Board 
     ...b,
     tasks: b.tasks.map(t => {
       const adds = lines.get(t.id)
-      return adds ? { ...t, history: adds.reduce((h, [at, add]) => withHistory(h, at, add), t.history) } : t
+      return adds ? { ...t, timeline: adds.reduce((h, [at, add]) => withTimeline(h, at, add), t.timeline) } : t
     }),
   }
 }

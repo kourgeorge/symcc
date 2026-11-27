@@ -1,9 +1,9 @@
 // /<name>-stats and the lead's stats tool: time and token figures built only from what the board
-// already keeps (tasks, their tries in runs[], their history), plus the archived tasks.
+// already keeps (tasks, their tries in runs[], their timeline), plus the archived tasks.
 // Every function here is pure (but statsReport remembering the figures of its last texts, see statsDataOf); the plugin
 // reads board.json and archive.json and passes the tasks in.
-import type { SymccHistoryEntry, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
-import { type FailReason, onPurposeStop } from './history'
+import type { SymccTimelineEntry, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
+import { type FailReason, onPurposeStop } from './timeline'
 import { DEFAULT_NAME } from '../name'
 import { INVESTIGATION, isErrand, isInvestigation, kindOf, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
@@ -87,7 +87,7 @@ export function taskFigures(t: Pick<SymccTask, 'runs'>, nowMs?: number): TaskFig
   return { ms: runs.reduce((s, r) => s + runMs(r, nowMs), 0), tries: runs.length, hasData: runs.length > 0, ...(tokens ? { tokens, tok: tokenCount(tokens) } : {}) }
 }
 
-/** Why a try failed or was sent back: the `reason` a history line records (T-806). */
+/** Why a try failed or was sent back: the `reason` a timeline line records (T-806). */
 export type { FailReason }
 
 /** The label of each reason in "Failed tries by reason", in the order they are shown. */
@@ -107,14 +107,14 @@ export function failedRows(reasons: Record<FailReason, number>): { key: FailReas
 
 /**
  * How a done task ended: merged on its own, approved by the owner, merged outside the board (by hand, then
- * marked done), "answered" for an investigation (nothing is merged), or null when its history doesn't say.
+ * marked done), "answered" for an investigation (nothing is merged), or null when its timeline doesn't say.
  */
-export function mergedHow(t: Pick<SymccTask, 'history'> & { kind?: unknown }): 'own' | 'approved' | 'answered' | 'errand' | 'outside' | null {
+export function mergedHow(t: Pick<SymccTask, 'timeline'> & { kind?: unknown }): 'own' | 'approved' | 'answered' | 'errand' | 'outside' | null {
   if (isErrand(t as { kind?: unknown })) return 'errand'
   if (kindOf(t as { kind?: unknown }) === INVESTIGATION) return 'answered'
   // T-514: merged by hand, then marked done on the board
-  if (t.history.some(l => l.how === 'outside')) return 'outside'
-  const merged = t.history.filter(l => l.how === 'own' || l.how === 'approved')
+  if (t.timeline.some(l => l.how === 'outside')) return 'outside'
+  const merged = t.timeline.filter(l => l.how === 'own' || l.how === 'approved')
   if (!merged.length) return null
   return merged.some(l => l.how === 'approved') ? 'approved' : 'own'
 }
@@ -136,7 +136,7 @@ export const isAnsweredInvestigation = (t: Pick<SymccTask, 'status' | 'runs'> & 
 // ---------------- time per stage (T-719) ----------------
 
 /**
- * The stages a task's life is cut into, read from its tries and its timed history: waiting to start (to do, free),
+ * The stages a task's life is cut into, read from its tries and its timed timeline: waiting to start (to do, free),
  * waiting on other tasks (to do, an `after` task not done yet), in the backlog, work (worker tries), prep, check
  * (the checker), the merge queue, tests, merge, and waiting for you (a question, or ready for review).
  */
@@ -151,17 +151,17 @@ export type TaskStages = { ms: Record<Stage, number>; lifetime: number }
 
 const zeroStages = (): Record<Stage, number> => ({ free: 0, blocked: 0, backlog: 0, work: 0, prep: 0, check: 0, queue: 0, tests: 0, merge: 0, owner: 0 })
 
-/** When task `t` was done: its last "merged" or "done" history entry, else (done) its last change; undefined when not done. */
-export function doneAtMs(t: Pick<SymccTask, 'status' | 'history' | 'updated_at'>): number | undefined {
+/** When task `t` was done: its last "merged" or "done" timeline entry, else (done) its last change; undefined when not done. */
+export function doneAtMs(t: Pick<SymccTask, 'status' | 'timeline' | 'updated_at'>): number | undefined {
   if (t.status !== 'done') return undefined
-  const end = [...t.history].reverse().find(e => e.kind === 'merged' || e.kind === 'done')
+  const end = [...t.timeline].reverse().find(e => e.kind === 'merged' || e.kind === 'done')
   const ms = Date.parse(end?.at ?? t.updated_at ?? '')
   return Number.isFinite(ms) ? ms : undefined
 }
 
-/** The stage a history entry moves a task into: a stage, 'end' (merged or done), or null (it changes nothing). */
+/** The stage a timeline entry moves a task into: a stage, 'end' (merged or done), or null (it changes nothing). */
 const STEP_STAGE: Partial<Record<string, Stage>> = { prep: 'prep', checker: 'check', queue: 'queue', tests: 'tests', merge: 'merge' }
-function entryStage(e: SymccHistoryEntry): Stage | 'end' | null {
+function entryStage(e: SymccTimelineEntry): Stage | 'end' | null {
   if (e.kind === 'stage') return (e.step && STEP_STAGE[e.step]) || null
   switch (e.kind) {
     case 'merged':
@@ -195,8 +195,8 @@ function entryStage(e: SymccHistoryEntry): Stage | 'end' | null {
 }
 
 /**
- * Task `t`'s time per stage (see Stage), from its tries' start and end and the history lines between them, cut to
- * `clip` when given. Null when it can't be read reliably: not a done task, a history entry with no time (older boards),
+ * Task `t`'s time per stage (see Stage), from its tries' start and end and the timeline lines between them, cut to
+ * `clip` when given. Null when it can't be read reliably: not a done task, a timeline entry with no time (older boards),
  * no finished try, or no stage line (boards from before the stage lines). `doneAt` gives when another task was done,
  * so to-do time before its `after` tasks were done counts as waiting on them.
  */
@@ -205,9 +205,9 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
   const end = doneAtMs(t)
   const runs = (t.runs ?? []).filter(r => Number.isFinite(Date.parse(r.started)) && Number.isFinite(Date.parse(r.ended ?? '')))
   if (!Number.isFinite(made) || end === undefined || end < made || !runs.length) return null
-  if (t.history.some(e => !Number.isFinite(Date.parse(e.at ?? '')))) return null
-  if (!t.history.some(e => e.kind === 'stage')) return null
-  // the points where the stage may change, in time order: a try's end, then history lines, then a try's start
+  if (t.timeline.some(e => !Number.isFinite(Date.parse(e.at ?? '')))) return null
+  if (!t.timeline.some(e => e.kind === 'stage')) return null
+  // the points where the stage may change, in time order: a try's end, then timeline lines, then a try's start
   type Point = { ms: number; prio: number; run?: 'start' | 'end'; idle?: 'from' | 'to'; to?: Stage | 'end' | null }
   // T-863: a try that went on after a restart symcc did itself has idle stretches (no session was open): there nothing
   // runs, so the time is waiting, never work
@@ -217,7 +217,7 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
   const points: Point[] = [
     ...runs.flatMap(r => [{ ms: Date.parse(r.started), prio: 2, run: 'start' as const }, { ms: Date.parse(r.ended!), prio: 0, run: 'end' as const }]),
     ...idle.flatMap(g => [{ ms: g.from, prio: 0, idle: 'from' as const }, { ms: g.to, prio: 0, idle: 'to' as const }]),
-    ...t.history.map(e => ({ ms: Date.parse(e.at!), prio: 1, to: entryStage(e) })),
+    ...t.timeline.map(e => ({ ms: Date.parse(e.at!), prio: 1, to: entryStage(e) })),
   ].sort((a, b) => a.ms - b.ms || a.prio - b.prio)
   const depsDone = Math.max(made, ...(t.after ?? []).map(id => doneAt(id) ?? made))
   const ms = zeroStages()
@@ -229,7 +229,7 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
     if (y > x) ms[s] += y - x
   }
   // a task made straight into the backlog has no "moved to the backlog" line: its first backlog line is the move out
-  const firstBacklog = t.history.find(e => e.kind === 'moved-backlog')
+  const firstBacklog = t.timeline.find(e => e.kind === 'moved-backlog')
   let cur: Stage = firstBacklog && !firstBacklog.backlog ? 'backlog' : 'free'
   let since = made
   let inRun = false
@@ -256,7 +256,7 @@ export function taskStages(t: SymccTask, doneAt: (id: string) => number | undefi
       cur = 'work'
       idleNow = false
     } else if (idleNow) {
-      // history lines inside an idle stretch change nothing; the try's end after it does
+      // timeline lines inside an idle stretch change nothing; the try's end after it does
       if (p.run === 'end') {
         close(p.ms)
         cur = pending ?? 'free'
@@ -578,10 +578,10 @@ export function statsData(input: StatsInput & { full?: boolean }): StatsData {
   const outside = how.filter(h => h === 'outside').length
   const unclear = finished.length - own - approved - answeredDone - errandsDone - outside
   const reasons = Object.fromEntries(Object.keys(FAIL_LABEL).map(k => [k, 0])) as Record<FailReason, number>
-  for (const t of all) for (const l of t.history) {
+  for (const t of all) for (const l of t.timeline) {
     if (l.reason && l.reason in reasons) reasons[l.reason]++
   }
-  const ended = [{ label: 'merged on its own', n: own }, { label: 'approved by you', n: approved }, ...(outside ? [{ label: 'merged outside the board', n: outside }] : []), ...(answeredDone ? [{ label: 'answered (investigation)', n: answeredDone }] : []), ...(errandsDone ? [{ label: 'errand done', n: errandsDone }] : []), ...(unclear ? [{ label: 'not clear from history', n: unclear }] : [])]
+  const ended = [{ label: 'merged on its own', n: own }, { label: 'approved by you', n: approved }, ...(outside ? [{ label: 'merged outside the board', n: outside }] : []), ...(answeredDone ? [{ label: 'answered (investigation)', n: answeredDone }] : []), ...(errandsDone ? [{ label: 'errand done', n: errandsDone }] : []), ...(unclear ? [{ label: 'not clear from timeline', n: unclear }] : [])]
   const failed = failedRows(reasons)
 
   const group = (key: string, label: string, ts: SymccTask[]): StatsGroup => {
@@ -747,7 +747,7 @@ export function headlineParts(d: StatsData): string[] {
 /** T-721: the short report lists only the latest this many failed tries, and the top this many failing tests. */
 export const FAILED_TRIES_SHORT = 10
 /**
- * T-735: when "Each failed try" (each try's own end) and "Failed tries" (history lines) count differently, why; '' when
+ * T-735: when "Each failed try" (each try's own end) and "Failed tries" (timeline lines) count differently, why; '' when
  * they agree. Both leave out tries stopped on purpose (onPurposeStop). T-736: "Failed tries" now has every failed end
  * (checker send-backs, time-outs, no result, no change, not merged ...); what still differs is a try rejected by the
  * owner or restarted by a change (its own end is "ready for review" or "restarted"). T-743: a restart symcc did itself
@@ -755,7 +755,7 @@ export const FAILED_TRIES_SHORT = 10
  */
 export function failedCountsNote(d: Pick<StatsData, 'failedTries' | 'failedTotal'>): string {
   if (d.failedTries.length === d.failedTotal) return ''
-  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads each saved try's own end; that count reads the history lines, which also count tries rejected by you and restarts by a change, whose own end is a review or a restart`
+  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads each saved try's own end; that count reads the timeline lines, which also count tries rejected by you and restarts by a change, whose own end is a review or a restart`
 }
 export const FAILED_TESTS_SHORT = 5
 /** The failed tries and failing tests a report lists: all of them when full, else the latest tries and the top tests. */
@@ -836,7 +836,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   out.push(row('time', `avg ${durOr(d.perTry.avgMs)} · total ${durOr(d.perTry.sumMs)}`))
   out.push(row('tokens', `avg ${tokOr(d.perTry.avgTok)} in all · total ${tokOr(d.perTry.sumTok)}`))
 
-  // Time per stage (T-719): where the done tasks' lifetime went, from their tries and timed history
+  // Time per stage (T-719): where the done tasks' lifetime went, from their tries and timed timeline
   out.push('', ...stageLines(d.stages, full))
 
   // The biggest tasks
@@ -853,7 +853,7 @@ export function statsReport(input: StatsInput & { full?: boolean }): string {
   const maxEnd = Math.max(...d.ended.map(e => e.n))
   for (const e of d.ended) out.push(barRow(e.label, 24, e.n, maxEnd, d.finished))
   const maxFail = Math.max(0, ...d.failed.map(f => f.n))
-  out.push(`  Failed tries (${d.failedTotal}, from history)`)
+  out.push(`  Failed tries (${d.failedTotal}, from timeline)`)
   for (const f of d.failed) out.push(barRow(`  ${f.label}`, 24, f.n, maxFail, null, f.folded ? `(${f.folded})` : ''))
 
   // T-721: each failed try (short: the latest FAILED_TRIES_SHORT), and the tests that failed most (short: the top FAILED_TESTS_SHORT)
@@ -929,12 +929,12 @@ export function statsDataOf(text: string): StatsData | undefined {
 export const unlinkedText = (n: number) => `${plural(n, 'task')} not linked to a run`
 
 /** How the stage times are read, said in the full view. */
-export const STAGES_NOTE = 'read from each done task\'s tries (work) and its timed history lines ("prep started", "checker started", "waits in the merge queue", "tests started", "merge started", "merged", questions, answers and results); a task whose history has an entry with no time (older boards) or no stage line is left out and counted as lacking data.'
+export const STAGES_NOTE = 'read from each done task\'s tries (work) and its timed timeline lines ("prep started", "checker started", "waits in the merge queue", "tests started", "merge started", "merged", questions, answers and results); a task whose timeline has an entry with no time (older boards) or no stage line is left out and counted as lacking data.'
 
 /** The "Time per stage" lines for figures `f`: per stage the total, the average per done task and its share of the lifetime; then active, waiting and the lifetime. */
 export function stageLines(f: StageFigures, full = false): string[] {
-  const out = [`Time per stage (${plural(f.n, 'done task')}${f.lacking ? `; ${f.lacking} without timed history, left out` : ''})`]
-  if (!f.n) return [...out, '  no done tasks with timed history']
+  const out = [`Time per stage (${plural(f.n, 'done task')}${f.lacking ? `; ${f.lacking} without timed timeline, left out` : ''})`]
+  if (!f.n) return [...out, '  no done tasks with timed timeline']
   const shown = f.stages.filter(s => s.ms > 0 || (s.stage !== 'backlog' && s.stage !== 'blocked'))
   const max = Math.max(...shown.map(s => s.ms))
   const w = 16

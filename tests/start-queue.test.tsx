@@ -223,7 +223,7 @@ function world(on: On) {
   on('session.id', () => ({ value: 's1' }) as never)
   on('env.get', () => ({ value: undefined }) as never)
   const clock = mock.clock(on, { now: T0 })
-  // a done task's history and tries are in its parts file (T-675): joined back here
+  // a done task's timeline and tries are in its parts file (T-675): joined back here
   const board = () => JSON.parse(joinedText(files.get(BOARD)!, rel => files.get(BOARD.replace('board.json', rel)) ?? null)) as Board
   return { files, spawned, prompts, clock, task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
@@ -397,7 +397,7 @@ test('T-428 loaded: after a reload lost the queue, the session start queues the 
   const t = w.task('T-1')
   expect(t.attempts).toBe(1)
   expect(t.runs?.length).toBe(1)
-  expect(t.history.some(sentBack)).toBe(false)
+  expect(t.timeline.some(sentBack)).toBe(false)
   expect(w.prompts.some(p => p.includes('no worker was working on'))).toBe(false)
 })
 
@@ -423,7 +423,7 @@ test('T-428 loaded: the regular check, with no reload, finds a queued task its c
   for (const id of ['T-1', 'T-2']) {
     const t = w.task(id)
     expect(t.attempts).toBe(1)
-    expect(t.history.some(sentBack)).toBe(false)
+    expect(t.timeline.some(sentBack)).toBe(false)
   }
   expect(w.prompts.some(p => p.includes('no worker was working on'))).toBe(false)
 })
@@ -440,7 +440,7 @@ test('T-428: a doing task whose worker started (no longer the queued note) is no
   expect(u.status).toBe('todo')
   expect(u.attempts).toBe(0)
   expect(u.runs).toBeUndefined()
-  expect(u.history).toEqual(t.history)
+  expect(u.timeline).toEqual(t.timeline)
 })
 
 test('T-470: a claim cut off before its worker started on a host with no start queue (note STARTING_NOTE) is unclaimed too, with no try counted', () => {

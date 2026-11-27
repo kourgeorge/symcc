@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { type ChangeSize, parseNumstat, hasMergedChanges, parseShortstat, type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withHistory, findRole, roleOf, isProseRole, notProse, notProseText, docsOnly, PROSE_TESTS_SKIPPED, PROSE_DOCS_CHECKS, testCommandsOf, docsTestCommandsOf } from '../board'
+import { type ChangeSize, parseNumstat, hasMergedChanges, parseShortstat, type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withTimeline, findRole, roleOf, isProseRole, notProse, notProseText, docsOnly, PROSE_TESTS_SKIPPED, PROSE_DOCS_CHECKS, testCommandsOf, docsTestCommandsOf } from '../board'
 import { loadRoles } from './roles'
 import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn, repoOf } from './git'
 import { S, changesCache } from './state'
@@ -111,21 +111,21 @@ export type CheckResult = { ok: boolean; detail: string; reason?: FailReason; ea
 /** T-733: how many times one try's branch goes back into the merge line for each reason (main moved by hand, a reload cut its tests off), so it can't loop. */
 export const AGAIN_MAX = 2
 
-/** T-733: the history line (after "try N: ") when main moved by hand during the merge and the same branch is tested and merged again. */
+/** T-733: the timeline line (after "try N: ") when main moved by hand during the merge and the same branch is tested and merged again. */
 export const MOVED_AGAIN = 'main moved by hand; testing again'
 
-/** T-733: the history line (after "try N: ") when a reload cut off a task's test or merge and the same branch is tested and merged again. */
+/** T-733: the timeline line (after "try N: ") when a reload cut off a task's test or merge and the same branch is tested and merged again. */
 export const RELOAD_AGAIN = 'tests cut off by a reload; testing again'
 
-/** T-733: how many times task `t`'s current try already went back into the merge line for `why` (MOVED_AGAIN or RELOAD_AGAIN), from its history. */
-export const againsThisTry = (t: Pick<BoardTask, 'history' | 'role' | 'attempts'>, why: string) => (t.history ?? []).filter(h => h.text === `${tryLabel(t)}: ${why}`).length
+/** T-733: how many times task `t`'s current try already went back into the merge line for `why` (MOVED_AGAIN or RELOAD_AGAIN), from its timeline. */
+export const againsThisTry = (t: Pick<BoardTask, 'timeline' | 'role' | 'attempts'>, why: string) => (t.timeline ?? []).filter(h => h.text === `${tryLabel(t)}: ${why}`).length
 
-/** T-733: writes task `t`'s history line for going back into the merge line (`why`), while it is still the same try. Never throws. */
+/** T-733: writes task `t`'s timeline line for going back into the merge line (`why`), while it is still the same try. Never throws. */
 export async function noteAgain($: Host, t: Pick<SymccTask, 'id' | 'status' | 'attempts'>, why: string) {
   await change($, x => {
     const cur = find(x, t.id)
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return x
-    return patchTask(x, t.id, { history: withHistory(cur.history, now(), tryEntry(cur, 'step', why)) }, now())
+    return patchTask(x, t.id, { timeline: withTimeline(cur.timeline, now(), tryEntry(cur, 'step', why)) }, now())
   }).catch(() => undefined)
 }
 

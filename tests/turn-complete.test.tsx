@@ -183,7 +183,7 @@ function world(on: On, o: { work?: Record<string, string[]>; agents?: { id: stri
   on('session.id', () => ({ value: 'me' }) as never)
   on('env.get', () => ({ value: undefined }) as never)
   const clock = mock.clock(on, { now: T0 })
-  // a done task's history and tries are in its parts file (T-675): joined back here
+  // a done task's timeline and tries are in its parts file (T-675): joined back here
   const board = () => JSON.parse(joinedText(files.get(BOARD)!, rel => files.get(BOARD.replace('board.json', rel)) ?? null)) as Board
   return { files, git, prompts, sends, reached, toasts, taskStops, clock, board, release: () => release?.(), task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
@@ -504,7 +504,7 @@ test("T-724: a worker that hands back its report while its own background comman
   expect(w.taskStops).toEqual(['bg:bun test'])
   expect(w.task('T-1').status).toBe('done')
   expect(w.task('T-1').note ?? '').not.toContain(ENDED_EARLY)
-  expect(w.task('T-1').history.some(h => h.text === 'try 1: stopped 1 command still running at hand-back')).toBe(true)
+  expect(w.task('T-1').timeline.some(h => h.text === 'try 1: stopped 1 command still running at hand-back')).toBe(true)
   expect(w.git.onMain()).toEqual([expect.stringMatching(/^T-1: /)])
 })
 
@@ -553,7 +553,7 @@ test('T-435: with nothing in flight at its SubagentStop, a worker that says "sti
   await finish($, 'a1', "The background runs are still going; I'll continue when they finish.")
   await w.clock.settle()
   expect(w.task('T-1').status).toBe('done')
-  expect(w.task('T-1').history.some(h => h.text.includes('warning:'))).toBe(true)
+  expect(w.task('T-1').timeline.some(h => h.text.includes('warning:'))).toBe(true)
 })
 
 test('a hand-back that says "QUESTION:" and "NEED FILES:" with no ask_owner call or refused edit is merged normally', async ($, on) => {
@@ -607,8 +607,8 @@ test('two workers finishing at the same moment: both checks really overlap, and 
   // every write of both is on the board: neither task is still "doing", each has its own try-ending line, next_id kept
   const [t1, t2] = [w.task('T-1'), w.task('T-2')]
   expect([t1.status === 'doing', t2.status === 'doing']).toEqual([false, false])
-  expect(t1.history.at(-1)?.text).toMatch(/^try 1: changed a → /)
-  expect(t2.history.at(-1)?.text).toMatch(/^try 1: changed b → merged into main/)
+  expect(t1.timeline.at(-1)?.text).toMatch(/^try 1: changed a → /)
+  expect(t2.timeline.at(-1)?.text).toMatch(/^try 1: changed b → merged into main/)
   expect(t1.runs?.at(-1)?.ended).toBeDefined()
   // T-2 moved main first; T-1 lost that race, brought T-2's work in and merged on top of it by itself
   expect(w.git.onMain().some(m => /^T-1: bring up to date/.test(m))).toBe(true)

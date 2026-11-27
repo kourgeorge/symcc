@@ -2104,7 +2104,7 @@ input:focus {
 .task-body .report {
   max-width: 100ch;
 }
-.history {
+.timeline {
   list-style: none;
   padding: 0;
   margin-top: 6px;
@@ -2116,26 +2116,26 @@ input:focus {
   font-size: 12px;
   line-height: 1.45;
 }
-.history li {
+.timeline li {
   display: grid;
   grid-template-columns: 14px minmax(0, 1fr);
   gap: 4px;
 }
-.history-mark {
+.timeline-mark {
   font-weight: 600;
   color: var(--muted);
 }
-.history .is-step .history-mark {
+.timeline .is-step .timeline-mark {
   color: var(--fg);
 }
-.history .is-good :is(.history-mark, .history-result) {
+.timeline .is-good :is(.timeline-mark, .timeline-result) {
   color: var(--good);
 }
-.history .is-bad :is(.history-mark, .history-result),
-.history-bad {
+.timeline .is-bad :is(.timeline-mark, .timeline-result),
+.timeline-bad {
   color: var(--bad);
 }
-.history-dim {
+.timeline-dim {
   color: var(--muted);
 }
 .checker summary .codicon-pass {

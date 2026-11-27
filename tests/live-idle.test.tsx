@@ -11,8 +11,8 @@ import { PANE, T0, seedBoard } from './board-fixture'
 import { tabBar, wantTabs } from './vscode-tabs'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
-const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
-const merged = (id: string, minAgo: number) => task(id, 'done', { history: [{ kind: 'merged', at: iso(minAgo), text: 'try 1 → merged into main' }] })
+const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
+const merged = (id: string, minAgo: number) => task(id, 'done', { timeline: [{ kind: 'merged', at: iso(minAgo), text: 'try 1 → merged into main' }] })
 
 /** The four boards, and the lines each one shows. */
 const CASES: { name: string; mode: 'auto' | 'paused'; tasks: unknown[]; lines: string[] }[] = [

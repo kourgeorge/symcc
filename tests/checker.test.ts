@@ -6,7 +6,7 @@ import type { SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, checkerVerdict, checkerOutput, isCheckerOutput, docsOnly, checkerOn, applySettings, parseSettingValue, settingValue, finishedNote, bashOutsideText, gitWriteText, gitWriteIn, workerGitWriteText, untestedChange, testTail, statusCell, PREP_NOTE, STEP_NOTE, shownNote } from '../hooks/board'
 import { notProse, checkerProblems, problemsBlockLines, parseCheckerAnswer } from '../hooks/core/checker'
 import { makeAsk } from '../hooks/board'
-import { historyEvent, historyLineWords, workerStartedEntry, withHistory, noteAddedLine } from '../hooks/core/history'
+import { timelineEvent, timelineLineWords, workerStartedEntry, withTimeline, noteAddedLine } from '../hooks/core/timeline'
 import { S, leadQueue, meanwhile, workers, checkerRuns, stopped, adoptedCheckers } from '../hooks/app/state'
 import { pump, workerFinished, WORKER_PROMPT, checkingNow, stopAsked, check, stoppedHandBack } from '../hooks/app/workers'
 import { setBoardMode, setSymcc } from '../hooks/app/board-mode'
@@ -249,7 +249,7 @@ test('with the checker off nothing changes: a passing change merges at once and 
   expect(w.spawns).toEqual([])
   expect(t.status).toBe('done')
   expect(w.git.main).toBe(H1)
-  expect(t.history.some(h => h.text.includes('checker'))).toBe(false)
+  expect(t.timeline.some(h => h.text.includes('checker'))).toBe(false)
 })
 
 test('with the checker on, a passing change waits for a checker (shown as checking); OK merges it, with the verdict and its tokens on the try', async () => {
@@ -274,7 +274,7 @@ test('with the checker on, a passing change waits for a checker (shown as checki
   expect(w.spawns.length).toBe(1)
   expect(t.status).toBe('done')
   expect(w.git.main).toBe(H1)
-  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  expect(t.timeline.map(h => h.text)).toContain('try 1: checker: OK')
   expect(tryTokens(t.runs!.at(-1))).toEqual({ output: 500 })
   // T-769, T-805: the checker's part is read from its own entry, so the Live tab can tell checkers from workers
   expect(checkerTokensOf(t.runs!.at(-1))).toEqual({ output: 500 })
@@ -306,7 +306,7 @@ test('T-440: the target branch deleted while the checker runs: after its OK the 
   })
   expect(t.status).toBe('waiting')
   expect(t.ask?.text).toMatch(/^branch main is gone: merge into \S+ instead\?$/)
-  expect(t.history.at(-1)?.text).toMatch(/^not merged: branch main is gone; asked the owner/)
+  expect(t.timeline.at(-1)?.text).toMatch(/^not merged: branch main is gone; asked the owner/)
   expect(t.test_tries ?? 0).toBe(0)
   expect(w.git.main).toBe(M1)
   expect(leadQueue.join('\n')).not.toMatch(/checking failed/)
@@ -364,11 +364,11 @@ test('T-551: with the checker on, the checker runs before the task joins the mer
   expect(testRuns(w)).toEqual(['/bin/sh -c npm test', '/bin/sh -c npm run lint'])
   expect(t.status).toBe('done')
   expect(w.git.main).toBe(H1)
-  const texts = t.history.map(h => h.text)
+  const texts = t.timeline.map(h => h.text)
   expect(texts).toContain('try 1: checker: OK')
 })
 
-test('T-616: a worker finish → checker → queue → test → merge emits each event once, logs them to events.jsonl and puts each stage in the history once', async () => {
+test('T-616: a worker finish → checker → queue → test → merge emits each event once, logs them to events.jsonl and puts each stage in the timeline once', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
   const T2 = `${ROOT}/.symcc/worktrees/T-2`
@@ -404,8 +404,8 @@ test('T-616: a worker finish → checker → queue → test → merge emits each
     { kind: 'verdict', at: 'x', task: 'T-1', try: 1, verdict: 'ok' },
     { kind: 'queue', at: 'x', task: 'T-1', try: 1, outcome: 'merged', commit: H1 },
   ])
-  // the history shows the whole path, each stage once, between the outcome lines it already had
-  expect(t.history.map(h => [h.kind, h.text])).toEqual([
+  // the timeline shows the whole path, each stage once, between the outcome lines it already had
+  expect(t.timeline.map(h => [h.kind, h.text])).toEqual([
     ['created', 'created by the lead because a test'],
     // T-723: the hand-back has its own line, just before "prep started"
     ['stage', 'try 1: worker handed back'],
@@ -446,7 +446,7 @@ test('T-565: checker on, the checker says OK but the merge line\'s tests fail: a
   expect(t.status).toBe('todo')
   expect(t.test_tries).toBe(1)
   expect(w.git.main).toBe(M1)
-  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  expect(t.timeline.map(h => h.text)).toContain('try 1: checker: OK')
   const prompt = WORKER_PROMPT(t, await load(w.$), WT)
   expect(prompt).toContain('Your last try failed these tests; fix it.')
   expect(prompt).toContain('(fail) src/a.test.ts > doIt handles empty input')
@@ -499,7 +499,7 @@ test("T-565: a task's checker runs while another task holds the merge line; afte
   expect(testRuns(w).length).toBe(2)
   expect(w.git.moves).toEqual([M2, H1])
   expect(t.status).toBe('done')
-  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  expect(t.timeline.map(h => h.text)).toContain('try 1: checker: OK')
 })
 
 test('T-551: the checker prompt names no test command to run and says the tests run in the merge line after it', async () => {
@@ -556,7 +556,7 @@ test('a checker that finds problems sends the task back to its worker with the r
   expect(t.status).toBe('todo')
   expect(t.test_tries).toBe(1)
   expect(t.note).toBe('the checker found problems; a new try will fix them (1 of 2)')
-  expect(t.history.some(h => h.text.startsWith('try 1: checker found problems: src/a.ts:12'))).toBe(true)
+  expect(t.timeline.some(h => h.text.startsWith('try 1: checker found problems: src/a.ts:12'))).toBe(true)
   expect(t.runs!.at(-1)!.ended_note).toBe('checker found problems')
   expect(meanwhile.join('\n')).toContain('was sent back by the checker; retrying on its own (1 of 2)')
   expect(leadQueue.join('\n')).not.toContain('retrying on its own')
@@ -631,7 +631,7 @@ test('in review mode an OK from the checker sends the task to review, not merged
   expect(w.spawns.length).toBe(1)
   expect(t.status).toBe('review')
   expect(w.git.main).toBe(M1)
-  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  expect(t.timeline.map(h => h.text)).toContain('try 1: checker: OK')
 })
 
 test('a checker stopped before its verdict merges nothing: the task waits for the owner\'s review', async () => {
@@ -657,7 +657,7 @@ test('T-402: through agentFinished (turn.complete), a checker whose turn ended o
     expect(t.note).toBe(`ready for review: the tests passed, but the checker gave no verdict (${why}), nothing merged yet`)
     expect(t.attempts).toBe(before.attempts)
     expect(t.test_tries ?? 0).toBe(0)
-    expect(t.history.some(h => h.text.includes('checker found problems'))).toBe(false)
+    expect(t.timeline.some(h => h.text.includes('checker found problems'))).toBe(false)
     expect(w.git.main).toBe(M1)
   }
 })
@@ -838,17 +838,17 @@ for (const [what, move] of [
     expect(w.git.head).toBe(H1)
     expect(w.git.main).toBe(H1)
     expect(t.status).toBe('done')
-    expect(t.history.map(h => h.text)).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
-    expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+    expect(t.timeline.map(h => h.text)).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
+    expect(t.timeline.map(h => h.text)).toContain('try 1: checker: OK')
   })
 }
 
-test('a checker that leaves the branch alone: nothing is put back and nothing extra goes in the history', async () => {
+test('a checker that leaves the branch alone: nothing is put back and nothing extra goes in the timeline', async () => {
   const w = world()
   await saveBoard(w.$, boardWith(true))
   const t = await finish(w, async id => checkerFinished(id, 'OK'))
   expect(w.calls.some(c => c.includes('checkout'))).toBe(false)
-  expect(t.history.some(h => h.text.includes('moved the branch'))).toBe(false)
+  expect(t.timeline.some(h => h.text.includes('moved the branch'))).toBe(false)
   expect(w.git.main).toBe(H1)
 })
 
@@ -862,7 +862,7 @@ test("a checker that moved the branch when it can't be put back gives no verdict
   })
   expect(w.git.main).toBe(M1)
   expect(t.status).toBe('review')
-  expect(t.history.map(h => h.text)).toContain("try 1: checker gave no verdict (it moved the task's branch symcc/T-1 and it could not be put back)")
+  expect(t.timeline.map(h => h.text)).toContain("try 1: checker gave no verdict (it moved the task's branch symcc/T-1 and it could not be put back)")
 })
 
 test("a checker's Bash aimed at the owner's project folder is refused as a worker's is; inside the task's folder it is allowed", async () => {
@@ -988,7 +988,7 @@ test('T-1068: a checker still running after a reload is adopted, not stopped; it
   expect(t.status).toBe('done')
   expect(t.attempts).toBe(1)
   expect(t.test_tries ?? 0).toBe(0)
-  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  expect(t.timeline.map(h => h.text)).toContain('try 1: checker: OK')
   expect(w.spawns.length).toBe(1)
 })
 
@@ -1026,7 +1026,7 @@ test('T-1068: an adopted checker that finds problems: its verdict is used (the t
   checkerFinished('chk1', 'PROBLEMS: src/a.ts breaks on empty input')
   await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
   const t = find(await load(w.$), 'T-1')!
-  expect(t.history.some(h => h.text.includes('the checker found problems') || h.text.includes('checker: problems') || h.text.includes('PROBLEMS'))).toBe(true)
+  expect(t.timeline.some(h => h.text.includes('the checker found problems') || h.text.includes('checker: problems') || h.text.includes('PROBLEMS'))).toBe(true)
   expect(t.status).not.toBe('done')
   expect(w.spawns.length).toBe(1)
 })
@@ -1040,7 +1040,7 @@ test('T-1068: an adopted checker that hands back before the step waits for it: i
   await check(w.$)
   await until(() => checkerRuns.size === 0 && !checkingNow('T-1'))
   const t = find(await load(w.$), 'T-1')!
-  expect(t.history.some(h => h.text.includes('PROBLEMS') || h.text.includes('found problems'))).toBe(true)
+  expect(t.timeline.some(h => h.text.includes('PROBLEMS') || h.text.includes('found problems'))).toBe(true)
   expect(t.status).not.toBe('done')
   expect(w.spawns.length).toBe(1)
   expect(w.sends).toEqual([])
@@ -1162,7 +1162,7 @@ test("T-386: a restarted checker whose agent type isn't loaded yet: the task sta
   const mid = find(await load(w.$), 'T-1')!
   expect(mid.status).toBe('doing')
   expect(mid.live?.phase).toBe('checker')
-  expect(mid.history.some(l => l.text.includes('no verdict'))).toBe(false)
+  expect(mid.timeline.some(l => l.text.includes('no verdict'))).toBe(false)
   await check(w.$)
   await until(() => checkerRuns.size > 0)
   expect(w.spawns.length).toBe(2)
@@ -1213,8 +1213,8 @@ for (const how of ['answers just "stopped"', 'was stopped by symcc (its agent is
     expect(t.status).toBe('doing')
     expect(t.attempts).toBe(1)
     expect(t.test_tries ?? 0).toBe(0)
-    expect(t.history.some(h => h.text.includes('checker found problems'))).toBe(false)
-    expect(t.history.map(h => h.text)).toContain('try 1: checker gave no verdict (it was stopped; a new checker starts)')
+    expect(t.timeline.some(h => h.text.includes('checker found problems'))).toBe(false)
+    expect(t.timeline.map(h => h.text)).toContain('try 1: checker gave no verdict (it was stopped; a new checker starts)')
     expect(leadQueue.join('\n')).not.toContain('sent back by the checker')
     // a new checker starts on the same work, without waiting for a regular check
     await until(() => w.spawns.length === 2 && checkerRuns.size > 0)
@@ -1249,7 +1249,7 @@ for (const second of ['the same worker again', "the earlier try's worker"]) {
     await done
     await turns(50)
     const t = find(await load(w.$), 'T-1')!
-    const texts = t.history.map(h => h.text)
+    const texts = t.timeline.map(h => h.text)
     expect(texts.filter(x => x === 'try 2: worker handed back').length).toBe(1)
     expect(texts.filter(x => /prep started/.test(x)).length).toBeLessThan(2)
     expect(texts.filter(x => /checker: OK/.test(x)).length).toBe(1)
@@ -1269,7 +1269,7 @@ test("T-740: a hand-back from an earlier try's worker while the new try's worker
   expect(t.status).toBe('doing')
   expect(t.live?.checking?.at).toBe(undefined)
   expect(t.runs!.at(-1)!.ended).toBe(undefined)
-  expect(t.history.some(h => h.text.includes('worker handed back'))).toBe(false)
+  expect(t.timeline.some(h => h.text.includes('worker handed back'))).toBe(false)
   expect(w.spawns.length).toBe(0)
 })
 
@@ -1287,8 +1287,8 @@ test('T-740: a checker symcc stopped partway gives no verdict, whatever it answe
   expect(t.status).toBe('doing')
   expect(t.attempts).toBe(1)
   expect(t.test_tries ?? 0).toBe(0)
-  expect(t.history.some(h => h.text.includes('checker found problems'))).toBe(false)
-  expect(t.history.map(h => h.text)).toContain('try 1: checker gave no verdict (it was stopped; a new checker starts)')
+  expect(t.timeline.some(h => h.text.includes('checker found problems'))).toBe(false)
+  expect(t.timeline.map(h => h.text)).toContain('try 1: checker gave no verdict (it was stopped; a new checker starts)')
   expect(leadQueue.join('\n')).not.toContain('sent back by the checker')
   await until(() => w.spawns.length === 2 && checkerRuns.size > 0)
   checkerFinished([...checkerRuns.keys()][0]!, 'OK')
@@ -1301,7 +1301,7 @@ test('T-740: a checker symcc stopped partway gives no verdict, whatever it answe
 })
 
 for (const [how, line] of [['the board is paused', 'you paused the board'], ['symcc is disabled', 'you disabled symcc']] as const) {
-  test(`T-740: when ${how} while a checker runs, its history line keeps the reason ("${line}"), not "a new checker starts"`, async () => {
+  test(`T-740: when ${how} while a checker runs, its timeline line keeps the reason ("${line}"), not "a new checker starts"`, async () => {
     const w = world()
     // git takes a moment, as on a real machine: the task's stop is set before the checker's line is written
     w.git.slowStatus = 3000
@@ -1311,7 +1311,7 @@ for (const [how, line] of [['the board is paused', 'you paused the board'], ['sy
       if (how === 'the board is paused') await setBoardMode(w.$, 'paused', 'you')
       else await setSymcc(w.$, false)
     })
-    const texts = t.history.map(h => h.text)
+    const texts = t.timeline.map(h => h.text)
     expect(texts).toContain(`try 1: checker gave no verdict (${line})`)
     expect(texts.some(x => x.includes('a new checker starts'))).toBe(false)
     expect(t.status).toBe('todo')
@@ -1344,7 +1344,7 @@ test('T-600, T-632: a worker\'s and its checker\'s "Learned:" lines never change
   await turns(50)
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('done')
-  expect(t.history.map(h => h.text)).toContain('try 1: checker: OK')
+  expect(t.timeline.map(h => h.text)).toContain('try 1: checker: OK')
   expect(await w.$.fs.read(GUIDE)).toBe(GUIDE_TEXT)
   const said = leadQueue.join('\n')
   expect(said).toContain('T-1: Suggested for org-mem')
@@ -1622,7 +1622,7 @@ test('T-1068: an adopted checker that moves HEAD and then says OK: the branch is
   expect(w.calls).toContain(`git checkout -q -f -B symcc/T-1 ${H1}`)
   expect(w.git.main).toBe(H1)
   expect(t.status).toBe('done')
-  expect(t.history.map(h => h.text)).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
+  expect(t.timeline.map(h => h.text)).toContain(`try 1: the checker moved the branch symcc/T-1; it was put back at ${H1.slice(0, 10)}, so nothing it made is merged`)
 })
 
 // ---------------- the lead moves a task to a stage (T-1072) ----------------
@@ -1646,7 +1646,7 @@ test('T-1072: stage tests while the checker runs stops it, and the task merges a
   expect(t.status).toBe('done')
   expect(w.git.moves.length).toBe(1)
   expect(w.spawns.length).toBe(1)
-  expect(t.history.map(h => h.text)).toContain('moved to tests by the lead')
+  expect(t.timeline.map(h => h.text)).toContain('moved to tests by the lead')
 })
 
 test('T-1072: stage tests on a failed task runs its tests and merges it, with no checker', async () => {
@@ -1680,7 +1680,7 @@ test('T-1072: stage check on a failed task starts a checker on the kept branch, 
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('doing')
   expect(t.attempts).toBe(1)
-  expect(t.history.map(h => h.text)).toContain('moved to check by the lead')
+  expect(t.timeline.map(h => h.text)).toContain('moved to check by the lead')
   await runTool(w.$, 'drop', { task: 'T-1' })
 })
 
@@ -1695,7 +1695,7 @@ test('T-1072: stage work from a running checker queues a new worker try; stage r
     const t = find(await load(w.$), 'T-1')!
     expect(t.status === status || (stage === 'work' && t.status === 'doing')).toBe(true)
     expect(w.git.moves.length).toBe(0)
-    expect(t.history.map(h => h.text)).toContain(`moved to ${stage} by the lead`)
+    expect(t.timeline.map(h => h.text)).toContain(`moved to ${stage} by the lead`)
   }
 })
 
@@ -1723,7 +1723,7 @@ test('T-1072: stage work on a failed task starts a worker try (doing, a new try)
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('doing')
   expect(t.attempts).toBe(2)
-  expect(t.history.filter(h => h.text === 'moved to work by the lead').length).toBe(1)
+  expect(t.timeline.filter(h => h.text === 'moved to work by the lead').length).toBe(1)
   expect(w.spawns.length).toBe(1)
 })
 
@@ -1746,7 +1746,7 @@ test('T-1072: failed → review → work: the next worker prompt has no "Last fa
   expect(w.spawns[0]!.prompt).not.toContain('Last failure in full')
 })
 
-test('T-1072: a move from a running checker writes one history line, no "review meanwhile" line, and leaves other tasks alone', async () => {
+test('T-1072: a move from a running checker writes one timeline line, no "review meanwhile" line, and leaves other tasks alone', async () => {
   for (const stage of ['tests', 'review', 'work']) {
     const w = world()
     inRepo(w)
@@ -1758,7 +1758,7 @@ test('T-1072: a move from a running checker writes one history line, no "review 
     })
     const board = await load(w.$)
     const t = find(board, 'T-1')!
-    const texts = t.history.map(h => h.text)
+    const texts = t.timeline.map(h => h.text)
     expect(texts.filter(x => x === `moved to ${stage} by the lead`).length).toBe(1)
     expect(texts.filter(x => x.includes('review meanwhile') || x.includes('not merged') || x.includes('no verdict'))).toEqual([])
     expect(leadQueue.filter(x => x.includes('was stopped'))).toEqual([])
@@ -1768,7 +1768,7 @@ test('T-1072: a move from a running checker writes one history line, no "review 
   }
 })
 
-test('T-1072: stage check from a running checker starts a fresh checker with one history line', async () => {
+test('T-1072: stage check from a running checker starts a fresh checker with one timeline line', async () => {
   const w = world()
   inRepo(w)
   await saveBoard(w.$, boardWith(true))
@@ -1779,8 +1779,8 @@ test('T-1072: stage check from a running checker starts a fresh checker with one
     await until(() => [...checkerRuns.keys()].some(k => k !== first))
     const t = find(await load(w.$), 'T-1')!
     expect(t.attempts).toBe(1)
-    expect(t.history.map(h => h.text).filter(x => x === 'moved to check by the lead').length).toBe(1)
-    expect(t.history.some(h => h.text.includes('review meanwhile'))).toBe(false)
+    expect(t.timeline.map(h => h.text).filter(x => x === 'moved to check by the lead').length).toBe(1)
+    expect(t.timeline.some(h => h.text.includes('review meanwhile'))).toBe(false)
     await runTool(w.$, 'drop', { task: 'T-1' })
   })
 })
@@ -1796,14 +1796,14 @@ test('T-1072: in board mode review a move to tests runs the tests and ends in re
   expect(w.git.moves.length).toBe(0)
 })
 
-test('T-1081: a move to tests that stops at review writes a finished try: history line, untested flag, secrets text', async () => {
+test('T-1081: a move to tests that stops at review writes a finished try: timeline line, untested flag, secrets text', async () => {
   const w = world(['src/a.ts', 'src/.env'])
   inRepo(w)
   await saveBoard(w.$, boardWith(false, { status: 'failed', note: 'x' }, { mode: 'review' }))
   await runTool(w.$, 'change', { task: 'T-1', stage: 'tests' })
   const t = find(await load(w.$), 'T-1')!
   expect(t.status).toBe('review')
-  expect(t.history.map(h => h.text).join('\n')).toMatch(/checks passed/)
+  expect(t.timeline.map(h => h.text).join('\n')).toMatch(/checks passed/)
   expect(t.note).toContain('ready for review')
   const told = leadQueue.join('\n')
   expect(told).toContain('changed code but no test')
@@ -1898,23 +1898,23 @@ test('T-1079: a worker hand-back line is the worker\'s alone, and the checker\'s
   const w = world()
   await saveBoard(w.$, boardWith(true))
   const t = await finish(w, async id => checkerFinished(id, PROBLEMS_REPORT))
-  const events = t.history.map(h => historyEvent(h))
+  const events = t.timeline.map(h => timelineEvent(h))
   // (a) the worker's result line: "worker symcc-T-1", its report, "→ the checker found problems", none of the checker's words
   const worker = events.filter(e => e.who === 'worker' && e.result)
   expect(worker.length).toBe(1)
   expect(worker[0]!.by).toBe('worker symcc-T-1')
   expect(worker[0]!.said).toBe('made the change')
   expect(worker[0]!.result).toBe('the checker found problems')
-  expect(historyLineWords(t.history.find(h => h.result)!)).toBe('worker symcc-T-1: try 1: made the change → the checker found problems')
-  expect(t.history.filter(h => h.result).every(h => !h.text.includes('doIt'))).toBe(true)
+  expect(timelineLineWords(t.timeline.find(h => h.result)!)).toBe('worker symcc-T-1: try 1: made the change → the checker found problems')
+  expect(t.timeline.filter(h => h.result).every(h => !h.text.includes('doIt'))).toBe(true)
   // (b) the checker's verdict: one line, its first problem (not the report's first sentence), with its agent name
-  const lines = t.history.filter(h => h.kind === 'checker-problems')
+  const lines = t.timeline.filter(h => h.kind === 'checker-problems')
   expect(lines.length).toBe(1)
-  expect(historyLineWords(lines[0]!)).toBe('checker symcc-T-1-checker: found problems: src/a.ts:12 doIt("") throws instead of returning ""')
-  expect(historyLineWords(lines[0]!)).not.toContain('I checked')
+  expect(timelineLineWords(lines[0]!)).toBe('checker symcc-T-1-checker: found problems: src/a.ts:12 doIt("") throws instead of returning ""')
+  expect(timelineLineWords(lines[0]!)).not.toContain('I checked')
   // (c) no second line for the same verdict
-  expect(t.history.filter(h => h.text.includes('found problems')).length).toBe(2) // the checker's line and the worker's outcome only
-  expect(t.history.filter(h => h.text.includes('src/a.ts:12')).length).toBe(1)
+  expect(t.timeline.filter(h => h.text.includes('found problems')).length).toBe(2) // the checker's line and the worker's outcome only
+  expect(t.timeline.filter(h => h.text.includes('src/a.ts:12')).length).toBe(1)
   // the full report is saved, and the verdict line names the file
   expect((lines[0] as { report?: string }).report).toBe('.symcc/reports/T-1-try-1-checker.md')
   expect(await w.$.fs.read(`${ROOT}/.symcc/reports/T-1-try-1-checker.md`)).toContain('I checked T-1 by importing')
@@ -1924,21 +1924,21 @@ test('T-1079: a checker OK is "checker symcc-T-1-checker: OK"; an old entry with
   const w = world()
   await saveBoard(w.$, boardWith(true))
   const t = await finish(w, async id => checkerFinished(id, 'Everything held.\nOK'))
-  const ok = t.history.find(h => h.kind === 'checker-ok')!
-  expect(historyLineWords(ok)).toBe('checker symcc-T-1-checker: OK')
+  const ok = t.timeline.find(h => h.kind === 'checker-ok')!
+  expect(timelineLineWords(ok)).toBe('checker symcc-T-1-checker: OK')
   const { agent: _gone, ...old } = ok as typeof ok & { agent?: string }
-  expect(historyLineWords(old)).toBe('checker: OK')
-  expect(historyEvent(old)).toMatchObject({ who: 'checker', agent: '', by: 'checker' })
+  expect(timelineLineWords(old)).toBe('checker: OK')
+  expect(timelineEvent(old)).toMatchObject({ who: 'checker', agent: '', by: 'checker' })
 })
 
-test('T-1079: one try read top to bottom: each history line has one actor, in order (worker, checker, worker, lead, worker again)', async () => {
+test('T-1079: one try read top to bottom: each timeline line has one actor, in order (worker, checker, worker, lead, worker again)', async () => {
   const w = world()
-  const start = patchTask(boardWith(true), 'T-1', { history: withHistory([], ISO, workerStartedEntry({ role: 'general', attempts: 1, history: [] }, false, 'symcc-T-1')) }, ISO)
+  const start = patchTask(boardWith(true), 'T-1', { timeline: withTimeline([], ISO, workerStartedEntry({ role: 'general', attempts: 1, timeline: [] }, false, 'symcc-T-1')) }, ISO)
   await saveBoard(w.$, start)
   const t = await finish(w, async id => checkerFinished(id, PROBLEMS_REPORT))
   // the lead adds a note, and the next try's worker starts
-  const next = { ...t, attempts: 2, history: withHistory(t.history, ISO, ['note', noteAddedLine('use the other fix')], workerStartedEntry({ role: 'general', attempts: 2, history: t.history }, false, 'symcc-T-1')) }
-  const story = next.history.map(h => historyEvent(h)).filter(e => e.by).map(e => `${e.by}: ${e.said}${e.result ? ` → ${e.result}` : ''}`)
+  const next = { ...t, attempts: 2, timeline: withTimeline(t.timeline, ISO, ['note', noteAddedLine('use the other fix')], workerStartedEntry({ role: 'general', attempts: 2, timeline: t.timeline }, false, 'symcc-T-1')) }
+  const story = next.timeline.map(h => timelineEvent(h)).filter(e => e.by).map(e => `${e.by}: ${e.said}${e.result ? ` → ${e.result}` : ''}`)
   expect(story).toEqual([
     'worker symcc-T-1: worker started (role general)',
     'worker symcc-T-1: worker handed back',
@@ -1948,7 +1948,7 @@ test('T-1079: one try read top to bottom: each history line has one actor, in or
     'worker symcc-T-1: worker started (role general)',
   ])
   // symcc's own steps (prep, checker started, ...) have no actor, and no line mixes two
-  expect(next.history.map(h => historyEvent(h)).filter(e => !e.by).every(e => e.who === '')).toBe(true)
+  expect(next.timeline.map(h => timelineEvent(h)).filter(e => !e.by).every(e => e.who === '')).toBe(true)
 })
 
 test('T-996: a report whose only findings say "worse than main: none" is OK, and a follow-ups section before OK is OK', () => {
@@ -1964,7 +1964,7 @@ test('T-996: a report whose only findings say "worse than main: none" is OK, and
 test('T-996: the 2nd checker send-back makes the task wait for the owner with Merge as is / Keep fixing / Drop; Keep fixing starts one more try with the report', async () => {
   const w = world()
   const prior = { at: ISO, kind: 'checker-problems' as const, text: 'try 1: checker found problems: src/a.ts:1 old', try: 1 }
-  await saveBoard(w.$, boardWith(true, { attempts: 2, test_tries: 1, history: [prior] }))
+  await saveBoard(w.$, boardWith(true, { attempts: 2, test_tries: 1, timeline: [prior] }))
   const t = await finish(w, async id => checkerFinished(id, 'Problems:\n- src/a.ts:12 new hole: run x'))
   expect(t.status).toBe('waiting')
   expect(t.ask!.text).toBe('T-1 was sent back twice by the checker: src/a.ts:12 new hole: run x. Merge as is / Keep fixing / Drop')
@@ -1981,7 +1981,7 @@ test('T-996: the 2nd checker send-back makes the task wait for the owner with Me
 test('T-996: answering Drop to that question drops the task', async () => {
   const w = world()
   const prior = { at: ISO, kind: 'checker-problems' as const, text: 'try 1: checker found problems: src/a.ts:1 old', try: 1 }
-  await saveBoard(w.$, boardWith(true, { attempts: 2, history: [prior] }))
+  await saveBoard(w.$, boardWith(true, { attempts: 2, timeline: [prior] }))
   await finish(w, async id => checkerFinished(id, 'Problems:\n- src/a.ts:12 new hole: run x'))
   await runTool(w.$, 'change', { task: 'T-1', answer: 'Drop' })
   expect(find(await load(w.$), 'T-1')!.status).toBe('dropped')

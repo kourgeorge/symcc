@@ -18,7 +18,7 @@ const at = new Date(now).toISOString()
 function bigBoard() {
   let b = taskListBoard(now)
   for (let i = 0; i < 8; i++) b = addTask(b, { origin: { why: 'a test' }, title: `Task number ${i} with a rather long title that goes on and on and on past seventy characters`, files: ['src/'], after: [], backlog: i > 5 }, at)[0]
-  b = patchTask(b, 'T-1', { details: 'Pick one.\n  - indented line\n' + 'x'.repeat(900), history: [1, 2, 3, 4, 5, 6, 7].map(n => ({ at, kind: 'note', text: `event ${n}` })) as never }, at)
+  b = patchTask(b, 'T-1', { details: 'Pick one.\n  - indented line\n' + 'x'.repeat(900), timeline: [1, 2, 3, 4, 5, 6, 7].map(n => ({ at, kind: 'note', text: `event ${n}` })) as never }, at)
   return b
 }
 

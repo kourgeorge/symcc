@@ -162,7 +162,7 @@ export function statsHtml(d: StatsData, project: string): string {
   const maxFail = Math.max(0, ...d.failed.map(f => f.n))
   const ended = section(`How tasks ended (${plural(d.finished, 'done task')})`,
     d.ended.map((e, i) => barRow(e.label, e.n, maxEnd, `${e.n} · ${pctText(e.n, d.finished)}`, CYCLE[i % CYCLE.length]!)).join('')
-    + `<h3>Failed tries by reason (${d.failedTotal}, from history)</h3>`
+    + `<h3>Failed tries by reason (${d.failedTotal}, from timeline)</h3>`
     + d.failed.map(f => barRow(f.label, f.n, maxFail, String(f.n), f.key === 'changed' ? 'var(--grey)' : 'var(--red)', f.folded ?? '')).join(''))
 
   // T-731: the text report's "Each failed try" and "Tests that failed most" (T-721), the same short/full cut
@@ -202,10 +202,10 @@ export function statsHtml(d: StatsData, project: string): string {
   const shown = f.stages.filter(x => x.ms > 0 || (x.stage !== 'backlog' && x.stage !== 'blocked'))
   const maxStage = Math.max(0, ...shown.map(x => x.ms))
   const stageRow = (label: string, ms: number, avg: number, colour: string) => barRow(label, ms, maxStage, `${fmtDuration(ms)} · avg ${fmtDuration(avg)} · ${pctText(ms, f.lifetime)}`, colour)
-  const stages = section(`Time per stage (${plural(f.n, 'done task')}${f.lacking ? `; ${f.lacking} without timed history, left out` : ''})`, f.n
+  const stages = section(`Time per stage (${plural(f.n, 'done task')}${f.lacking ? `; ${f.lacking} without timed timeline, left out` : ''})`, f.n
     ? shown.map((x, i) => stageRow(x.label, x.ms, x.avgMs, CYCLE[i % CYCLE.length]!)).join('')
       + kv([['active', `${fmtDuration(f.active)} · avg ${fmtDuration(f.active / f.n)} · ${pctText(f.active, f.lifetime)}`], ['waiting', `${fmtDuration(f.waiting)} · avg ${fmtDuration(f.waiting / f.n)} · ${pctText(f.waiting, f.lifetime)}`], ['lifetime', `${fmtDuration(f.lifetime)} · avg ${fmtDuration(f.avgLifetime)}`]])
-    : '<p class="muted">No done tasks with timed history.</p>', true)
+    : '<p class="muted">No done tasks with timed timeline.</p>', true)
 
   const v = d.inv
   const inv = section(`Investigations (${d.invCount}, ${d.answered} answered)`, d.invCount ? kv([

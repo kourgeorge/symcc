@@ -61,7 +61,7 @@ const ask = (question: string, labels: string[], more: Record<string, unknown> =
 async function waitingTask(host: never, extra: Record<string, unknown>) {
   const { question, options, asked_files, ...rest } = extra as { question?: string; options?: string[]; asked_files?: string[] }
   const ask = question !== undefined || asked_files ? { by: asked_files ? 'symcc' : 'worker', text: question ?? 'files?', asked_at: ISO, ...(options ? { options } : {}), ...(asked_files ? { files: asked_files } : {}) } : undefined
-  const t = { id: 'T-1', title: 'Pick the color', details: '', files: ['a.ts'], status: 'waiting', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: ISO, updated_at: ISO, ...rest, ...(ask ? { ask } : {}) }
+  const t = { id: 'T-1', title: 'Pick the color', details: '', files: ['a.ts'], status: 'waiting', note: '', priority: 1, after: [], attempts: 1, timeline: [], branch: null, created_at: ISO, updated_at: ISO, ...rest, ...(ask ? { ask } : {}) }
   await change(host, x => ({ ...x, tasks: [...x.tasks, t as never], next_id: 2 }))
 }
 
@@ -174,7 +174,7 @@ test("a question about a task waiting for the owner is tied to that task's board
   expect(out.context[0]).toMatch(/^symcc put the owner's answer into T-1: /)
   const t = w.board().tasks[0]!
   expect(t.status).not.toBe('waiting')
-  expect(t.history.map(h => h.text).join('\n')).toContain('Red')
+  expect(t.timeline.map(h => h.text).join('\n')).toContain('Red')
 })
 
 test("a file request answered Allow in the pop-up allows the files; the lead hears it only in the pop-up's result, with no board update (T-968)", async () => {
@@ -488,7 +488,7 @@ test("T-753: a task-tied pop-up answered with the refusal words puts the answer 
   expect(out.context[0]).toMatch(/^symcc put the owner's answer into T-1: /)
   const t = w.board().tasks[0]!
   expect(t.status).not.toBe('waiting')
-  expect(t.history.map(h => h.text).join('\n')).toContain(said)
+  expect(t.timeline.map(h => h.text).join('\n')).toContain(said)
 })
 
 // T-801: the lead's wording of a task's question goes on the task and shows on the board in place of symcc's text
@@ -556,7 +556,7 @@ test("a worker's question with options shows the lead's question and options, an
   const after = w.board().tasks[0]!
   expect(after.status).not.toBe('waiting')
   expect(after.ask).toBeUndefined()
-  expect(after.history.map(h => h.text).join('\n')).toContain('Navy')
+  expect(after.timeline.map(h => h.text).join('\n')).toContain('Navy')
 })
 
 test("a tied pop-up keeps the task's waiting time, and a second one without options drops the first one's buttons", async () => {
@@ -585,7 +585,7 @@ test("the NEEDS YOU row for a more-time task shows the lead's text whole", () =>
 
 /** An answered investigation in review (T-1), put on the board. */
 async function answeredTask(host: never) {
-  const t = { id: 'T-1', title: 'Why is the cache slow', details: 'Find out why.', files: [], status: 'review', kind: 'investigation', note: 'answered; waiting for you to read it', answer: 'It is never cleared.', priority: 1, after: [], attempts: 1, history: [{ at: ISO, text: 'try 1: answered: It is never cleared.' }], branch: 'symcc/T-1', created_at: ISO, updated_at: ISO }
+  const t = { id: 'T-1', title: 'Why is the cache slow', details: 'Find out why.', files: [], status: 'review', kind: 'investigation', note: 'answered; waiting for you to read it', answer: 'It is never cleared.', priority: 1, after: [], attempts: 1, timeline: [{ at: ISO, text: 'try 1: answered: It is never cleared.' }], branch: 'symcc/T-1', created_at: ISO, updated_at: ISO }
   await change(host, x => ({ ...x, tasks: [...x.tasks, t as never], next_id: 2 }))
 }
 

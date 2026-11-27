@@ -356,8 +356,8 @@ test('T-773: a freshly opened VS Code board (no tab saved) shows the Live tab an
 })
 
 test('T-794: a task merged 3 minutes ago keeps a dim Branches row joining main; 11 minutes ago it has none; only finished rows still show the section; the same tasks as the Tasks lanes', () => {
-  const tasks = branchTasks(T0) as { id: string; status: string; history: { kind: string; at: string; text: string }[] }[]
-  const merged = (id: string, minAgo: number) => ({ ...tasks[3]!, id, history: [{ kind: 'merged', at: new Date(T0 - minAgo * 60_000).toISOString(), text: 'merged' }] })
+  const tasks = branchTasks(T0) as { id: string; status: string; timeline: { kind: string; at: string; text: string }[] }[]
+  const merged = (id: string, minAgo: number) => ({ ...tasks[3]!, id, timeline: [{ kind: 'merged', at: new Date(T0 - minAgo * 60_000).toISOString(), text: 'merged' }] })
   const only = [merged('T-724', 3), merged('T-730', 11), merged('T-731', 1), merged('T-732', 2), merged('T-733', 4)]
   const view = { tasks: only as never[], branches: { ...branchFactsAt(T0), tasks: {} } }
   const b = liveBranches(view, T0, 100)!

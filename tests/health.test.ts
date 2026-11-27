@@ -1,12 +1,12 @@
 import { expect, test } from 'claude-code/testing'
 import { type Board, type BoardTask, emptyBoard, boardHealth, newFindings, healthText, shareFiles, afterChanges, afterChangedLine, changeLines, OWNER_IDLE_MS } from '../hooks/board'
-import { hist } from './history-fixture'
+import { hist } from './timeline-fixture'
 
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
 
 function task(id: string, over: Partial<BoardTask> = {}): BoardTask {
-  return { id, title: `task ${id}`, details: '', files: [`src/${id}.ts`], status: 'todo', note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(10), updated_at: iso(10), ...over }
+  return { id, title: `task ${id}`, details: '', files: [`src/${id}.ts`], status: 'todo', note: '', priority: 0, after: [], attempts: 0, timeline: [], branch: null, created_at: iso(10), updated_at: iso(10), ...over }
 }
 const board = (tasks: BoardTask[], extra: Partial<Board> = {}): Board => ({ ...emptyBoard(), tasks, ...extra })
 const reasons = (b: Board) => boardHealth(b, NOW).map(f => `${f.reason}:${f.tasks.join(',')}`)
@@ -36,11 +36,11 @@ test('health: a dependency loop is found once', () => {
 
 test('health: starving after 3 changes of its after list, or 2+ hours while newer tasks started', () => {
   const h = hist('waits on changed: nothing → T-2', 'waits on changed: T-2 → T-3', 'waits on changed: T-3 → T-4')
-  expect(afterChanges({ history: h })).toBe(3)
+  expect(afterChanges({ timeline: h })).toBe(3)
   // its after list changed 3 times, and it waits only on a newer task
-  expect(reasons(board([task('T-1', { history: h, after: ['T-4'], files: ['a/'] }), task('T-4', { status: 'doing', files: ['a/'] })]))).toEqual(['starving:T-1'])
+  expect(reasons(board([task('T-1', { timeline: h, after: ['T-4'], files: ['a/'] }), task('T-4', { status: 'doing', files: ['a/'] })]))).toEqual(['starving:T-1'])
   // waiting on an older task is fair
-  expect(reasons(board([task('T-1', { status: 'doing' }), task('T-2', { history: h, after: ['T-1'] })]))).toEqual([])
+  expect(reasons(board([task('T-1', { status: 'doing' }), task('T-2', { timeline: h, after: ['T-1'] })]))).toEqual([])
   // ready for 3 hours while two newer tasks started (and took the only slot)
   const old = task('T-1', { created_at: iso(180), updated_at: iso(180) })
   const full = { max_parallel: 1 }
@@ -131,7 +131,7 @@ test('health: no repeat for the same tasks and reason; reset once the problem is
   expect(c.told.size).toBe(0)
 })
 
-test('the after list changing writes a "waits on changed" history line', () => {
+test('the after list changing writes a "waits on changed" timeline line', () => {
   expect(afterChangedLine(['T-1'], ['T-1'])).toBe(null)
   expect(afterChangedLine(['T-1'], undefined)).toBe(null)
   expect(afterChangedLine(['T-1'], ['T-2', 'T-3'])).toBe('waits on changed: T-1 → T-2, T-3')
@@ -146,7 +146,7 @@ test('health: the text opens with the health check label', () => {
 test('health: a task moved from the backlog to todo is not flagged for its backlog time', () => {
   const full = { max_parallel: 1 }
   const newer = [task('T-5', { status: 'doing' }), task('T-6', { status: 'review' })]
-  const waiting = (history: BoardTask['history']) => task('T-1', { created_at: iso(300), updated_at: iso(10), after: ['T-4'], history })
+  const waiting = (timeline: BoardTask['timeline']) => task('T-1', { created_at: iso(300), updated_at: iso(10), after: ['T-4'], timeline })
   const blocker = task('T-4', { status: 'doing' })
   // made 5 hours ago, but moved to todo 10 minutes ago
   const moved = waiting([{ at: iso(10), kind: 'moved-backlog', text: 'moved from the backlog' }])

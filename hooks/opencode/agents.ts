@@ -112,7 +112,7 @@ export function sessionEnd(info: OcSessionInfo, messages: ReadonlyArray<OcSessio
   const failed = info.outcome === 'failed' || last?.finish === 'error' || !!last?.error
   if (!failed) return { answer, end: { reason: 'answer' }, isAborted: false, tokens, ...cost }
   // T-928: the session's own error is kept apart from the worker's text, so a worker that wrote something before it
-  // failed ("Free usage limit reached …") still has its error said in the try's note, history and the lead's update
+  // failed ("Free usage limit reached …") still has its error said in the try's note, timeline and the lead's update
   const error = errorText(last?.error)
   return { answer: answer || error, end: { reason: 'error', ...(last?.error ? { error } : {}) }, isAborted: false, tokens, ...cost }
 }

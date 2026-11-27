@@ -101,7 +101,7 @@ export async function archiveOld(host: Host, nowMs = Date.now(), force = false):
   const moved = await locked(host, async () => {
     const b = await load(host)
     if (!onHere(b)) return null
-    // T-681: a task loaded as a stub (its parts file missing) stays: archived now, it would keep no history, and
+    // T-681: a task loaded as a stub (its parts file missing) stays: archived now, it would keep no timeline, and
     // putting the good parts file back would no longer restore it
     const old = toArchive(b, nowMs).filter(t => !isStubbed(t.id))
     if (!old.length) return null
@@ -138,7 +138,7 @@ export async function findArchived(host: Host, id: string): Promise<BoardTask | 
 export const archivedText = (id: string) => `${id} is archived (in ${S.N.archiveFile}); archived tasks can't be changed. Add a new task instead.`
 
 /**
- * Brings an archived dropped task back to the board as "todo", with a history line. The board is
+ * Brings an archived dropped task back to the board as "todo", with a timeline line. The board is
  * saved first, then the task leaves the archive (so it is never lost on the way). Throws for a done one.
  */
 export async function bringBackArchived(host: Host, id: string): Promise<string> {

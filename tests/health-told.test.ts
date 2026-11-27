@@ -9,7 +9,7 @@ import { fakeHost, memoryFs } from './fake-host'
 const NOW = Date.parse('2026-11-13T12:00:00Z')
 const iso = (minAgo: number) => new Date(NOW - minAgo * 60_000).toISOString()
 function task(id: string, over: Partial<BoardTask> = {}): BoardTask {
-  return { id, title: `task ${id}`, details: '', files: [`src/${id}.ts`], status: 'todo', note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(10), updated_at: iso(10), ...over }
+  return { id, title: `task ${id}`, details: '', files: [`src/${id}.ts`], status: 'todo', note: '', priority: 0, after: [], attempts: 0, timeline: [], branch: null, created_at: iso(10), updated_at: iso(10), ...over }
 }
 
 test('health: a told pushed-back problem is not told again after a reload or when the task it waits for retries', async () => {

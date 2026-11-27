@@ -1,5 +1,5 @@
 // The board panel's view stays under Claude Code's 4 MB limit on one plugin value: every done and dropped task is
-// slimmed (no history, details or long parts, T-891), open ones stay whole, and a view still too big is trimmed.
+// slimmed (no timeline, details or long parts, T-891), open ones stay whole, and a view still too big is trimmed.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { slimView, VIEW_MAX_CHARS } from '../hooks/claude/panel'
@@ -19,7 +19,7 @@ const long = 'x'.repeat(5000)
 const VIEW_WHOLE_MS = 2 * 24 * 60 * 60_000
 
 function task(id: string, status: string, msAgo: number) {
-  return { id, title: id, status, details: long, note: '', after: [], files: [], attempts: 1, created_at: at(msAgo), updated_at: at(msAgo), history: [{ at: at(msAgo), kind: 'merged', text: long }] }
+  return { id, title: id, status, details: long, note: '', after: [], files: [], attempts: 1, created_at: at(msAgo), updated_at: at(msAgo), timeline: [{ at: at(msAgo), kind: 'merged', text: long }] }
 }
 
 function viewOf(tasks: unknown[]): SymccView {
@@ -28,12 +28,12 @@ function viewOf(tasks: unknown[]): SymccView {
 
 test('T-891: every finished task is slimmed, old or just finished; open ones stay whole', () => {
   const v = slimView(viewOf([task('T-1', 'done', VIEW_WHOLE_MS + 60_000), task('T-2', 'done', 60_000), task('T-3', 'todo', VIEW_WHOLE_MS * 3), task('T-4', 'dropped', VIEW_WHOLE_MS * 2)]))
-  const byId = Object.fromEntries((v.tasks as unknown as { id: string; details: string; history: unknown[] }[]).map(t => [t.id, t]))
+  const byId = Object.fromEntries((v.tasks as unknown as { id: string; details: string; timeline: unknown[] }[]).map(t => [t.id, t]))
   expect(byId['T-1']?.details).toBe('')
-  expect(byId['T-1']?.history).toEqual([])
+  expect(byId['T-1']?.timeline).toEqual([])
   expect(byId['T-4']?.details).toBe('')
   expect(byId['T-2']?.details).toBe('')
-  expect(byId['T-2']?.history).toEqual([])
+  expect(byId['T-2']?.timeline).toEqual([])
   expect(byId['T-3']?.details).toBe(long)
 })
 
@@ -61,12 +61,12 @@ test('a view over the limit is trimmed, oldest finished tasks first, instead of 
 })
 
 test('open tasks are cut only after old finished tasks have gone', () => {
-  const open = { ...task('T-open', 'todo', 60_000), details: long.repeat(4), history: Array.from({ length: 40 }, () => ({ at: at(0), kind: 'step', text: 'line' })) }
-  const tasks = [open, ...Array.from({ length: 20000 }, (_, i) => ({ ...task(`T-${i}`, 'done', VIEW_WHOLE_MS * 2 + i), details: '', history: [] }))]
+  const open = { ...task('T-open', 'todo', 60_000), details: long.repeat(4), timeline: Array.from({ length: 40 }, () => ({ at: at(0), kind: 'step', text: 'line' })) }
+  const tasks = [open, ...Array.from({ length: 20000 }, (_, i) => ({ ...task(`T-${i}`, 'done', VIEW_WHOLE_MS * 2 + i), details: '', timeline: [] }))]
   const out = slimView(viewOf(tasks))
-  const o = (out.tasks as unknown as { id: string; details: string; history: unknown[] }[]).find(t => t.id === 'T-open')
+  const o = (out.tasks as unknown as { id: string; details: string; timeline: unknown[] }[]).find(t => t.id === 'T-open')
   expect(o?.details).toBe(long.repeat(4))
-  expect(o?.history.length).toBe(40)
+  expect(o?.timeline.length).toBe(40)
   expect(JSON.stringify(out).length).toBeLessThan(VIEW_MAX_CHARS)
 })
 
@@ -96,7 +96,7 @@ test('publish of a board with many long recent finished tasks stores a view unde
   const w = refusingWorld()
   const b = emptyBoard()
   const base = addTask(emptyBoard(), { origin: { why: 't' }, title: 'base' }, at(0))[0].tasks[0]!
-  for (let i = 1; i <= 700; i++) b.tasks.push({ ...base, id: `T-${i}`, status: 'done', details: long, history: [{ at: at(0), kind: 'merged', text: long }], updated_at: at(60_000) } as never)
+  for (let i = 1; i <= 700; i++) b.tasks.push({ ...base, id: `T-${i}`, status: 'done', details: long, timeline: [{ at: at(0), kind: 'merged', text: long }], updated_at: at(60_000) } as never)
   expect(JSON.stringify(b.tasks).length).toBeGreaterThan(3_000_000)
   await publish(w.host, b)
   expect(w.stored().length).toBeGreaterThan(0)

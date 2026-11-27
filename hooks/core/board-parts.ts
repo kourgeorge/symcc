@@ -1,5 +1,5 @@
 // Keeping board.json small (T-675). Claude Code reads and writes a file whole and refuses one over 4 MiB, and a
-// busy board grows by about a megabyte a day, nearly all of it from done and dropped tasks (their history, tries,
+// busy board grows by about a megabyte a day, nearly all of it from done and dropped tasks (their timeline, tries,
 // details, origin and notes). So a finished task keeps only a short stub in board.json (STUB_KEYS, and `parts`: the
 // file holding the rest), and the rest goes to a parts file of its own under .<name>/tasks/, one file per
 // PARTS_PER_FILE task ids (tasks/T-600.json holds T-600 to T-649). Reading the board joins them back (joinParts),
@@ -101,7 +101,7 @@ export const safePartsFile = (f: unknown): f is string => typeof f === 'string' 
 /**
  * board.json's parsed content `raw` with each stub joined with its parts (read from `files`: each parts file's tasks
  * by name; a file missing from it was not there), its `parts` field gone. Where its board.json fields and its parts
- * both have a field, board.json's wins. `missing`: what could not be found, in words (e.g. "T-612: its history,
+ * both have a field, board.json's wins. `missing`: what could not be found, in words (e.g. "T-612: its timeline,
  * tries and details are missing from tasks/T-600.json"); such a task loads as its stub alone. `stubbed`: those
  * tasks' ids and parts files, in the same order as `missing` (a save must not write their empty parts over a parts file put back later, T-681).
  */
@@ -114,7 +114,7 @@ export function joinParts(raw: unknown, files: Map<string, Record<string, Record
     const { [PARTS_KEY]: file, ...stub } = t
     const parts = typeof file === 'string' ? files.get(file)?.[String(t.id)] : undefined
     if (!parts) {
-      missing.push(`${String(t.id)}: its history, tries and details are missing from ${String(file)}`)
+      missing.push(`${String(t.id)}: its timeline, tries and details are missing from ${String(file)}`)
       stubbed.push({ id: String(t.id), file: String(file) })
       return stub
     }
@@ -129,16 +129,16 @@ export function hasWholeFinished(raw: unknown, held?: Set<string>): boolean {
 }
 
 /** The fields a finished task leaves out of the board view file (OpenCode's TUI reads its parts file when its page opens). */
-export const VIEW_LEFT_OUT = ['history', 'details', 'test_output', 'answer', 'suggested', 'research_notes'] as const
+export const VIEW_LEFT_OUT = ['timeline', 'details', 'test_output', 'answer', 'suggested', 'research_notes'] as const
 
-/** The view task's field with the times of its history lines the Live tab's "today" counts (VIEW_MARK_KINDS), without their text. */
-export const VIEW_MARKS_KEY = 'history_marks'
-/** The history kinds whose times a finished view task keeps (merges, the checker's send-backs and the 'failed' lines of tests failed or a clash with main, see core/live.ts liveToday). */
+/** The view task's field with the times of its timeline lines the Live tab's "today" counts (VIEW_MARK_KINDS), without their text. */
+export const VIEW_MARKS_KEY = 'timeline_marks'
+/** The timeline kinds whose times a finished view task keeps (merges, the checker's send-backs and the 'failed' lines of tests failed or a clash with main, see core/live.ts liveToday). */
 export const VIEW_MARK_KINDS: readonly string[] = ['merged', 'checker-problems', 'failed']
-/** A history line's kind and time, as a finished view task keeps it. */
+/** A timeline line's kind and time, as a finished view task keeps it. */
 export type ViewMark = { kind: string; at?: string; reason?: string }
 
-/** The history marks of view task `t`: its own `history_marks` when it is a finished one slimmed by viewTask, else undefined. */
+/** The timeline marks of view task `t`: its own `timeline_marks` when it is a finished one slimmed by viewTask, else undefined. */
 export function viewMarks(t: object): ViewMark[] | undefined {
   const m = (t as Record<string, unknown>)[VIEW_MARKS_KEY]
   return Array.isArray(m) ? (m.filter(isObj) as ViewMark[]) : undefined
@@ -153,10 +153,10 @@ export function viewTask<T extends { id: string; status: SymccStatus }>(t: T): T
   const file = splits(t) ? partsFileOf(t.id) : ''
   if (!file) return t
   const x = { ...t } as Record<string, unknown>
-  const history = Array.isArray(x.history) ? x.history.filter(isObj) : []
-  // A task viewTask already slimmed has no history left: keep its marks (slimming twice must not wipe them, T-891).
-  const slimmed = PARTS_KEY in x && Array.isArray(x[VIEW_MARKS_KEY]) && history.length === 0
-  if (!slimmed) x[VIEW_MARKS_KEY] = history.filter(h => VIEW_MARK_KINDS.includes(String(h.kind)) && (h.kind !== 'failed' || ['tests', 'clash'].includes(String(h.reason)))).map(h => ({ kind: String(h.kind), ...(typeof h.at === 'string' ? { at: h.at } : {}), ...(typeof h.reason === 'string' ? { reason: h.reason } : {}) }))
+  const timeline = Array.isArray(x.timeline) ? x.timeline.filter(isObj) : []
+  // A task viewTask already slimmed has no timeline left: keep its marks (slimming twice must not wipe them, T-891).
+  const slimmed = PARTS_KEY in x && Array.isArray(x[VIEW_MARKS_KEY]) && timeline.length === 0
+  if (!slimmed) x[VIEW_MARKS_KEY] = timeline.filter(h => VIEW_MARK_KINDS.includes(String(h.kind)) && (h.kind !== 'failed' || ['tests', 'clash'].includes(String(h.reason)))).map(h => ({ kind: String(h.kind), ...(typeof h.at === 'string' ? { at: h.at } : {}), ...(typeof h.reason === 'string' ? { reason: h.reason } : {}) }))
   for (const k of VIEW_LEFT_OUT) delete x[k]
   if (isObj(x.origin)) {
     const { request: _r, evidence: _e, ...origin } = x.origin
@@ -167,12 +167,12 @@ export function viewTask<T extends { id: string; status: SymccStatus }>(t: T): T
 
 /**
  * View task `t` safe to draw while its parts are not (yet) read: a task viewTask slimmed gets an empty `details` and
- * `history` where they are missing (pages read both). Any other task comes back as it is.
+ * `timeline` where they are missing (pages read both). Any other task comes back as it is.
  */
 export function viewStubFilled<T extends object>(t: T): T {
   const x = t as Record<string, unknown>
-  if (!(PARTS_KEY in x) || (typeof x.details === 'string' && Array.isArray(x.history))) return t
-  return { ...x, details: typeof x.details === 'string' ? x.details : '', history: Array.isArray(x.history) ? x.history : [] } as T
+  if (!(PARTS_KEY in x) || (typeof x.details === 'string' && Array.isArray(x.timeline))) return t
+  return { ...x, details: typeof x.details === 'string' ? x.details : '', timeline: Array.isArray(x.timeline) ? x.timeline : [] } as T
 }
 
 /** View task `t` with its parts (from its parts file's text) put back; `t` itself when it has none or they can't be read. */
@@ -254,7 +254,7 @@ export const tooBigText = (file: string, bytes: number, doing: 'read' | 'write' 
   `${file} is ${mbText(bytes)}, over the 4 MB limit on ${doing === 'read' ? 'reading' : 'writing'} one file, so symcc can't ${doing} it; nothing that needs it works until it is smaller`
 
 /**
- * What makes a board big, per field across its tasks (each field's JSON bytes, history counted per entry kind too),
+ * What makes a board big, per field across its tasks (each field's JSON bytes, timeline counted per entry kind too),
  * biggest first: for finding what to keep out of board.json.
  */
 export function fieldSizes(b: { tasks?: unknown }): { field: string; bytes: number }[] {
@@ -264,7 +264,7 @@ export function fieldSizes(b: { tasks?: unknown }): { field: string; bytes: numb
     if (!isObj(t)) continue
     for (const [k, v] of Object.entries(t)) {
       add(k, utf8Bytes(JSON.stringify(v) ?? ''))
-      if (k === 'history' && Array.isArray(v)) for (const e of v) if (isObj(e)) add(`history:${String(e.kind)}`, utf8Bytes(JSON.stringify(e)))
+      if (k === 'timeline' && Array.isArray(v)) for (const e of v) if (isObj(e)) add(`timeline:${String(e.kind)}`, utf8Bytes(JSON.stringify(e)))
       if (k === 'origin' && isObj(v)) for (const [ok, ov] of Object.entries(v)) add(`origin.${ok}`, utf8Bytes(JSON.stringify(ov) ?? ''))
     }
   }

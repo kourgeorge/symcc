@@ -13,7 +13,7 @@ import { openQuestions, type OwnerQuestion } from './questions'
 import { checkStepNow } from './lead'
 import { STEP_WORD } from './panel'
 import { fromText } from './origin'
-import { historyLineText } from './history'
+import { timelineLineText } from './timeline'
 import { liveToday, todayMore, type TodayTeam } from './live'
 import { fmtDuration, fmtTokens } from './runs'
 import type { OrgMemNote } from './org-mem'
@@ -171,13 +171,13 @@ const cutPart = (s: string, n: number): string => {
 /** One task's page as chat text. */
 export function chatTaskText(t: SymccTask, report: ChatReport | null | undefined, nowMs: number, page = 1): string {
   const L =[`${t.id}: ${plain(t.title)}`]
-  const changed = historyLineText({ at: t.updated_at } as never, nowMs).split('  ')[0]
+  const changed = timelineLineText({ at: t.updated_at } as never, nowMs).split('  ')[0]
   L.push(`Status: ${STATUS_WORD[t.status]}${Number(t.attempts) > 0 ? `, try ${t.attempts}` : ''}${changed ? `, changed ${changed}` : ''}`)
   if ((t as BoardTask).project) L.push(`Project: ${plain((t as BoardTask).project!)}`)
   L.push(t.origin?.why ? `Why: ${plain(t.origin.why)}` : plain(fromText(t, 100)))
   if (t.status === 'waiting' && t.ask?.text) L.push(...askLines(taskAsks(t as BoardTask)?.text ?? t.ask.text, askChoices(t as BoardTask, taskAsks(t as BoardTask))))
   L.push('What to do:', t.details.trim() ? cutPart(t.details, PART_MAX) : '(no details)')
-  if (t.history.length) L.push('Last events:', ...t.history.slice(-5).reverse().map(h => plain(historyLineText(h, nowMs))))
+  if (t.timeline.length) L.push('Last events:', ...t.timeline.slice(-5).reverse().map(h => plain(timelineLineText(h, nowMs))))
   if (report?.text) L.push(`Report (try ${report.try}):`, cutPart(report.text, PART_MAX))
   L.push("Say: approve, reject, tasks")
   return fitChat(L.join('\n').split('\n'), `say 'more ${t.id}'`, page)

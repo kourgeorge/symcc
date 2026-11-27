@@ -1,5 +1,5 @@
 // T-1145: runs scripts/site-stats.ts on a small fake project (a board with a finished task kept in tasks/T-1.json,
-// an archive file, scouts.json) and checks the fields of the JSON and that no title, detail, request, history text
+// an archive file, scouts.json) and checks the fields of the JSON and that no title, detail, request, timeline text
 // or path of the fake board is in it. Run by tests/site-stats.sh: bun tests/site-stats-check.mjs <repo> <tmp folder>
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -12,8 +12,8 @@ mkdirSync(join(data, 'tasks'), { recursive: true })
 const now = Date.now()
 const iso = min => new Date(now - min * 60_000).toISOString()
 const run = (min, tokens) => ({ started: iso(100), ended: iso(100 - min), ended_by: 'merged', ended_note: 'merged', agents: [{ kind: 'worker', started: iso(100), ended: iso(100 - min), tokens: { input: tokens, output: tokens / 10 } }] })
-const base = (id, title, status, over = {}) => ({ id, title, details: `DETAILS-${id}`, files: ['src/secret-file.ts'], status, note: 'NOTE-SECRET', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(100), updated_at: iso(1), ...over })
-const done = (id, title, over = {}) => base(id, title, 'done', { history: [{ at: iso(2), kind: 'merged', text: 'HISTORY-SECRET', how: 'own' }], runs: [run(10, 1000)], origin: { by: 'scout', scout: 'bugs', why: 'WHY-SECRET', request: 'REQUEST-SECRET' }, ...over })
+const base = (id, title, status, over = {}) => ({ id, title, details: `DETAILS-${id}`, files: ['src/secret-file.ts'], status, note: 'NOTE-SECRET', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: iso(100), updated_at: iso(1), ...over })
+const done = (id, title, over = {}) => base(id, title, 'done', { timeline: [{ at: iso(2), kind: 'merged', text: 'TIMELINE-SECRET', how: 'own' }], runs: [run(10, 1000)], origin: { by: 'scout', scout: 'bugs', why: 'WHY-SECRET', request: 'REQUEST-SECRET' }, ...over })
 const t1 = done('T-1', 'TITLE-SECRET-ONE')
 const { id, title, status, priority, after, attempts, branch, created_at, updated_at } = t1
 writeFileSync(join(data, 'board.json'), JSON.stringify({
@@ -52,7 +52,7 @@ if (s.perDay.reduce((n, d) => n + d.done, 0) !== s.tasks.done - s.tasks.answered
 // T-1147: a fixed offset: a change task done at 23:30 UTC is on the next day at UTC+2; an answered investigation is not counted
 const { siteStats } = await import(join(repo, 'hooks/core/site-stats.ts'))
 const at = '2026-11-20T23:30:00.000Z'
-const mk = (id, over) => ({ ...base(id, 't', 'done', { history: [{ at, kind: 'merged', text: 'x', how: 'own' }], updated_at: at, runs: [run(10, 1000)] }), ...over })
+const mk = (id, over) => ({ ...base(id, 't', 'done', { timeline: [{ at, kind: 'merged', text: 'x', how: 'own' }], updated_at: at, runs: [run(10, 1000)] }), ...over })
 const nowFixed = Date.parse('2026-11-21T12:00:00Z')
 const tasks = [mk('T-10', {}), mk('T-11', { kind: 'investigation' })]
 const days = off => siteStats({ tasks, nowMs: nowFixed, from: '2026-11-09', offsetMin: off }).perDay

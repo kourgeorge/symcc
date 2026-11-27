@@ -141,7 +141,7 @@ export function copilotTouches(dir: string, toolName: string, toolArgs: unknown)
  * A running shell keeps what was typed into it across calls, so a command split over two calls ("echo x > /re\\",
  * then "po/README.md") would pass if each piece were judged alone. So symcc's agents (not the lead) may not type into a
  * running shell (write_bash, write_powershell) nor start or reach one by id (a bash or powershell call with a shellId,
- * or async: true): each command goes in one call and is judged whole, and no typed-text history is needed.
+ * or async: true): each command goes in one call and is judged whole, and no typed-text timeline is needed.
  */
 export const splitShellText = 'Refused: symcc workers run each shell command on its own; send the whole command in one bash call (no shellId, no async, no write_bash).'
 

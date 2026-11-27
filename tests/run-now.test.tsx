@@ -1,7 +1,7 @@
 // T-954: "Run now" on a task starts its worker at once, instead of waiting for its turn: even when every agent slot is
 // busy (one over the limit; nothing else starts until the count is back under), on a paused board (only this one
 // starts), from the backlog (it moves to todo), and, after "Start anyway?", while tasks it waits on aren't done. Its
-// history says "started now by the owner", and the health check doesn't count it as pushing older tasks back.
+// timeline says "started now by the owner", and the health check doesn't count it as pushing older tasks back.
 // These run the loaded plugin (as start-queue.test.tsx): a start is claimed ("doing", queued for the next turn).
 import { joinedText } from '../hooks/core/board-parts'
 import { expect, mock, type Engine } from 'claude-code/testing'
@@ -75,9 +75,9 @@ const runTool = async ($: Engine, task: string, more: Record<string, unknown> = 
   const r = (await $.tool.call({ tool: 'mcp__symcc__run', task, ...more } as never)) as { result?: string }
   return String(r?.result ?? r)
 }
-const runNowLines = (t: BoardTask) => t.history.filter(e => e.kind === 'run-now')
+const runNowLines = (t: BoardTask) => t.timeline.filter(e => e.kind === 'run-now')
 
-test('T-954: run now with a free slot starts the task at once, with its history line', async ($, on) => {
+test('T-954: run now with a free slot starts the task at once, with its timeline line', async ($, on) => {
   const w = world(on)
   // 3 slots, the board paused: nothing starts on its own, T-2 todo
   w.files.set(BOARD, JSON.stringify(todo(2, 3, 'paused')))
@@ -112,7 +112,7 @@ test('T-954: the health check does not count run now starts as newer tasks that 
   const old = new Date(T0 - 5 * 3_600_000).toISOString()
   let b = todo(3, 1)
   b = { ...b, tasks: b.tasks.map(t => ({ ...t, created_at: old, updated_at: old })) }
-  const started = (id: string, kind: 'run-now' | 'stage') => (x: Board) => patchTask(x, id, { status: 'doing', attempts: 1, runs: [{ started: ISO }], history: [{ at: ISO, kind, text: kind === 'run-now' ? 'try 1: started now by the owner' : 'try 1: worker started', try: 1 }] }, old)
+  const started = (id: string, kind: 'run-now' | 'stage') => (x: Board) => patchTask(x, id, { status: 'doing', attempts: 1, runs: [{ started: ISO }], timeline: [{ at: ISO, kind, text: kind === 'run-now' ? 'try 1: started now by the owner' : 'try 1: worker started', try: 1 }] }, old)
   // T-2 and T-3 (newer) started the usual way while T-1 waited 5 hours: T-1 is flagged
   const usual = started('T-3', 'stage')(started('T-2', 'stage')(b))
   expect(boardHealth(usual, T0).filter(f => f.reason === 'starving').map(f => f.tasks)).toEqual([['T-1']])
@@ -132,7 +132,7 @@ test('T-954: a run now start that fails says the task failed, not that it starts
   expect(said).not.toContain('when there is room')
 })
 
-test('T-954: two run nows on one task at once: both say it started, and it has one history line', async ($, on) => {
+test('T-954: two run nows on one task at once: both say it started, and it has one timeline line', async ($, on) => {
   const w = world(on)
   w.files.set(BOARD, JSON.stringify(todo(3, 1, 'paused')))
   await $.session.start({ cwd: '/repo' } as never)
@@ -228,7 +228,7 @@ test('T-954: the question names each unfinished task with its state; a run now t
   expect(runNowQuestion('T-3', runNowWaits(b, t3))).toBe('T-3 waits on T-1 (running). Start anyway?')
   // T-3 started now on try 1 while T-1 runs, both may change src1/
   b = patchTask(b, 'T-1', { files: ['src1/'] }, ISO)
-  b = patchTask(b, 'T-3', { status: 'doing', attempts: 1, files: ['src1/a.ts'], history: [...t3.history, { at: ISO, kind: 'run-now', text: 'try 1: started now by the owner', try: 1 }] }, ISO)
+  b = patchTask(b, 'T-3', { status: 'doing', attempts: 1, files: ['src1/a.ts'], timeline: [...t3.timeline, { at: ISO, kind: 'run-now', text: 'try 1: started now by the owner', try: 1 }] }, ISO)
   const rows = (id: string) => detailRows(b.tasks.find(t => t.id === id)!, { roles: [], all: b.tasks, when: x => x, nowMs: T0 }).flatMap(r => r.segs.map(s => s.text))
   expect(rows('T-3')).toContain(`⚠ ${runNowShareText(['T-1'])}`)
   expect(runNowShareText(['T-1'])).toBe('started now while T-1 runs; they share files, so their changes may clash at the merge')

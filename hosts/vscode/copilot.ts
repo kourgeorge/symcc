@@ -52,7 +52,7 @@ export type CopilotSession = {
   abort: () => Promise<void>
   setModel: (model: string, o?: { reasoningEffort?: string }) => Promise<void>
   disconnect: () => Promise<void>
-  rpc: { history: { compact: () => Promise<{ success: boolean; summaryContent?: string }> } }
+  rpc: { timeline: { compact: () => Promise<{ success: boolean; summaryContent?: string }> } }
 }
 
 export type CopilotClient = {
@@ -256,7 +256,7 @@ function copilotAgent(session: CopilotSession, model: string, turn: { readOnly: 
       }
     },
     async summarize() {
-      const done = session.rpc.history.compact().then(
+      const done = session.rpc.timeline.compact().then(
         (r): SdkRunResult => (r.success ? { status: 'finished', result: r.summaryContent ?? '' } : { status: 'error', error: 'Copilot could not summarize the conversation' }),
         (err): SdkRunResult => ({ status: 'error', error: (err as Error).message }),
       )

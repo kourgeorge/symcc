@@ -44,5 +44,5 @@ export function addPassedTree(list: readonly PassedTree[], tree: string, command
 /** The file's text for `list`. */
 export const passedTreesText = (list: readonly PassedTree[]) => JSON.stringify({ passed: list }) + '\n'
 
-/** What the task's history and the lead's update say when the run was skipped. */
+/** What the task's timeline and the lead's update say when the run was skipped. */
 export const testsSkippedText = (tree: string) => `tests: this exact code already passed (tree ${tree.slice(0, 7)}); not run again`

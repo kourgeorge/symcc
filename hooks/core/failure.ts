@@ -9,7 +9,7 @@ import { failBlocks, moreFailingLine } from './settings'
 /** Every way a task can end as failed (see workers.ts, review.ts and checker.ts in hooks/app). */
 export type FailedHow = 'tests' | 'checker' | 'scope' | 'no change' | 'no result' | 'timed out' | 'api error' | 'refused' | 'no start' | 'clash' | 'stopped' | 'hung' | 'ended early' | 'other'
 
-type Failed = Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'test_output' | 'runs'>>
+type Failed = Pick<SymccTask, 'note' | 'timeline'> & Partial<Pick<SymccTask, 'test_output' | 'runs'>>
 
 /** How task `t` failed, read from its note, its test output and how its last try ended. */
 export function failedHow(t: Failed): FailedHow {
@@ -60,7 +60,7 @@ const QUOTED = /```[\s\S]*?```|`[^`\n]*`|"[^"\n]*"|“[^”\n]*”|‘[^’\n]*�
  * The text check for whether a worker ended its turn while its work still runs ("The background runs are still
  * going; I'll continue when they finish."). It never fails a try (only the host's signal, TurnEnd.background in
  * app/workers.ts, does): it only adds a warning note (endedEarlyNote) to the lead's board update and the task's
- * history, so a false alarm costs little. Still kept narrow: only the answer's last paragraph is read (not when it is a
+ * timeline, so a false alarm costs little. Still kept narrow: only the answer's last paragraph is read (not when it is a
  * bullet list), with quotes and code taken out, sentence by sentence, and a sentence counts only when it says something
  * is still running AND the writer goes on when it finishes (or is waiting for it). Offers ("If you want, I'll continue
  * with …") and plain "I'll / let me continue" without anything still running never count.
@@ -86,9 +86,9 @@ export function endedEarlyNote(id: string, sentence: string): string {
   return `${id}'s answer may have ended before its work finished: "${cutLine(sentence, 200)}" (only a warning: its try goes on to the tests and merge as usual)`
 }
 
-/** What the worker said in its last try that ended with `detail` (from the history line "try N: <said> → <detail>"); '' if none. */
+/** What the worker said in its last try that ended with `detail` (from the timeline line "try N: <said> → <detail>"); '' if none. */
 function saidBefore(t: Failed, detail: RegExp): string {
-  for (const { text: line } of [...(t.history ?? [])].reverse()) {
+  for (const { text: line } of [...(t.timeline ?? [])].reverse()) {
     const at = line.lastIndexOf(' → ')
     if (at < 0 || !detail.test(line.slice(at + 3))) continue
     const said = line.slice(0, at).replace(/^try \S+(?: \(role [^)]*\))?:\s*/, '').trim()
@@ -249,7 +249,7 @@ const upper = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 /**
  * Why failed task `t` failed, in one plain sentence (or two): the same text in the board row, the lead's text
  * board and the task page's "Why it failed" block. Built from the task alone (its note, test output, runs and
- * history), so it needs no file read.
+ * timeline), so it needs no file read.
  */
 export function whyFailed(t: Failed): string {
   const note = (t.note ?? '').trim()
@@ -333,12 +333,12 @@ export function failNext(t: Failed): string {
     case 'stopped':
       return 'Retry to start a fresh try (it goes on from the work so far), ask the lead in the chat to make it smaller, or Drop it.'
     default:
-      return 'Read the history and report below; Retry, ask the lead in the chat to change the task, or Drop it.'
+      return 'Read the timeline and report below; Retry, ask the lead in the chat to change the task, or Drop it.'
   }
 }
 
 /**
- * What the worker's report (`report`, or what it said in the history when the report can't be read) asks for:
+ * What the worker's report (`report`, or what it said in the timeline when the report can't be read) asks for:
  * a "NEED FILES:" line, or a question it ends on; '' when it asks nothing.
  */
 export function failAsks(report: string | null | undefined): string {

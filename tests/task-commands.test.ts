@@ -157,5 +157,5 @@ test('/symcc-task retry puts a failed task back to todo; merged marks one done w
   expect(out?.text).toContain('T-1 done: its work is already in main')
   const t = await task(host, 'T-1')
   expect(t.status).toBe('done')
-  expect(t.history.at(-1)?.text).toContain('marked done by the owner')
+  expect(t.timeline.at(-1)?.text).toContain('marked done by the owner')
 })

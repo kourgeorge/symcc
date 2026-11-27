@@ -15,7 +15,7 @@ const iso = (msAgo: number) => new Date(now - msAgo).toISOString()
 const task = (id: string, status: string, msAgo: number, details: string, request: string) => ({
   id, title: `Task ${id}`, status, details, note: '', after: [], files: [], attempts: 1, priority: 1,
   origin: { why: 'x', by: 'owner', request }, created_at: iso(msAgo + 60_000), updated_at: iso(msAgo),
-  history: [{ at: iso(msAgo), kind: 'merged', text: 'try 1 → merged into main' }],
+  timeline: [{ at: iso(msAgo), kind: 'merged', text: 'try 1 → merged into main' }],
 })
 // T-5 finished a minute ago (before T-891 the view kept it whole), T-6 five days ago, T-7 is open
 const WHOLE = [

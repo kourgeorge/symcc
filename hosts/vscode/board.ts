@@ -1,4 +1,4 @@
-// The board's serve side: what the panel and the sidebar show besides the board view (the lead chat and its history,
+// The board's serve side: what the panel and the sidebar show besides the board view (the lead chat and its timeline,
 // each agent's steps, the lead's model and mode, the account's models, the slash commands, a network problem), what
 // their presses do, and what serve asks of the editor (./contract.ts EditorAction). The webview's messages come here
 // through the extension unread (./protocol.ts FromWebview); an answer goes back to the surface that asked.

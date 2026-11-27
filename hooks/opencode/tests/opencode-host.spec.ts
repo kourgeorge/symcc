@@ -1590,7 +1590,7 @@ test('the TUI\'s view file (T-466, R6): each publish writes .symcc/view.json; /s
     expect(answered.text).toContain('T-2')
     expect(meanwhile.some(l => l.startsWith('The owner answered T-2 ("postgres")'))).toBe(true)
     await until(async () => (await view())!.view.tasks.find(t => t.id === 'T-2')!.status !== 'waiting')
-    expect((await view())!.view.tasks.find(t => t.id === 'T-2')!.history.some(l => l.text.includes('postgres'))).toBe(true)
+    expect((await view())!.view.tasks.find(t => t.id === 'T-2')!.timeline.some(l => l.text.includes('postgres'))).toBe(true)
     // (T-562) the lead's roles and task types tools publish a change, so the panel's Roles and Task types pages show it at once
     expect((await view())!.view.roles?.some(r => r.name === 'docsy')).toBe(false)
     expect(JSON.stringify(await tool('symcc_roles', { action: 'add', name: 'docsy', description: 'writes the docs', body: 'Check the docs.' }))).toContain('docsy')

@@ -2,7 +2,7 @@
 // Every function here is pure; the plugin (app/archive.ts) reads and writes the files.
 import { DEFAULT_NAME, namesFor } from '../name'
 import { type ArchivedTotals, type Board, type BoardTask, cleanCommitFields, find, isFinished, normId } from './board-file'
-import { withHistory } from './history'
+import { withTimeline } from './timeline'
 import { addTokens, sumRuns } from './runs'
 import { isObj } from './text'
 
@@ -39,7 +39,7 @@ export function readArchive(text: string | null): { archive: Archive; broken?: s
   const tasks = (raw as { tasks?: unknown }).tasks
   if (!Array.isArray(tasks)) return { archive: emptyArchive(), broken: '"tasks" is not a list' }
   const ok = tasks.filter((t): t is BoardTask => !!t && typeof t === 'object' && typeof (t as BoardTask).id === 'string' && isFinished(t as BoardTask))
-  const clean = ok.map(t => ({ ...cleanCommitFields(t), after: Array.isArray(t.after) ? t.after : [], history: Array.isArray(t.history) ? t.history : [], files: Array.isArray(t.files) ? t.files : [] }))
+  const clean = ok.map(t => ({ ...cleanCommitFields(t), after: Array.isArray(t.after) ? t.after : [], timeline: Array.isArray(t.timeline) ? t.timeline : [], files: Array.isArray(t.files) ? t.files : [] }))
   return { archive: { version: 1, tasks: clean } }
 }
 
@@ -102,13 +102,13 @@ export function removeArchived(b: Board, tasks: BoardTask[]): Board {
 }
 
 /**
- * An archived dropped task back on the board as "todo", with a history line; its counts and tries
+ * An archived dropped task back on the board as "todo", with a timeline line; its counts and tries
  * leave `archived`. Throws for a done task (it stays archived) or a task already on the board.
  */
 export function bringBack(b: Board, t: BoardTask, now: string): Board {
   if (find(b, t.id)) throw new Error(`${t.id} is already on the board`)
   if (t.status !== 'dropped') throw new Error(`${t.id} is archived and done; add a new task instead`)
-  const back: BoardTask = { ...t, status: 'todo', note: 'brought back from the archive; queued', test_tries: 0, history: withHistory(t.history, now, ['retried', 'brought back from the archive (was dropped)']), updated_at: now }
+  const back: BoardTask = { ...t, status: 'todo', note: 'brought back from the archive; queued', test_tries: 0, timeline: withTimeline(t.timeline, now, ['retried', 'brought back from the archive (was dropped)']), updated_at: now }
   return { ...b, archived: addTotals(archivedOf(b), t, -1), tasks: [...b.tasks, back] }
 }
 

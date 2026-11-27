@@ -265,7 +265,7 @@ export function turnedDown(r: unknown): boolean {
   return [x.text, x.result].some(v => typeof v === 'string' && REFUSED.test(v))
 }
 
-/** The history note of a Q-n dropped because the owner turned its pop-up down (T-753). */
+/** The timeline note of a Q-n dropped because the owner turned its pop-up down (T-753). */
 export const TURNED_DOWN_NOTE = 'the owner turned the question down in the chat'
 
 /** Drops the open Q-ns `ids` because the owner turned their pop-up down: the ids it dropped. */

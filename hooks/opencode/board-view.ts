@@ -1584,7 +1584,7 @@ export function reportPickOf(id: string): ReportPick | undefined {
 
 /** How many lines of a long Timeline or Report section the task page shows; the rest is cut with "… (n more lines)"
  *  (the whole report stays in its file, named in the section). */
-export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { history: 30, report: 40 }
+export const SECTION_LINES: Partial<Record<TaskSection['id'], number>> = { timeline: 30, report: 40 }
 
 /** The page of the task or question `id`: its title, its question and its choices, each a clickable line (T-583),
  *  and the answer just sent (`sent`); then a task's sections as on Claude Code's task page (core's taskSections,

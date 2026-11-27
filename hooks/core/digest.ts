@@ -7,7 +7,7 @@ export const DIGEST_EVERY_MS = 2 * 3_600_000
 /** A todo or waiting task older than this counts as stuck. */
 export const DIGEST_STUCK_MS = 3 * 3_600_000
 
-type DigestTask = Pick<SymccTask, 'id' | 'title' | 'status' | 'attempts' | 'updated_at'> & Partial<Pick<SymccTask, 'history' | 'after' | 'merged'>>
+type DigestTask = Pick<SymccTask, 'id' | 'title' | 'status' | 'attempts' | 'updated_at'> & Partial<Pick<SymccTask, 'timeline' | 'after' | 'merged'>>
 
 const ENDED = ['done', 'dropped']
 const at = (s: string | undefined): number => (s ? Date.parse(s) : NaN)
@@ -37,7 +37,7 @@ export function digestText(tasks: readonly DigestTask[], sinceMs: number, nowMs:
   const running = (t: DigestTask) => t.status === 'doing' || t.status === 'review'
   const tries = open.filter(t => t.status !== 'backlog' && Number(t.attempts) >= 3 && (running(t) || fresh(t)))
   if (tries.length) lines.push(`On try 3 or more: ${list(tries, t => `${short(t)} (try ${t.attempts})`)}.`)
-  const testFails = (t: DigestTask) => (t.history ?? []).filter(h => h.kind === 'failed' && h.reason === 'tests')
+  const testFails = (t: DigestTask) => (t.timeline ?? []).filter(h => h.kind === 'failed' && h.reason === 'tests')
   // One line for test failures: worth saying when an open task failed tests in 2 or more tries, or 2 or more tasks failed.
   const testTasks = tasks.filter(t => testFails(t).some(h => since(h.at, sinceMs)))
   const testy = open.some(t => testTasks.includes(t) && testFails(t).length >= 2)
@@ -47,10 +47,10 @@ export function digestText(tasks: readonly DigestTask[], sinceMs: number, nowMs:
     lines.push(`Tests failed since the last digest in ${n} task${n > 1 ? 's' : ''}: ${list(testNew, t => `${short(t)} (${testFails(t).length}x)`)}.`)
   }
   // Every task counts, merged and dropped ones too: the usual path is send back, fix, merge.
-  const back = tasks.reduce((n, t) => n + (t.history ?? []).filter(h => h.kind === 'checker-problems' && since(h.at, sinceMs)).length, 0)
+  const back = tasks.reduce((n, t) => n + (t.timeline ?? []).filter(h => h.kind === 'checker-problems' && since(h.at, sinceMs)).length, 0)
   if (back >= 2) {
     const merged = tasks.filter(t => t.status === 'done' && t.merged && since(t.updated_at, sinceMs))
-    const first = merged.filter(t => (t.history ?? []).every(h => h.kind !== 'checker-problems') && Number(t.attempts) <= 1).length
+    const first = merged.filter(t => (t.timeline ?? []).every(h => h.kind !== 'checker-problems') && Number(t.attempts) <= 1).length
     lines.push(`The checker sent work back ${back} times since the last digest${merged.length ? `; ${first} of ${merged.length} merged tasks passed on the first try` : ''}.`)
   }
   const old = (t: DigestTask) => nowMs - at(t.updated_at) > DIGEST_STUCK_MS

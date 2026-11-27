@@ -9,7 +9,7 @@ import { parseSearch, searchTasks, taskMatches, boardText, emptyBoard, type Boar
 const NOW = Date.parse('2026-11-19T12:00:00Z')
 const hoursAgo = (h: number) => new Date(NOW - h * 3_600_000).toISOString()
 const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) =>
-  ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: hoursAgo(500), updated_at: hoursAgo(500), ...extra }) as unknown as SymccTask
+  ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, timeline: [], branch: null, created_at: hoursAgo(500), updated_at: hoursAgo(500), ...extra }) as unknown as SymccTask
 
 // done tasks changed 1h, 2h, ... 8h ago (T-1 newest); some to do ones in a run order unlike their numbers
 const tasks: SymccTask[] = [

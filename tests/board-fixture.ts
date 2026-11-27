@@ -3,21 +3,21 @@
 import { mock, type MockClock } from 'claude-code/testing'
 import type { On } from 'claude-code'
 import { inProject } from './project'
-import { hist } from './history-fixture'
+import { hist } from './timeline-fixture'
 import { askShape } from './ask-shape'
 
 /** The clock the board is seen at. */
 export const T0 = Date.UTC(2026, 10, 18, 12, 0, 0)
 const iso = (ms: number) => new Date(ms).toISOString()
 
-const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: iso(T0 - 3_600_000), updated_at: iso(T0 - 60_000), ...askShape(extra) })
+const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, timeline: [], branch: null, created_at: iso(T0 - 3_600_000), updated_at: iso(T0 - 60_000), ...askShape(extra) })
 
 export const BOARD_TASKS = [
   task('T-401', 'doing', 'Show the plugin version in the board title and the band above the prompt', { role: 'worker', kind: 'docs' }), // T-722: only its kind shows in the row
   task('T-402', 'doing', 'Keep the search box open while typing several words in a row', { attempts: 1 }),
   task('T-403', 'review', 'Make the settings page show every group with its own short summary line'),
   task('T-404', 'waiting', 'Pick the colors for the review mark on light themes', { question: 'Yellow or blue for review?' }),
-  task('T-405', 'failed', 'Rename the scouts page heading and move its buttons under the list', { note: 'tests failed', history: hist('try 1: tests failed') }),
+  task('T-405', 'failed', 'Rename the scouts page heading and move its buttons under the list', { note: 'tests failed', timeline: hist('try 1: tests failed') }),
   task('T-406', 'todo', 'Write the guide section about adding a new scout from the board panel'),
   task('T-407', 'todo', 'Let the lead read the archived tasks when the owner asks about old work', { after: ['T-406'] }),
   task('T-408', 'todo', 'Add a short CHANGELOG line for every merged task automatically'),

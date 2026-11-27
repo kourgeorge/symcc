@@ -14,11 +14,11 @@ import { PANE, T0, seedBoard } from './board-fixture'
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
 const SIZE = { files: 25, added: 539, removed: 3722 }
 const SHA = 'c2fb0c16aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: 'Do it.', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 9, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
+const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: 'Do it.', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 9, timeline: [], branch: null, created_at: iso(300), updated_at: iso(1), ...x })
 const merged = task('T-1062', 'Slim the worker guards', {
   status: 'done', branch: 'symcc/T-1062', merged: SHA, size: SIZE, done: 'Git is checked against a short allowed list; the shell parser is gone.',
   runs: [{ started: iso(100), ended: iso(2), agents: [{ kind: 'worker' as const, started: iso(100), ended: iso(2), tokens: { input: 6_100_000 } }] }],
-  history: [{ kind: 'merged', at: iso(1), text: 'try 9 → merged into main' }],
+  timeline: [{ kind: 'merged', at: iso(1), text: 'try 9 → merged into main' }],
 })
 const inReview = task('T-1063', 'In review', { status: 'review', branch: 'symcc/T-1063', size: SIZE })
 const errand = task('T-1064', 'An errand', { status: 'review', kind: 'investigation', branch: null })

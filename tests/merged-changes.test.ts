@@ -14,7 +14,7 @@ import { fakeHost } from './fake-host'
 const sha = (c: string) => c.repeat(40)
 const NOW = Date.parse('2026-11-26T12:00:00.000Z')
 const task = (extra: Partial<BoardTask> = {}): BoardTask =>
-  ({ id: 'T-7', title: 'Do it', details: '', files: [], status: 'done', note: '', priority: 1, after: [], attempts: 1, history: [], branch: null, created_at: '2026-11-26T10:00:00.000Z', updated_at: '2026-11-26T11:00:00.000Z', ...extra }) as BoardTask
+  ({ id: 'T-7', title: 'Do it', details: '', files: [], status: 'done', note: '', priority: 1, after: [], attempts: 1, timeline: [], branch: null, created_at: '2026-11-26T10:00:00.000Z', updated_at: '2026-11-26T11:00:00.000Z', ...extra }) as BoardTask
 
 /** A host whose git knows `commits` (sha -> parents, message) and answers the diff of `before..merged` with `numstat` and `diff`. */
 function gitWorld(o: { commits: Record<string, { parents: string[]; message: string }>; numstat?: string; numstatFail?: boolean; diff?: string }) {

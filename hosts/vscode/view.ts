@@ -3,7 +3,7 @@
 // the scouts, in the board's own words. The webview only draws it; every rule about what a task needs lives in core/.
 import type { SymccTask } from '../../types'
 import type { PaneView } from '../../hooks/app/state'
-import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isFinished, needsYou, newestFirst, taskAsks, taskActions, whyFailed, liveLanes, liveFinishedLanes, onDemand, everyText, shownStatus, roleOf, HISTORY_KINDS, isHistoryKind, MODE_NAME, MODE_MEANING, driveNoticeParts, showsDriveButton, DRIVE_HERE_LABEL, sizeText, type ChangeSize, type Seg, historyEvent, historyTime, taskReports } from '../../hooks/board'
+import { type BoardTask, type DiffFile, type TaskAction, isAnswered, kindOf, isFinished, needsYou, newestFirst, taskAsks, taskActions, whyFailed, liveLanes, liveFinishedLanes, onDemand, everyText, shownStatus, roleOf, TIMELINE_KINDS, isTimelineKind, MODE_NAME, MODE_MEANING, driveNoticeParts, showsDriveButton, DRIVE_HERE_LABEL, sizeText, type ChangeSize, type Seg, timelineEvent, timelineTime, taskReports } from '../../hooks/board'
 import { DEFAULT_NAME } from '../../hooks/name'
 import { sizeSegs } from '../../hooks/core/page-header'
 import { checkerReportOf } from '../../hooks/core/task-sections'
@@ -12,7 +12,7 @@ import { viewMarks } from '../../hooks/core/board-parts'
 import { byRunOrder } from '../../hooks/core/board-file'
 import { liveIdle, liveIdleFacts } from '../../hooks/core/live'
 import { ORG_MEM_EMPTY, ORG_MEM_MAX_LINES, ORG_MEM_SUBTITLE, ORG_MEM_TITLE, orgMemAbout, orgMemDeleteAsk, orgMemNoteHead, orgMemNoteKey, orgMemTopicCounts, type OrgMemNote } from '../../hooks/core/org-mem'
-import type { PanelAction, PanelActionId, PanelChecker, PanelFollows, PanelHistory, PanelIdle, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelScout, PanelSession, PanelSize, PanelTask, PanelView } from './protocol'
+import type { PanelAction, PanelActionId, PanelChecker, PanelFollows, PanelTimeline, PanelIdle, PanelLane, PanelNeed, PanelNews, PanelOrgMem, PanelScout, PanelSession, PanelSize, PanelTask, PanelView } from './protocol'
 
 const ms = (iso: unknown): number | undefined => {
   const n = typeof iso === 'string' ? Date.parse(iso) : NaN
@@ -97,19 +97,19 @@ function laneSize(z: ChangeSize): PanelSize {
   return sizePieces([{ text: added, color: 'success' }, { text: ' ', color: 'text' }, { text: removed, color: 'error' }])
 }
 
-/** The most history lines of a task the panel gets, newest first. */
-export const HISTORY_SHOWN = 30
+/** The most timeline lines of a task the panel gets, newest first. */
+export const TIMELINE_SHOWN = 30
 /** The most of a checker's report the panel gets; the rest is in its file. */
 export const CHECKER_SHOWN_CHARS = 12_000
 
-/** A task's history, newest first, each line with who wrote it, as the task page draws it (core/task-sections.ts historyLines). */
-function panelHistory(t: BoardTask, nowMs: number): PanelHistory[] {
-  return t.history
-    .slice(-HISTORY_SHOWN)
+/** A task's timeline, newest first, each line with who wrote it, as the task page draws it (core/task-sections.ts timelineLines). */
+function panelTimeline(t: BoardTask, nowMs: number): PanelTimeline[] {
+  return t.timeline
+    .slice(-TIMELINE_SHOWN)
     .reverse()
     .map(h => {
-      const e = historyEvent(h)
-      const at = historyTime(e.at, nowMs)
+      const e = timelineEvent(h)
+      const at = timelineTime(e.at, nowMs)
       return { mark: e.mark, tone: e.tone, said: e.said, ...(at ? { at } : {}), ...(e.by ? { by: e.by } : {}), ...(e.label ? { label: e.label } : {}), ...(e.result ? { result: e.result } : {}) }
     })
 }
@@ -141,7 +141,7 @@ function panelTask(t: BoardTask, nowMs: number, checkers: Record<string, string>
     ...(t.details?.trim() ? { details: t.details.trim() } : {}),
     ...(t.done?.trim() ? { done: t.done.trim() } : {}),
     ...(size ? { size: sizePieces(size) } : {}),
-    ...(t.history?.length ? { history: panelHistory(t, nowMs), historyCount: t.history.length } : {}),
+    ...(t.timeline?.length ? { timeline: panelTimeline(t, nowMs), timelineCount: t.timeline.length } : {}),
     ...(checker ? { checker } : {}),
     needsYou: needsYou(t, nowMs),
     actions: actionsOf(t),
@@ -149,7 +149,7 @@ function panelTask(t: BoardTask, nowMs: number, checkers: Record<string, string>
   }
 }
 
-/** The kinds of history entry that are news for the owner. */
+/** The kinds of timeline entry that are news for the owner. */
 const NEWS_KINDS: ReadonlySet<string> = new Set(['created', 'merged', 'done', 'failed', 'checker-problems', 'rejected', 'approve-failed', 'stopped'])
 /** How far back the stream's board news goes. */
 export const NEWS_DAYS = 3
@@ -159,12 +159,12 @@ function newsOf(tasks: readonly BoardTask[], nowMs: number): PanelNews[] {
   const from = nowMs - NEWS_DAYS * 86_400_000
   const out: PanelNews[] = []
   for (const t of tasks) {
-    // a finished task's history is kept in its own part file; the board keeps only its marks (merged, failed)
-    const lines = t.history?.length ? t.history : (viewMarks(t) ?? []).map(m => ({ kind: m.kind, at: m.at, text: m.reason ?? '' }))
+    // a finished task's timeline is kept in its own part file; the board keeps only its marks (merged, failed)
+    const lines = t.timeline?.length ? t.timeline : (viewMarks(t) ?? []).map(m => ({ kind: m.kind, at: m.at, text: m.reason ?? '' }))
     lines.forEach((h, i) => {
       const at = ms(h.at)
       if (at === undefined || at < from || !NEWS_KINDS.has(h.kind)) return
-      const tone = isHistoryKind(h.kind) ? HISTORY_KINDS[h.kind] : 'other'
+      const tone = isTimelineKind(h.kind) ? TIMELINE_KINDS[h.kind] : 'other'
       // a long command in it (the test command that failed) is the board's own setting, not news
       const why = typeof (h as { result?: unknown }).result === 'string' ? (h as { result: string }).result.replace(/`[^`]{60,}`/g, '`…`') : undefined
       out.push({ key: `${t.id}:${i}:${h.kind}`, task: t.id, title: t.title, tone: tone === 'good' ? 'good' : tone === 'bad' ? 'bad' : 'other', kind: h.kind, text: h.text, atMs: at, ...(why ? { why } : {}) })

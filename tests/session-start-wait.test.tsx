@@ -69,7 +69,7 @@ function world(on: On, o: { agents?: { id: string; type: string }[] } = {}) {
   on('session.id', () => ({ value: 'me' }) as never)
   on('env.get', () => ({ value: undefined }) as never)
   const clock = mock.clock(on, { now: T0 })
-  // a done task's history and tries are in its parts file (T-675): joined back here
+  // a done task's timeline and tries are in its parts file (T-675): joined back here
   const board = () => JSON.parse(joinedText(files.get(BOARD)!, rel => files.get(BOARD.replace('board.json', rel)) ?? null)) as Board
   return { files, spawned, sent, clock, board, task: (id: string) => board().tasks.find(t => t.id === id)! }
 }

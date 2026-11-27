@@ -81,9 +81,9 @@ export type PanelTask = {
   done?: string
   /** its change's size: where the change is, its files, the lines added and removed */
   size?: PanelSize
-  /** its history, newest first: the latest lines, out of `historyCount` */
-  history?: PanelHistory[]
-  historyCount?: number
+  /** its timeline, newest first: the latest lines, out of `timelineCount` */
+  timeline?: PanelTimeline[]
+  timelineCount?: number
   /** the checker's saved report of the try its latest report is about */
   checker?: PanelChecker
   needsYou: boolean
@@ -93,10 +93,10 @@ export type PanelTask = {
 }
 
 /**
- * A line of a task's history in the board's words (hooks/core/history.ts historyEvent): its mark and tone, when ("10:42",
+ * A line of a task's timeline in the board's words (hooks/core/timeline.ts timelineEvent): its mark and tone, when ("10:42",
  * "Nov 23 10:42"), who wrote it ("worker symcc-T-3", "checker", "you"), its try label, what was said and the try's result.
  */
-export type PanelHistory = { mark: string; tone: 'good' | 'bad' | 'step' | 'other'; at?: string; by?: string; label?: string; said: string; result?: string }
+export type PanelTimeline = { mark: string; tone: 'good' | 'bad' | 'step' | 'other'; at?: string; by?: string; label?: string; said: string; result?: string }
 
 /**
  * A checker's saved report: its heading ("Checker (try 2) · symcc-T-3-checker"), its verdict, its file in the project,

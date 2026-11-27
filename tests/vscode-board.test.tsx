@@ -11,7 +11,7 @@ import { drawNow } from '../hooks/claude/ui/now'
 import { mayMove } from '../hooks/core/logo'
 import { modeLabel, MODE_MEANING, panelSections, fitRow } from '../hooks/board'
 import { paneWidth, VS_WIDE } from '../hooks/claude/ui/parts'
-import { hist } from './history-fixture'
+import { hist } from './timeline-fixture'
 import { tabBar, wantTabs } from './vscode-tabs'
 
 type Node = { type?: string; key?: string; props?: Record<string, unknown>; children?: unknown[] }
@@ -528,7 +528,7 @@ test('mdText keeps a title plain in markdown', () => {
 test('in VS Code a row keeps its kind when its question or reason has the same word, and one option is "1 choice"', async ($, on) => {
   const base = BOARD_TASKS.find(t => t.id === 'T-404')!
   const DOCS = { ...base, id: 'T-501', priority: 0, kind: 'docs', ask: { by: 'worker', text: 'Should the docs page list every setting?', asked_at: '' } }
-  const BUG = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-502', priority: 0, kind: 'bug', note: 'the bug is still there', history: hist('try 1: the bug is still there') }
+  const BUG = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-502', priority: 0, kind: 'bug', note: 'the bug is still there', timeline: hist('try 1: the bug is still there') }
   const ONE = { ...QUESTION, id: 'Q-4', options: ['Yes'] }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks: [...BOARD_TASKS, DOCS, BUG], questions: [ONE] } } })
   on('ui.toast', () => ({ value: undefined }))
@@ -688,11 +688,11 @@ test('in VS Code a doing row shows only the total work time of all tries, no Σ,
 })
 
 test('T-590: in VS Code each open task and question is one line: id, state, then the title; a long title is cut with "…" first', async ($, on) => {
-  const long = 'Let the lead read every archived task and its whole history when the owner asks about old work from months ago'
+  const long = 'Let the lead read every archived task and its whole timeline when the owner asks about old work from months ago'
   const after = { ...BOARD_TASKS.find(t => t.id === 'T-407')!, id: 'T-578', priority: 0, kind: 'feature', title: long, after: ['T-406'] }
   const doing = { ...BOARD_TASKS.find(t => t.id === 'T-401')!, kind: 'investigation', role: 'researcher', attempts: 2 }
   const reason = 'the tests still fail because the merge line runs the old copy of the plugin and never sees the new code that the worker wrote'
-  const failed = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-579', priority: 0, kind: 'bug', title: long, note: reason, history: hist(`try 1: ${reason}`) }
+  const failed = { ...BOARD_TASKS.find(t => t.id === 'T-405')!, id: 'T-579', priority: 0, kind: 'bug', title: long, note: reason, timeline: hist(`try 1: ${reason}`) }
   const tasks = [...BOARD_TASKS.map(t => (t.id === 'T-401' ? doing : t)), after, failed]
   const ask = { ...QUESTION, text: 'Should the board open by itself when a session starts, or only when the owner asks for it?' }
   seedBoard(on, { view: { ...BOARD_VIEW, value: { ...BOARD_VIEW.value, tasks, questions: [ask] } } })
@@ -748,7 +748,7 @@ test('T-590: in VS Code each open task and question is one line: id, state, then
 })
 
 test('T-702: vsFit is the shared fitRow with one more lead column for " · ": a long title is cut, the row\'s end stays whole', () => {
-  const long = 'Let the lead read every archived task and its whole history when the owner asks about old work from months ago'
+  const long = 'Let the lead read every archived task and its whole timeline when the owner asks about old work from months ago'
   for (const room of [42, 63, 80, 126]) {
     for (const end of ['waits for T-690', '[feature]', 'waits for T-406 · feature', '']) {
       const fit = vsFit(12, long, end, room)

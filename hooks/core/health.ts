@@ -8,7 +8,7 @@
 //    the board (and was not archived as done), so it would wait forever. Or tasks wait on each
 //    other in a loop (T-1 after T-2 after T-1).
 // 2. Starving: a todo task that could start, or waits only on tasks added after it, and either
-//    its after list was changed STARVE_AFTER_CHANGES or more times (history lines "waits on
+//    its after list was changed STARVE_AFTER_CHANGES or more times (timeline lines "waits on
 //    changed: ..."), or it has waited more than STARVE_MS and STARVE_NEWER or more tasks made
 //    after it have already started. A task that could start counts its wait from when it became
 //    ready (its last after task finished, or it was added or changed, whichever is later), and is
@@ -25,7 +25,7 @@
 // key is only its task, status and after list: a task it waits for being retried does not tell it again.
 import type { Board, BoardTask } from './board-file'
 import { asBlockers, blockerFiles, find, intoOf, isFinished, waitsForFiles } from './board-file'
-import { AFTER_CHANGED, ranNow } from './history'
+import { AFTER_CHANGED, ranNow } from './timeline'
 import { fixWays } from './review'
 import { num } from './text'
 import { ready } from './task'
@@ -71,8 +71,8 @@ export function shareFiles(a: readonly string[], b: readonly string[]): boolean 
   }))
 }
 
-/** How many times task `t`'s after list was changed, by its history lines. */
-export const afterChanges = (t: Pick<BoardTask, 'history'>) => (t.history ?? []).filter(l => l.text.startsWith(AFTER_CHANGED)).length
+/** How many times task `t`'s after list was changed, by its timeline lines. */
+export const afterChanges = (t: Pick<BoardTask, 'timeline'>) => (t.timeline ?? []).filter(l => l.text.startsWith(AFTER_CHANGED)).length
 
 function stuck(b: Board): HealthFinding[] {
   const out: HealthFinding[] = []
@@ -131,10 +131,10 @@ function readyAt(b: Board, t: BoardTask): number {
 
 /**
  * When task `t` last moved to todo (from the backlog, or back after a failure or pause); else when it was made.
- * A retry, a reject and an "asked more" write no history line, so a task that already had a try counts from its last change.
+ * A retry, a reject and an "asked more" write no timeline line, so a task that already had a try counts from its last change.
  */
 function todoSince(t: BoardTask): number {
-  const moves = (t.history ?? []).filter(e => (e.kind === 'moved-backlog' && !e.backlog) || e.kind === 'retried' || e.kind === 'resumed').map(e => Date.parse(e.at || ''))
+  const moves = (t.timeline ?? []).filter(e => (e.kind === 'moved-backlog' && !e.backlog) || e.kind === 'retried' || e.kind === 'resumed').map(e => Date.parse(e.at || ''))
   const back = t.runs?.length ? Date.parse(t.updated_at || '') : NaN
   return Math.max(Date.parse(t.created_at || ''), ...[...moves, back].filter(Number.isFinite))
 }

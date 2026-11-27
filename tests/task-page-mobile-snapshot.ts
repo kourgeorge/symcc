@@ -68,7 +68,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {
@@ -845,7 +845,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {
@@ -1652,7 +1652,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {
@@ -2405,7 +2405,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {
@@ -2935,7 +2935,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {
@@ -3705,7 +3705,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {
@@ -4160,7 +4160,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {
@@ -4586,7 +4586,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {
@@ -5289,7 +5289,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {
@@ -5995,7 +5995,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {
@@ -6914,7 +6914,7 @@ export const TASK_BEFORE_MOBILE: Record<string, unknown> = {
                 "type": "Text",
                 "children": [
                   {"type":"Text","props":{"color":"text"},"children":["       "]},
-                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the history and the latest report"]}
+                  {"type":"Text","props":{"bold":true,"color":"text","weight":"semibold"},"children":["details, the timeline and the latest report"]}
                 ]
               },
               {

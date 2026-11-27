@@ -24,7 +24,7 @@ const PANE = {
   props: { title: 'symcc board', isFocused: false, bodyColumns: 50, placement: 'dock', scroll: { offset: 0, bodyRows: 20 }, view: {} },
 } as const
 
-const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', ...askShape(extra) })
+const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, timeline: [], branch: null, created_at: '', updated_at: '', ...askShape(extra) })
 const scout = (name: string, extra: Record<string, unknown> = {}) => ({ name, every_minutes: 30, last_run: null, running: false, ...extra })
 const view = (tasks: unknown[], more: Record<string, unknown> = {}) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [scout('bugs', { prompt: 'Look for crashes.' })], mode: 'auto', test_commands: [], ...more } })
 

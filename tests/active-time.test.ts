@@ -25,7 +25,7 @@ const gapRun = (over: Record<string, unknown> = {}) => ({
 })
 
 const task = (id: string, x: Record<string, unknown> = {}): SymccTask =>
-  ({ id, title: `task ${id}`, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: at(32 * 60), updated_at: at(1), ...x }) as SymccTask
+  ({ id, title: `task ${id}`, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: at(32 * 60), updated_at: at(1), ...x }) as SymccTask
 
 test('T-863: a try with a 30-hour gap between a reopen stop and its restart counts only its active minutes', () => {
   const r = gapRun()
@@ -70,7 +70,7 @@ test('T-863: a task waiting in the queue shows the time since it entered the que
   const t = task('T-52', {
     runs: [gapRun({ ended: at(2) })],
     live: { checking: { step: 'queue', at: at(1), place: 4 } },
-    history: [{ kind: 'stage', at: at(1), text: 'try 1: waits in the merge queue (place 4)', try: 1, step: 'queue' }],
+    timeline: [{ kind: 'stage', at: at(1), text: 'try 1: waits in the merge queue (place 4)', try: 1, step: 'queue' }],
   })
   const v = { tasks: [t], checker: false, mode: 'auto' as const, max_parallel: 3 }
   const lane = liveLanes(v, NOW)[0]!
@@ -84,7 +84,7 @@ test('T-863: the stage chart does not count the idle stretch as work; lifetime a
     status: 'done',
     created_at: at(40 * 60),
     runs: [{ ...gapRun(), ended: at(10), ended_by: 'finished' }],
-    history: [
+    timeline: [
       { kind: 'created', at: at(40 * 60), text: 'created by the owner' },
       { kind: 'stage', at: at(10), text: 'try 1: prep started', try: 1, step: 'prep' },
       { kind: 'stage', at: at(8), text: 'try 1: merge started', try: 1, step: 'merge' },
@@ -129,7 +129,7 @@ test('T-863: a try that handed back before the close: the gap starts at the last
   const t = task('T-52', {
     live: { session: 'me' },
     runs: [{ started: at(1850), ended: at(1840), agents: [{ id: 'ag1', kind: 'worker' as const, started: at(1850), ended: at(1840) }] }],
-    history: [{ kind: 'stage', at: at(1835), text: 'try 1: tests started', try: 1, step: 'tests' }],
+    timeline: [{ kind: 'stage', at: at(1835), text: 'try 1: tests started', try: 1, step: 'tests' }],
   })
   const board = { tasks: [t] } as unknown as Parameters<typeof resetDoing>[0]
   const back = resetDoing(board, 'new', leadText('me', NOW - 1800 * MIN), NOW - 12 * MIN, REOPEN, at(12)).tasks[0]!
@@ -146,7 +146,7 @@ test('T-863: after a reopen the check step shows the time since its own prep lin
   const t = task('T-52', {
     runs: [{ started: at(31 * 60), restarts: [{ at: at(31 * 60 - 20), why: REOPEN, started: at(12) }], ended: at(10), ended_by: 'finished' }],
     live: { checking: { step: 'checker', at: at(8) } },
-    history: [
+    timeline: [
       { kind: 'stage', at: at(31 * 60 - 25), text: 'try 1: prep started', try: 1, step: 'prep' },
       { kind: 'stage', at: at(9), text: 'try 1: prep started', try: 1, step: 'prep' },
       { kind: 'stage', at: at(8), text: 'try 1: checker started', try: 1, step: 'checker' },
@@ -163,7 +163,7 @@ test('T-863: the stage chart counts the steps that ran before the close under th
     status: 'done',
     created_at: at(1860),
     runs: [{ started: at(1850), ended: at(10), ended_by: 'finished', restarts: [{ at: at(1800), why: REOPEN, started: at(12) }] }],
-    history: [
+    timeline: [
       { kind: 'created', at: at(1860), text: 'created by the owner' },
       { kind: 'stage', at: at(1835), text: 'try 1: tests started', try: 1, step: 'tests' },
       { kind: 'stage', at: at(9), text: 'try 1: tests started', try: 1, step: 'tests' },

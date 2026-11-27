@@ -26,11 +26,11 @@ export function statusBoard(nowMs: number, quiet = false): Board {
   const testing = iso(nowMs - 2 * 60_000)
   const merged = (share: number) => {
     const when = inToday(nowMs, share)
-    return { runs: [{ started: iso(when - 60_000), ended: iso(when - 30_000), agents: [{ id: 'w', kind: 'worker' as const, started: iso(when - 60_000), ended: iso(when - 30_000), tokens: { input: 1_000_000 } }] }], history: [{ kind: 'merged', at: iso(when), text: 'try 1 → merged into main' }] }
+    return { runs: [{ started: iso(when - 60_000), ended: iso(when - 30_000), agents: [{ id: 'w', kind: 'worker' as const, started: iso(when - 60_000), ended: iso(when - 30_000), tokens: { input: 1_000_000 } }] }], timeline: [{ kind: 'merged', at: iso(when), text: 'try 1 → merged into main' }] }
   }
   const patch: Record<string, Partial<BoardTask>> = {
     'T-1': { status: 'waiting', ask: { by: 'worker', text: 'Postgres or SQLite?', options: ['Postgres', 'SQLite'], asked_at: at } as BoardTask['ask'] },
-    'T-2': { status: 'doing', attempts: 2, live: { session: 'driver', checking: { step: 'testing', at: testing } }, runs: [{ started: iso(nowMs - 30 * 60_000), ended: iso(nowMs - 20 * 60_000) }, { started, ended: handed }], history: [{ kind: 'stage', step: 'tests', at: testing, text: 'tests started' }] } as Partial<BoardTask>,
+    'T-2': { status: 'doing', attempts: 2, live: { session: 'driver', checking: { step: 'testing', at: testing } }, runs: [{ started: iso(nowMs - 30 * 60_000), ended: iso(nowMs - 20 * 60_000) }, { started, ended: handed }], timeline: [{ kind: 'stage', step: 'tests', at: testing, text: 'tests started' }] } as Partial<BoardTask>,
     'T-3': { status: 'review' },
     'T-5': { status: 'done', ...merged(0.3) } as Partial<BoardTask>,
     'T-6': { status: 'done', ...merged(0.6) } as Partial<BoardTask>,

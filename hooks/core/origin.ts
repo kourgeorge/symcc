@@ -111,7 +111,7 @@ export function originWho(t: { origin?: unknown }): string {
   return 'the lead'
 }
 
-/** The first history line of a new task. */
+/** The first timeline line of a new task. */
 export const createdLine = (o: SymccOrigin) => `created by ${originWho({ origin: o })} because ${o.why}`
 
 /**

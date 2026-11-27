@@ -34,7 +34,7 @@ export type SymccRun = {
   report?: string
   /** how this try ended (see ended_note for the details); missing while it runs and on old boards */
   ended_by?: SymccRunEnd
-  /** a short note on how it ended, worded like the task's history lines, e.g. "merged" or "the task was changed (details)" */
+  /** a short note on how it ended, worded like the task's timeline lines, e.g. "merged" or "the task was changed (details)" */
   ended_note?: string
   /** T-721: when this try failed its tests, the test command that failed (one of the board's test_commands) */
   failed_command?: string
@@ -89,18 +89,18 @@ export type SymccTokens = { input?: number; output?: number; cache_write?: numbe
 export type SymccRunEnd = 'finished' | 'restarted' | 'stopped' | 'timed out' | 'asked' | 'dropped'
 
 /**
- * One event in a task's history: when it happened (`at`, an ISO time; missing on an entry converted from an old board
- * whose time could not be guessed), what kind of event it is (`kind`, one of HISTORY_KINDS in hooks/core/history.ts,
+ * One event in a task's timeline: when it happened (`at`, an ISO time; missing on an entry converted from an old board
+ * whose time could not be guessed), what kind of event it is (`kind`, one of TIMELINE_KINDS in hooks/core/timeline.ts,
  * e.g. "created", "checker-ok", "merged", "note") and its line as the owner reads it (`text`, e.g. "try 1: checker: OK").
  */
-export type SymccHistoryEntry = {
+export type SymccTimelineEntry = {
   at?: string
   kind: string
   text: string
   /** T-806: the facts of the line, set where it is written (readers never read them back out of `text`): the try number it is about */
   try?: number
   /** a stage line's step: the worker started or handed back, or the check stage the try went into */
-  step?: SymccHistoryStep
+  step?: SymccTimelineStep
   /** a merge-queue line's place in the queue */
   place?: number
   /** a try's result line: the words after its " → " */
@@ -117,10 +117,10 @@ export type SymccHistoryEntry = {
   backlog?: true
 }
 
-/** T-806: the step of a 'stage' history line. */
-export type SymccHistoryStep = 'worker-start' | 'handed-back' | 'prep' | 'checker' | 'queue' | 'tests' | 'merge'
+/** T-806: the step of a 'stage' timeline line. */
+export type SymccTimelineStep = 'worker-start' | 'handed-back' | 'prep' | 'checker' | 'queue' | 'tests' | 'merge'
 
-/** T-806: why a try was sent back or failed, as a history line records it. */
+/** T-806: why a try was sent back or failed, as a timeline line records it. */
 export type SymccFailReason = 'tests' | 'checker' | 'clash' | 'scope' | 'timeout' | 'noresult' | 'nochange' | 'notmerged' | 'other' | 'changed' | 'stopped' | 'rejected'
 
 /**
@@ -182,8 +182,8 @@ export type SymccTask = {
   test_tries?: number
   /** the end of the failing test output from the last try, shown to the next worker */
   test_output?: string
-  /** what happened to the task, oldest first: one record per event (see SymccHistoryEntry) */
-  history: SymccHistoryEntry[]
+  /** what happened to the task, oldest first: one record per event (see SymccTimelineEntry) */
+  timeline: SymccTimelineEntry[]
   /** who made the task, why and from which request (a task from before origins were kept was given one by the lead, why "made before origins were kept") */
   origin?: SymccOrigin
   /** the worker role (a role file's name) the lead picked; missing = "general" */

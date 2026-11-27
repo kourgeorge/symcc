@@ -17,7 +17,7 @@ import { fakeHost, memoryFs } from './fake-host'
 import { inToday, todayAt } from './day-clock'
 import { PANE, T0, seedBoard } from './board-fixture'
 import { TODAY_BAR_START, TODAY_LINE_3, todayTasks, todayTeamOf } from './live-today-fixture'
-import { oldHistoryFacts } from '../hooks/core/old-data'
+import { oldTimelineFacts } from '../hooks/core/old-data'
 
 // T0 is 12:00 UTC: every time of the fixture is within today (UTC)
 const TASKS = todayTasks(T0)
@@ -119,8 +119,8 @@ test('T-809: on a narrower panel line 4 drops busiest, then the cost, then squee
 
 test('T-781: line 1 counts every send-back today, line 3 only the checker\'s; an empty day shows no more lines', () => {
   const at = new Date(T0 - 60_000).toISOString()
-  const h = (kind: string, text: string) => ({ at, kind, text, ...oldHistoryFacts({ kind, text }) })
-  const t = { id: 'T-1', status: 'todo', history: [h('checker-problems', 'try 1: checker found problems: x'), h('checker-problems', 'try 2: checker found problems: y'), h('failed', 'try 3: did it → tests failed: z')], runs: [] }
+  const h = (kind: string, text: string) => ({ at, kind, text, ...oldTimelineFacts({ kind, text }) })
+  const t = { id: 'T-1', status: 'todo', timeline: [h('checker-problems', 'try 1: checker found problems: x'), h('checker-problems', 'try 2: checker found problems: y'), h('failed', 'try 3: did it → tests failed: z')], runs: [] }
   const lines = texts(liveTodayLines({ tasks: [t] as never[], today_team: undefined }, T0, 140, 0))
   expect(lines[0]).toContain('↺ 3 sent back')
   expect(lines.at(-1)).toBe('⌕ 2 sent back by the checker')
@@ -129,8 +129,8 @@ test('T-781: line 1 counts every send-back today, line 3 only the checker\'s; an
 
 test('T-781: a done task keeps its tests-failed and checker send-backs on the slim board view (OpenCode)', () => {
   const at = new Date(T0 - 60_000).toISOString()
-  const h = (kind: string, text: string) => ({ at, kind, text, ...oldHistoryFacts({ kind, text }) })
-  const t = { id: 'T-1', status: 'done' as const, history: [h('failed', 'try 1: did it → tests failed: z'), h('checker-problems', 'try 2: checker found problems: y'), h('failed', 'try 3: did it → the worker made no change'), h('merged', 'try 4: did it → merged')], runs: [] }
+  const h = (kind: string, text: string) => ({ at, kind, text, ...oldTimelineFacts({ kind, text }) })
+  const t = { id: 'T-1', status: 'done' as const, timeline: [h('failed', 'try 1: did it → tests failed: z'), h('checker-problems', 'try 2: checker found problems: y'), h('failed', 'try 3: did it → the worker made no change'), h('merged', 'try 4: did it → merged')], runs: [] }
   const top = (x: unknown) => texts(liveTodayLines({ tasks: [x] as never[], today_team: undefined }, T0, 140, 0))[0]
   expect(top(t)).toContain('↺ 2 sent back')
   expect(top(viewTask(t))).toContain('↺ 2 sent back')
@@ -293,9 +293,9 @@ test('T-799: Σ is everyone\'s tokens (never below the busiest hour); without th
 
 test('T-806: the slim view\'s marks carry the reason, so a clash and a failed test are told apart (OpenCode)', () => {
   const at = new Date(T0 - 60_000).toISOString()
-  const t = { id: 'T-1', status: 'done' as const, history: [{ at, kind: 'failed', text: 'try 1: x → y', reason: 'tests' }, { at, kind: 'failed', text: 'try 2: x → y', reason: 'clash' }, { at, kind: 'failed', text: 'try 3: x → y', reason: 'nochange' }, { at, kind: 'checker-problems', text: 'try 4: checker found problems: y' }], runs: [] }
-  const slim = viewTask(t as never) as unknown as { history_marks: { kind: string; reason?: string }[] }
-  expect(slim.history_marks.map(m => [m.kind, m.reason])).toEqual([['failed', 'tests'], ['failed', 'clash'], ['checker-problems', undefined]])
+  const t = { id: 'T-1', status: 'done' as const, timeline: [{ at, kind: 'failed', text: 'try 1: x → y', reason: 'tests' }, { at, kind: 'failed', text: 'try 2: x → y', reason: 'clash' }, { at, kind: 'failed', text: 'try 3: x → y', reason: 'nochange' }, { at, kind: 'checker-problems', text: 'try 4: checker found problems: y' }], runs: [] }
+  const slim = viewTask(t as never) as unknown as { timeline_marks: { kind: string; reason?: string }[] }
+  expect(slim.timeline_marks.map(m => [m.kind, m.reason])).toEqual([['failed', 'tests'], ['failed', 'clash'], ['checker-problems', undefined]])
 })
 
 test('T-1159: the VS Code Per task row starts with "median" even when no task has a token figure', () => {

@@ -1,6 +1,6 @@
 // Task events (T-616): every board write (see writeBoard in store.ts) compares each task before and after and emits
 // what changed (phaseEvents in core/events.ts). writeBoard itself keeps the activity log, .<name>/events.jsonl
-// (logTaskEvents, under the board lock), and adds the history's stage lines (withStageHistory); the listeners here
+// (logTaskEvents, under the board lock), and adds the timeline's stage lines (withStageTimeline); the listeners here
 // get the events only after the board lock is let go, so a listener may write the board itself.
 import type { TaskEvent } from '../core/events'
 import type { Host } from '../host'

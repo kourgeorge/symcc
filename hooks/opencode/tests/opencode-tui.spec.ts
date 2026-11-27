@@ -2124,13 +2124,13 @@ test('T-585: the Settings tab\'s groups open and close like the Claude Code boar
   board.stop()
 })
 
-/** T-580: the view file with T-2 in review (two tries, a history, its changed files in view.json) and T-4 failed. */
+/** T-580: the view file with T-2 in review (two tries, a timeline, its changed files in view.json) and T-4 failed. */
 function sectionsViewFile(): ViewFile {
   const f = viewFile()
   const runs = (id: string) => [1, 2].map(n => ({ started: AT, ended: AT, report: `.symcc/reports/${id}-try-${n}.md` }))
-  const history = [{ kind: 'tried', at: AT, text: 'try 1: changed it → tests failed' }, { kind: 'merged', at: AT, text: 'try 2: fixed it → passed' }]
+  const timeline = [{ kind: 'tried', at: AT, text: 'try 1: changed it → tests failed' }, { kind: 'merged', at: AT, text: 'try 2: fixed it → passed' }]
   const tasks = f.view.tasks.map(t =>
-    t.id === 'T-2' ? { ...t, details: '## Goal\n- Fix `src/a.ts`', attempts: 2, runs: runs('T-2'), history } : t.id === 'T-4' ? { ...t, status: 'failed' as const, note: 'tests failed', attempts: 2, runs: runs('T-4'), history } : t,
+    t.id === 'T-2' ? { ...t, details: '## Goal\n- Fix `src/a.ts`', attempts: 2, runs: runs('T-2'), timeline } : t.id === 'T-4' ? { ...t, status: 'failed' as const, note: 'tests failed', attempts: 2, runs: runs('T-4'), timeline } : t,
   ) as ViewFile['view']['tasks']
   return { ...f, view: { ...f.view, tasks, changes: { 'T-2': { files: [{ file: 'src/a.ts', added: 4, removed: 2 }], error: '' } } } }
 }
@@ -2561,13 +2561,13 @@ test("T-622/T-686: a scout's page shows its Results figures from view.json in th
   expect(parseViewFile(viewFileText({ ...f, view: { ...f.view, scout_results: [] as never } }))?.view.scout_results).toBe(undefined)
 })
 
-/** T-627: the view file with T-2 in review on a long page: a title that wraps, a long history with lines that wrap, and
- *  (with `report`) a long report; `entries` history lines. */
+/** T-627: the view file with T-2 in review on a long page: a title that wraps, a long timeline with lines that wrap, and
+ *  (with `report`) a long report; `entries` timeline lines. */
 function longPageViewFile(entries = 24): ViewFile {
   const f = sectionsViewFile()
   const long = 'and then it went on to change a good many other things in the same folder, which takes more than one line'
-  const history = Array.from({ length: entries }, (_, i) => ({ kind: 'step', at: AT, text: `step ${i + 1}: ${i % 3 ? 'short' : long}` }))
-  const tasks = f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, title: 'a reviewed change whose title is long enough to wrap onto a second line here', history } : t)) as ViewFile['view']['tasks']
+  const timeline = Array.from({ length: entries }, (_, i) => ({ kind: 'step', at: AT, text: `step ${i + 1}: ${i % 3 ? 'short' : long}` }))
+  const tasks = f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, title: 'a reviewed change whose title is long enough to wrap onto a second line here', timeline } : t)) as ViewFile['view']['tasks']
   return { ...f, view: { ...f.view, tasks } }
 }
 
@@ -2627,7 +2627,7 @@ test('T-627: a long task page scrolls by drawn lines under its fixed title and b
   expect(title.at(-1)).toMatch(/^─+$/)
   expect(title.join(' ')).toContain('onto a second line here')
   expect(text.slice(all.fixed).some(l => l.includes('▍Timeline'))).toBe(true)
-  // the long history and report lines are broken into rows the panel's width, keeping every word in order
+  // the long timeline and report lines are broken into rows the panel's width, keeping every word in order
   expect(text.join(' ').replace(/\s+/g, ' ')).toContain('report line 1 is a long one that says a lot about what was done, so it has to wrap in a narrow panel')
   const firstTitle = title.findIndex(l => l.startsWith('T-2'))
   checkScrolling(draw, 25, w, [title[firstTitle]!, title.find(l => l.startsWith('[Approve]'))!])
@@ -2676,9 +2676,9 @@ test('T-627: in the TUI, the panel is drawn exactly its height; a page that gets
   expect(end.length).toBe(22)
   expect(end.slice(0, head.length)).toEqual(head)
   expect(board.state().scroll).toBeGreaterThan(0)
-  // the page gets much shorter (a short history, no report): the scroll comes back within it, and every row is drawn
+  // the page gets much shorter (a short timeline, no report): the scroll comes back within it, and every row is drawn
   // again, from the page's own lines and blank rows, with nothing of the long page left
-  const short = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, title: 'short', history: [], runs: [] } : t)) } }
+  const short = { ...f, view: { ...f.view, tasks: f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, title: 'short', timeline: [], runs: [] } : t)) } }
   files.set('/work/proj/.symcc/view.json', viewFileText(short))
   await board.refresh()
   const after = shown(panel)
@@ -2747,17 +2747,17 @@ test('T-627: drawnLines cuts a line into the rows it takes: at line breaks, and 
   expect(drawnLines([{ text: 'x'.repeat(20), color: 'text' }], 8).map(lineText)).toEqual(['xxxxxxxx', 'xxxxxxxx', 'xxxx'])
 })
 
-test('T-675: a done task\'s page draws before its parts file is read, and when it is missing (empty history, no error)', async () => {
+test('T-675: a done task\'s page draws before its parts file is read, and when it is missing (empty timeline, no error)', async () => {
   const f0 = viewFile()
-  const history = [{ kind: 'merged', at: AT, text: 'try 1: merged after a long road' }]
-  const whole = f0.view.tasks.map(t => (t.id === 'T-5' ? { ...t, details: 'the old details', history } : t))
+  const timeline = [{ kind: 'merged', at: AT, text: 'try 1: merged after a long road' }]
+  const whole = f0.view.tasks.map(t => (t.id === 'T-5' ? { ...t, details: 'the old details', timeline } : t))
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: whole.map(t => viewTask(t)) as ViewFile['view']['tasks'] } }
   const partsPath = '/work/proj/.symcc/tasks/T-0.json'
   for (const partsThere of [true, false]) {
     let release: () => void = () => undefined
     const gate = new Promise<void>(res => (release = res))
     const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)]])
-    if (partsThere) files.set(partsPath, JSON.stringify({ version: 1, tasks: { 'T-5': { details: 'the old details', history } } }))
+    if (partsThere) files.set(partsPath, JSON.stringify({ version: 1, tasks: { 'T-5': { details: 'the old details', timeline } } }))
     const toasts: string[] = []
     const slots: { append: string; render: (input: never) => unknown }[] = []
     const ctx: TuiContext = {
@@ -2801,16 +2801,16 @@ test('T-675: a done task\'s page draws before its parts file is read, and when i
   }
 })
 
-test('T-675: a done task\'s history is not in the view file; opening its page reads it from its parts file and shows it', async () => {
+test('T-675: a done task\'s timeline is not in the view file; opening its page reads it from its parts file and shows it', async () => {
   const f0 = viewFile()
-  const history = [{ kind: 'merged', at: AT, text: 'try 1: merged after a long road' }]
-  const whole = f0.view.tasks.map(t => (t.id === 'T-5' ? { ...t, details: 'the old details', history } : t))
-  // as the engine writes it: T-5 without its history and details, naming its parts file
+  const timeline = [{ kind: 'merged', at: AT, text: 'try 1: merged after a long road' }]
+  const whole = f0.view.tasks.map(t => (t.id === 'T-5' ? { ...t, details: 'the old details', timeline } : t))
+  // as the engine writes it: T-5 without its timeline and details, naming its parts file
   const slim = whole.map(t => viewTask(t))
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: slim as ViewFile['view']['tasks'] } }
   expect(viewFileText(f)).not.toContain('a long road')
   const t5 = whole.find(t => t.id === 'T-5')!
-  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)], ['/work/proj/.symcc/tasks/T-0.json', JSON.stringify({ version: 1, tasks: { 'T-5': { details: t5.details, history } } })]])
+  const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)], ['/work/proj/.symcc/tasks/T-0.json', JSON.stringify({ version: 1, tasks: { 'T-5': { details: t5.details, timeline } } })]])
   const slots: { append: string; render: (input: never) => unknown }[] = []
   const ctx: TuiContext = {
     location: { directory: '/work/proj' },
@@ -3103,12 +3103,12 @@ test('T-696: a long-title row in the list keeps "waits for T-1" / "[feature]" at
  *  merged today after a send-back, a failed one, two to do (one waiting on the other). Times are minutes before NOW. */
 function liveTasks(): SymccTask[] {
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   return [
     task('T-610', 'Organizational memory search', { runs: [{ started: ago(4) }] }),
-    task('T-611', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 1_100_000 } }] }, { started: ago(30), ended: ago(10), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(10), tokens: { input: 1_100_000 } }] }], live: { checking: { step: 'queue', at: ago(0), place: 2 } }, history: [{ kind: 'checker-problems', at: ago(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: ago(5), text: 'try 2: waits in the merge queue (place 2)', try: 2, step: 'queue' }] }),
-    task('T-612', 'Scout page: drop the first line', { runs: [{ started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 540_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(2) }] }], live: { checking: { step: 'checker', at: ago(0) } }, history: [{ kind: 'stage', at: ago(2), text: 'try 1: prep started', try: 1, step: 'prep' }] }),
-    task('T-600', 'A merged one', { status: 'done', merged: 'abc1234', updated_at: ago(1), runs: [{ started: ago(200), ended: ago(100), agents: [{ kind: 'worker' as const, started: ago(200), ended: ago(100), tokens: { input: 800_000 } }] }], history: [{ kind: 'checker-problems', at: ago(90), text: 'try 1: checker: problems, a long reason' }, { kind: 'merged', at: ago(30), text: 'try 2 → merged into main' }] }),
+    task('T-611', '/symcc-doctor checks the hooks', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 1_100_000 } }] }, { started: ago(30), ended: ago(10), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(10), tokens: { input: 1_100_000 } }] }], live: { checking: { step: 'queue', at: ago(0), place: 2 } }, timeline: [{ kind: 'checker-problems', at: ago(40), text: 'try 1: checker: problems' }, { kind: 'stage', at: ago(5), text: 'try 2: waits in the merge queue (place 2)', try: 2, step: 'queue' }] }),
+    task('T-612', 'Scout page: drop the first line', { runs: [{ started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 540_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(2) }] }], live: { checking: { step: 'checker', at: ago(0) } }, timeline: [{ kind: 'stage', at: ago(2), text: 'try 1: prep started', try: 1, step: 'prep' }] }),
+    task('T-600', 'A merged one', { status: 'done', merged: 'abc1234', updated_at: ago(1), runs: [{ started: ago(200), ended: ago(100), agents: [{ kind: 'worker' as const, started: ago(200), ended: ago(100), tokens: { input: 800_000 } }] }], timeline: [{ kind: 'checker-problems', at: ago(90), text: 'try 1: checker: problems, a long reason' }, { kind: 'merged', at: ago(30), text: 'try 2 → merged into main' }] }),
     task('T-601', 'A failed one', { status: 'failed', updated_at: ago(20) }),
     task('T-620', 'Live tab part 1', { status: 'todo', priority: 5 }),
     task('T-621', 'Live tab in VS Code', { status: 'todo', after: ['T-620'], priority: 1 }),
@@ -3142,7 +3142,7 @@ test('T-760: the OpenCode Live tab ends work and check in ✧ (in the heading co
 test('T-846: the OpenCode Live tab draws an investigation as work → done, a docs-only check as "–", and a needs-review task at "you"', () => {
   const f0 = viewFile()
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const handed = { runs: [{ started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 300_000 } }] }] }
   const tasks = [
     task('T-801', 'Why is it slow', { kind: 'investigation', runs: [{ started: ago(4) }] }),
@@ -3241,10 +3241,10 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
     // T-938: no mode line above the sections: it is ▍Today's first row, "Now:"
     return [segText(liveHeading('Tasks', w)), ' ', under(liveLabelLine(layout)), ...lanes.flatMap(l => laneLines(l, layout, { nowMs: NOW, frame }).map(x => under(segText(x)))), ' ', segText(liveHeading('Today', w)), ' ', under(segText(liveNowSegs(view, lanes, NOW, inner))), ...todayLines(liveToday(whole, NOW), inner, true).map(under), ...liveLegend(inner).map(under)]
   }
-  // OpenCode reads the view file, whose done task comes slim (no history): the today row must still match
+  // OpenCode reads the view file, whose done task comes slim (no timeline): the today row must still match
   const f: ViewFile = { ...f0, view: { ...view, tasks: whole.map(t => viewTask(t)) } }
   const slim = f.view.tasks.find(t => t.id === 'T-600') as unknown as Record<string, unknown>
-  expect('history' in slim).toBe(false)
+  expect('timeline' in slim).toBe(false)
   expect(viewFileText(f)).not.toContain('a long reason')
   expect(liveToday(f.view.tasks, NOW, 0)).toEqual(liveToday(whole, NOW, 0))
   expect([liveToday(f.view.tasks, NOW, 0).merged, liveToday(f.view.tasks, NOW, 0).sentBack, liveToday(f.view.tasks, NOW, 0).failed]).toEqual([1, 2, 1])
@@ -3280,16 +3280,16 @@ test('T-692: the Live tab draws the terminal panel\'s lanes and today (core/live
 test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the median (warning from twice it), its time and who spent them, no bar, and the key line without the bar', () => {
   const f0 = viewFile()
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const tasks = [
-    task('T-800', 'Done at 4M', { status: 'done', merged: 'abc1234', runs: [{ started: ago(300), ended: ago(200), agents: [{ kind: 'worker' as const, started: ago(300), ended: ago(200), tokens: { input: 4_000_000 } }] }], history: [{ kind: 'merged', at: ago(30), text: 'try 1 → merged into main' }] }),
+    task('T-800', 'Done at 4M', { status: 'done', merged: 'abc1234', runs: [{ started: ago(300), ended: ago(200), agents: [{ kind: 'worker' as const, started: ago(300), ended: ago(200), tokens: { input: 4_000_000 } }] }], timeline: [{ kind: 'merged', at: ago(30), text: 'try 1 → merged into main' }] }),
     task('T-801', 'Try 2 running', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }] }, { started: ago(20) }] }),
     task('T-802', 'Try 2 handed back', { attempts: 2, runs: [{ started: ago(60), ended: ago(50), agents: [{ kind: 'worker' as const, started: ago(60), ended: ago(50), tokens: { input: 4_000_000 } }] }, { started: ago(20), ended: ago(2), agents: [{ kind: 'worker' as const, started: ago(20), ended: ago(2), tokens: { input: 1_000_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(2) }] }], live: { checking: { step: 'checker', at: ago(0) } }, }),
     task('T-803', 'Try 1 running', { runs: [{ started: ago(10) }] }),
     task('T-804', 'At the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 4_000_000 } }] }], live: { checking: { step: 'testing', at: ago(0) } }, }),
     task('T-805', 'At half the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 2_000_000 } }] }], live: { checking: { step: 'testing', at: ago(0) } }, }),
     task('T-806', 'Past twice the usual', { runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(3), tokens: { input: 9_000_000 } }] }], live: { checking: { step: 'testing', at: ago(0) } }, }),
-    task('T-807', 'Merged with a checker', { status: 'done', merged: 'abc1235', runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(10), tokens: { input: 3_000_000 } }, { kind: 'checker' as const, started: ago(10), ended: ago(3), tokens: { input: 1_000_000 } }] }], history: [{ kind: 'merged', at: ago(2), text: 'try 1 → merged into main' }] }),
+    task('T-807', 'Merged with a checker', { status: 'done', merged: 'abc1235', runs: [{ started: ago(40), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(40), ended: ago(10), tokens: { input: 3_000_000 } }, { kind: 'checker' as const, started: ago(10), ended: ago(3), tokens: { input: 1_000_000 } }] }], timeline: [{ kind: 'merged', at: ago(2), text: 'try 1 → merged into main' }] }),
   ]
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
@@ -3326,7 +3326,7 @@ test('T-757, T-867: the OpenCode Live tab shows the whole task\'s tokens × the 
 test('T-709: the Live tab shows a lane for an approved task in review while its tests run (as the Tasks tab counts it in doing)', () => {
   const f0 = viewFile()
   const ago = (s: number) => new Date(NOW - s * 1000).toISOString()
-  const approved = { id: 'T-630', title: 'Approved, in its tests', details: '', files: [], status: 'review', note: '', priority: 19, after: [], attempts: 1, history: [], branch: null, created_at: ago(9000), updated_at: ago(60), runs: [{ started: ago(2400), ended: ago(1200) }], live: { checking: { step: 'testing', at: ago(5) } }, } as unknown as SymccTask
+  const approved = { id: 'T-630', title: 'Approved, in its tests', details: '', files: [], status: 'review', note: '', priority: 19, after: [], attempts: 1, timeline: [], branch: null, created_at: ago(9000), updated_at: ago(60), runs: [{ started: ago(2400), ended: ago(1200) }], live: { checking: { step: 'testing', at: ago(5) } }, } as unknown as SymccTask
   const tasks = [...liveTasks().filter(t => t.status !== 'doing'), approved]
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: tasks.map(t => viewTask(t)), checker: true, max_parallel: 3 } }
   const d = panelLines(parseViewFile(viewFileText(f)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120)
@@ -3411,10 +3411,10 @@ test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ 
 // them, for each other and for a failed task; one free, one waiting for the free one.
 const trainTasks = (): SymccTask[] => {
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   return [
     task('T-712', 'Scout ordering fix', { runs: [{ started: ago(2) }] }),
-    task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: ago(30), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(3), tokens: { input: 1_400_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(3) }] }], live: { checking: { step: 'checker', at: ago(0) } }, history: [{ kind: 'stage', at: ago(3), text: 'try 2: prep started', try: 2, step: 'prep' }] }),
+    task('T-690', 'Live tab first part', { attempts: 2, runs: [{ started: ago(30), ended: ago(3), agents: [{ kind: 'worker' as const, started: ago(30), ended: ago(3), tokens: { input: 1_400_000 } }, { id: 'agent-c', kind: 'checker' as const, started: ago(3) }] }], live: { checking: { step: 'checker', at: ago(0) } }, timeline: [{ kind: 'stage', at: ago(3), text: 'try 2: prep started', try: 2, step: 'prep' }] }),
     task('T-701', 'A failed one', { status: 'failed', updated_at: ago(20) }),
     task('T-713', 'Task files: no silent drops', { status: 'todo', after: ['T-712'] }),
     task('T-714', 'Help: /symcc-help shows all', { status: 'todo', after: ['T-713'] }),
@@ -3516,8 +3516,8 @@ test('T-715: in the TUI, ↓ to a train and Enter (or a click on it) opens that 
 // running ones, at most 3, newest first; one merged 11 minutes ago, failed or dropped tasks get none.
 const finishedTasks = (): SymccTask[] => {
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
-  const merged = (id: string, title: string, min: number) => task(id, title, { status: 'done', runs: [{ started: ago(min + 20), ended: ago(min + 2), agents: [{ kind: 'worker' as const, started: ago(min + 20), ended: ago(min + 2), tokens: { input: 900_000 } }] }], history: [{ kind: 'merged', at: ago(min), text: 'try 1 → merged into main' }] })
+  const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const merged = (id: string, title: string, min: number) => task(id, title, { status: 'done', runs: [{ started: ago(min + 20), ended: ago(min + 2), agents: [{ kind: 'worker' as const, started: ago(min + 20), ended: ago(min + 2), tokens: { input: 900_000 } }] }], timeline: [{ kind: 'merged', at: ago(min), text: 'try 1 → merged into main' }] })
   return [
     task('T-760', 'A running one', { runs: [{ started: ago(4) }] }),
     merged('T-747', 'Live tab: each section starts with a heading', 3),
@@ -4087,12 +4087,12 @@ test('T-913: the OpenCode Branches rows say each task\'s state (paused, failed, 
   }
 })
 
-test('T-727: tasks as the OpenCode TUI draws them (viewTask, then viewStubFilled: slim done tasks get history: []) still show the "◀ T-n merged" row and today\'s merged / sent-back counts', () => {
+test('T-727: tasks as the OpenCode TUI draws them (viewTask, then viewStubFilled: slim done tasks get timeline: []) still show the "◀ T-n merged" row and today\'s merged / sent-back counts', () => {
   const f = branchesViewFile()
   const tui = (ts: readonly unknown[]) => (ts as SymccTask[]).map(t => viewStubFilled(viewTask(t)))
   const kinds = (tasks: SymccTask[]) => liveBranches({ ...f.view, tasks }, NOW, 100)!.rows.map(r => segText(r.segs))
   const slim = tui(f.view.tasks).find(t => t.id === 'T-724')!
-  expect(slim.history).toEqual([])
+  expect(slim.timeline).toEqual([])
   expect(kinds(tui(f.view.tasks))).toEqual(kinds(f.view.tasks as SymccTask[]))
   expect(kinds(tui(f.view.tasks)).some(l => l.includes('◀ T-724  merged 3m ago'))).toBe(true)
   // the same through the whole TUI path: the parsed view file, then viewStubFilled
@@ -4538,7 +4538,7 @@ test('T-904: the Tasks search finds done tasks (one a minute ago, one 5 days ago
   const slim = whole.map(t => viewTask(t))
   const f: ViewFile = { ...f0, view: { ...f0.view, tasks: slim as ViewFile['view']['tasks'] } }
   for (const word of ['zebrafish', 'kumquat', 'narwhal', 'okapi']) expect(viewFileText(f)).not.toContain(word)
-  const parts = Object.fromEntries(whole.filter(t => t.status === 'done').map(t => [t.id, { details: t.details, origin: t.origin, history: t.history }]))
+  const parts = Object.fromEntries(whole.filter(t => t.status === 'done').map(t => [t.id, { details: t.details, origin: t.origin, timeline: t.timeline }]))
   const files = new Map([['/work/proj/.symcc/view.json', viewFileText(f)], ['/work/proj/.symcc/tasks/T-0.json', JSON.stringify({ version: 1, tasks: parts })]])
   const partsReads: string[] = []
   const readText = async (p: string) => (p.includes('/tasks/') && partsReads.push(p), files.get(p) ?? Promise.reject(new Error('missing')))
@@ -4601,13 +4601,13 @@ test('T-904: the Tasks search finds done tasks (one a minute ago, one 5 days ago
 test('T-903: with no task running, the OpenCode Live tab says why (paused, waiting, all done, a new board) and what to do next', () => {
   const f0 = viewFile()
   const ago = (min: number) => new Date(NOW - min * 60_000).toISOString()
-  const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
+  const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const cases: [SymccMode, SymccTask[], string[]][] = [
     ['paused', [task('T-1', 'todo')], ['Paused: nothing starts. /symcc-mode auto starts work again.']],
     ['auto', [task('T-6', 'paused'), task('T-7', 'todo', { after: ['T-6'] }), task('T-5', 'waiting', { ask: { by: 'worker', text: 'Which one?', asked_at: ago(2) } })], ['Nothing running · 3 waiting: T-5 needs you, T-6 paused, T-7 waits for T-6']],
-    ['auto', [task('T-891', 'done', { history: [{ kind: 'merged', at: ago(12), text: 'try 1 → merged into main' }] }), task('T-893', 'backlog'), task('T-894', 'backlog')], ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo.", '  ◇ T-893  Task T-893', '  ◇ T-894  Task T-894']],
+    ['auto', [task('T-891', 'done', { timeline: [{ kind: 'merged', at: ago(12), text: 'try 1 → merged into main' }] }), task('T-893', 'backlog'), task('T-894', 'backlog')], ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo.", '  ◇ T-893  Task T-893', '  ◇ T-894  Task T-894']],
     // T-924: the next 3 backlog items (lowest priority first, then oldest), then how many more
-    ['auto', [task('T-891', 'done', { history: [{ kind: 'merged', at: ago(3), text: 'try 1 → merged into main' }] }), task('T-895', 'backlog', { priority: 1 }), task('T-893', 'backlog', { priority: 9 }), task('T-896', 'backlog', { priority: 1 }), task('T-894', 'backlog', { priority: 2 }), task('T-897', 'backlog', { priority: 19 })], ['All done · last merged T-891, 3m ago', "Tell the lead what's next, or move one of 5 backlog items to todo.", '  ◇ T-895  Task T-895', '  ◇ T-896  Task T-896', '  ◇ T-894  Task T-894', '  … 2 more in the backlog']],
+    ['auto', [task('T-891', 'done', { timeline: [{ kind: 'merged', at: ago(3), text: 'try 1 → merged into main' }] }), task('T-895', 'backlog', { priority: 1 }), task('T-893', 'backlog', { priority: 9 }), task('T-896', 'backlog', { priority: 1 }), task('T-894', 'backlog', { priority: 2 }), task('T-897', 'backlog', { priority: 19 })], ['All done · last merged T-891, 3m ago', "Tell the lead what's next, or move one of 5 backlog items to todo.", '  ◇ T-895  Task T-895', '  ◇ T-896  Task T-896', '  ◇ T-894  Task T-894', '  … 2 more in the backlog']],
     ['auto', [], ['No tasks yet. Tell the lead what you want built.']],
   ]
   for (const [mode, tasks, want] of cases) {
@@ -4690,8 +4690,8 @@ function threeTriesViewFile(): ViewFile {
   const f = viewFile()
   const ids = [1, 2, 3].map(n => [`w${n}00000000${n}`, `c${n}00000000${n}`] as const)
   const runs = [1, 2, 3].map(n => ({ started: AT, ended: AT, report: `.symcc/reports/T-2-try-${n}.md`, agents: [{ id: ids[n - 1]![0], kind: 'worker' as const, started: AT, ended: AT }, { id: ids[n - 1]![1], kind: 'checker' as const, started: AT, ended: AT }] }))
-  const history = [1, 2, 3].map(n => ({ kind: 'checker-problems', at: AT, text: `try ${n}: checker found problems`, try: n, report: `.symcc/reports/T-2-try-${n}-checker.md` }))
-  const tasks = f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, attempts: 3, runs, history } : t)) as ViewFile['view']['tasks']
+  const timeline = [1, 2, 3].map(n => ({ kind: 'checker-problems', at: AT, text: `try ${n}: checker found problems`, try: n, report: `.symcc/reports/T-2-try-${n}-checker.md` }))
+  const tasks = f.view.tasks.map(t => (t.id === 'T-2' ? { ...t, attempts: 3, runs, timeline } : t)) as ViewFile['view']['tasks']
   return { ...f, view: { ...f.view, tasks } }
 }
 

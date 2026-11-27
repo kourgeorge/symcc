@@ -1,7 +1,7 @@
 // Who drives the board, and which session owns a running task.
 import { type Board, type BoardTask, type CheckStep, CHECKED_STATUSES, isSha, intoOf, DEFAULT_TEST_MINUTES, testMinutesOf } from './board-file'
 import { parseStamp, plural } from './text'
-import { stoppedEntry, stopEnd, withHistory } from './history'
+import { stoppedEntry, stopEnd, withTimeline } from './timeline'
 import { addCommits, shortSha } from './commits'
 import { tryLabel } from './roles'
 import { endedBy, withEnd } from './runs'
@@ -139,7 +139,7 @@ export const HANDOVER_NOTE = 'restarted: the owner moved driving to another sess
 
 /**
  * Task `t` after its worker was stopped by a hand-over the owner asked for (/<name>-drive): back to "todo" with
- * HANDOVER_NOTE and a history line saying so, but its try is not counted (attempts back one, the try's open run
+ * HANDOVER_NOTE and a timeline line saying so, but its try is not counted (attempts back one, the try's open run
  * taken off, as T-428 does for a queued start), so the next worker goes on from the same folder and branch on the
  * same try number. A task that is not "doing" is left as it is.
  */
@@ -148,7 +148,7 @@ export function handedOff(t: BoardTask, now: string): BoardTask {
   const { live: _l, runs: _r, ...rest } = t
   const last = t.runs?.at(-1)
   const runs = last && !last.ended ? t.runs!.slice(0, -1) : t.runs
-  return { ...rest, status: 'todo' as const, note: HANDOVER_NOTE, attempts: Math.max(0, t.attempts - 1), updated_at: now, history: withHistory(t.history, now, stoppedEntry(t, HANDOVER_NOTE)), ...(runs?.length ? { runs } : {}) }
+  return { ...rest, status: 'todo' as const, note: HANDOVER_NOTE, attempts: Math.max(0, t.attempts - 1), updated_at: now, timeline: withTimeline(t.timeline, now, stoppedEntry(t, HANDOVER_NOTE)), ...(runs?.length ? { runs } : {}) }
 }
 
 // ---------------- which session owns a running task ----------------
@@ -241,7 +241,7 @@ export function mergedThisTry(t: Pick<BoardTask, 'merged' | 'runs'>): string | n
   return isSha(t.merged) && !!last?.commits?.includes(t.merged) ? t.merged : null
 }
 
-/** The history line of a task found already merged (`sha`) when it was about to be `when` (e.g. "sent back to todo"). */
+/** The timeline line of a task found already merged (`sha`) when it was about to be `when` (e.g. "sent back to todo"). */
 export const alreadyMergedLine = (t: Pick<BoardTask, 'role' | 'attempts' | 'merge_into'>, sha: string, when: string) =>
   `${tryLabel(t)}: its work was already merged into ${intoOf(t)} (${shortSha(sha)}) when it was about to be ${when}, so it is done`
 
@@ -252,7 +252,7 @@ export const alreadyMergedLine = (t: Pick<BoardTask, 'role' | 'attempts' | 'merg
 export function mergedDone(t: BoardTask, sha: string, when: string, now: string): BoardTask {
   const { live: _l, test_output: _o, ...rest } = t
   const runs = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
-  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: undefined, updated_at: now, history: withHistory(t.history, now, ['merged', alreadyMergedLine(t, sha, when), { try: Number(t.attempts) || 0 }]), ...(runs ? { runs } : {}) }
+  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: undefined, updated_at: now, timeline: withTimeline(t.timeline, now, ['merged', alreadyMergedLine(t, sha, when), { try: Number(t.attempts) || 0 }]), ...(runs ? { runs } : {}) }
 }
 
 // ---------------- merged outside the board (T-514) ----------------
@@ -262,7 +262,7 @@ export function mergedDone(t: BoardTask, sha: string, when: string, now: string)
 /** The statuses a task can be marked "merged outside the board" from (a running one is stopped first). */
 export const MERGED_OUTSIDE_FROM: readonly BoardTask['status'][] = ['todo', 'doing', 'failed', 'waiting', 'paused', 'review', 'dropped']
 
-/** The history line of a task marked done because its work was merged outside the board (`sha`), by `by` ("the owner", "the lead"). */
+/** The timeline line of a task marked done because its work was merged outside the board (`sha`), by `by` ("the owner", "the lead"). */
 export const mergedOutsideLine = (sha: string, by: string) => `merged outside the board (${shortSha(sha)}); marked done by ${by}`
 
 /** The refusal when task `id`'s branch has `n` commits that `into` doesn't have. */
@@ -278,7 +278,7 @@ export function mergedOutside(t: BoardTask, sha: string, by: string, commits: re
   const { live: _l, test_output: _o, ask: _ak, ...rest } = t
   const ended = t.status === 'doing' ? endedBy(t, now, 'finished', 'merged').runs : t.runs?.length ? withEnd(t.runs, 'finished', 'merged', true) : undefined
   const runs = ended ? addCommits(ended, [...commits, sha]) : undefined
-  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: undefined, updated_at: now, history: withHistory(t.history, now, ['merged', mergedOutsideLine(sha, by), { how: 'outside' }]), ...(runs ? { runs } : {}) }
+  return { ...rest, status: 'done' as const, note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: undefined, updated_at: now, timeline: withTimeline(t.timeline, now, ['merged', mergedOutsideLine(sha, by), { how: 'outside' }]), ...(runs ? { runs } : {}) }
 }
 
 /**
@@ -314,10 +314,10 @@ export function relabelSession(b: Board, oldId: string, newId: string): Board {
   }
 }
 
-/** Task `t` back to "todo" with `note`, no longer tied to a session; a running one gets a history line saying why (the next try starts for that reason). */
+/** Task `t` back to "todo" with `note`, no longer tied to a session; a running one gets a timeline line saying why (the next try starts for that reason). */
 export function backToTodo(t: BoardTask, note: string, now: string, stoppedAt: string = now): BoardTask {
   const { live: _l, ...rest } = t
-  return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { history: withHistory(t.history, now, stoppedEntry(t, note)), ...laterEnd(endedBy(t, stoppedAt, ...stopEnd(note)), stoppedAt) } : {}) }
+  return { ...rest, status: 'todo' as const, note, updated_at: now, ...(t.status === 'doing' ? { timeline: withTimeline(t.timeline, now, stoppedEntry(t, note)), ...laterEnd(endedBy(t, stoppedAt, ...stopEnd(note)), stoppedAt) } : {}) }
 }
 
 /** T-863: a try that handed back before the close (prep, queue, tests ran after) ends at the later last-alive time, so those minutes count as active and the gap starts there. */
@@ -329,14 +329,14 @@ function laterEnd(p: { runs?: BoardTask['runs'] }, at: string): { runs?: BoardTa
 
 /**
  * T-863: the last moment the old session was known to be alive while task `t` ran: the old lead.json heartbeat, else the
- * latest of the task's updated_at, last history time and checking time. Never after `now`, never before the try started.
+ * latest of the task's updated_at, last timeline time and checking time. Never after `now`, never before the try started.
  * T-885: a heartbeat later than `now` (a wrong clock) is ignored, as if there were none.
  */
 function lastAlive(t: BoardTask, leadBefore: string | null, now: string): string {
   const nowMs = Date.parse(now)
   const beat = parseLead(leadBefore)?.heartbeat
   const heartbeat = typeof beat === 'number' && Number.isFinite(beat) && !(beat > nowMs) ? beat : undefined
-  const times = [heartbeat, ...(heartbeat === undefined ?[t.updated_at, t.live?.checking?.at, ...(t.history ?? []).map(h => h.at)].map(s => Date.parse(s ?? '')) : [])]
+  const times = [heartbeat, ...(heartbeat === undefined ?[t.updated_at, t.live?.checking?.at, ...(t.timeline ?? []).map(h => h.at)].map(s => Date.parse(s ?? '')) : [])]
   const known = times.filter((n): n is number => typeof n === 'number' && Number.isFinite(n))
   if (!known.length) return now
   const started = Date.parse(t.runs?.at(-1)?.started ?? '')

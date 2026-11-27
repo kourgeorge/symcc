@@ -8,7 +8,7 @@
 //   Details: the labelled rows the terminal and OpenCode show (detailRows: Steps, Added, Role, Kind, From, Why,
 //   Files, Into, After, …, Tries) as a two-column label / value grid that wraps (T-699); each task it waits for is a link
 //   Branch (T-761: the task's branch against main, the terminal's lines in the monospaced face)
-//   Answer · What to do (Markdown) · Changes · Timeline (a timeline on one rail, newest first, the newest HISTORY_FIRST
+//   Answer · What to do (Markdown) · Changes · Timeline (a timeline on one rail, newest first, the newest TIMELINE_FIRST
 //   with a "Show all" button) · the Time and cost fold (Runs) · Report (Markdown, its first part with a "Show all" button)
 // (a fold and a task id are links: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.
@@ -16,7 +16,7 @@ import type { SymccTask } from '../../../types'
 import { type DetailRow, type DiffFile, type Seg, findRole, fmtTotal, sumRuns, taskActions, type TaskAction, type TaskActionId, type BoardTask } from '../../board'
 import { runLines, type ReportPick, type TaskSection } from '../../core/task-sections'
 import { RUN_NOW_NO, RUN_NOW_YES } from '../../core/run-now'
-import { historyEvent, historyTime, HISTORY_COLOR } from '../../core/history'
+import { timelineEvent, timelineTime, TIMELINE_COLOR } from '../../core/timeline'
 import { S } from '../../app/state'
 import type { PaneParts } from './parts'
 import { draftFor, dropDraft, fieldRows, keepDraftText } from './answer-box'
@@ -26,8 +26,8 @@ import { type PageHeader, vsPageHeader } from './page-header'
 
 /** How many lines of a report VS Code's task page shows before its "Show all" button. */
 export const REPORT_FIRST_LINES = 12
-/** How many history events (the newest) VS Code's task page shows before its "Show all" button. */
-export const HISTORY_FIRST = 10
+/** How many timeline events (the newest) VS Code's task page shows before its "Show all" button. */
+export const TIMELINE_FIRST = 10
 
 /** The key of a Details row on VS Code's task page: "vs-row-status", "vs-row-stage"; a row with no label (one that
  *  goes on from the row above) gets the label above it and its place: "vs-row-after-1". */
@@ -387,29 +387,29 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       ])
     : null
 
-  // the history as a timeline (T-512, T-699), newest first: the same events and marks as the terminal page (historyEvent).
+  // the timeline (T-512, T-699), newest first: the same events and marks as the terminal page (timelineEvent).
   // A left rail: each event is a row, its mark (in its tone) at the top of a one-cell column and, under it, a thin
   // line (a Box that grows to the event's whole height, not a "│" row of its own) that meets the next event's mark, so
   // the marks sit on one unbroken line; the oldest event has none below it. To the right: when it happened
-  // (T-522, historyTime) and its try, then the words, wrapped whole. A long history shows its newest HISTORY_FIRST
+  // (T-522, timelineTime) and its try, then the words, wrapped whole. A long timeline shows its newest TIMELINE_FIRST
   // events and a "Show all (N more)" button.
-  const events = [...t.history].reverse().map(historyEvent)
-  const historyAll = isOpen('history-all')
-  const shownEvents = historyAll ? events : events.slice(0, HISTORY_FIRST)
+  const events = [...t.timeline].reverse().map(timelineEvent)
+  const timelineAll = isOpen('timeline-all')
+  const shownEvents = timelineAll ? events : events.slice(0, TIMELINE_FIRST)
   const hidden = events.length - shownEvents.length
-  const historySec = sec('history')
-  const history = historySec
-    ? section('history', historySec.title, [
-        <Box key="vs-history" flexDirection="column">
+  const timelineSec = sec('timeline')
+  const timeline = timelineSec
+    ? section('timeline', timelineSec.title, [
+        <Box key="vs-timeline" flexDirection="column">
           {shownEvents.map((e, i) => {
-            const stamp = [historyTime(e.at, nowMs), e.by, e.label].filter(Boolean).join(' · ')
-            const resultColor = e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text'
+            const stamp = [timelineTime(e.at, nowMs), e.by, e.label].filter(Boolean).join(' · ')
+            const resultColor = e.tone === 'good' || e.tone === 'bad' ? TIMELINE_COLOR[e.tone] : 'text'
             // the line goes on below the last shown event when older ones are hidden behind "Show all"
             const line = i < shownEvents.length - 1 || hidden > 0
             return (
-              <Box key={`vs-history-${i}`} flexDirection="row" columnGap={1}>
+              <Box key={`vs-timeline-${i}`} flexDirection="row" columnGap={1}>
                 <Box key="rail" flexDirection="column" alignItems="center" width={1} flexShrink={0}>
-                  <Text key="mark" bold color={C(HISTORY_COLOR[e.tone])}>{e.mark}</Text>
+                  <Text key="mark" bold color={C(TIMELINE_COLOR[e.tone])}>{e.mark}</Text>
                   {line ? <Box key="line" flexGrow={1} width={1} minHeight={1} backgroundColor={C('subtle')} /> : null}
                 </Box>
                 <Box key="body" flexDirection="column" flexGrow={1} flexShrink={1} paddingBottom={line ? 1 : 0}>
@@ -423,9 +423,9 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
             )
           })}
         </Box>,
-        events.length > HISTORY_FIRST ? (
-          <Box key="vs-history-buttons" flexDirection="row">
-            <Button key="history-all" label={historyAll ? 'Show less' : `Show all (${hidden} more)`} variant="secondary" onPress={toggle('history-all')} />
+        events.length > TIMELINE_FIRST ? (
+          <Box key="vs-timeline-buttons" flexDirection="row">
+            <Button key="timeline-all" label={timelineAll ? 'Show less' : `Show all (${hidden} more)`} variant="secondary" onPress={toggle('timeline-all')} />
           </Box>
         ) : null,
       ])
@@ -488,7 +488,7 @@ export function taskPageVs(pane: PaneParts, t: SymccTask, x: VsTaskCtx) {
       {answer}
       {details}
       {changes}
-      {history}
+      {timeline}
       {time}
       {report}
     </Box>

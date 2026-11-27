@@ -182,7 +182,7 @@ const shaTimes = (stdout: string): BranchCommit[] =>
  * for a merged task, into's commits between the fork and the merge (`git log <fork>..<merged>`) and the first few after.
  * Null when the branch can't be read (none yet, deleted) or git fails.
  */
-export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs: number, status?: { failed: boolean }): Promise<TaskBranchFacts | null> {
+export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'timeline'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs: number, status?: { failed: boolean }): Promise<TaskBranchFacts | null> {
   if (!safe(into)) return null
   // T-1126: `status.failed` tells a git failure (or timeout) apart from "nothing to show" (both return null)
   const repo = repoOf(t) // T-1154: read in the task's own repo
@@ -244,7 +244,7 @@ export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'stat
   if (!tip) return null
   const own = new Set(commits.map(c => c.sha))
   const mergedLine = commits.find(c => c.sha === merged)
-  const mergedAt = Math.max(-Infinity, ...(t.history ?? []).filter(h => h.kind === 'merged').map(h => Date.parse(h.at ?? '') || -Infinity))
+  const mergedAt = Math.max(-Infinity, ...(t.timeline ?? []).filter(h => h.kind === 'merged').map(h => Date.parse(h.at ?? '') || -Infinity))
   return {
     branch: branch || S.N.branch(t.id),
     into,
@@ -267,7 +267,7 @@ export const hasTaskBranch = (t: Pick<SymccTask, 'status' | 'branch' | 'merged'>
  * and starts a read in the background when they are stale (see above); `onRead` is called once that read is done.
  * `done` (tests) is the read started, if any.
  */
-export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history' | 'attempts'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs = Date.now(), onRead?: () => void): { facts: TaskBranchFacts | undefined; done?: Promise<void> } {
+export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'timeline' | 'attempts'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs = Date.now(), onRead?: () => void): { facts: TaskBranchFacts | undefined; done?: Promise<void> } {
   if (S.gitState !== 'ok' || !S.root || !hasTaskBranch(t) || gitStateOfTask(t) !== 'ok') return { facts: undefined }
   // T-1117: a finished task's answer only changes when main moves, so its key holds main's tip and it has no timer
   const finished = isFinished(t)

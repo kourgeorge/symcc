@@ -1,7 +1,7 @@
 // The lead's questions for the owner that are not about one task ("raise the version?", "add a scout?"): kept on
 // the board file (board.questions), so they don't scroll away in the chat. Open ones show in the board panel's
 // "Questions for you" list, in the band and in the status line; an answer (on the board or in the chat) closes one,
-// and it stays in the file as history.
+// and it stays in the file as timeline.
 import type { SymccAsk } from '../../types'
 import { clean, isObj, squash, plural } from './text'
 
@@ -58,7 +58,7 @@ export const QUESTION_OPTIONS = { min: 2, max: 6 } as const
 export const OPTION_MAX = 60
 /** A question is cut to this many characters. */
 export const QUESTION_MAX = 500
-/** At most this many closed questions are kept as history; older ones are let go. */
+/** At most this many closed questions are kept as timeline; older ones are let go. */
 export const QUESTIONS_KEPT = 50
 
 type WithQuestions = { questions?: OwnerQuestion[]; next_question?: number }

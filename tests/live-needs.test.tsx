@@ -9,7 +9,7 @@ import { PANE, T0, seedBoard } from './board-fixture'
 import { askShape } from './ask-shape'
 
 const iso = (minAgo: number) => new Date(T0 - minAgo * 60_000).toISOString()
-const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: iso(300), updated_at: iso(1), ...askShape(x) })
+const task = (id: string, title: string, x: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: iso(300), updated_at: iso(1), ...askShape(x) })
 const QUESTION = { id: 'Q-88', text: "Which figures should go on the Today section's 4th line?", options: [], asked_at: iso(5) }
 const RUNNING = task('T-760', 'A running one', { runs: [{ started: iso(4) }] })
 const REVIEW = task('T-749', 'Website home page: a live, played-out demo of the board with a long title that has to be cut', { status: 'review', updated_at: iso(3), runs: [{ started: iso(20), ended: iso(3) }] })

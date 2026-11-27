@@ -34,7 +34,7 @@ export const mergingLine = (id: string): string => pressed.get(id) ?? (mergingNo
 
 /** One task opened: its details and actions; for a task in review also its changes. */
 export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
-  // T-829: a task the view slimmed gets its details and history back from its parts file, for this page only
+  // T-829: a task the view slimmed gets its details and timeline back from its parts file, for this page only
   const t = await taskWithParts(claudeHost($), viewTask)
   const { Box, Text, Button, Input, v, width, color, word, mark, act, C, footer, buttonRows, heading, paragraphs } = pane
   // desktop and mobile draw every Button as a native button: there a button gets its label plain, no brackets (as the header)
@@ -323,7 +323,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
   // what the failed try's report asks for (a NEED FILES line or a question), if anything. Only the report of the
   // try that failed counts: a try that left no report (no result, could not start) must not show an older try's ask.
   const latestBody = !failed || !latest || latest.try !== t.attempts ? null : (texts[latest.file] ?? null)
-  const why = failed ? { reason: whyFailed(t), next: failNext(t), asks: failAsks(latestBody ?? t.history.at(-1)?.text ?? '') } : null
+  const why = failed ? { reason: whyFailed(t), next: failNext(t), asks: failAsks(latestBody ?? t.timeline.at(-1)?.text ?? '') } : null
   // Copy (y): the task as plain text on the clipboard, with the latest worker report, and a toast saying whether it took.
   const goBack = act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => '')))
   const openTask = (id: string) => act(async () => ((S.diffOpen = null), (S.rejecting = null), await panelValues($).updateOpened(() => id)))
@@ -492,7 +492,7 @@ export async function taskPage($: $, pane: PaneParts, viewTask: SymccTask) {
       )}
 
       {sectionEl('what')}
-      {sectionEl('history')}
+      {sectionEl('timeline')}
       {sectionEl('runs')}
       {sectionEl('report')}
 

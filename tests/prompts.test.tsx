@@ -14,7 +14,7 @@ import { TOOLS } from '../hooks/app/tools'
 import { ICON } from '../hooks/name'
 import { inProject } from './project'
 import { ran, entry } from './fakes'
-import { hist } from './history-fixture'
+import { hist } from './timeline-fixture'
 
 const ROOT = '/proj'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -35,15 +35,15 @@ function setup() {
   S.enabledNow = true
 }
 
-test("T-616: the 'stage' history lines stay out of Earlier tries, so an earlier try's failure is not pushed out", () => {
+test("T-616: the 'stage' timeline lines stay out of Earlier tries, so an earlier try's failure is not pushed out", () => {
   setup()
-  const step = (text: string) => ({ kind: 'stage', text }) as SymccTask['history'][number]
-  const history = [
+  const step = (text: string) => ({ kind: 'stage', text }) as SymccTask['timeline'][number]
+  const timeline = [
     ...hist('created by the lead', 'try 1: checker found problems: X broken'),
     step('try 2: checker started'), step('try 2: checker: OK'), step('try 2: waits in the merge queue (place 2)'), step('try 2: tests started'),
     ...hist('try 2: tests failed: Y'),
   ]
-  const b = boardWith(['npm test'], { history })
+  const b = boardWith(['npm test'], { timeline })
   const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
   expect(p).toContain('## Earlier tries\n\n| try | how it ended | reason |')
   expect(p).toMatch(/\| 1 \| sent back by the checker \|/)
@@ -53,7 +53,7 @@ test("T-616: the 'stage' history lines stay out of Earlier tries, so an earlier 
 
 test('the built-in prompts are filled in for the task: no placeholder is left, and the change prompt has the test rule', () => {
   setup()
-  const b = boardWith(['npm test'], { history: hist('created by the lead', 'try 1: Fixed the parser. → tests failed: 2 failed') })
+  const b = boardWith(['npm test'], { timeline: hist('created by the lead', 'try 1: Fixed the parser. → tests failed: 2 failed') })
   const p = WORKER_PROMPT(b.tasks[0]!, b, WT)
   expect(p).not.toContain('{{')
   expect(p).toContain('You are a symcc worker. Do exactly this one task, then stop.')

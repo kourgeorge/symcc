@@ -53,7 +53,7 @@ function fakeCopilot(script: Script, o: { signedIn?: () => boolean; models?: Par
         abort: async () => ((s.aborted = true), aborted()),
         setModel: async (model, mo) => void s.models.push({ model, ...(mo?.reasoningEffort ? { effort: mo.reasoningEffort } : {}) }),
         disconnect: async () => void (s.closed = true),
-        rpc: { history: { compact: async () => ({ success: true, summaryContent: 'We added a README.' }) } },
+        rpc: { timeline: { compact: async () => ({ success: true, summaryContent: 'We added a README.' }) } },
       }
       sessions.push(s)
       return s
@@ -245,7 +245,7 @@ test("a turn's model and reasoning are set when they change, back to the agent's
   expect(s.sent[1]!.attachments).toBe(undefined)
 })
 
-test("summarizing compacts the session's history; closing lets go of the session, then of the runtime", async () => {
+test("summarizing compacts the session's timeline; closing lets go of the session, then of the runtime", async () => {
   const fake = fakeCopilot(answers('ok'))
   const sdk = copilotSdk({ load: fake.load })
   const agent = await sdk.create({ model: 'auto', cwd: '/tmp/w', tools: {}, disallowedTools: [] })

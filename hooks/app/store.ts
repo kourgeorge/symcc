@@ -6,7 +6,7 @@ import { tellLead } from './tell'
 import { migrateIfOld } from './migrate-data'
 import { S, onHere, sizeNotes } from './state'
 import { timed } from './slow-log'
-import { boardEvents, withStageHistory } from '../core/events'
+import { boardEvents, withStageTimeline } from '../core/events'
 import { emitTaskEvents, logTaskEvents, type TaskEvent } from './events'
 import type { Host } from '../host'
 
@@ -366,7 +366,7 @@ export async function saveMigrated(host: Host): Promise<void> {
   if (!got) return
   const { text, read: r, whole } = got
   if (r.broken || !whole) return
-  const what = `the done and dropped tasks' history, tries and details were moved to ${S.N.dir}/${PARTS_DIR}/, so the board file stays small`
+  const what = `the done and dropped tasks' timeline, tries and details were moved to ${S.N.dir}/${PARTS_DIR}/, so the board file stays small`
   await keepCopy(host, text, 'before-migrate', c => `${S.N.boardFile}: ${what}${c ? `. The file as it was is kept in ${c}` : ''}.`)
   await change(host, b => b)
 }
@@ -401,15 +401,15 @@ let missingParts = new Set<string>()
 const partsPath = (rel: string) => path(`${S.N.dir}/${rel}`)
 
 /**
- * View task `t` for a task page (T-829): a task the view slimmed (it has `parts`) comes back with its details, history
+ * View task `t` for a task page (T-829): a task the view slimmed (it has `parts`) comes back with its details, timeline
  * and the other left-out parts read from its parts file; the stored view is not touched. When the file can't be read,
- * `t` comes back with empty details and history (so the page can still draw). Any other task comes back as it is.
+ * `t` comes back with empty details and timeline (so the page can still draw). Any other task comes back as it is.
  */
 export async function taskWithParts<T extends object>(host: Host, t: T): Promise<T> {
   const rel = (t as Record<string, unknown>)[PARTS_KEY]
   if (!safePartsFile(rel)) return viewStubFilled(t)
   const text = await host.fs.read(partsPath(rel)).catch(() => null)
-  // the stored view carries empty stand-ins (viewStubFilled) for details and history; they must not win over the real ones
+  // the stored view carries empty stand-ins (viewStubFilled) for details and timeline; they must not win over the real ones
   const bare = { ...(t as Record<string, unknown>) }
   for (const k of VIEW_LEFT_OUT) delete bare[k]
   return viewStubFilled(withViewParts(bare as T, text))
@@ -601,8 +601,8 @@ export async function saveBoard(host: Host, b: Board) {
     const file = partsPath(rel)
     const seen = partsSeen.get(file)?.tasks ?? {}
     // a task loaded as a stub whose parts file is wholly missing keeps no parts here: the real file may come back
-    // (T-681). Accepted losses while its file is missing: history added to it meanwhile is not kept, and a stubbed
-    // task reopened meanwhile is saved whole with an empty history and details (it then no longer points to the parts
+    // (T-681). Accepted losses while its file is missing: timeline added to it meanwhile is not kept, and a stubbed
+    // task reopened meanwhile is saved whole with an empty timeline and details (it then no longer points to the parts
     // file put back later). A parts file that is there but lacks the task's entry gets its stub entry written, as before.
     const gone = missingParts.has(rel)
     const tasks = Object.fromEntries(Object.entries(all).filter(([id]) => !gone || !stubbed.has(id) || id in seen))
@@ -634,7 +634,7 @@ export async function saveBoard(host: Host, b: Board) {
 
 /**
  * Saves board `after` over `before` (read under the board lock, which the caller holds): the task events of the write
- * (boardEvents) put their stage lines in the tasks' history (withStageHistory), the board is saved and the events are
+ * (boardEvents) put their stage lines in the tasks' timeline (withStageTimeline), the board is saved and the events are
  * added to the activity log (logTaskEvents, never throws). Answers the board as saved and the events; the caller hands
  * the events to the listeners (emitTaskEvents) only after it lets go of the lock, so a listener may write the board.
  * Every board write goes through here (change, the archive).
@@ -642,7 +642,7 @@ export async function saveBoard(host: Host, b: Board) {
 export async function writeBoard(host: Host, before: Board, after: Board): Promise<{ board: Board; events: TaskEvent[] }> {
   const nowMs = Date.now()
   const events = boardEvents(before, after, nowMs)
-  const saved = withStageHistory(after, events)
+  const saved = withStageTimeline(after, events)
   await saveBoard(host, saved)
   await logTaskEvents(host, events)
   return { board: saved, events }

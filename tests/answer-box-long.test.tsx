@@ -20,7 +20,7 @@ function stateOf(on: On, seed: Record<string, unknown>) {
 const props = (bodyColumns: number) => ({ title: 'symcc board', isFocused: false, bodyColumns, placement: 'dock' as const, scroll: { offset: 0, bodyRows: 60 }, view: {} })
 const pane = (bodyColumns: number) => ({ plugin: 'symcc', component: 'Pane', requestId: 'symcc-board', props: props(bodyColumns) }) as const
 
-const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, history: [], branch: null, created_at: '', updated_at: '', ...askShape(extra) })
+const task = (id: string, status: string, title: string, extra: Record<string, unknown> = {}) => ({ id, title, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 0, timeline: [], branch: null, created_at: '', updated_at: '', ...askShape(extra) })
 const view = (tasks: unknown[]) => ({ shape: 'view-1', value: { tasks, working: [], scouts: [], mode: 'auto', test_commands: [] } })
 
 /** `n` characters of words. */

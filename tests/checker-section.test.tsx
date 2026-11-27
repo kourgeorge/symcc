@@ -1,4 +1,4 @@
-// T-1079: the task page says who said what. The worker's hand-back and the checker's verdict are separate history
+// T-1079: the task page says who said what. The worker's hand-back and the checker's verdict are separate timeline
 // lines, each starting with who wrote it (and the agent's name); T-1104: there is one ▍Report, and pressing the checker's
 // line in ▍Runs shows the checker's full saved report there (its heading says whose); a checker with no report is not pressable. Drawn by the Claude Code panel
 // (terminal), the VS Code board and the plain text view (the Node and OpenCode hosts' /symcc-task).
@@ -6,7 +6,7 @@ import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { PANE, T0, seedBoard } from './board-fixture'
 import { readText } from './fakes'
-import { historyEntry, historyTime } from '../hooks/core/history'
+import { timelineEntry, timelineTime } from '../hooks/core/timeline'
 import { taskText } from '../hooks/app/tools'
 import { checkerEntry } from '../hooks/core/checker'
 import type { SymccTask } from '../types'
@@ -20,17 +20,17 @@ const CHECKER_FILE = '.symcc/reports/T-505-try-2-checker.md'
 
 const at = iso(T0 - 600_000)
 const [, text, facts] = checkerEntry('try 2', { ok: false, report: CHECKER_FULL }, '', 2, { agent: 'symcc-T-505-checker', report: CHECKER_FILE })
-const HISTORY = [
-  historyEntry('stage', 'try 2: worker started (role general)', at, { try: 2, step: 'worker-start', agent: 'symcc-T-505' }),
-  historyEntry('failed', `try 2: ${WORKER_REPORT} → the checker found problems`, at, { try: 2, result: 'the checker found problems', reason: 'checker', agent: 'symcc-T-505' }),
-  historyEntry('checker-problems', text, at, facts!),
+const TIMELINE = [
+  timelineEntry('stage', 'try 2: worker started (role general)', at, { try: 2, step: 'worker-start', agent: 'symcc-T-505' }),
+  timelineEntry('failed', `try 2: ${WORKER_REPORT} → the checker found problems`, at, { try: 2, result: 'the checker found problems', reason: 'checker', agent: 'symcc-T-505' }),
+  timelineEntry('checker-problems', text, at, facts!),
 ]
 const WORKER_ID = 'w0123456789'
 const CHECKER_ID = 'c0123456789'
 const AGENT_RUNS = [{ started: iso(T0 - 1_900_000), ended: iso(T0 - 1_000_000) }, { started: iso(T0 - 900_000), ended: at, report: REPORT_FILE, agents: [{ id: WORKER_ID, kind: 'worker' as const, started: iso(T0 - 900_000), ended: iso(T0 - 700_000) }, { id: CHECKER_ID, kind: 'checker' as const, started: iso(T0 - 700_000), ended: at }] }]
-const TASK = (history = HISTORY, runs: unknown[] = AGENT_RUNS) =>
+const TASK = (timeline = TIMELINE, runs: unknown[] = AGENT_RUNS) =>
   ({
-    id: 'T-505', title: 'Say who said what', details: '', files: ['tests/'], status: 'todo', note: '', priority: 0, after: [], attempts: 2, history, runs,
+    id: 'T-505', title: 'Say who said what', details: '', files: ['tests/'], status: 'todo', note: '', priority: 0, after: [], attempts: 2, timeline, runs,
     branch: null, created_at: iso(T0 - 86_400_000), updated_at: iso(T0 - 60_000), role: 'general',
   }) as unknown as SymccTask
 
@@ -57,7 +57,7 @@ function section(tree: unknown, head: string): unknown[] | undefined {
 }
 const firstLines = (s: unknown[]) => s.slice(1).map(textOf).filter(l => /^[✓✗●○] /.test(l))
 
-test('T-1079: the Claude Code panel names who wrote each history line, and shows the checker\'s full report under the Report', async ($, on) => {
+test('T-1079: the Claude Code panel names who wrote each timeline line, and shows the checker\'s full report under the Report', async ($, on) => {
   seed(on, TASK())
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const tree = await ui.drawn()
@@ -88,7 +88,7 @@ test('T-1079: the Claude Code panel names who wrote each history line, and shows
 })
 
 test('T-1079: the Claude Code panel has no ▍Checker section when the try had no checker', async ($, on) => {
-  seed(on, TASK(HISTORY.slice(0, 2)))
+  seed(on, TASK(TIMELINE.slice(0, 2)))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const tree = await ui.drawn()
   expect(section(tree, 'Checker')).toBeUndefined()
@@ -99,8 +99,8 @@ test('T-1079: the Claude Code panel has no ▍Checker section when the try had n
   await ui.unmount()
 })
 
-test('T-1079: an old history entry with no saved agent shows "checker:" and no id', async ($, on) => {
-  const old = [historyEntry('checker-ok', 'try 2: checker: OK', at, { try: 2 })]
+test('T-1079: an old timeline entry with no saved agent shows "checker:" and no id', async ($, on) => {
+  const old = [timelineEntry('checker-ok', 'try 2: checker: OK', at, { try: 2 })]
   seed(on, TASK(old, []))
   const ui2 = await $.ui.mount({ ...PANE, surface: 'terminal' })
   const lines = firstLines(section(await ui2.drawn(), 'Timeline')!)
@@ -109,16 +109,16 @@ test('T-1079: an old history entry with no saved agent shows "checker:" and no i
   expect(lines[0]).toMatch(/^✓ \d\d:\d\d checker: OK$/)
 })
 
-test('T-1079: the VS Code board shows who wrote each history line and the Checker section with the full report', async ($, on) => {
+test('T-1079: the VS Code board shows who wrote each timeline line and the Checker section with the full report', async ($, on) => {
   seed(on, TASK())
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const tree = await ui.drawn()
   await ui.unmount()
-  const history = textOf(section(tree, 'Timeline')!)
-  expect(history).toContain(`${historyTime(at, T0)} · checker symcc-T-505-checker`)
-  expect(history).toContain('found problems: the empty input still throws')
-  expect(history).toContain(`${historyTime(at, T0)} · worker symcc-T-505 · try 2`)
-  expect(history).not.toContain('docs name no example')
+  const timeline = textOf(section(tree, 'Timeline')!)
+  expect(timeline).toContain(`${timelineTime(at, T0)} · checker symcc-T-505-checker`)
+  expect(timeline).toContain('found problems: the empty input still throws')
+  expect(timeline).toContain(`${timelineTime(at, T0)} · worker symcc-T-505 · try 2`)
+  expect(timeline).not.toContain('docs name no example')
   expect(section(tree, 'Checker')).toBeUndefined()
   expect(JSON.stringify(tree)).not.toContain('the docs name no example')
 })
@@ -140,7 +140,7 @@ test('T-1104: in VS Code the agent lines of Runs are link-style buttons; the che
 })
 
 test('T-1079: the VS Code board has no Checker section when the try had no checker', async ($, on) => {
-  seed(on, TASK(HISTORY.slice(0, 2)))
+  seed(on, TASK(TIMELINE.slice(0, 2)))
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const tree = await ui.drawn()
   await ui.unmount()
@@ -165,7 +165,7 @@ const file = (n: number, checker = false) => `.symcc/reports/T-505-try-${n}${che
 const THREE = () =>
   ({
     id: 'T-505', title: 'Three tries', details: '', files: ['tests/'], status: 'todo', note: '', priority: 0, after: [], attempts: 3,
-    history: [1, 2, 3].map(n => historyEntry('checker-problems', `try ${n}: checker found problems`, at, { try: n, agent: 'symcc-T-505-checker', report: file(n, true) })),
+    timeline: [1, 2, 3].map(n => timelineEntry('checker-problems', `try ${n}: checker found problems`, at, { try: n, agent: 'symcc-T-505-checker', report: file(n, true) })),
     runs: [1, 2, 3].map(n => ({ started: iso(T0 - 900_000), ended: at, report: file(n), agents: [{ id: ids3[n - 1]![0], kind: 'worker' as const, started: iso(T0 - 900_000), ended: iso(T0 - 700_000) }, { id: ids3[n - 1]![1], kind: 'checker' as const, started: iso(T0 - 700_000), ended: at }] })),
     branch: null, created_at: iso(T0 - 86_400_000), updated_at: iso(T0 - 60_000), role: 'general',
   }) as unknown as SymccTask

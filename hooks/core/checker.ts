@@ -5,7 +5,7 @@
 // failed test run). Investigations and docs-only changes skip it. Everything here is pure.
 import type { SymccTask } from '../../types'
 import type { Board } from './board-file'
-import type { HistoryAdd } from './history'
+import type { TimelineAdd } from './timeline'
 import { DOC_NAMES, MEDIA_EXTS } from './review'
 import { CHECKER_ROLE } from './roles'
 import { DEFAULT_NAME, namesFor } from '../name'
@@ -72,9 +72,9 @@ export function notProseText(role: string, bad: readonly string[], undone = fals
   return undone ? `${head}. Those changes were undone on the task's branch, so the next try starts without them; a task that needs code needs another role` : `${head}. To fix: give the task another role with change`
 }
 
-/** The history's words when a prose-only role's change skipped the tests (T-900). */
+/** The timeline's words when a prose-only role's change skipped the tests (T-900). */
 export const PROSE_TESTS_SKIPPED = 'tests skipped: only prose changed'
-/** The history's words when a prose-only role's change ran the board's docs_test_commands instead of its test_commands (T-908). */
+/** The timeline's words when a prose-only role's change ran the board's docs_test_commands instead of its test_commands (T-908). */
 export const PROSE_DOCS_CHECKS = 'docs checks only: only prose changed'
 
 /** The most of the diff a checker's prompt holds; the rest it reads with git diff itself. */
@@ -152,7 +152,7 @@ export const checkerPrompt = (v: CheckerValues, task?: SymccTask): string => {
   return buildPrompt({ kind: 'checker', values: all, ...(task ? { task } : {}) })
 }
 
-/** The history line of a checker's verdict: with problems, only the first problem (see firstProblemOf). */
+/** The timeline line of a checker's verdict: with problems, only the first problem (see firstProblemOf). */
 export const checkerLine = (tryLabel: string, v: CheckerVerdict | null, why = ''): string =>
   !v ? `${tryLabel}: checker gave no verdict${why ? ` (${why})` : ''}` : 'report' in v ? `${tryLabel}: checker found problems: ${firstProblemOf(v.report)}` : `${tryLabel}: checker: OK`
 
@@ -175,7 +175,7 @@ export function firstProblemOf(report: string): string {
   return oneLine(after || lines.find(l => l !== CHECKER_MARK) || '', 300)
 }
 
-/** The most problem lines saved on a checker's history entry. */
+/** The most problem lines saved on a checker's timeline entry. */
 export const CHECKER_PROBLEMS_MAX = 5
 
 /**
@@ -218,8 +218,8 @@ export function problemsBlockLines(report: string, max = CHECKER_PROBLEMS_MAX): 
   return out.filter(Boolean).slice(0, max)
 }
 
-/** checkerLine as a history entry to add: "checker-ok", "checker-problems" (with its `problems` fact), or "checker" with no verdict. */
-export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = '', tryNo = 0, who: { agent?: string; report?: string } = {}): HistoryAdd => {
+/** checkerLine as a timeline entry to add: "checker-ok", "checker-problems" (with its `problems` fact), or "checker" with no verdict. */
+export const checkerEntry = (tryLabel: string, v: CheckerVerdict | null, why = '', tryNo = 0, who: { agent?: string; report?: string } = {}): TimelineAdd => {
   const problems = v && 'report' in v ? checkerProblems(v.report) : []
   return [!v ? 'checker' : 'report' in v ? 'checker-problems' : 'checker-ok', checkerLine(tryLabel, v, why), { try: tryNo, ...(problems.length ? { problems } : {}), ...(who.agent ? { agent: who.agent } : {}), ...(who.report ? { report: who.report } : {}) }]
 }
@@ -232,8 +232,8 @@ const oneLine = (s: string, max: number) => {
 /** T-996: the checker sends a task back this many times; the next send-back stops and asks the owner. */
 export const CHECKER_SEND_BACKS = 2
 
-/** How many times the checker sent task `t` back (its "checker found problems" history lines, all tries). */
-export const checkerSendBacks = (t: Pick<SymccTask, 'history'>): number => (t.history ?? []).filter(h => h.kind === 'checker-problems').length
+/** How many times the checker sent task `t` back (its "checker found problems" timeline lines, all tries). */
+export const checkerSendBacks = (t: Pick<SymccTask, 'timeline'>): number => (t.timeline ?? []).filter(h => h.kind === 'checker-problems').length
 
 /** T-996: the choices of the question a task waits with after the checker sent it back twice. */
 export const CHECKER_ASK_OPTIONS = ['Merge as is', 'Keep fixing', 'Drop'] as const

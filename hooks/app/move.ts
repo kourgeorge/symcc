@@ -1,5 +1,5 @@
 import type { Host } from '../host'
-import { find, patchTask, withHistory, endedBy, isInvestigation, intoOf, failedOnClash, gitNote, type BoardTask } from '../board'
+import { find, patchTask, withTimeline, endedBy, isInvestigation, intoOf, failedOnClash, gitNote, type BoardTask } from '../board'
 import { S, finishing, movedAway } from './state'
 import { load, change, now } from './store'
 import { repoOf, taskGitReady, gitStateOfTask, projectNotes, branchExists, prepareWorktree, taskBranch, worktreeDir } from './git'
@@ -38,13 +38,13 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
   }
   const why = `moved to ${stage} by the lead`
   // The task is written in a status the old step can't write over; then what ran is stopped and let go of.
-  let said = false // one history line per move
+  let said = false // one timeline line per move
   const write = (status: BoardTask['status'], note: string, extra: Partial<BoardTask> = {}) =>
     change($, x => {
       const cur = find(x, t.id) ?? t
-      const history = said ? cur.history : withHistory(cur.history, now(), ['other', why])
+      const timeline = said ? cur.timeline : withTimeline(cur.timeline, now(), ['other', why])
       said = true
-      return patchTask(x, t.id, { status, note, test_tries: 0, ...extra, history, ...endedBy(cur, now(), 'stopped', why) }, now(), S.N.dir)
+      return patchTask(x, t.id, { status, note, test_tries: 0, ...extra, timeline, ...endedBy(cur, now(), 'stopped', why) }, now(), S.N.dir)
     })
   if (checkingNow(t.id)) {
     // Only a checker can be stopped; prep, tests and the merge are let to end first.

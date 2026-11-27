@@ -99,7 +99,7 @@ test('T-761: the app reads a task\'s branch with read-only git: its commits and 
   expect(got.tip.sha).toBe(sha('ee'))
   expect(got.main.map(c => c.sha)).toEqual(want.main.map(c => c.sha))
   for (const c of calls) expect(['log', 'rev-list', 'merge-base']).toContain(c[1])
-  // merged: the commits that carry its Symcc-Task line, the one under them is the fork; the merge time from its history
+  // merged: the commits that carry its Symcc-Task line, the one under them is the fork; the merge time from its timeline
   const m = (await readTaskBranch(f.host, merged as never, 'main', T0))!
   expect(m.commits.map(c => c.sha)).toEqual(taskBranchMerged(T0).commits.map(c => c.sha))
   expect(m.merged).toEqual({ sha: sha('cd'), at: T0 - 5 * 60_000 })

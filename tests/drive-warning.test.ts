@@ -85,7 +85,7 @@ test('T-643: a claimed doing task says it runs in the other session when this on
 })
 
 test('T-647: the task page\'s state line and the lead\'s text board say "runs in the other session" for a claimed doing task when this session does not drive', () => {
-  const t = { ...claimed(60_000), title: 'Search', details: '', files: [], after: [], created_at: ago(60_000), history: [], runs: [] } as never
+  const t = { ...claimed(60_000), title: 'Search', details: '', files: [], after: [], created_at: ago(60_000), timeline: [], runs: [] } as never
   // T-751: the note is the last group of the page header's state line (no Now row in the Details)
   const now = (driving?: boolean) => taskStateGroups(t, { nowMs: NOW, note: sessionNote(t, driving) }).at(-1)![0]!.text
   expect(detailRows(t, { roles: [], all: [t], when: s => s, nowMs: NOW }).some(r => r.label === STATE_LABEL)).toBe(false)

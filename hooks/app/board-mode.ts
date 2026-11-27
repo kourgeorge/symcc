@@ -1,7 +1,7 @@
 // Board mode and stopping: pausing / resuming the board, disabling / enabling symcc, stopping workers (one, all, or
 // before the host quits). Split out of workers.ts (T-603); it imports from workers.ts, never the other way.
 import type { SymccMode } from '../../types'
-import { settingShown, type Board, modeOf, symccOn, patchTask, find, workerName, setMode, modeText, setEnabled, openOnStart, stoppedEntry, withHistory, endedBy } from '../board'
+import { settingShown, type Board, modeOf, symccOn, patchTask, find, workerName, setMode, modeText, setEnabled, openOnStart, stoppedEntry, withTimeline, endedBy } from '../board'
 import { haltCheckers } from './checker'
 import { publish } from './lead'
 import { S, workers, queuedWorkers, type Worker, halt, scoutRuns, scoutState, leadQueue, meanwhile, sayQueue } from './state'
@@ -66,7 +66,7 @@ export async function setBoardMode(host: Host, m: SymccMode, who: string): Promi
       ids.push(w.task)
       await change(host, x => {
         const cur = find(x, w.task)
-        return patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues when the board runs again`, ...(cur ? { history: withHistory(cur.history, now(), stoppedEntry(cur, `${who} paused the board`)), ...endedBy(cur, now(), 'stopped', `${who} paused the board`) } : {}) }, now())
+        return patchTask(x, w.task, { status: 'todo', note: `stopped by ${who}; continues when the board runs again`, ...(cur ? { timeline: withTimeline(cur.timeline, now(), stoppedEntry(cur, `${who} paused the board`)), ...endedBy(cur, now(), 'stopped', `${who} paused the board`) } : {}) }, now())
       })
     })
     if (ids.length) extra.push(`stopped ${ids.join(', ')}`)
@@ -154,7 +154,7 @@ export async function stopForQuit(host: Host, why: string): Promise<string[]> {
     await change(host, x => {
       const cur = find(x, w.task)
       if (cur?.status !== 'doing') return x
-      return patchTask(x, w.task, { status: 'todo', note: `stopped: ${why}; continues on the next run`, history: withHistory(cur.history, now(), stoppedEntry(cur, why)), ...endedBy(cur, now(), 'stopped', why) }, now())
+      return patchTask(x, w.task, { status: 'todo', note: `stopped: ${why}; continues on the next run`, timeline: withTimeline(cur.timeline, now(), stoppedEntry(cur, why)), ...endedBy(cur, now(), 'stopped', why) }, now())
     })
   })
   ids.push(...(await stopChecks(host, why)).back)

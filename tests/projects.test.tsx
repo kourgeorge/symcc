@@ -123,7 +123,7 @@ for (const surface of ['terminal', 'vscode'] as const)
     await ui.unmount()
   })
 
-test('T-1146: a change that sets only the project keeps a running or finished task as it is, and writes a history line', async () => {
+test('T-1146: a change that sets only the project keeps a running or finished task as it is, and writes a timeline line', async () => {
   const { w, files } = await world(['server', 'client'])
   await runTool(w.host, 'add', { ...WISH, title: 'Fix login', project: 'client' })
   await runTool(w.host, 'add', { ...WISH, title: 'Other', project: 'client' })
@@ -136,8 +136,8 @@ test('T-1146: a change that sets only the project keeps a running or finished ta
   expect(await runTool(w.host, 'change', { task: 'T-1', project: 'server' })).toContain('keeps running')
   const doing = (await load(w.host)).tasks.find(t => t.id === 'T-1')!
   expect(doing.status).toBe('doing')
-  expect(doing.history?.some(h => h.text.includes('project: server (was client)'))).toBe(true)
-  expect(doing.history?.some(h => h.text.includes('restarted'))).toBe(false)
+  expect(doing.timeline?.some(h => h.text.includes('project: server (was client)'))).toBe(true)
+  expect(doing.timeline?.some(h => h.text.includes('restarted'))).toBe(false)
   await runTool(w.host, 'change', { task: 'T-2', project: 'server' })
   expect((await load(w.host)).tasks.find(t => t.id === 'T-2')!.status).toBe('review')
   expect(boardOf(files).tasks[1]!.project).toBe('server')

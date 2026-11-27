@@ -86,7 +86,7 @@ export async function findMerged($: Host, t: BoardTask): Promise<MergedFound> {
 
 /**
  * Marks task `id` done because its work is already merged into the branch it merges into, outside the board (checked
- * with git, see findMerged). `by` is who did it ("the owner", "the lead"), said in its history. A running task is
+ * with git, see findMerged). `by` is who did it ("the owner", "the lead"), said in its timeline. A running task is
  * stopped first. Nothing is merged or tested; its folder and branch are cleaned up like after a merge, and tasks
  * waiting on it can start. Throws a plain reason when it can't.
  */

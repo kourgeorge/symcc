@@ -26,13 +26,13 @@ import { STATUS_MARK } from './details'
 import { sizeText } from './commits'
 
 /**
- * The kinds and times of task `t`'s history lines. A board view's done or dropped task (viewTask, e.g. OpenCode's)
- * comes without its history, and OpenCode's TUI then fills it in as `history: []` (viewStubFilled): its history marks
- * (the kinds and times of its merge and send-back lines) stand in for it whenever it has them and no history lines.
+ * The kinds and times of task `t`'s timeline lines. A board view's done or dropped task (viewTask, e.g. OpenCode's)
+ * comes without its timeline, and OpenCode's TUI then fills it in as `timeline: []` (viewStubFilled): its timeline marks
+ * (the kinds and times of its merge and send-back lines) stand in for it whenever it has them and no timeline lines.
  */
-function marksOf(t: { history?: readonly { kind: string; at?: string; reason?: string }[] }): readonly { kind: string; at?: string; reason?: string }[] {
-  const history = Array.isArray(t.history) ? t.history : []
-  return history.length > 0 ? history : (viewMarks(t) ?? history)
+function marksOf(t: { timeline?: readonly { kind: string; at?: string; reason?: string }[] }): readonly { kind: string; at?: string; reason?: string }[] {
+  const timeline = Array.isArray(t.timeline) ? t.timeline : []
+  return timeline.length > 0 ? timeline : (viewMarks(t) ?? timeline)
 }
 
 /**
@@ -40,7 +40,7 @@ function marksOf(t: { history?: readonly { kind: string; at?: string; reason?: s
  * lists failed tries (the checker's problems, tests failed, a clash with main), `checker` only the checker's. A finished
  * task's board view keeps marks (no text) of the checker's lines and of its tests-failed and clash lines (with their reason).
  */
-function sentBackOf(t: { history?: readonly { kind: string; at?: string; reason?: string }[] }, isToday: (at: string | undefined) => boolean): { all: number; checker: number } {
+function sentBackOf(t: { timeline?: readonly { kind: string; at?: string; reason?: string }[] }, isToday: (at: string | undefined) => boolean): { all: number; checker: number } {
   const marks = marksOf(t) as readonly { kind: string; at?: string; reason?: string }[]
   const checker = marks.filter(h => h.kind === 'checker-problems' && isToday(h.at)).length
   const other = marks.filter(h => (h.reason === 'tests' || h.reason === 'clash') && isToday(h.at)).length
@@ -313,14 +313,14 @@ const ms = (iso: string | undefined): number | undefined => {
   return Number.isFinite(n) ? n : undefined
 }
 
-/** When task `t` got to `station` in its try that started at `startMs`: the history's stage lines (T-616), else the hand-back, else the check step's mark. */
+/** When task `t` got to `station` in its try that started at `startMs`: the timeline's stage lines (T-616), else the hand-back, else the check step's mark. */
 function stationSince(t: BoardTask, station: LiveStation, startMs: number | undefined): number | undefined {
   if (station === 'work') return startMs
   // T-863: the check step starts at the first prep or checker line after the last restart (older lines belong to the closed session's hand-back)
   const restartMs = ms(restartsOf(t.runs?.[t.runs.length - 1]).at(-1)?.started)
   const from = station === 'check' && restartMs !== undefined ? Math.max(restartMs, startMs ?? restartMs) : startMs
   const stageAt = (steps: string[], first: boolean) => {
-    const hits = (t.history ?? []).filter(h => h.kind === 'stage' && h.step !== undefined && steps.includes(h.step)).map(h => ms(h.at)).filter((n): n is number => n !== undefined && (from === undefined || n >= from))
+    const hits = (t.timeline ?? []).filter(h => h.kind === 'stage' && h.step !== undefined && steps.includes(h.step)).map(h => ms(h.at)).filter((n): n is number => n !== undefined && (from === undefined || n >= from))
     return hits.length ? (first ? Math.min(...hits) : Math.max(...hits)) : undefined
   }
   const found = station === 'check' ? stageAt(['prep', 'checker'], true) : station === 'queue' ? stageAt(['queue'], false) : station === 'tests' ? stageAt(['tests'], false) : stageAt(['merge'], false)
@@ -330,7 +330,7 @@ function stationSince(t: BoardTask, station: LiveStation, startMs: number | unde
 /** When the approve (or files-merge) running on task `t` (in review or waiting) started: its last "prep started" line
  *  after its try ended, else its check step's mark. */
 function approveSince(t: BoardTask, endMs: number | undefined): number | undefined {
-  const preps = (t.history ?? []).filter(h => h.kind === 'stage' && h.step === 'prep').map(h => ms(h.at)).filter((n): n is number => n !== undefined && (endMs === undefined || n >= endMs))
+  const preps = (t.timeline ?? []).filter(h => h.kind === 'stage' && h.step === 'prep').map(h => ms(h.at)).filter((n): n is number => n !== undefined && (endMs === undefined || n >= endMs))
   return preps.length ? Math.max(...preps) : ms(t.live?.checking?.at)
 }
 
@@ -341,7 +341,7 @@ function approveSince(t: BoardTask, endMs: number | undefined): number | undefin
  */
 function checkSkipped(t: BoardTask, stage: PhaseStage, waiting: boolean): boolean {
   if (!waiting && (stage === 'worker' || stage === 'checker')) return false
-  const ran = agentsOf(t.runs?.[t.runs.length - 1]).some(a => a.kind === 'checker') || (t.history ?? []).some(h => h.kind === 'stage' && h.step === 'checker')
+  const ran = agentsOf(t.runs?.[t.runs.length - 1]).some(a => a.kind === 'checker') || (t.timeline ?? []).some(h => h.kind === 'stage' && h.step === 'checker')
   if (ran) return false
   // the files this try's commit really changed (saved on the try by the prep step); until prep knows, check is drawn as usual
   return t.runs?.[t.runs.length - 1]?.docs_only === true
@@ -399,7 +399,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
         ...(more && total > 0 ? { more } : {}),
         ...(usual ? { usual } : {}),
         ...usageOf(t, nowMs),
-        sentBack: (t.history ?? []).filter(h => h.kind === 'checker-problems').length,
+        sentBack: (t.timeline ?? []).filter(h => h.kind === 'checker-problems').length,
         enteredMs,
         agent: !waiting && stage === 'worker' || (stage === 'checker' && !!checkerIdOf(t)),
       }
@@ -407,7 +407,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
   return lanes.sort((a, b) => a.enteredMs - b.enteredMs || num(a.id) - num(b.id))
 }
 
-/** T-771: when done task `t` merged: its last "merged" history line (else its last try's end, when it has such a
+/** T-771: when done task `t` merged: its last "merged" timeline line (else its last try's end, when it has such a
  *  line without a time). Undefined when it did not merge (investigations never do). */
 function finishedAt(t: SymccTask): { atMs: number; word: 'merged' } | undefined {
   const marks = marksOf(t)
@@ -946,9 +946,9 @@ function trainLine(x: LiveTrain, depth: number, width: number): LiveSeg[] {
 /** Today's numbers: tasks merged, checker send-backs, tasks failed, and the worker tries' tokens. */
 export type LiveToday = { merged: number; sentBack: number; failed: number; tokens: number }
 
-/** Today's numbers at `nowMs` (the owner's day, `offsetMin` east of UTC): merged (a "merged" history line today), sent back
- *  (the checker's send-backs today; a task given without its history, as a board view's done one, is counted by its
- *  history marks, see viewTask), failed (tasks failed now that failed today), tokens (of the tries that ended today, or run today). */
+/** Today's numbers at `nowMs` (the owner's day, `offsetMin` east of UTC): merged (a "merged" timeline line today), sent back
+ *  (the checker's send-backs today; a task given without its timeline, as a board view's done one, is counted by its
+ *  timeline marks, see viewTask), failed (tasks failed now that failed today), tokens (of the tries that ended today, or run today). */
 export function liveToday(tasks: readonly SymccTask[], nowMs: number, offsetMin: number = localOffset(nowMs)): LiveToday {
   const today = dayOf(nowMs, offsetMin)
   const isToday = (iso: string | undefined) => {
@@ -960,8 +960,8 @@ export function liveToday(tasks: readonly SymccTask[], nowMs: number, offsetMin:
   let failed = 0
   let tokens = 0
   for (const t of tasks) {
-    const history = marksOf(t)
-    if (history.some(h => h.kind === 'merged' && isToday(h.at))) merged++
+    const timeline = marksOf(t)
+    if (timeline.some(h => h.kind === 'merged' && isToday(h.at))) merged++
     sentBack += sentBackOf(t, isToday).all
     if (t.status === 'failed' && isToday(t.updated_at)) failed++
     for (const r of t.runs ?? []) if (tryTokens(r) && isToday(r.ended ?? r.started)) tokens += tokenCount(tryTokens(r))

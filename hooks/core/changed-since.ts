@@ -34,12 +34,12 @@ export type ChangedSince = {
   scope: 'files' | 'named' | 'none'
 }
 
-/** The task was moved from the backlog to todo at some point (its history says so). */
-export const cameFromBacklog = (t: Pick<SymccTask, 'history'>): boolean =>
-  (t.history ?? []).some(e => e.kind === 'moved-backlog' && !e.backlog && !/^moved to the backlog\b/.test(e.text))
+/** The task was moved from the backlog to todo at some point (its timeline says so). */
+export const cameFromBacklog = (t: Pick<SymccTask, 'timeline'>): boolean =>
+  (t.timeline ?? []).some(e => e.kind === 'moved-backlog' && !e.backlog && !/^moved to the backlog\b/.test(e.text))
 
 /** A try on `t` starting at `nowMs` gets the check: it came from the backlog, or was written more than STALE_AFTER_MS ago. */
-export function mayBeStale(t: Pick<SymccTask, 'history' | 'created_at'>, nowMs: number): boolean {
+export function mayBeStale(t: Pick<SymccTask, 'timeline' | 'created_at'>, nowMs: number): boolean {
   const made = Date.parse(t.created_at || '')
   if (!Number.isFinite(made)) return false
   return cameFromBacklog(t) || nowMs - made > STALE_AFTER_MS

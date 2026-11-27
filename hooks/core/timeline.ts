@@ -1,9 +1,9 @@
-// Short history lines for things that stop or restart a task, or that the owner said.
-import type { SymccFailReason, SymccHistoryEntry, SymccRun, SymccTask } from '../../types'
+// Short timeline lines for things that stop or restart a task, or that the owner said.
+import type { SymccFailReason, SymccTimelineEntry, SymccRun, SymccTask } from '../../types'
 import { roleOf, tryLabel } from './roles'
 import { ellipsis, isObj, squash } from './text'
 
-/** How much of the owner's answer goes into a history line. */
+/** How much of the owner's answer goes into a timeline line. */
 export const ANSWER_LINE_CHARS = 300
 
 /** The fields of a change that count as "what changed" in a restart line, in this order. */
@@ -42,27 +42,27 @@ export const waitsForOwner = (why: string): boolean => /\basked the owner\b/.tes
  * T-806: result line `line` with " (not used: <why>)" added: the check it ends was counted by another line of its own (the
  * try was stopped, or the task changed), so a "not merged" result keeps no reason, and the note is part of its result.
  */
-export function notUsedEntry(line: HistoryAdd, why: string): HistoryAdd {
+export function notUsedEntry(line: TimelineAdd, why: string): TimelineAdd {
   const { result, reason, ...rest } = line[2] ?? {}
   const note = ` (not used: ${why})`
   const dropped = reason === 'notmerged' && (result ?? '').startsWith('not merged')
   return [line[0], line[1] + note, { ...rest, ...(result !== undefined ? { result: result + note } : {}), ...(reason && !dropped ? { reason } : {}) }]
 }
 
-/** The facts a history line carries besides its time, kind and text (T-806; see SymccHistoryEntry). */
-export type HistoryFacts = Omit<SymccHistoryEntry, 'at' | 'kind' | 'text'> & HistoryWho
+/** The facts a timeline line carries besides its time, kind and text (T-806; see SymccTimelineEntry). */
+export type TimelineFacts = Omit<SymccTimelineEntry, 'at' | 'kind' | 'text'> & TimelineWho
 
 /**
- * T-1079: who wrote a history line, saved with it. `agent`: the name the agent ran under ("symcc-T-3", "symcc-T-3-checker");
- * `by`: 'worker' or 'you' where the kind alone doesn't say (see historyActor); `report`: a checker line's saved full report (a file).
+ * T-1079: who wrote a timeline line, saved with it. `agent`: the name the agent ran under ("symcc-T-3", "symcc-T-3-checker");
+ * `by`: 'worker' or 'you' where the kind alone doesn't say (see timelineActor); `report`: a checker line's saved full report (a file).
  */
-export type HistoryWho = { agent?: string; by?: 'worker' | 'you' | 'lead' | 'symcc'; report?: string }
+export type TimelineWho = { agent?: string; by?: 'worker' | 'you' | 'lead' | 'symcc'; report?: string }
 
 /** "try 2: <body>" as an entry to add, with its `try` fact; `facts` adds the rest. */
-export const tryEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, kind: HistoryKind, body: string, facts: HistoryFacts = {}): HistoryAdd => [kind, `${tryLabel(t)}: ${body}`, { try: Number(t.attempts) || 0, ...facts }]
+export const tryEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, kind: TimelineKind, body: string, facts: TimelineFacts = {}): TimelineAdd => [kind, `${tryLabel(t)}: ${body}`, { try: Number(t.attempts) || 0, ...facts }]
 
 /** "try 2: <said> → <result>" as an entry to add: its `try` and `result` facts are set; `facts` adds the rest (the reason, ...). */
-export const resultEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, kind: HistoryKind, said: string, result: string, facts: HistoryFacts = {}): HistoryAdd =>
+export const resultEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, kind: TimelineKind, said: string, result: string, facts: TimelineFacts = {}): TimelineAdd =>
   tryEntry(t, kind, `${said} → ${result}`, { result, ...facts })
 
 /**
@@ -81,7 +81,7 @@ export function filesWidenedLine(before: readonly string[], after: readonly stri
   return added.length ? `files widened: ${added.map(f => `+ ${f}`).join(', ')}` : null
 }
 
-/** The start of the history line written when a task's after list changes (the health check counts them). */
+/** The start of the timeline line written when a task's after list changes (the health check counts them). */
 export const AFTER_CHANGED = 'waits on changed:'
 
 /** "waits on changed: T-1 → T-1, T-3", or null when the list stays the same. */
@@ -107,7 +107,7 @@ export function stoppedLine(t: Pick<SymccTask, 'role' | 'attempts'>, why: string
  * stoppedLine as an entry to add: "restarted" when `why` says so, else "stopped". Its reason: "changed" for a restart
  * by a change, "stopped" for a stop that was not on purpose; a restart symcc did itself and an on-purpose stop have none.
  */
-export const stoppedEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, why: string): HistoryAdd => {
+export const stoppedEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, why: string): TimelineAdd => {
   const restarted = /^restarted\b/.test(why)
   const reason: FailReason | undefined = restarted ? (/^restarted: the task was changed\b/.test(why) ? 'changed' : undefined) : onPurposeStop(why) ? undefined : 'stopped'
   return [restarted ? 'restarted' : 'stopped', stoppedLine(t, why), { try: Number(t.attempts) || 0, ...(reason ? { reason } : {}), ...(!restarted && waitsForOwner(why) ? { owner: true as const } : {}) }]
@@ -117,7 +117,7 @@ export const stoppedEntry = (t: Pick<SymccTask, 'role' | 'attempts'>, why: strin
 export const WORKER_STARTED = 'worker started'
 export const WORKER_HANDED_BACK = 'worker handed back'
 
-/** T-806: why a try failed or was sent back, as a history line records it (`reason`). */
+/** T-806: why a try failed or was sent back, as a timeline line records it (`reason`). */
 export type FailReason = SymccFailReason
 
 /**
@@ -127,25 +127,25 @@ export type FailReason = SymccFailReason
  * Only that T-678 path gives a try its number back without a "restarted"/"stopped" line: a drive hand-over (handedOff)
  * also takes the number back but writes its own "restarted" line, which already says why, so no mark is added then.
  */
-export function workerStartedEntry(t: Pick<SymccTask, 'role' | 'attempts' | 'history'>, mergeMain: boolean, agent?: string): HistoryAdd {
-  const history = t.history ?? []
-  const last = history.findLastIndex(h => h.kind === 'stage' && h.step === 'worker-start' && h.try === (Number(t.attempts) || 0))
-  const since = last < 0 ? [] : history.slice(last + 1)
+export function workerStartedEntry(t: Pick<SymccTask, 'role' | 'attempts' | 'timeline'>, mergeMain: boolean, agent?: string): TimelineAdd {
+  const timeline = t.timeline ?? []
+  const last = timeline.findLastIndex(h => h.kind === 'stage' && h.step === 'worker-start' && h.try === (Number(t.attempts) || 0))
+  const since = last < 0 ? [] : timeline.slice(last + 1)
   const changed = last >= 0 && !since.some(h => h.kind === 'restarted' || h.kind === 'stopped')
   const again = !changed ? '' : since.some(h => h.kind === 'note') ? ' · same try number (note joined)' : ' · same try number (task changed)'
   return ['stage', `try ${t.attempts}: ${WORKER_STARTED} (role ${roleOf(t)})${mergeMain ? ' · merges main in first' : ''}${again}`, { try: Number(t.attempts) || 0, step: 'worker-start', ...(agent ? { agent } : {}) }]
 }
 
 /** T-723: "try 2: worker handed back", the 'stage' line of a try whose worker handed back its report. */
-export const workerHandedBackEntry = (t: Pick<SymccTask, 'attempts'>, agent?: string): HistoryAdd => ['stage', `try ${t.attempts}: ${WORKER_HANDED_BACK}`, { try: Number(t.attempts) || 0, step: 'handed-back', ...(agent ? { agent } : {}) }]
+export const workerHandedBackEntry = (t: Pick<SymccTask, 'attempts'>, agent?: string): TimelineAdd => ['stage', `try ${t.attempts}: ${WORKER_HANDED_BACK}`, { try: Number(t.attempts) || 0, step: 'handed-back', ...(agent ? { agent } : {}) }]
 
 /**
- * The history lines of a change to task `t` (as it was) with `patch`: the restart line when its
+ * The timeline lines of a change to task `t` (as it was) with `patch`: the restart line when its
  * worker was stopped (`wasDoing`), "files widened" when files were added, "waits on changed"
  * when its after list changed, the owner's answer and the lead's added note.
  */
-export function changeLines(t: Pick<SymccTask, 'role' | 'attempts' | 'files'> & Partial<SymccTask>, patch: Partial<SymccTask>, wasDoing: boolean, answer?: string, note?: string): HistoryAdd[] {
-  const lines: HistoryAdd[] = []
+export function changeLines(t: Pick<SymccTask, 'role' | 'attempts' | 'files'> & Partial<SymccTask>, patch: Partial<SymccTask>, wasDoing: boolean, answer?: string, note?: string): TimelineAdd[] {
+  const lines: TimelineAdd[] = []
   if (wasDoing) lines.push(['restarted', changeRestartLine(t, changedFields(t, patch)), { try: Number(t.attempts) || 0, reason: 'changed' }])
   const widened = filesWidenedLine(t.files ?? [], patch.files)
   if (widened) lines.push(['files-widened', widened])
@@ -174,14 +174,14 @@ export function detailsBothRefusal(a: { details?: unknown; add_details?: unknown
   return given(a.details) && given(a.add_details) ? 'Nothing changed: give either details (rewrites the whole text) or add_details (adds a note to it), not both. To rewrite and add a note, put the note at the end of the new details.' : null
 }
 
-/** How a history event went: well (✓), badly (✗), a step of a try (●), or anything else (○). */
-export type HistoryTone = 'good' | 'bad' | 'step' | 'other'
+/** How a timeline event went: well (✓), badly (✗), a step of a try (●), or anything else (○). */
+export type TimelineTone = 'good' | 'bad' | 'step' | 'other'
 
 /**
- * Every kind of history entry symcc writes (T-522), with how it went (its tone, and so its mark). This is the one list:
+ * Every kind of timeline entry symcc writes (T-522), with how it went (its tone, and so its mark). This is the one list:
  * a new kind of event gets its name here.
  */
-export const HISTORY_KINDS = {
+export const TIMELINE_KINDS = {
   /** the task was made ("created by the owner because ...") */
   created: 'other',
   /** the lead added a note to its details */
@@ -220,7 +220,7 @@ export const HISTORY_KINDS = {
   'try-result': 'step',
   /** any other step of a try (a warning, more time given, the tests run again …) */
   step: 'step',
-  /** T-616: a try went into a check stage ("checker started", "waits in the merge queue (place 2)"; see withStageHistory) */
+  /** T-616: a try went into a check stage ("checker started", "waits in the merge queue (place 2)"; see withStageTimeline) */
   stage: 'step',
   /** a running worker was stopped and its task starts again (the task was changed) */
   restarted: 'step',
@@ -242,39 +242,39 @@ export const HISTORY_KINDS = {
   done: 'good',
   /** anything else */
   other: 'other',
-} as const satisfies Record<string, HistoryTone>
+} as const satisfies Record<string, TimelineTone>
 
-/** The name of a kind of history entry (see HISTORY_KINDS). */
-export type HistoryKind = keyof typeof HISTORY_KINDS
+/** The name of a kind of timeline entry (see TIMELINE_KINDS). */
+export type TimelineKind = keyof typeof TIMELINE_KINDS
 
-/** A history entry (the record saved in board.json). */
-export type HistoryEntry = SymccHistoryEntry & HistoryWho
+/** A timeline entry (the record saved in board.json). */
+export type TimelineEntry = SymccTimelineEntry & TimelineWho
 
-/** One entry to add: its kind, its text and its facts (see HistoryFacts). */
-export type HistoryAdd = [kind: HistoryKind, text: string, facts?: HistoryFacts]
+/** One entry to add: its kind, its text and its facts (see TimelineFacts). */
+export type TimelineAdd = [kind: TimelineKind, text: string, facts?: TimelineFacts]
 
 /** T-954: whether task `t` was ever started by the owner's Run now (a 'run-now' line): the health check doesn't count
  *  such a start as pushing older tasks back. */
-export const ranNow = (t: Pick<SymccTask, 'history'>): boolean => (t.history ?? []).some(e => e.kind === 'run-now')
+export const ranNow = (t: Pick<SymccTask, 'timeline'>): boolean => (t.timeline ?? []).some(e => e.kind === 'run-now')
 
 /** T-954: whether task `t`'s current try (its `attempts`) was started by the owner's Run now. */
-export const ranNowThisTry = (t: Pick<SymccTask, 'history' | 'attempts'>): boolean => (t.history ?? []).some(e => e.kind === 'run-now' && e.try === Number(t.attempts))
+export const ranNowThisTry = (t: Pick<SymccTask, 'timeline' | 'attempts'>): boolean => (t.timeline ?? []).some(e => e.kind === 'run-now' && e.try === Number(t.attempts))
 
-/** Whether `k` is a kind symcc knows (see HISTORY_KINDS). */
-export const isHistoryKind = (k: unknown): k is HistoryKind => typeof k === 'string' && Object.prototype.hasOwnProperty.call(HISTORY_KINDS, k)
+/** Whether `k` is a kind symcc knows (see TIMELINE_KINDS). */
+export const isTimelineKind = (k: unknown): k is TimelineKind => typeof k === 'string' && Object.prototype.hasOwnProperty.call(TIMELINE_KINDS, k)
 
-/** The one way a history entry is made: `{ at, kind, text, ...facts }`, `at` the time it happened (ISO). */
-export const historyEntry = (kind: HistoryKind, text: string, at: string, facts: HistoryFacts = {}): HistoryEntry => ({ at, kind, text, ...facts })
+/** The one way a timeline entry is made: `{ at, kind, text, ...facts }`, `at` the time it happened (ISO). */
+export const timelineEntry = (kind: TimelineKind, text: string, at: string, facts: TimelineFacts = {}): TimelineEntry => ({ at, kind, text, ...facts })
 
-/** Task history `history` with entries added (each one [kind, text]), all at time `at`. */
-export function withHistory(history: readonly HistoryEntry[] | undefined, at: string, ...adds: HistoryAdd[]): HistoryEntry[] {
-  return [...(history ?? []), ...adds.map(([kind, text, facts]) => historyEntry(kind, text, at, facts))]
+/** Task timeline `timeline` with entries added (each one [kind, text]), all at time `at`. */
+export function withTimeline(timeline: readonly TimelineEntry[] | undefined, at: string, ...adds: TimelineAdd[]): TimelineEntry[] {
+  return [...(timeline ?? []), ...adds.map(([kind, text, facts]) => timelineEntry(kind, text, at, facts))]
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
 /** When an entry happened, short and in local time: "10:42" for today, "Nov 18 22:49" for an older day; '' when it has no time. */
-export function historyTime(at: string | undefined, nowMs = Date.now()): string {
+export function timelineTime(at: string | undefined, nowMs = Date.now()): string {
   const ms = at ? Date.parse(at) : NaN
   if (!Number.isFinite(ms)) return ''
   const d = new Date(ms)
@@ -285,22 +285,22 @@ export function historyTime(at: string | undefined, nowMs = Date.now()): string 
 }
 
 /** "10:42  try 1: checker: OK": an entry's line for plain text, its time first when it has one. */
-export const historyLineText = (e: HistoryEntry, nowMs = Date.now()): string => {
-  const when = historyTime(e.at, nowMs)
-  const words = historyLineWords(e)
+export const timelineLineText = (e: TimelineEntry, nowMs = Date.now()): string => {
+  const when = timelineTime(e.at, nowMs)
+  const words = timelineLineWords(e)
   return when ? `${when}  ${words}` : words
 }
 
 /** The mark drawn for each tone, the same in every view. */
-export const HISTORY_MARK: Record<HistoryTone, string> = { good: '✓', bad: '✗', step: '●', other: '○' }
+export const TIMELINE_MARK: Record<TimelineTone, string> = { good: '✓', bad: '✗', step: '●', other: '○' }
 
 /** The theme color of each tone's mark (a try's good or bad result is drawn in it too), the same in every view. */
-export const HISTORY_COLOR: Record<HistoryTone, string> = { good: 'success', bad: 'error', step: 'text', other: 'inactive' }
+export const TIMELINE_COLOR: Record<TimelineTone, string> = { good: 'success', bad: 'error', step: 'text', other: 'inactive' }
 
-/** A history entry in parts (T-512), for drawing. */
-export type HistoryEvent = {
-  kind: HistoryKind
-  tone: HistoryTone
+/** A timeline entry in parts (T-512), for drawing. */
+export type TimelineEvent = {
+  kind: TimelineKind
+  tone: TimelineTone
   mark: string
   /** when it happened (ISO), or '' when the entry has no time */
   at: string
@@ -314,16 +314,16 @@ export type HistoryEvent = {
   said: string
   /** a try's result, after its " → " ('' when there is none) */
   result: string
-  /** T-1079: who wrote the line ('' for symcc's own steps; see historyActor) */
-  who: HistoryActor
+  /** T-1079: who wrote the line ('' for symcc's own steps; see timelineActor) */
+  who: TimelineActor
   /** the name the agent ran under ("symcc-T-3-checker"), '' when none was saved (old entries) */
   agent: string
   /** "worker symcc-T-3" / "checker" / "lead" / "you": drawn dim before the line; '' for symcc's own steps */
   by: string
 }
 
-/** T-1079: who wrote a history line: an agent (worker, checker, scout), the lead, the owner, or symcc itself (''). */
-export type HistoryActor = '' | 'worker' | 'checker' | 'scout' | 'lead' | 'you'
+/** T-1079: who wrote a timeline line: an agent (worker, checker, scout), the lead, the owner, or symcc itself (''). */
+export type TimelineActor = '' | 'worker' | 'checker' | 'scout' | 'lead' | 'you'
 
 /** A line's "try 2 (role tester): " label split off: [label, try number, the rest], or null when it names no try. */
 export function tryParts(text: string): [label: string, n: number, body: string] | null {
@@ -331,25 +331,25 @@ export function tryParts(text: string): [label: string, n: number, body: string]
   return m ? [m[1]!, Number(m[2]), m[3]!] : null
 }
 
-/** Whether `v` can be a history entry read from a file: a record with a text and a kind. */
-export function historyEntryOk(v: unknown): boolean {
+/** Whether `v` can be a timeline entry read from a file: a record with a text and a kind. */
+export function timelineEntryOk(v: unknown): boolean {
   if (!isObj(v)) return false
-  const e = v as Partial<HistoryEntry>
+  const e = v as Partial<TimelineEntry>
   return typeof e.text === 'string' && typeof e.kind === 'string' && (e.at === undefined || typeof e.at === 'string')
 }
 
 /** The kinds of a try's result line ("try 2: <what the worker said> → <the result>"), whose text is split at the " → ". */
-const RESULT_KINDS = ['merged', 'done', 'failed', 'try-result', 'not-merged', 'approve-failed'] as const satisfies readonly HistoryKind[]
+const RESULT_KINDS = ['merged', 'done', 'failed', 'try-result', 'not-merged', 'approve-failed'] as const satisfies readonly TimelineKind[]
 
 /**
- * A history entry as an event to draw: its mark and tone come from its saved kind (HISTORY_KINDS), never from words in
+ * A timeline entry as an event to draw: its mark and tone come from its saved kind (TIMELINE_KINDS), never from words in
  * its text. Its try label and, for a try's result, what was said before the " → " and the result after it, are split
  * off the text for drawing only.
  */
-export function historyEvent(e: HistoryEntry): HistoryEvent {
-  const kind: HistoryKind = isHistoryKind(e.kind) ? e.kind : 'other'
-  const tone: HistoryTone = HISTORY_KINDS[kind]
-  const who = historyActor(e)
+export function timelineEvent(e: TimelineEntry): TimelineEvent {
+  const kind: TimelineKind = isTimelineKind(e.kind) ? e.kind : 'other'
+  const tone: TimelineTone = TIMELINE_KINDS[kind]
+  const who = timelineActor(e)
   let parts = tryParts(e.text)
   // a checker's line reads "checker <id>: found problems: ..." / "checker <id>: OK": its own words, with no try label
   if (who === 'checker' && parts) parts = ['', parts[1], parts[2].replace(/^checker:? ?/, '')]
@@ -357,24 +357,24 @@ export function historyEvent(e: HistoryEntry): HistoryEvent {
   const isResult = (RESULT_KINDS as readonly string[]).includes(kind)
   const result = parts && isResult && e.result && text.endsWith(` → ${e.result}`) ? e.result : ''
   return {
-    kind, tone, mark: HISTORY_MARK[tone], at: e.at ?? '', try: parts ? parts[1] : 0, label: parts ? parts[0] : '', text,
+    kind, tone, mark: TIMELINE_MARK[tone], at: e.at ?? '', try: parts ? parts[1] : 0, label: parts ? parts[0] : '', text,
     said: result ? text.slice(0, text.length - result.length - 3) : text, result,
     who, agent: e.agent ?? '', by: who ? (e.agent ? `${who} ${e.agent}` : who) : '',
   }
 }
 
 /** The kinds written by the lead's or the owner's own words. */
-const LEAD_KINDS: readonly HistoryKind[] = ['note']
-const OWNER_KINDS: readonly HistoryKind[] = ['answer', 'rejected', 'approve-failed', 'run-now']
+const LEAD_KINDS: readonly TimelineKind[] = ['note']
+const OWNER_KINDS: readonly TimelineKind[] = ['answer', 'rejected', 'approve-failed', 'run-now']
 
 /**
- * T-1079: who wrote history entry `e`, from what was saved with it (`by`) or else its kind: the checker's lines are the
+ * T-1079: who wrote timeline entry `e`, from what was saved with it (`by`) or else its kind: the checker's lines are the
  * checker's, a worker's start and hand-back and the result lines carrying its report are the worker's, a note is the
  * lead's, the owner's answer and rejection are the owner's ("you"); symcc's own steps have no actor ('').
  */
-export function historyActor(e: Pick<HistoryEntry, 'kind' | 'step' | 'result' | 'by'>): HistoryActor {
+export function timelineActor(e: Pick<TimelineEntry, 'kind' | 'step' | 'result' | 'by'>): TimelineActor {
   if (e.by) return e.by === 'symcc' ? '' : e.by
-  const kind = e.kind as HistoryKind
+  const kind = e.kind as TimelineKind
   if (kind === 'checker' || kind === 'checker-ok' || kind === 'checker-problems') return 'checker'
   if (LEAD_KINDS.includes(kind)) return 'lead'
   if (OWNER_KINDS.includes(kind)) return 'you'
@@ -384,8 +384,8 @@ export function historyActor(e: Pick<HistoryEntry, 'kind' | 'step' | 'result' | 
   return ''
 }
 
-/** T-1079: history entry `e` as one plain line: its time, who wrote it, then its words ("10:42  checker symcc-T-3-checker: found problems: ..."). */
-export function historyLineWords(e: HistoryEntry): string {
-  const v = historyEvent(e)
+/** T-1079: timeline entry `e` as one plain line: its time, who wrote it, then its words ("10:42  checker symcc-T-3-checker: found problems: ..."). */
+export function timelineLineWords(e: TimelineEntry): string {
+  const v = timelineEvent(e)
   return `${v.by ? `${v.by}: ` : ''}${v.label ? `${v.label}: ` : ''}${v.text}`
 }

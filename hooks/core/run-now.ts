@@ -58,7 +58,7 @@ export function backlogMovedText(all: readonly Pick<SymccTask, 'id' | 'status' |
 export const runNowShareText = (ids: readonly string[]): string =>
   `started now while ${ids.join(', ')} ${ids.length === 1 ? 'runs' : 'run'}; they share files, so their changes may clash at the merge`
 
-/** The history line of a run now start (after the try label): "started now by the owner", with what it skipped. */
+/** The timeline line of a run now start (after the try label): "started now by the owner", with what it skipped. */
 export function runNowLine(o: { waits?: readonly RunNowWait[]; over?: { busy: number; max: number }; paused?: boolean; }): string {
   const more = [
     o.waits?.length ? `without waiting for ${o.waits.map(w => w.id).join(', ')}` : '',

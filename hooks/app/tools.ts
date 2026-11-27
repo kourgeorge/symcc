@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { isFinished, priorityError, makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, filesAllowedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, PROSE_ROLE_TEXT, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withHistory, type HistoryAdd, historyLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, applyProjectSettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, detailsTooLong, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
+import { isFinished, priorityError, makeAsk, settingShown, allowFiles, refuseFiles, waitsForFiles, filesRefusedText, filesAllowedText, type BoardTask, STATUS_WORD, fromText, fmtRun, fmtTotal, sumRuns, taskCommits, commitText, rolesLeadText, BUILT_IN_ROLES, ROLE_TOOL_WORDS, PROSE_ROLE_TEXT, DEFAULT_ROLE, find, boardText, shortHome, checkRole, makeOrigin, addTask, evidenceText, stashTask, failedOnClash, patchTask, promoteTask, rejectTask, changeLines, stoppedEntry, waitsForOwner, withTimeline, type TimelineAdd, timelineLineText, type SettingsInput, type SettingChange, testMinutesRefusal, isMode, readNotify, notifySet, notifyRefusal, applySettings, applyProjectSettings, intoOf, crossBranchNotes, parseGoneBranch, saysMergeInstead, type Board, settingSetText, taskReports, reportPreview, statsReport, statsData, parseStatsRange, parseStatsArgs, archivedCount, localOffset, endedBy, freshTry, withoutOpenRun, stopEnd, changeRestartWhy, changedFields, addDetailsText, noteAddedLine, detailsBothRefusal, detailsTooLong, dayOf, inPlan, planBacklog, planAdded, planAddText, parseScoutUsage, parseStatusFilter, BOARD_STATUSES, type TeamInput, SETTING_NAMES, leadSettingsText, findingToBacklog, isScoutFindings, isTestsWithChanges, kindFor, isAnswered, askMoreTask, isInvestigation, checkKind, kindsLeadText, kindNames, BUILT_IN_KINDS, originOf, stateLabelLower, shownNote, modeOf, when, scoutNameOf, unknownScoutText } from '../board'
 import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, knownScouts, isKnownScout, loadScoutRunHistory } from './scouts'
 import { checkerReportOf } from '../core/task-sections'
 import { sizeSegs } from '../core/page-header'
@@ -39,9 +39,9 @@ const TOPIC_RULES = 'reuse an existing topic when it fits (a new one only when n
 // ---------------- the lead's tools ----------------
 
 /** T-1024: an add with the title and details of a task added within this long answers that task instead of adding another. */
-/** T-1079: a history line the lead's change or question wrote is the lead's ("lead: ..."); the owner's answer stays the owner's. */
-const leadLine = (l: HistoryAdd): HistoryAdd => (l[0] === 'answer' ? l : [l[0], l[1], { ...l[2], by: 'lead' }])
-const leadLines = (ls: HistoryAdd[]): HistoryAdd[] => ls.map(leadLine)
+/** T-1079: a timeline line the lead's change or question wrote is the lead's ("lead: ..."); the owner's answer stays the owner's. */
+const leadLine = (l: TimelineAdd): TimelineAdd => (l[0] === 'answer' ? l : [l[0], l[1], { ...l[2], by: 'lead' }])
+const leadLines = (ls: TimelineAdd[]): TimelineAdd[] => ls.map(leadLine)
 const sameJson =(x: unknown, y: unknown): boolean => JSON.stringify(x) === JSON.stringify(y)
 const ADD_AGAIN_MS = 5 * 60_000
 
@@ -90,7 +90,7 @@ export function taskText(t: SymccTask, running: boolean, all: SymccTask[] = [], 
     }
     for (const n of crossBranchNotes(t, all)) L.push(`  note: ${n}`)
   }
-  if (t.history.length) L.push('', `Timeline (${t.history.length}, newest first):`, ...[...t.history].reverse().map(h => `  • ${historyLineText(h)}`))
+  if (t.timeline.length) L.push('', `Timeline (${t.timeline.length}, newest first):`, ...[...t.timeline].reverse().map(h => `  • ${timelineLineText(h)}`))
   if (t.runs?.length) L.push('', 'Time and cost:', ...t.runs.map((r, i) => `  ${fmtRun(r, i, Date.now())}`), `  total: ${fmtTotal(sumRuns(t.runs, Date.now()))}`)
   const commits = taskCommits(t)
   if (commits.length) L.push('', 'Commits (newest first):', ...commits.map(c => `  ${commitText(c)}`))
@@ -229,7 +229,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   Fields: title, details (what to do and how we know it works), files (what the worker
   may change; empty = anywhere), after (tasks that must be done first), priority (like
   Unix nice: -20 to 19, everyone starts at 0, lower runs first), role (the worker role: ${BUILT_IN_ROLES.join(', ')},
-  or one in .${S.N.name}/roles/; it brings a checklist, skills and maybe a model), plus status, note, question, tries, history, branch, when added/changed, and merge_into:
+  or one in .${S.N.name}/roles/; it brings a checklist, skills and maybe a model), plus status, note, question, tries, timeline, branch, when added/changed, and merge_into:
   the branch it merges into, which is the branch you were on when it was made.
   Statuses:
     to do            waiting for a free worker (and for its "after" tasks)
@@ -421,7 +421,7 @@ ${
 - A worker whose run ended on an API error (retries used up, the context limit) or a refusal fails its try with that reason, and nothing is checked or merged; its work stays in its folder and branch, so ${S.N.name} retry continues from there. But when ${S.N.name} itself stopped that worker (a reload, a takeover, driving moved to another session), the try does not fail: a new worker goes on with the same try. What a worker writes in its hand-back is only its report: symcc never reads a question or a file request out of it.
 - A worker that runs past its time limit (max_minutes, plus any time the owner added) is not stopped: it keeps working, its task stays doing with the note "over time; asked the owner", and you are told "T-5 has run 45 min. Give it more time?" with the options +30 min | +60 min | Stop it (the owner hears "needs you" too, and the board shows them as buttons). Ask the owner in the chat, offering those choices as numbered plain chat text, plus "${answerTail()}"; put their pick into the task with ${S.N.name} change and answer: "+30 min", "+60 min" (any "+N min" works) or "Stop it". More time moves that task's limit later and the worker goes on. Stop it (or no answer by the limit plus max_minutes again) tells the worker to write down what it has and hand back; a few minutes later it is stopped and the task fails, with its work kept in its folder, branch and report, so a retry continues from there.
 - Details are limited to 8,000 characters; add and change refuse longer text (never cut it). Put long pasted material (a draft, a log) in a file and name the file in the details.
-- To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its history; a running task restarts). A change to a running task's details, title or files (add_details too) restarts its try, so put a note in the same change as an answer instead of sending it a moment later. After a checker send-back (or any other retry, not a task's first try), add your note within a minute of the retry starting: a retry under a minute old starts again with the note on the same try number (no lost try); later, the note restarts it as a new try. Changing only its priority or after-list keeps it running (saved for its next try). details rewrites the whole text, so use it only for a full rewrite, never both at once.
+- To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its timeline; a running task restarts). A change to a running task's details, title or files (add_details too) restarts its try, so put a note in the same change as an answer instead of sending it a moment later. After a checker send-back (or any other retry, not a task's first try), add your note within a minute of the retry starting: a retry under a minute old starts again with the note on the same try number (no lost try); later, the note restarts it as a new try. Changing only its priority or after-list keeps it running (saved for its next try). details rewrites the whole text, so use it only for a full rewrite, never both at once.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
@@ -470,10 +470,10 @@ export const TOOLS = () => [
   {
     name: 'change',
     description: 'Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version (except when only priority, after or needs_review change: those are saved and its worker keeps running); a waiting, failed or in-review one goes back to work; a paused one stays paused with the change saved (only resume or retry starts it again); a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.',
-    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, stage: { type: 'string', enum: ['work', 'check', 'tests', 'review'], description: "Move the task, with its branch as it is, to this stage of its run (only on its own, nothing else changes): work = a new worker try; check = a fresh checker now, then the merge line; tests = the merge line now, no checker (merges if its tests pass); review = ready for the owner (approve then runs the tests). A running worker or checker is stopped first. Works from todo, doing, failed, waiting and review; uses no automatic retry." }, details: { type: 'string', description: 'The new details: replaces the whole text. To add a line, use add_details instead.' }, add_details: { type: 'string', description: 'A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task\'s history too. Not together with details.' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, priority: { type: 'integer', minimum: -20, maximum: 19, description: 'Lower runs first; 0 is normal (urgent: -1, -2…; later: 1, 2…). A whole number from -20 to 19.' }, project: { type: 'string', description: 'The project (a folder below the board folder that holds its own .git) the task belongs to; only on a board over several repos. Empty on a change clears it.' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
+    inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, title: { type: 'string' }, stage: { type: 'string', enum: ['work', 'check', 'tests', 'review'], description: "Move the task, with its branch as it is, to this stage of its run (only on its own, nothing else changes): work = a new worker try; check = a fresh checker now, then the merge line; tests = the merge line now, no checker (merges if its tests pass); review = ready for the owner (approve then runs the tests). A running worker or checker is stopped first. Works from todo, doing, failed, waiting and review; uses no automatic retry." }, details: { type: 'string', description: 'The new details: replaces the whole text. To add a line, use add_details instead.' }, add_details: { type: 'string', description: 'A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task\'s timeline too. Not together with details.' }, files: { type: 'array', items: { type: 'string' } }, after: { type: 'array', items: { type: 'string' } }, priority: { type: 'integer', minimum: -20, maximum: 19, description: 'Lower runs first; 0 is normal (urgent: -1, -2…; later: 1, 2…). A whole number from -20 to 19.' }, project: { type: 'string', description: 'The project (a folder below the board folder that holds its own .git) the task belongs to; only on a board over several repos. Empty on a change clears it.' }, needs_review: { type: 'boolean' }, backlog: { type: 'boolean', description: 'true: stash in the backlog (never starts); false: move from the backlog to todo.' }, role: { type: 'string', description: `The worker role for the task (${BUILT_IN_ROLES.join(', ')} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: 'string', description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's timeline." }, merge_into: { type: 'string', description: 'Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made).' } } },
   },
   { name: 'approve', description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review". For an answered investigation it is Done: the task ends done, nothing is merged, its folder is removed, and its branch too unless it has commits from earlier tries, which are kept (the reply says so); with keep_note: true (Keep as a note) a new small docs task is added too that writes docs/research/<topic>.md from the saved answer and merges as usual.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, keep_note: { type: 'boolean', description: 'Only for an answered investigation: also add a docs task that keeps its answer as docs/research/<topic>.md.' } } } },
-  { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review". For an answered investigation it is Ask more: the reason is the follow-up question; it goes back to "todo" and the fresh try gets the question and the earlier answer in its details.', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker (for an answered investigation: the follow-up question).' } } } },
+  { name: 'reject', description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its timeline, and a fresh worker picks it up. Only for a task in "review". For an answered investigation it is Ask more: the reason is the follow-up question; it goes back to "todo" and the fresh try gets the question and the earlier answer in its details.', inputSchema: { type: 'object', required: ['task', 'reason'], properties: { task: { type: 'string' }, reason: { type: 'string', description: 'What is wrong and what to change, for the next worker (for an answered investigation: the follow-up question).' } } } },
   { name: 'retry', description: 'Put a task (back) to "todo" so a worker picks it up again, e.g. after it failed, or to bring back a dropped task on purpose. For a task whose finished work only waits for the owner\'s files on its branch ("waiting for your files on ..."), it only tries the merge again, with no worker. Not for a done task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'ask', description: 'Make a task wait for the owner with a question. Not for a done or dropped task (retry it first).', inputSchema: { type: 'object', required: ['task', 'question'], properties: { task: { type: 'string' }, question: { type: 'string' } } } },
   {
@@ -482,10 +482,10 @@ export const TOOLS = () => [
     inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['add', 'list', 'answer', 'drop'], description: 'What to do; list when left out.' }, text: { type: 'string', description: 'For add: the question, plain and short.' }, options: { type: 'array', items: { type: 'string' }, description: 'For add: 2 to 6 short choices (buttons on the board).' }, id: { type: 'string', description: 'For answer / drop: the question, e.g. Q-3.' }, answer: { type: 'string', description: "For answer: the owner's answer from the chat, their words or the option they picked." } } },
   },
   { name: 'drop', description: 'Stop and drop a task.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
-  { name: 'merged', description: `Mark a task done whose work is already merged outside the board (by hand), e.g. after its only failure was the merge tests timing out. ${S.N.name} checks it with git first: every commit on the task's branch must be in the branch it merges into (merged, fast-forwarded, or rebased as equal changes); if not, it is refused with the reason ("T-5's branch has 2 commits that aren't in main yet"). Works for a task that is to do, running (its worker is stopped first), failed, waiting, paused, in review or dropped. The task becomes done with the history line "merged outside the board (<commit>); marked done by the lead", its commits are recorded, its folder and branch are cleaned up like after a merge, and tasks waiting on it can start. Nothing is merged and no test runs. Only on the owner's word or a rule the owner set.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
+  { name: 'merged', description: `Mark a task done whose work is already merged outside the board (by hand), e.g. after its only failure was the merge tests timing out. ${S.N.name} checks it with git first: every commit on the task's branch must be in the branch it merges into (merged, fast-forwarded, or rebased as equal changes); if not, it is refused with the reason ("T-5's branch has 2 commits that aren't in main yet"). Works for a task that is to do, running (its worker is stopped first), failed, waiting, paused, in review or dropped. The task becomes done with the timeline line "merged outside the board (<commit>); marked done by the lead", its commits are recorded, its folder and branch are cleaned up like after a merge, and tasks waiting on it can start. Nothing is merged and no test runs. Only on the owner's word or a rule the owner set.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
   { name: 'pause', description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, reason: { type: 'string' } } } },
   { name: 'resume', description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' } } } },
-  { name: 'run', description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. Only for a task that is to do; any other task is refused with a short reason (retry it or move it to todo first). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its history says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, anyway: { type: 'boolean', description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
+  { name: 'run', description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. Only for a task that is to do; any other task is refused with a short reason (retry it or move it to todo first). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its timeline says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: 'object', required: ['task'], properties: { task: { type: 'string' }, anyway: { type: 'boolean', description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
   {
     name: 'scouts',
     description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt, whole last report and its last few runs: when, outcome, findings, tasks made from it and its report file). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; optional findings: auto = you decide where its tasks go, backlog = every task from its findings goes to the backlog, default (or left out) = follow the board's scout_findings setting; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (a paused scout runs too, once, and stays paused; refused with the reason when it is already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
@@ -625,7 +625,7 @@ function tellOnce(id: string, answer: string, tell: () => void) {
 
 /** The change tool's reply when `answer` comes for a task that is not waiting (any) more: nothing is changed. */
 function alreadyAnsweredText(t: SymccTask, a: In): string {
-  const earlier = [...t.history].reverse().find(l => l.text.startsWith('the owner answered: '))?.text
+  const earlier = [...t.timeline].reverse().find(l => l.text.startsWith('the owner answered: '))?.text
   const quoted = earlier ? `, ${earlier}` : ''
   const others = ['title', 'details', 'add_details', 'files', 'after', 'priority', 'needs_review', 'backlog', 'role', 'kind', 'merge_into', 'project'].filter(k => a[k] !== undefined)
   const also = others.length ? ` The other changes (${others.join(', ')}) were not made either; send them again without answer.` : ''
@@ -847,7 +847,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // T-1182/T-1194: a plain folder (no project) holds only scratch; a task given a project starts clean in a git copy.
       // Only after every refusal above; removeWorktree deletes it only when symcc made it as a plain folder (marker).
       if (projectMoves && project && plainTask(t) && (await $.fs.exists(worktreeDir(t.id)))) await removeWorktree($, t.id, worktreeDir(t.id))
-      const noteHistory = (x: Board): Partial<SymccTask> => (note ? { history: withHistory((find(x, t.id) ?? t).history, now(), ['note', noteAddedLine(note)]) } : {})
+      const noteTimeline = (x: Board): Partial<SymccTask> => (note ? { timeline: withTimeline((find(x, t.id) ?? t).timeline, now(), ['note', noteAddedLine(note)]) } : {})
       const gone = parseGoneBranch(t.status === 'waiting' ? (t.ask?.text ?? null) : null)
       if (projectMoves && a.merge_into === undefined && !isInvestigation(t)) into = await homeBranch($, repoOf(project ? { project } : undefined))
       if (!into && gone && saysMergeInstead(str(a.answer) ?? '', gone.instead)) into = gone.instead
@@ -871,21 +871,21 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         if (t.status !== 'backlog' && !['todo', 'doing', 'paused', 'failed'].includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
         if (wasRunning) await stopWorker($, t.id, 'moved to the backlog')
         await scratchGone()
-        await change($, x => stashTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x), ...endedBy(find(x, t.id), now(), 'stopped', 'moved to the backlog') }, now(), S.N.dir), t.id, now()))
+        await change($, x => stashTask(patchTask(x, t.id, { ...fields(), ...noteTimeline(x), ...endedBy(find(x, t.id), now(), 'stopped', 'moved to the backlog') }, now(), S.N.dir), t.id, now()))
         void pump($)
         return `${t.id} is in the backlog${wasRunning ? ' (its worker was stopped)' : ''}; it starts only when moved to todo`
       }
       if (a.backlog === false) {
         if (t.status !== 'backlog') throw new Error(`${t.id} is not in the backlog (it is ${STATUS_WORD[t.status]})`)
         await scratchGone()
-        await change($, x => promoteTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir), t.id, now()))
+        await change($, x => promoteTask(patchTask(x, t.id, { ...fields(), ...noteTimeline(x) }, now(), S.N.dir), t.id, now()))
         void pump($)
         const nb = (await load($)).tasks
         return backlogMovedText(nb, nb.find(x => x.id === t.id) ?? t)
       }
       if (t.status === 'backlog') {
         await scratchGone()
-        await change($, x => patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir))
+        await change($, x => patchTask(x, t.id, { ...fields(), ...noteTimeline(x) }, now(), S.N.dir))
         return `${t.id} ${note ? 'note added' : 'updated'} (still in the backlog)`
       }
       // A change that sets only the project keeps the status (the task has no copy or branch yet, see above, so no worker either).
@@ -893,7 +893,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         const p = fields()
         await change($, x => {
           const lines = leadLines(changeLines(t, p, false))
-          return patchTask(x, t.id, { ...p, ...(lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {}) }, now(), S.N.dir)
+          return patchTask(x, t.id, { ...p, ...(lines.length ? { timeline: withTimeline(find(x, t.id)?.timeline ?? t.timeline, now(), ...lines) } : {}) }, now(), S.N.dir)
         })
         return `${t.id} updated (its worker keeps running if it has one; its status stays ${t.status})`
       }
@@ -910,7 +910,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         // No restart line, but a changed after-list still gets its "waits on changed" line (the health check counts them).
         await change($, x => {
           const lines = leadLines(changeLines(t, p, false))
-          return patchTask(x, t.id, { ...p, ...(lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {}) }, now(), S.N.dir)
+          return patchTask(x, t.id, { ...p, ...(lines.length ? { timeline: withTimeline(find(x, t.id)?.timeline ?? t.timeline, now(), ...lines) } : {}) }, now(), S.N.dir)
         })
         return `${t.id} updated (its worker keeps running; this counts from its next try)`
       }
@@ -923,14 +923,14 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // A paused task stays paused (only resume or retry starts it again); a dropped one stays dropped.
       const keep = t.status === 'dropped' || t.status === 'paused'
       const patch: Partial<BoardTask> = { status: keep ? t.status : 'todo', note: t.status === 'paused' ? t.note : wasDoing ? 'changed; restarting' : 'changed', ...(failedOnClash(t) ? { merge_main: true } : {}), ...fields() }
-      // The owner's answer to a waiting task goes into its details (for the next worker) and its history.
+      // The owner's answer to a waiting task goes into its details (for the next worker) and its timeline.
       const answer = str(a.answer)?.trim()
       if (answer) patch.details = `${(patch.details ?? t.details).trimEnd()}\n\nOwner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ''}: ${answer}`
       await change($, x => {
         const cur = find(x, t.id) ?? t
         const lines = leadLines(changeLines(t, patch, wasDoing && !fresh, answer, note))
         const end = fresh ? { attempts: Math.max(0, cur.attempts - 1), runs: withoutOpenRun(cur.runs) } : wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {}
-        return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { history: withHistory(cur.history, now(), ...lines) } : {}) }, now(), S.N.dir)
+        return patchTask(x, t.id, { ...patch, ...end, ...(lines.length ? { timeline: withTimeline(cur.timeline, now(), ...lines) } : {}) }, now(), S.N.dir)
       })
       void pump($)
       const how = fresh ? ` (its try had just started: it starts again${note ? ' with the note' : ''} on the same try number)` : wasDoing ? ` (restarting${note ? ' with the note' : ''})` : ''
@@ -950,8 +950,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const fromDropped = t.status === 'dropped'
       await change($, x => {
         const cur = find(x, t.id)
-        const history = fromDropped && cur ? withHistory(cur.history, now(), ['retried', 'brought back from dropped']) : undefined
-        return patchTask(x, t.id, { status: 'todo', note: fromDropped ? 'brought back from dropped; queued' : 'queued', test_tries: 0, merge_main: clashed || undefined, ...(history ? { history } : {}) }, now())
+        const timeline = fromDropped && cur ? withTimeline(cur.timeline, now(), ['retried', 'brought back from dropped']) : undefined
+        return patchTask(x, t.id, { status: 'todo', note: fromDropped ? 'brought back from dropped; queued' : 'queued', test_tries: 0, merge_main: clashed || undefined, ...(timeline ? { timeline } : {}) }, now())
       })
       void pump($)
       return fromDropped ? `${t.id} brought back from dropped and queued` : `${t.id} queued${clashed ? '; its new worker merges the latest main first' : ''}`
@@ -964,8 +964,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       else if (t.status === 'doing') await stopWorker($, t.id, 'waiting for the owner')
       const asked = t.status === 'doing' && !checkingNow(t.id)
       // T-732: a to-do task asked about gets a line too, so the stats count the wait as waiting for the owner
-      const line: HistoryAdd | null = asked ? leadLine(stoppedEntry(t, 'the lead asked the owner a question')) : t.status === 'todo' ? ['asked', 'the lead asked the owner a question', { by: 'lead' }] : null
-      await change($, x => patchTask(x, t.id, { status: 'waiting', ask: makeAsk('lead', (str(a.question) ?? '').slice(0, 1000), now()), note: 'waiting for you', ...(failedOnClash(t) ? { merge_main: true } : {}), ...(line ? { history: withHistory((find(x, t.id) ?? t).history, now(), line) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
+      const line: TimelineAdd | null = asked ? leadLine(stoppedEntry(t, 'the lead asked the owner a question')) : t.status === 'todo' ? ['asked', 'the lead asked the owner a question', { by: 'lead' }] : null
+      await change($, x => patchTask(x, t.id, { status: 'waiting', ask: makeAsk('lead', (str(a.question) ?? '').slice(0, 1000), now()), note: 'waiting for you', ...(failedOnClash(t) ? { merge_main: true } : {}), ...(line ? { timeline: withTimeline((find(x, t.id) ?? t).timeline, now(), line) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', 'the lead asked the owner a question') }, now()))
       await haltChecker($, t.id, 'the task was sent to the owner')
       return `${t.id} now waits for the owner`
     }
@@ -1001,15 +1001,15 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const wasDoing = t.status === 'doing'
       if (wasDoing) await stopWorker($, t.id, reason ?? 'the lead paused this task')
       // T-737: a to-do task's pause gets its own line too ("paused: <reason>"), so the stats can tell an owner-wait pause
-      const line: HistoryAdd | null = wasDoing ? stoppedEntry(t, paused) : t.status === 'todo' ? ['stopped', paused, waitsForOwner(paused) ? { owner: true } : {}] : null
-      await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...(failedOnClash(t) ? { merge_main: true } : {}), ...(line ? { history: withHistory((find(x, t.id) ?? t).history, now(), line) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
+      const line: TimelineAdd | null = wasDoing ? stoppedEntry(t, paused) : t.status === 'todo' ? ['stopped', paused, waitsForOwner(paused) ? { owner: true } : {}] : null
+      await change($, x => patchTask(x, t.id, { status: 'paused', note: paused, ...(failedOnClash(t) ? { merge_main: true } : {}), ...(line ? { timeline: withTimeline((find(x, t.id) ?? t).timeline, now(), line) } : {}), ...endedBy(find(x, t.id), now(), 'stopped', paused) }, now()))
       void pump($)
       return `${t.id} paused${wasDoing ? ' (its worker was stopped)' : ''}; ${S.N.name} resume ${t.id} continues it`
     }
     case 'resume': {
       const t = await taskOrThrow($, id)
       if (t.status !== 'paused') return `${t.id} is not paused (it is ${t.status})`
-      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'resumed', history: withHistory((find(x, t.id) ?? t).history, now(), ['resumed', 'resumed after a pause']) }, now()))
+      await change($, x => patchTask(x, t.id, { status: 'todo', note: 'resumed', timeline: withTimeline((find(x, t.id) ?? t).timeline, now(), ['resumed', 'resumed after a pause']) }, now()))
       void pump($)
       return `${t.id} resumed`
     }

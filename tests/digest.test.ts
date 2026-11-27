@@ -35,7 +35,7 @@ test('digest: a task on try 3 is named, every time', () => {
 
 test('digest: tests failing in 2 tries, and a task waiting for the owner too long', () => {
   const fail = (n: number) => ({ at: '2026-11-13T01:00:00.000Z', kind: 'failed', text: `try ${n}: tests failed`, try: n, reason: 'tests' })
-  const b = boardWith({ status: 'doing', attempts: 2, history: [fail(1), fail(2)] }, { status: 'waiting', attempts: 1 })
+  const b = boardWith({ status: 'doing', attempts: 2, timeline: [fail(1), fail(2)] }, { status: 'waiting', attempts: 1 })
   const text = digestText(b.tasks, T0, T0 + 6 * 3_600_000)!
   expect(text).toContain('Tests failed since the last digest in 1 task: T-1 "Task 1" (2x)')
   expect(text).toContain('Waiting on the owner for a long time: T-2')
@@ -43,14 +43,14 @@ test('digest: tests failing in 2 tries, and a task waiting for the owner too lon
 
 test('digest: a single task with one test failure is not worth a line', () => {
   const fail = { at: '2026-11-13T01:00:00.000Z', kind: 'failed', text: 'try 1: tests failed', try: 1, reason: 'tests' }
-  expect(digestText(boardWith({ status: 'doing', attempts: 1, history: [fail] }).tasks, T0, T0 + 1000)).toBeNull()
+  expect(digestText(boardWith({ status: 'doing', attempts: 1, timeline: [fail] }).tasks, T0, T0 + 1000)).toBeNull()
 })
 
 const twoFails = () =>
   [1, 2].map(n => ({ at: '2026-11-13T01:00:00.000Z', kind: 'failed', text: `try ${n}: tests failed`, try: n, reason: 'tests' }))
 
 test('digest: 5 tasks each failing tests twice give one test line with 3 names and "and 2 more"', () => {
-  const b = boardWith(...[1, 2, 3, 4, 5].map(() => ({ status: 'doing', attempts: 2, history: twoFails() })))
+  const b = boardWith(...[1, 2, 3, 4, 5].map(() => ({ status: 'doing', attempts: 2, timeline: twoFails() })))
   const text = digestText(b.tasks, T0, T0 + 1000)!
   const testLines = text.split('\n').filter(l => l.includes('Tests failed'))
   expect(testLines.length).toBe(1)
@@ -60,7 +60,7 @@ test('digest: 5 tasks each failing tests twice give one test line with 3 names a
 })
 
 test('digest: tasks failing tests are not named again until their try changes', () => {
-  const b = boardWith(...[1, 2].map(() => ({ status: 'doing', attempts: 2, history: twoFails() })))
+  const b = boardWith(...[1, 2].map(() => ({ status: 'doing', attempts: 2, timeline: twoFails() })))
   const seen = new Map<string, string>()
   expect(digestText(b.tasks, T0, T0 + 1000, seen)).toContain('T-2')
   expect(digestText(b.tasks, T0, T0 + 2000, seen)).toBeNull()
@@ -71,7 +71,7 @@ test('digest: tasks failing tests are not named again until their try changes', 
 })
 
 test('digest: a task on try 3 that also failed tests twice is named once', () => {
-  const b = boardWith({ status: 'doing', attempts: 3, history: twoFails() }, { status: 'doing', attempts: 2, history: twoFails() })
+  const b = boardWith({ status: 'doing', attempts: 3, timeline: twoFails() }, { status: 'doing', attempts: 2, timeline: twoFails() })
   const text = digestText(b.tasks, T0, T0 + 1000)!
   expect(text.split('T-1 ').length - 1).toBe(1)
   expect(text).toContain('T-2')
@@ -86,12 +86,12 @@ test('digest: a todo task on try 3, unchanged for 4 hours, is named exactly once
 test('digest: tasks sent back twice then merged are counted; tests failing in 2 tasks are named', () => {
   const back = (n: number) => ({ at: '2026-11-13T01:00:00.000Z', kind: 'checker-problems', text: `try ${n}: problems`, try: n })
   const fail = { at: '2026-11-13T01:00:00.000Z', kind: 'failed', text: 'tests failed', try: 1, reason: 'tests' }
-  const merged = (extra: Record<string, unknown> = {}) => ({ status: 'done', merged: 'abc', attempts: 3, updated_at: '2026-11-13T02:00:00.000Z', history: [back(1), back(2)], ...extra })
-  const b = boardWith(merged(), merged(), merged({ attempts: 1, history: [] }))
+  const merged = (extra: Record<string, unknown> = {}) => ({ status: 'done', merged: 'abc', attempts: 3, updated_at: '2026-11-13T02:00:00.000Z', timeline: [back(1), back(2)], ...extra })
+  const b = boardWith(merged(), merged(), merged({ attempts: 1, timeline: [] }))
   const text = digestText(b.tasks, T0 - 1, T0 + 1000)!
   expect(text).toContain('sent work back 4 times')
   expect(text).toContain('1 of 3 merged tasks passed on the first try')
-  const t = boardWith({ status: 'done', attempts: 1, history: [fail] }, { status: 'done', attempts: 1, history: [fail] })
+  const t = boardWith({ status: 'done', attempts: 1, timeline: [fail] }, { status: 'done', attempts: 1, timeline: [fail] })
   expect(digestText(t.tasks, T0 - 1, T0 + 1000)).toContain('Tests failed since the last digest in 2 tasks')
 })
 

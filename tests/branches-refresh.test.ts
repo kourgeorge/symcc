@@ -30,7 +30,7 @@ test('T-1117: a refresh of 13 tasks updates the view once; finished tasks are re
   S.gitState = 'ok'
   resetBranches()
   const iso = (n: number) => new Date(Date.UTC(2026, 10, 20, 0, n)).toISOString()
-  const task = (id: string, x: Record<string, unknown>) => ({ id, title: id, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, history: [], branch: `symcc/${id}`, created_at: iso(0), updated_at: iso(1), ...x })
+  const task = (id: string, x: Record<string, unknown>) => ({ id, title: id, details: '', files: [], status: 'doing', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: `symcc/${id}`, created_at: iso(0), updated_at: iso(1), ...x })
   const tasks = [
     ...[1, 2, 3].map(n => task(`T-${n}`, {})),
     ...[4, 5, 6, 7, 8].map(n => task(`T-${n}`, { status: 'done', merged: sha(`c${n}`) })),
@@ -86,7 +86,7 @@ test('T-1126: a done task whose git log failed is read again after BRANCH_CACHE_
   S.gitState = 'ok'
   resetBranches()
   const iso = new Date(Date.UTC(2026, 10, 20)).toISOString()
-  const t = { id: 'T-4', title: 'x', details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: 1, history: [], branch: 'symcc/T-4', merged: sha('c4'), created_at: iso, updated_at: iso }
+  const t = { id: 'T-4', title: 'x', details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: 'symcc/T-4', merged: sha('c4'), created_at: iso, updated_at: iso }
   const b = { tasks: [t] } as never
   const t0 = 1_000_000
   await Promise.all(taskBranchesView(host, b, t0).done)

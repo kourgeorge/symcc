@@ -17,7 +17,7 @@ import type { SymccTask } from '../../types'
 import type { Seg } from './details'
 import { agoText, type BranchCommit, LIVE_INDENT, LIVE_TONE, liveInner } from './live'
 import { cutTitle, fitSegs, padWidth, textWidth } from './width'
-import { historyTime } from './history'
+import { timelineTime } from './timeline'
 import { taskCommits } from './commits'
 import { plural } from './text'
 
@@ -47,7 +47,7 @@ type Placed = Ev & { x: number }
 
 /** A time as the section says it: "14:42" today, else "Nov 19". */
 export const branchTime = (ms: number, nowMs: number): string => {
-  const t = historyTime(new Date(ms).toISOString(), nowMs)
+  const t = timelineTime(new Date(ms).toISOString(), nowMs)
   return t.replace(/^(\w{3} \d{1,2}) \d\d:\d\d$/, '$1')
 }
 

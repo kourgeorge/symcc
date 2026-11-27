@@ -3,7 +3,7 @@ import type { SymccMode, SymccTask } from '../../types'
 import { DEFAULT_NAME } from '../name'
 import { type Board, type BoardTask, type Blockers, blockerFiles, find, isMode, modeOf, STATUS_WORD } from './board-file'
 import { isSecretName } from './git-setup'
-import { type FailReason, onPurposeStop, withHistory } from './history'
+import { type FailReason, onPurposeStop, withTimeline } from './timeline'
 import { patchTask } from './task'
 import { clean, shownPath } from './text'
 
@@ -134,13 +134,13 @@ export function taskWasResult(why: string): { ok: false; detail: string; reason?
 
 /**
  * The owner rejected task `id` (in "review") because of `reason`: it goes back to "todo" with the
- * reason in its note and history, so the next worker sees it; its test and merge-main retries start over.
+ * reason in its note and timeline, so the next worker sees it; its test and merge-main retries start over.
  */
 export function rejectTask(b: Board, id: string, reason: string, now: string): Board {
   const t = reviewTask(b, id, 'reject')
   const why = clean(reason, 1000)
   if (!why) throw new Error('give a reason for rejecting, so the next worker knows what to fix')
-  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, test_output: undefined, merge_main: undefined, history: withHistory(t.history, now, ['rejected', `try ${t.attempts}: rejected by the owner: ${why}`, { try: Number(t.attempts) || 0, reason: 'rejected' }]) }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `rejected: ${why.slice(0, 280)}`, test_tries: 0, test_output: undefined, merge_main: undefined, timeline: withTimeline(t.timeline, now, ['rejected', `try ${t.attempts}: rejected by the owner: ${why}`, { try: Number(t.attempts) || 0, reason: 'rejected' }]) }, now)
 }
 
 // ---------------- looking at a task's changes (review) ----------------
@@ -151,7 +151,7 @@ export type DiffFile = { file: string; added: number; removed: number; binary?: 
 /** Said next to a task's changes when they include the owner's own edits in its folder. */
 export const YOUR_EDITS = '(includes your edits)'
 
-/** The history line of an approve after the owner edited files in the task's folder. */
+/** The timeline line of an approve after the owner edited files in the task's folder. */
 export const ownerEditedLine = (files: readonly string[]) => `owner edited files before approving: ${files.join(', ')}`
 
 /** Strips git's quoting of an unusual path ("a b\".txt" → a b".txt). */

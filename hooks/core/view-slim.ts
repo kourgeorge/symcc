@@ -14,11 +14,11 @@ const CUT_TEXT = 1500
 
 const size = (v: unknown) => JSON.stringify(v).length
 
-/** `x` with every string over CUT_TEXT characters cut (deep), and every array of more than 20 history lines cut to the last 20. */
+/** `x` with every string over CUT_TEXT characters cut (deep), and every array of more than 20 timeline lines cut to the last 20. */
 function cutTexts(x: unknown): unknown {
   if (typeof x === 'string') return x.length > CUT_TEXT ? x.slice(0, CUT_TEXT) : x
   if (Array.isArray(x)) return x.map(cutTexts)
-  if (x && typeof x === 'object') return Object.fromEntries(Object.entries(x).map(([k, val]) => [k, k === 'history' && Array.isArray(val) && val.length > 20 ? val.slice(-20).map(cutTexts) : cutTexts(val)]))
+  if (x && typeof x === 'object') return Object.fromEntries(Object.entries(x).map(([k, val]) => [k, k === 'timeline' && Array.isArray(val) && val.length > 20 ? val.slice(-20).map(cutTexts) : cutTexts(val)]))
   return x
 }
 
@@ -30,9 +30,9 @@ export const trimNote = (step: SlimStep, left: number) =>
 
 /**
  * The view as the panel keeps it, under Claude Code's 4 MB limit on one value. Every done or dropped task is always
- * slimmed (T-891, viewTask: no history, details or long parts; its page reads them back from its parts file,
+ * slimmed (T-891, viewTask: no timeline, details or long parts; its page reads them back from its parts file,
  * taskWithParts, and the Tasks list's search reads its details and request from there too, app/search-parts.ts; its
- * tries and history marks stay, for the lists, the Live tab and ▍Today). Then, each only when the view is still over
+ * tries and timeline marks stay, for the lists, the Live tab and ▍Today). Then, each only when the view is still over
  * VIEW_TARGET_CHARS: leave out the archive totals; drop the oldest finished tasks (their done ids
  * go into archived_done, so waiting tasks still see them done); and only last cut long texts (open tasks stay whole
  * as long as possible). Never throws, never gives back a view over the limit unless open tasks alone are that big.

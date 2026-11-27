@@ -1,4 +1,4 @@
-// T-853: hooks/core/prompt-sections.ts can be the first module loaded. It imports board-file.ts, which (through history.ts and
+// T-853: hooks/core/prompt-sections.ts can be the first module loaded. It imports board-file.ts, which (through timeline.ts and
 // roles.ts) imports prompts.ts, which imports prompt-sections.ts back. prompts.ts used to build its prompt tables at load, so
 // loading prompt-sections.ts first failed with "Cannot access 'PROMPT_SECTIONS' before initialization". The tables are now
 // made on first read; this test checks they hold the same values as before. The test kit loads other modules first, so the

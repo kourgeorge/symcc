@@ -364,7 +364,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (opened() && !hasPage(f, opened(), tab())) openPage('')
     if (run() && !scoutRunsIn(f, opened()).some(x => x.run.ended === run())) setRun('')
   }
-  // T-675: a done or dropped task's long parts (history, details, ...) are not in the view file; its page reads them
+  // T-675: a done or dropped task's long parts (timeline, details, ...) are not in the view file; its page reads them
   // from its parts file (.<name>/tasks/T-n.json), read again on each refresh while the page is open
   let rawFile: ViewFile | null = null
   let parts: { id: string; file: string; text: string | null } | undefined
@@ -373,7 +373,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     if (!f) return f
     const t = openTask(f) as (Record<string, unknown> & { id: string }) | undefined
     const p = t && parts && parts.id === t.id && parts.file === t[PARTS_KEY] ? parts : undefined
-    // a slim task is drawn with empty details and history until (or if never) its parts are read
+    // a slim task is drawn with empty details and timeline until (or if never) its parts are read
     return { ...f, view: { ...f.view, tasks: f.view.tasks.map(x => viewStubFilled(p && x.id === p.id ? withViewParts(x, p.text) : x)) } }
   }
   const readTaskParts = () => {

@@ -11,7 +11,7 @@ import { squash } from './text'
 import { checkStepNow } from './lead'
 import { IN_LINE_ICON, rowTime, STEP_ICON, STEP_NOTE, STEP_WORD } from './panel'
 import { stageStep, taskPhase } from './phase'
-import { ranNowThisTry } from './history'
+import { ranNowThisTry } from './timeline'
 import { depDone, openAfter } from './archive'
 import { runNowShares, runNowShareText } from './run-now'
 

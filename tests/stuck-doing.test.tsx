@@ -71,7 +71,7 @@ function world(on: On, agents: Agent[], sid = 's1', gate: { wait?: Promise<void>
   on('session.id', () => ({ value: sid }) as never)
   on('env.get', () => ({ value: undefined }) as never)
   const clock = mock.clock(on, { now: T0 })
-  // a done task's history and tries are in its parts file (T-675): joined back here
+  // a done task's timeline and tries are in its parts file (T-675): joined back here
   const board = () => JSON.parse(joinedText(files.get(BOARD)!, rel => files.get(BOARD.replace('board.json', rel)) ?? null)) as Board
   return { files, sent, prompts, spawned, clock, board, task: (id: string) => board().tasks.find(t => t.id === id)! }
 }
@@ -146,7 +146,7 @@ test('(b, c) a worker this copy stopped that stays listed does not keep its task
   const t = w.task('T-1')
   expect(t.status).toBe('todo')
   expect(t.branch).toBe('symcc/T-1')
-  expect(t.history.at(-1)?.text).toMatch(/restarted: the old worker has ended/)
+  expect(t.timeline.at(-1)?.text).toMatch(/restarted: the old worker has ended/)
   // w9 is not messaged again (that would wake it up)
   expect(w.sent).toEqual(['w9'])
   await w.clock.advance(2_000)
@@ -234,7 +234,7 @@ test('a worker stopped on purpose (pause) does not make the regular check send i
   await w.clock.settle()
   const t = w.task('T-1')
   expect(t.status).toBe('paused')
-  expect(t.history.some(h => /restarted/.test(h.text))).toBe(false)
+  expect(t.timeline.some(h => /restarted/.test(h.text))).toBe(false)
   expect(w.prompts.some(p => p.includes('no worker was working on it any more'))).toBe(false)
   expect(w.spawned).toEqual([])
 })
@@ -335,7 +335,7 @@ test('a worker stopped because its time is up: a "Stopped" answer during the slo
   await w.clock.settle()
   const t = w.task('T-1')
   expect(t.status).toBe('failed')
-  expect(t.history.some(h => /restarted/.test(h.text))).toBe(false)
+  expect(t.timeline.some(h => /restarted/.test(h.text))).toBe(false)
   expect(w.prompts.some(p => p.includes('no worker was working on it any more'))).toBe(false)
   expect(w.spawned).toEqual([])
 })

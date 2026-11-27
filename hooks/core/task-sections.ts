@@ -10,7 +10,7 @@ import { type BoardTask, hasMergedChanges } from './board-file'
 import { isAnswered } from './task'
 import { taskReports } from './reports'
 import { whyFailed, failNext, failAsks } from './failure'
-import { historyEvent, historyTime, HISTORY_COLOR, type HistoryEntry } from './history'
+import { timelineEvent, timelineTime, TIMELINE_COLOR, type TimelineEntry } from './timeline'
 import { agentRows, fmtRun, fmtTotal, runsSummary, sumRuns, shortAgentId } from './runs'
 import { usualTokens } from './live'
 import { type DiffFile, YOUR_EDITS } from './review'
@@ -18,7 +18,7 @@ import { taskBranchLines, taskBranchTitle, type TaskBranchFacts } from './task-b
 import { cutTitle } from './width'
 
 /** The sections, in the page's order. */
-export type TaskSectionId = 'done' | 'why' | 'answer' | 'details' | 'branch' | 'changes' | 'what' | 'history' | 'runs' | 'report'
+export type TaskSectionId = 'done' | 'why' | 'answer' | 'details' | 'branch' | 'changes' | 'what' | 'timeline' | 'runs' | 'report'
 
 /** What a press on a line does: show a changed file's diff. */
 export type SectionAction = { diff: string }
@@ -33,7 +33,7 @@ export type SectionLine = { segs: Seg[]; action?: SectionAction; key?: string; p
 export type ReportPick = { try: number; kind: 'worker' | 'checker'; id?: string }
 
 /** T-1104: the report a pick shows (the latest worker report with no pick): its try, kind, agent id and file; null when there is none. */
-export function resolveReport(t: Pick<SymccTask, 'runs' | 'history'>, pick?: ReportPick | null): { try: number; kind: 'worker' | 'checker'; id?: string; file: string } | null {
+export function resolveReport(t: Pick<SymccTask, 'runs' | 'timeline'>, pick?: ReportPick | null): { try: number; kind: 'worker' | 'checker'; id?: string; file: string } | null {
   const lastId = (n: number, kind: 'worker' | 'checker') => {
     const r = t.runs?.[n - 1]
     return r ? agentRows(r).filter(a => a.kind === kind).at(-1)?.id : undefined
@@ -137,23 +137,23 @@ export function changedFileSegs(f: DiffFile, width: number): Seg[] {
   ]
 }
 
-/** The history as a timeline (T-512), newest first: each event's mark in its tone, when it happened (T-522), its try
+/** The timeline (T-512), newest first: each event's mark in its tone, when it happened (T-522), its try
  *  label in bold, the words wrapped under the mark with the connector (│) beside them, and a connector line between events. */
-export function historyLines(t: Pick<SymccTask, 'history'>, width: number, nowMs: number): SectionLine[] {
-  const events = [...t.history].reverse().map(historyEvent)
+export function timelineLines(t: Pick<SymccTask, 'timeline'>, width: number, nowMs: number): SectionLine[] {
+  const events = [...t.timeline].reverse().map(timelineEvent)
   return events.flatMap((e, i) => {
     const last = i === events.length - 1
-    const at = historyTime(e.at, nowMs)
+    const at = timelineTime(e.at, nowMs)
     const words: Seg[] = [
       ...(at ? [{ text: `${at} `, color: 'inactive' } as Seg] : []),
       ...(e.by ? [{ text: `${e.by}: `, color: 'inactive' } as Seg] : []),
       ...(e.label ? [{ text: `${e.label}: `, color: 'text', bold: true } as Seg] : []),
       { text: e.said, color: e.tone === 'bad' && !e.result ? 'error' : 'inactive' },
-      ...(e.result ? [{ text: ` → ${e.result}`, color: e.tone === 'good' || e.tone === 'bad' ? HISTORY_COLOR[e.tone] : 'text' } as Seg] : []),
+      ...(e.result ? [{ text: ` → ${e.result}`, color: e.tone === 'good' || e.tone === 'bad' ? TIMELINE_COLOR[e.tone] : 'text' } as Seg] : []),
     ]
     return [
-      ...wrapSegs(words, Math.max(12, width - 2)).map((w, j): SectionLine => ({ segs: [j ? { text: last ? '  ' : '│ ', color: 'inactive' } : { text: `${e.mark} `, color: HISTORY_COLOR[e.tone], bold: true }, ...w], key: `history-${i}-${j}` })),
-      ...(last ? [] : [{ segs: [{ text: '│', color: 'inactive' }], key: `history-${i}-line` }]),
+      ...wrapSegs(words, Math.max(12, width - 2)).map((w, j): SectionLine => ({ segs: [j ? { text: last ? '  ' : '│ ', color: 'inactive' } : { text: `${e.mark} `, color: TIMELINE_COLOR[e.tone], bold: true }, ...w], key: `timeline-${i}-${j}` })),
+      ...(last ? [] : [{ segs: [{ text: '│', color: 'inactive' }], key: `timeline-${i}-line` }]),
     ]
   })
 }
@@ -162,8 +162,8 @@ export function historyLines(t: Pick<SymccTask, 'history'>, width: number, nowMs
  * T-1079: the saved report of the latest checker of try `tryNo` of task `t`: its file, its agent name ('' on an old entry) and
  * the verdict ('ok' or 'problems'); null when that try had no checker with a saved report.
  */
-export function checkerReportOf(t: Pick<SymccTask, 'history'>, tryNo: number): { try: number; file: string; agent: string; ok: boolean } | null {
-  const e = (t.history as HistoryEntry[]).findLast(h => h.report && h.try === tryNo && (h.kind === 'checker-ok' || h.kind === 'checker-problems'))
+export function checkerReportOf(t: Pick<SymccTask, 'timeline'>, tryNo: number): { try: number; file: string; agent: string; ok: boolean } | null {
+  const e = (t.timeline as TimelineEntry[]).findLast(h => h.report && h.try === tryNo && (h.kind === 'checker-ok' || h.kind === 'checker-problems'))
   return e?.report ? { try: tryNo, file: e.report, agent: e.agent ?? '', ok: e.kind === 'checker-ok' } : null
 }
 
@@ -172,7 +172,7 @@ export function checkerReportOf(t: Pick<SymccTask, 'history'>, tryNo: number): {
  * report file (a worker's: the try's report; a checker's: its saved report) carries a `pick`, and is marked "●" when it is
  * the one the Report shows. A try with no agent lines has its try line as the pick when its worker report exists.
  */
-export function runLines(t: Pick<SymccTask, 'runs' | 'history'>, r: SymccRun, i: number, nowMs: number, shown: { try: number; kind: string; id?: string } | null): SectionLine[] {
+export function runLines(t: Pick<SymccTask, 'runs' | 'timeline'>, r: SymccRun, i: number, nowMs: number, shown: { try: number; kind: string; id?: string } | null): SectionLine[] {
   const n = i + 1
   const rows = agentRows(r, nowMs)
   const files = { worker: taskReports(t).some(x => x.try === n), checker: !!checkerReportOf(t, n) }
@@ -204,7 +204,7 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
   // next. Only the report of the try that failed counts.
   if (t.status === 'failed') {
     const body = latest && latest.try === t.attempts ? textOf(f, latest.file) : null
-    const asks = failAsks(body ?? t.history.at(-1)?.text ?? '')
+    const asks = failAsks(body ?? t.timeline.at(-1)?.text ?? '')
     const under = (text: string, color: string, key: string) => wrapSegs([{ text, color }], Math.max(12, width - 2)).map((w, j): SectionLine => ({ segs: [{ text: '  ', color: 'text' }, ...w], key: `${key}-${j}` }))
     out.push({ id: 'why', title: 'Why it failed', lines: [...under(whyFailed(t), 'text', 'why'), ...(asks ? under(asks, 'warning', 'why-asks') : []), ...under(`Next: ${failNext(t)}`, 'inactive', 'why-next')] })
   }
@@ -242,7 +242,7 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
     })
   }
   out.push({ id: 'what', title: 'What to do', lines: t.details.trim() ? detailsLines(t.details.trimEnd(), width) : [plainLine('(no details)', 'inactive')] })
-  if (t.history.length) out.push({ id: 'history', title: `Timeline (${t.history.length}, newest first)`, lines: historyLines(t, width, f.nowMs) })
+  if (t.timeline.length) out.push({ id: 'timeline', title: `Timeline (${t.timeline.length}, newest first)`, lines: timelineLines(t, width, f.nowMs) })
   // T-1104: one Report section for the agent picked in Runs (its heading says whose report and which try)
   const shown = resolveReport(t, f.shown)
   const summary = t.runs?.length ? runsSummary(t.runs, f.nowMs, usualTokens(f.detail.all)) : ''

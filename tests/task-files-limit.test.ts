@@ -21,7 +21,7 @@ test('T-713: allowFiles on a task with 30 files adds the asked file and says so'
   expect(after.files.length).toBe(31)
   expect(after.files.includes('src/f30.ts')).toBe(true)
   expect(after.status).toBe('todo')
-  expect(after.history[after.history.length - 1]!.text.includes('+ src/f30.ts')).toBe(true)
+  expect(after.timeline[after.timeline.length - 1]!.text.includes('+ src/f30.ts')).toBe(true)
 })
 
 test('T-713: allowFiles refuses asked files a task cannot hold: no "allowed" line, still waiting', () => {
@@ -38,7 +38,7 @@ test('T-713: allowFiles refuses asked files a task cannot hold: no "allowed" lin
     const still = find(b1, t.id)!
     expect(still.status).toBe('waiting')
     expect(still.files).toEqual(['src/a.ts'])
-    expect(still.history.some(l => l.text.startsWith('the owner allowed files'))).toBe(false)
+    expect(still.timeline.some(l => l.text.startsWith('the owner allowed files'))).toBe(false)
   }
 })
 
@@ -47,7 +47,7 @@ test('T-713: allowFiles writes the cleaned names it really added', () => {
   const b1 = patchTask(b0, t.id, { status: 'waiting', ask: { by: 'symcc', text: 'files?', asked_at: '', files: ['./src/b.ts'] } }, NOW)
   const after = find(allowFiles(b1, t.id, NOW, '.symcc'), t.id)!
   expect(after.files).toEqual(['src/a.ts', 'src/b.ts'])
-  expect(after.history[after.history.length - 1]!.text).toBe('the owner allowed files: + src/b.ts')
+  expect(after.timeline[after.timeline.length - 1]!.text).toBe('the owner allowed files: + src/b.ts')
 })
 
 test('T-713: change widening a task past 30 files keeps them all', () => {

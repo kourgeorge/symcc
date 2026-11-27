@@ -5,7 +5,7 @@
 /** A placeholder: a name, or "task." and a dotted path ({{task.origin.request}}). */
 export const PLACEHOLDER = /\{\{\s*([A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z0-9_]+)*)\s*\}\}/g
 
-/** The most characters one {{task.<path>}} gives; a longer value (a long history) is cut with a note. */
+/** The most characters one {{task.<path>}} gives; a longer value (a long timeline) is cut with a note. */
 export const TASK_VALUE_MAX = 8000
 
 /** The key a role page lists for the generic task placeholder. */

@@ -30,7 +30,7 @@ import * as m_core_banner from '../hooks/core/banner'
 import * as m_core_board_file from '../hooks/core/board-file'
 import * as m_core_days from '../hooks/core/days'
 import * as m_core_def_files from '../hooks/core/def-files'
-import * as m_core_history from '../hooks/core/history'
+import * as m_core_timeline from '../hooks/core/timeline'
 import * as m_core_org_mem from '../hooks/core/org-mem'
 import * as m_core_path_guard from '../hooks/core/path-guard'
 import * as m_core_prompts from '../hooks/core/prompts'
@@ -73,7 +73,7 @@ const SOURCES: [string, Record<string, unknown>][] = [
   ['./core/board-file', m_core_board_file],
   ['./core/days', m_core_days],
   ['./core/def-files', m_core_def_files],
-  ['./core/history', m_core_history],
+  ['./core/timeline', m_core_timeline],
   ['./core/org-mem', m_core_org_mem],
   ['./core/path-guard', m_core_path_guard],
   ['./core/prompts', m_core_prompts],

@@ -265,7 +265,7 @@ test('T-479, T-805: only the last few tries keep agent ids (their entries and to
   // a bad id is never kept
   for (const bad of ['', 'a b', 'x'.repeat(201), 'new\nline', 7, null]) expect(withAgentStart([{ started: ISO }], 'worker', bad, ISO)).toEqual([{ started: ISO }])
   // from the file: a bad id is cut from its entry, a bad entry is dropped
-  const text = JSON.stringify({ tasks: [{ id: 'T-1', status: 'todo', title: 'x', details: '', note: '', files: [], after: [], history: [], priority: 1, attempts: 1, branch: null, created_at: ISO, updated_at: ISO, runs: [{ started: ISO, agents: [{ id: 5, kind: 'worker' as const, started: ISO }, { id: 'ok', kind: 'checker', started: ISO }, { id: 'has space', kind: 'checker', started: ISO }, { id: 'x', kind: 'other', started: ISO }] }, { started: ISO, agents: [{ id: 'w2', kind: 'worker' as const, started: ISO }] }] }] })
+  const text = JSON.stringify({ tasks: [{ id: 'T-1', status: 'todo', title: 'x', details: '', note: '', files: [], after: [], timeline: [], priority: 1, attempts: 1, branch: null, created_at: ISO, updated_at: ISO, runs: [{ started: ISO, agents: [{ id: 5, kind: 'worker' as const, started: ISO }, { id: 'ok', kind: 'checker', started: ISO }, { id: 'has space', kind: 'checker', started: ISO }, { id: 'x', kind: 'other', started: ISO }] }, { started: ISO, agents: [{ id: 'w2', kind: 'worker' as const, started: ISO }] }] }] })
   const read = readBoard(text)
   expect(read.board.tasks[0]!.runs!.map(r => agentsOf(r).map(a => [a.id, a.kind]))).toEqual([[[undefined, 'worker'], ['ok', 'checker'], [undefined, 'checker']], [['w2', 'worker']]])
   expect(read.fixed.some(f => /bad agent ids/.test(f))).toBe(true)

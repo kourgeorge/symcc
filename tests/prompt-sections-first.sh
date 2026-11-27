@@ -1,6 +1,6 @@
 #!/bin/sh
 # Checks that hooks/core/prompt-sections.ts (and prompts.ts) can be the very first module loaded (T-853). prompt-sections.ts
-# imports board-file.ts, which (through history.ts and roles.ts) imports prompts.ts, which imports prompt-sections.ts back.
+# imports board-file.ts, which (through timeline.ts and roles.ts) imports prompts.ts, which imports prompt-sections.ts back.
 # prompts.ts used to build its prompt tables at load, which then failed with "Cannot access 'PROMPT_SECTIONS' before
 # initialization". Plugin tests can't show this (other modules are always loaded first there), so this runs a fresh bun
 # from /tmp for each file. Usage: sh tests/prompt-sections-first.sh

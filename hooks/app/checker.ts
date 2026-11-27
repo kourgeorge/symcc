@@ -2,7 +2,7 @@
 // finishWork (workers.ts) runs a checker here after the prep step and before the task joins the merge line, and waits
 // for its verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { emptyBoard, type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, testCommandsOf, checkerEntry, checkerPrompt, checkerVerdict, checkerReportFile, reportText, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
+import { emptyBoard, type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, testCommandsOf, checkerEntry, checkerPrompt, checkerVerdict, checkerReportFile, reportText, cutLine, find, findRole, intoOf, patchTask, tryLabel, withTimeline, withAgentUsed, type TimelineAdd } from '../board'
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
@@ -32,7 +32,7 @@ export const checkerName = (name: string, id: string) => agentSafeName(`${name}-
  * verdict. The board shows the task's step as "checker" meanwhile. The checker runs as the read-only scout type
  * (no Edit or Write), and whatever it still changed in the folder is thrown away after; if it moved the task's branch
  * (a commit, a reset), the branch is put back where it was (putBack). Its time limit is the board's
- * max_minutes: past it, it is stopped and there is no verdict. Its verdict goes into the task's history and its
+ * max_minutes: past it, it is stopped and there is no verdict. Its verdict goes into the task's timeline and its
  * tokens are added to the task's current try. Never throws: a checker that can't start gives no verdict.
  * `stop`: why the task was stopped (dropped, paused, sent to the owner), if it was; looked at once the checker
  * started too, so a stop that came while it was starting up (before haltChecker could see it) still stops it at once.
@@ -166,7 +166,7 @@ async function markChecker($: Host, t: SymccTask, agentId: string, on: boolean) 
   }).catch(() => undefined)
 }
 
-/** The checker's verdict (`v`, or none with `why`) as a history line of task `t`, and its tokens added to the current try; only while `t` is still on that try. */
+/** The checker's verdict (`v`, or none with `why`) as a timeline line of task `t`, and its tokens added to the current try; only while `t` is still on that try. */
 async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: string, tokens?: SymccTokens, before?: string, agentId?: string, report?: string) {
   await change($, x => {
     const cur = find(x, t.id)
@@ -174,7 +174,7 @@ async function record($: Host, t: SymccTask, v: CheckerVerdict | null, why?: str
     if (!v && movedAway.has(t.id)) return x // the lead moved the task: its own "moved to ..." line is the only one
     // T-774, T-805: the checker's tokens go only on its own agent entry, ended now (a stopped checker keeps the tokens it had)
     const runs = cur.runs?.length && (agentId || tokens) ? withAgentUsed(cur.runs, 'checker', agentId, now(), tokens ? { tokens } : {}) : undefined
-    return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...(before ? [['step', before, { try: cur.attempts }] as HistoryAdd] : []), checkerEntry(tryLabel(cur), v, why, cur.attempts, { ...(agentId ? { agent: checkerName(S.N.name, t.id) } : {}), ...(report ? { report } : {}) })), ...(runs ? { runs } : {}) }, now())
+    return patchTask(x, t.id, { timeline: withTimeline(cur.timeline, now(), ...(before ? [['step', before, { try: cur.attempts }] as TimelineAdd] : []), checkerEntry(tryLabel(cur), v, why, cur.attempts, { ...(agentId ? { agent: checkerName(S.N.name, t.id) } : {}), ...(report ? { report } : {}) })), ...(runs ? { runs } : {}) }, now())
   }).catch(() => undefined)
 }
 

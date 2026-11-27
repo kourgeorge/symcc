@@ -323,8 +323,8 @@ export function statsLines(d: StatsData, width: number): StatLine[] {
 
   // where the time goes: each stage in its color
   const f = d.stages
-  L.heading('Where the time goes', `${plural(f.n, 'done task')}${f.lacking ? `; ${f.lacking} without timed history, left out` : ''}`)
-  if (!f.n) L.small('no done tasks with timed history', 2)
+  L.heading('Where the time goes', `${plural(f.n, 'done task')}${f.lacking ? `; ${f.lacking} without timed timeline, left out` : ''}`)
+  if (!f.n) L.small('no done tasks with timed timeline', 2)
   else {
     const shown = f.stages.filter(s => s.ms > 0 || (s.stage !== 'backlog' && s.stage !== 'blocked'))
     const stageRow = (label: string, ms: number, avg: number, color?: string, stage?: Stage): BarRow => ({ label, ...(color ? { color } : { bold: true }), ...(stage ? { value: ms, barColor: STAGE_COLOR[stage] } : {}), cols: [num(fmtDuration(ms)), num(fmtDuration(avg)), num(pctText(ms, f.lifetime))] })
@@ -344,7 +344,7 @@ export function statsLines(d: StatsData, width: number): StatLine[] {
   L.heading('How tasks ended', plural(d.finished, 'done task'))
   const endColor = (l: string) => (/^merged on its own/.test(l) ? GOOD : /^approved/.test(l) ? ACCENT : /^answered/.test(l) ? 'ide' : 'inactive')
   L.bars(d.ended.map(e => ({ label: e.label, color: endColor(e.label), value: e.n, barColor: endColor(e.label), cols: [num(String(e.n)), num(pctText(e.n, d.finished))], dimRow: !e.n })))
-  L.heading('Why tries were sent back', `${d.failedTotal}, from history`)
+  L.heading('Why tries were sent back', `${d.failedTotal}, from timeline`)
   L.bars(d.failed.map(x => ({ label: x.label, color: FAIL_COLOR[x.key] ?? 'text', value: x.n, barColor: FAIL_COLOR[x.key] ?? 'inactive', cols: [num(String(x.n))], dimRow: !x.n, ...(x.folded ? { rest: `(${x.folded})` } : {}) })))
 
   // each failed try, and the tests that failed most

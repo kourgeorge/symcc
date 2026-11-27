@@ -51147,7 +51147,7 @@ function endedWord(e) {
 }
 function triesRows(t, max = TRIES_SHOWN) {
   const byTry = /* @__PURE__ */ new Map();
-  for (const e of t.history ?? []) {
+  for (const e of t.timeline ?? []) {
     const n = tryNo(e);
     if (!n || e.kind === "stage" || e.kind === "created" || e.kind === "note" || e.kind === "answer") continue;
     byTry.set(n, [...byTry.get(n) ?? [], e]);
@@ -51186,7 +51186,7 @@ var when = (iso) => {
 };
 var STALE_AFTER_MS = 24 * 60 * 60 * 1e3;
 var CHANGED_SINCE_MAX = 15;
-var cameFromBacklog = (t) => (t.history ?? []).some((e) => e.kind === "moved-backlog" && !e.backlog && !/^moved to the backlog\b/.test(e.text));
+var cameFromBacklog = (t) => (t.timeline ?? []).some((e) => e.kind === "moved-backlog" && !e.backlog && !/^moved to the backlog\b/.test(e.text));
 function mayBeStale(t, nowMs) {
   const made = Date.parse(t.created_at || "");
   if (!Number.isFinite(made)) return false;
@@ -51717,7 +51717,7 @@ var NEW_ROLE_TEMPLATE = {
   checklist: "- the first thing a worker with this role checks\n- the next thing"
 };
 
-// ../../hooks/core/history.ts
+// ../../hooks/core/timeline.ts
 var ANSWER_LINE_CHARS = 300;
 var CHANGE_FIELDS = ["title", "details", "files", "after", "priority", "role", "needs_review", "merge_into", "project", "kind"];
 var same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
@@ -51768,9 +51768,9 @@ var stoppedEntry = (t, why2) => {
 var WORKER_STARTED = "worker started";
 var WORKER_HANDED_BACK = "worker handed back";
 function workerStartedEntry(t, mergeMain, agent) {
-  const history = t.history ?? [];
-  const last = history.findLastIndex((h) => h.kind === "stage" && h.step === "worker-start" && h.try === (Number(t.attempts) || 0));
-  const since2 = last < 0 ? [] : history.slice(last + 1);
+  const timeline = t.timeline ?? [];
+  const last = timeline.findLastIndex((h) => h.kind === "stage" && h.step === "worker-start" && h.try === (Number(t.attempts) || 0));
+  const since2 = last < 0 ? [] : timeline.slice(last + 1);
   const changed = last >= 0 && !since2.some((h) => h.kind === "restarted" || h.kind === "stopped");
   const again = !changed ? "" : since2.some((h) => h.kind === "note") ? " \xB7 same try number (note joined)" : " \xB7 same try number (task changed)";
   return ["stage", `try ${t.attempts}: ${WORKER_STARTED} (role ${roleOf(t)})${mergeMain ? " \xB7 merges main in first" : ""}${again}`, { try: Number(t.attempts) || 0, step: "worker-start", ...agent ? { agent } : {} }];
@@ -51801,7 +51801,7 @@ function detailsBothRefusal(a) {
   const given = (v) => typeof v === "string" && v.trim() !== "";
   return given(a.details) && given(a.add_details) ? "Nothing changed: give either details (rewrites the whole text) or add_details (adds a note to it), not both. To rewrite and add a note, put the note at the end of the new details." : null;
 }
-var HISTORY_KINDS = {
+var TIMELINE_KINDS = {
   /** the task was made ("created by the owner because ...") */
   created: "other",
   /** the lead added a note to its details */
@@ -51840,7 +51840,7 @@ var HISTORY_KINDS = {
   "try-result": "step",
   /** any other step of a try (a warning, more time given, the tests run again …) */
   step: "step",
-  /** T-616: a try went into a check stage ("checker started", "waits in the merge queue (place 2)"; see withStageHistory) */
+  /** T-616: a try went into a check stage ("checker started", "waits in the merge queue (place 2)"; see withStageTimeline) */
   stage: "step",
   /** a running worker was stopped and its task starts again (the task was changed) */
   restarted: "step",
@@ -51863,14 +51863,14 @@ var HISTORY_KINDS = {
   /** anything else */
   other: "other"
 };
-var ranNow = (t) => (t.history ?? []).some((e) => e.kind === "run-now");
-var isHistoryKind = (k) => typeof k === "string" && Object.prototype.hasOwnProperty.call(HISTORY_KINDS, k);
-var historyEntry = (kind, text2, at3, facts = {}) => ({ at: at3, kind, text: text2, ...facts });
-function withHistory(history, at3, ...adds) {
-  return [...history ?? [], ...adds.map(([kind, text2, facts]) => historyEntry(kind, text2, at3, facts))];
+var ranNow = (t) => (t.timeline ?? []).some((e) => e.kind === "run-now");
+var isTimelineKind = (k) => typeof k === "string" && Object.prototype.hasOwnProperty.call(TIMELINE_KINDS, k);
+var timelineEntry = (kind, text2, at3, facts = {}) => ({ at: at3, kind, text: text2, ...facts });
+function withTimeline(timeline, at3, ...adds) {
+  return [...timeline ?? [], ...adds.map(([kind, text2, facts]) => timelineEntry(kind, text2, at3, facts))];
 }
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-function historyTime(at3, nowMs = Date.now()) {
+function timelineTime(at3, nowMs = Date.now()) {
   const ms3 = at3 ? Date.parse(at3) : NaN;
   if (!Number.isFinite(ms3)) return "";
   const d = new Date(ms3);
@@ -51879,26 +51879,26 @@ function historyTime(at3, nowMs = Date.now()) {
   const sameDay = d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate();
   return sameDay ? hm : `${MONTHS[d.getMonth()]} ${d.getDate()} ${hm}`;
 }
-var historyLineText = (e, nowMs = Date.now()) => {
-  const when3 = historyTime(e.at, nowMs);
-  const words = historyLineWords(e);
+var timelineLineText = (e, nowMs = Date.now()) => {
+  const when3 = timelineTime(e.at, nowMs);
+  const words = timelineLineWords(e);
   return when3 ? `${when3}  ${words}` : words;
 };
-var HISTORY_MARK = { good: "\u2713", bad: "\u2717", step: "\u25CF", other: "\u25CB" };
+var TIMELINE_MARK = { good: "\u2713", bad: "\u2717", step: "\u25CF", other: "\u25CB" };
 function tryParts(text2) {
   const m = /^(try (\d+)(?: \([^)]*\))?):\s*(.*)$/s.exec(text2);
   return m ? [m[1], Number(m[2]), m[3]] : null;
 }
-function historyEntryOk(v) {
+function timelineEntryOk(v) {
   if (!isObj(v)) return false;
   const e = v;
   return typeof e.text === "string" && typeof e.kind === "string" && (e.at === void 0 || typeof e.at === "string");
 }
 var RESULT_KINDS = ["merged", "done", "failed", "try-result", "not-merged", "approve-failed"];
-function historyEvent(e) {
-  const kind = isHistoryKind(e.kind) ? e.kind : "other";
-  const tone = HISTORY_KINDS[kind];
-  const who = historyActor(e);
+function timelineEvent(e) {
+  const kind = isTimelineKind(e.kind) ? e.kind : "other";
+  const tone = TIMELINE_KINDS[kind];
+  const who = timelineActor(e);
   let parts = tryParts(e.text);
   if (who === "checker" && parts) parts = ["", parts[1], parts[2].replace(/^checker:? ?/, "")];
   const text2 = parts ? parts[2] : e.text;
@@ -51907,7 +51907,7 @@ function historyEvent(e) {
   return {
     kind,
     tone,
-    mark: HISTORY_MARK[tone],
+    mark: TIMELINE_MARK[tone],
     at: e.at ?? "",
     try: parts ? parts[1] : 0,
     label: parts ? parts[0] : "",
@@ -51921,7 +51921,7 @@ function historyEvent(e) {
 }
 var LEAD_KINDS = ["note"];
 var OWNER_KINDS = ["answer", "rejected", "approve-failed", "run-now"];
-function historyActor(e) {
+function timelineActor(e) {
   if (e.by) return e.by === "symcc" ? "" : e.by;
   const kind = e.kind;
   if (kind === "checker" || kind === "checker-ok" || kind === "checker-problems") return "checker";
@@ -51932,8 +51932,8 @@ function historyActor(e) {
   if (RESULT_KINDS.includes(kind) && e.result) return "worker";
   return "";
 }
-function historyLineWords(e) {
-  const v = historyEvent(e);
+function timelineLineWords(e) {
+  const v = timelineEvent(e);
   return `${v.by ? `${v.by}: ` : ""}${v.label ? `${v.label}: ` : ""}${v.text}`;
 }
 
@@ -52219,14 +52219,14 @@ function cleanArchived(v) {
 var LIST_OK = {
   files: (v) => typeof v === "string" && !!v.trim(),
   after: (v) => typeof v === "string" && /^T-\d+$/.test(normId(v)),
-  history: historyEntryOk
+  timeline: timelineEntryOk
 };
 function cleanTask(t, fixed2 = []) {
   if (!isObj(t) || typeof t.id !== "string" || !t.id.trim() || !STATUSES.includes(t.status)) return null;
   const x = { ...t };
   const id = t.id;
   for (const k of ["title", "details", "note"]) if (typeof x[k] !== "string") x[k] = "";
-  for (const k of ["files", "after", "history"]) {
+  for (const k of ["files", "after", "timeline"]) {
     if (!Array.isArray(x[k])) {
       x[k] = [];
       continue;
@@ -52607,7 +52607,7 @@ function readArchive(text2) {
   const tasks = raw.tasks;
   if (!Array.isArray(tasks)) return { archive: emptyArchive(), broken: '"tasks" is not a list' };
   const ok = tasks.filter((t) => !!t && typeof t === "object" && typeof t.id === "string" && isFinished(t));
-  const clean3 = ok.map((t) => ({ ...cleanCommitFields(t), after: Array.isArray(t.after) ? t.after : [], history: Array.isArray(t.history) ? t.history : [], files: Array.isArray(t.files) ? t.files : [] }));
+  const clean3 = ok.map((t) => ({ ...cleanCommitFields(t), after: Array.isArray(t.after) ? t.after : [], timeline: Array.isArray(t.timeline) ? t.timeline : [], files: Array.isArray(t.files) ? t.files : [] }));
   return { archive: { version: 1, tasks: clean3 } };
 }
 var archiveText = (a) => JSON.stringify(a, null, 2) + "\n";
@@ -52650,7 +52650,7 @@ function removeArchived(b, tasks) {
 function bringBack(b, t, now3) {
   if (find(b, t.id)) throw new Error(`${t.id} is already on the board`);
   if (t.status !== "dropped") throw new Error(`${t.id} is archived and done; add a new task instead`);
-  const back = { ...t, status: "todo", note: "brought back from the archive; queued", test_tries: 0, history: withHistory(t.history, now3, ["retried", "brought back from the archive (was dropped)"]), updated_at: now3 };
+  const back = { ...t, status: "todo", note: "brought back from the archive; queued", test_tries: 0, timeline: withTimeline(t.timeline, now3, ["retried", "brought back from the archive (was dropped)"]), updated_at: now3 };
   return { ...b, archived: addTotals(archivedOf(b), t, -1), tasks: [...b.tasks, back] };
 }
 function depDone(b, id) {
@@ -52838,7 +52838,7 @@ function handedOff(t, now3) {
   const { live: _l, runs: _r, ...rest } = t;
   const last = t.runs?.at(-1);
   const runs = last && !last.ended ? t.runs.slice(0, -1) : t.runs;
-  return { ...rest, status: "todo", note: HANDOVER_NOTE, attempts: Math.max(0, t.attempts - 1), updated_at: now3, history: withHistory(t.history, now3, stoppedEntry(t, HANDOVER_NOTE)), ...runs?.length ? { runs } : {} };
+  return { ...rest, status: "todo", note: HANDOVER_NOTE, attempts: Math.max(0, t.attempts - 1), updated_at: now3, timeline: withTimeline(t.timeline, now3, stoppedEntry(t, HANDOVER_NOTE)), ...runs?.length ? { runs } : {} };
 }
 function liveDriver(text2, nowMs, staleMs = LEAD_STALE_MS) {
   const l = parseLead(text2);
@@ -52879,7 +52879,7 @@ var alreadyMergedLine = (t, sha, when3) => `${tryLabel(t)}: its work was already
 function mergedDone(t, sha, when3, now3) {
   const { live: _l, test_output: _o, ...rest } = t;
   const runs = t.status === "doing" ? endedBy(t, now3, "finished", "merged").runs : t.runs?.length ? withEnd(t.runs, "finished", "merged", true) : void 0;
-  return { ...rest, status: "done", note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: void 0, updated_at: now3, history: withHistory(t.history, now3, ["merged", alreadyMergedLine(t, sha, when3), { try: Number(t.attempts) || 0 }]), ...runs ? { runs } : {} };
+  return { ...rest, status: "done", note: `merged into ${intoOf(t)} (${shortSha(sha)})`, merged: sha, merge_main: void 0, updated_at: now3, timeline: withTimeline(t.timeline, now3, ["merged", alreadyMergedLine(t, sha, when3), { try: Number(t.attempts) || 0 }]), ...runs ? { runs } : {} };
 }
 var MERGED_OUTSIDE_FROM = ["todo", "doing", "failed", "waiting", "paused", "review", "dropped"];
 var mergedOutsideLine = (sha, by) => `merged outside the board (${shortSha(sha)}); marked done by ${by}`;
@@ -52888,7 +52888,7 @@ function mergedOutside(t, sha, by, commits, now3) {
   const { live: _l, test_output: _o, ask: _ak, ...rest } = t;
   const ended = t.status === "doing" ? endedBy(t, now3, "finished", "merged").runs : t.runs?.length ? withEnd(t.runs, "finished", "merged", true) : void 0;
   const runs = ended ? addCommits(ended, [...commits, sha]) : void 0;
-  return { ...rest, status: "done", note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: void 0, updated_at: now3, history: withHistory(t.history, now3, ["merged", mergedOutsideLine(sha, by), { how: "outside" }]), ...runs ? { runs } : {} };
+  return { ...rest, status: "done", note: `merged into ${intoOf(t)} outside the board (${shortSha(sha)})`, merged: sha, merge_main: void 0, updated_at: now3, timeline: withTimeline(t.timeline, now3, ["merged", mergedOutsideLine(sha, by), { how: "outside" }]), ...runs ? { runs } : {} };
 }
 function resetDoing(b, me, leadBefore, nowMs, note2, now3, keep = []) {
   const live = liveDriver(leadBefore, nowMs);
@@ -52910,7 +52910,7 @@ function relabelSession(b, oldId, newId) {
 }
 function backToTodo(t, note2, now3, stoppedAt = now3) {
   const { live: _l, ...rest } = t;
-  return { ...rest, status: "todo", note: note2, updated_at: now3, ...t.status === "doing" ? { history: withHistory(t.history, now3, stoppedEntry(t, note2)), ...laterEnd(endedBy(t, stoppedAt, ...stopEnd(note2)), stoppedAt) } : {} };
+  return { ...rest, status: "todo", note: note2, updated_at: now3, ...t.status === "doing" ? { timeline: withTimeline(t.timeline, now3, stoppedEntry(t, note2)), ...laterEnd(endedBy(t, stoppedAt, ...stopEnd(note2)), stoppedAt) } : {} };
 }
 function laterEnd(p, at3) {
   const last = p.runs?.at(-1);
@@ -52921,7 +52921,7 @@ function lastAlive(t, leadBefore, now3) {
   const nowMs = Date.parse(now3);
   const beat = parseLead(leadBefore)?.heartbeat;
   const heartbeat = typeof beat === "number" && Number.isFinite(beat) && !(beat > nowMs) ? beat : void 0;
-  const times = [heartbeat, ...heartbeat === void 0 ? [t.updated_at, t.live?.checking?.at, ...(t.history ?? []).map((h) => h.at)].map((s) => Date.parse(s ?? "")) : []];
+  const times = [heartbeat, ...heartbeat === void 0 ? [t.updated_at, t.live?.checking?.at, ...(t.timeline ?? []).map((h) => h.at)].map((s) => Date.parse(s ?? "")) : []];
   const known = times.filter((n) => typeof n === "number" && Number.isFinite(n));
   if (!known.length) return now3;
   const started2 = Date.parse(t.runs?.at(-1)?.started ?? "");
@@ -53128,7 +53128,7 @@ function addTask(b, f, now3, dir = DATA_DIR) {
     priority: isPriority(f.priority) ? f.priority : 0,
     after,
     attempts: 0,
-    history: [historyEntry("created", createdLine(origin), now3)],
+    timeline: [timelineEntry("created", createdLine(origin), now3)],
     origin,
     merge_into: intoOf({ merge_into: f.merge_into }),
     branch: null,
@@ -53209,13 +53209,13 @@ function stashTask(b, id, now3, reason = "") {
   if (t.status === "backlog") return b;
   if (!BACKLOG_FROM.includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`);
   const why2 = clean(reason, 280);
-  return patchTask(b, t.id, { status: "backlog", note: why2 ? `in the backlog: ${why2}` : "in the backlog", ...failedOnClash(t) ? { merge_main: true } : {}, history: withHistory(t.history, now3, ["moved-backlog", `moved to the backlog (was ${t.status})${why2 ? `: ${why2}` : ""}`, { backlog: true }]) }, now3);
+  return patchTask(b, t.id, { status: "backlog", note: why2 ? `in the backlog: ${why2}` : "in the backlog", ...failedOnClash(t) ? { merge_main: true } : {}, timeline: withTimeline(t.timeline, now3, ["moved-backlog", `moved to the backlog (was ${t.status})${why2 ? `: ${why2}` : ""}`, { backlog: true }]) }, now3);
 }
 function promoteTask(b, id, now3) {
   const t = find(b, id);
   if (!t) throw new Error(`${id} is not on the board`);
   if (t.status !== "backlog") throw new Error(`${t.id} is not in the backlog (it is ${STATUS_WORD[t.status]})`);
-  return patchTask(b, t.id, { status: "todo", note: "moved from the backlog", history: withHistory(t.history, now3, ["moved-backlog", "moved from the backlog to todo"]) }, now3);
+  return patchTask(b, t.id, { status: "todo", note: "moved from the backlog", timeline: withTimeline(t.timeline, now3, ["moved-backlog", "moved from the backlog to todo"]) }, now3);
 }
 function outOfScope(changed, allowed, dir = DATA_DIR) {
   const re = (g) => {
@@ -53262,14 +53262,14 @@ function allowFiles(b, id, now3, dir = DATA_DIR) {
   if (bad.length) throw new Error(cantAllowText(t.id, bad, dir));
   const kept = cleanFiles(asked, dir);
   const added = kept.filter((f) => !t.files.includes(f));
-  return patchTask(b, t.id, { status: "todo", note: "files allowed; queued", files: [...t.files, ...added], history: withHistory(t.history, now3, ["files-widened", filesAllowedLine(added.length ? added : kept)]) }, now3, dir);
+  return patchTask(b, t.id, { status: "todo", note: "files allowed; queued", files: [...t.files, ...added], timeline: withTimeline(t.timeline, now3, ["files-widened", filesAllowedLine(added.length ? added : kept)]) }, now3, dir);
 }
 function cantAllowText(id, bad, dir = DATA_DIR) {
   return `Can't allow ${bad.join(", ")} for ${id}: a task's files can't name the whole project or paths outside it, under .git or under ${dir.replace(/\/$/, "")}, so nothing was added and ${id} keeps waiting. Press Don't allow, or the lead can change the task.`;
 }
 function refuseFiles(b, id, now3) {
   const [t, asked] = askedFilesOf(b, id);
-  return patchTask(b, t.id, { note: "files not allowed", history: withHistory(t.history, now3, ["files-refused", `the owner didn't allow files: ${asked.join(", ")}`]) }, now3);
+  return patchTask(b, t.id, { note: "files not allowed", timeline: withTimeline(t.timeline, now3, ["files-refused", `the owner didn't allow files: ${asked.join(", ")}`]) }, now3);
 }
 function outOfScopeText(bad, allowed, undone = false) {
   const head = `changed files outside the task (${bad.slice(0, 5).map(shownPath).join(", ")}); allowed: ${allowed.join(", ") || "-"}`;
@@ -53320,7 +53320,7 @@ function investigationDone(b, id, now3, kept) {
   const t = answeredTask(b, id, "marked done");
   const errand = isErrand(t);
   const line = `try ${t.attempts}: ${errand ? "the errand is finished" : "the owner read the answer"} \u2192 done (nothing merged)${kept ? `; kept as a note by ${kept}` : ""}`;
-  return patchTask(b, t.id, { status: "done", note: kept ? `answered; kept as a note by ${kept}` : errand ? "done" : "answered", merge_main: void 0, test_output: void 0, history: withHistory(t.history, now3, ["done", line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ""}` }]) }, now3);
+  return patchTask(b, t.id, { status: "done", note: kept ? `answered; kept as a note by ${kept}` : errand ? "done" : "answered", merge_main: void 0, test_output: void 0, timeline: withTimeline(t.timeline, now3, ["done", line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ""}` }]) }, now3);
 }
 var slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 function noteTopic(title, id = "") {
@@ -53422,7 +53422,7 @@ The earlier answer (try ${t.attempts})`;
   const fits = body && t.details.length + head.length + body.length + where.length + 40 <= DETAILS_MAX;
   const added = fits ? `${head}${report ? ` (in full in ${report})` : ""}:
 ${body}` : `${head}${where || " was not saved"}.`;
-  return patchTask(b, t.id, { status: "todo", note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: void 0, test_tries: 0, test_output: void 0, merge_main: void 0, history: withHistory(t.history, now3, ["asked", `try ${t.attempts}: the owner asked more: ${q}`, { try: Number(t.attempts) || 0 }]) }, now3);
+  return patchTask(b, t.id, { status: "todo", note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: void 0, test_tries: 0, test_output: void 0, merge_main: void 0, timeline: withTimeline(t.timeline, now3, ["asked", `try ${t.attempts}: the owner asked more: ${q}`, { try: Number(t.attempts) || 0 }]) }, now3);
 }
 
 // ../../hooks/core/review.ts
@@ -53485,7 +53485,7 @@ function rejectTask(b, id, reason, now3) {
   const t = reviewTask(b, id, "reject");
   const why2 = clean(reason, 1e3);
   if (!why2) throw new Error("give a reason for rejecting, so the next worker knows what to fix");
-  return patchTask(b, t.id, { status: "todo", note: `rejected: ${why2.slice(0, 280)}`, test_tries: 0, test_output: void 0, merge_main: void 0, history: withHistory(t.history, now3, ["rejected", `try ${t.attempts}: rejected by the owner: ${why2}`, { try: Number(t.attempts) || 0, reason: "rejected" }]) }, now3);
+  return patchTask(b, t.id, { status: "todo", note: `rejected: ${why2.slice(0, 280)}`, test_tries: 0, test_output: void 0, merge_main: void 0, timeline: withTimeline(t.timeline, now3, ["rejected", `try ${t.attempts}: rejected by the owner: ${why2}`, { try: Number(t.attempts) || 0, reason: "rejected" }]) }, now3);
 }
 var YOUR_EDITS = "(includes your edits)";
 var ownerEditedLine = (files) => `owner edited files before approving: ${files.join(", ")}`;
@@ -54640,7 +54640,7 @@ function recentClosed(tasks, n = SCOUT_CLOSED_SHOWN) {
 }
 function scoutToolLines(name, o = {}) {
   const may = o.web === false ? "- You may read files and run shell commands that only look." : "- You may read files, run shell commands that only look, and search or fetch pages on the web.";
-  const board = o.symccTools === false ? `- To look at the board, read ${namesFor(name).dir}/board.json yourself (only read it, never change it): its tasks list has each task's id, title and status, and a try's report file is named in its runs. A done or dropped task there is short: its history, runs and details are in the file its parts field names (e.g. ${namesFor(name).dir}/tasks/T-600.json, under its id).` : `- To look at the board, use the ${name} tools board and stats rather than reading ${namesFor(name).dir}/board.json: board with no arguments lists the open tasks; status (e.g. ["done"]) and search (words) narrow it; task (e.g. "T-12") shows one task in full with its latest report. stats shows time and token use. scouts with action list shows the other scouts (how often each runs, paused or not, last run, the start of its last report); add name for one scout in full with its last runs. They only read: every ${name} tool that changes the board (add, change, drop, approve, ...) is refused for you.`;
+  const board = o.symccTools === false ? `- To look at the board, read ${namesFor(name).dir}/board.json yourself (only read it, never change it): its tasks list has each task's id, title and status, and a try's report file is named in its runs. A done or dropped task there is short: its timeline, runs and details are in the file its parts field names (e.g. ${namesFor(name).dir}/tasks/T-600.json, under its id).` : `- To look at the board, use the ${name} tools board and stats rather than reading ${namesFor(name).dir}/board.json: board with no arguments lists the open tasks; status (e.g. ["done"]) and search (words) narrow it; task (e.g. "T-12") shows one task in full with its latest report. stats shows time and token use. scouts with action list shows the other scouts (how often each runs, paused or not, last run, the start of its last report); add name for one scout in full with its last runs. They only read: every ${name} tool that changes the board (add, change, drop, approve, ...) is refused for you.`;
   return { may, board };
 }
 function scoutPrompt(o) {
@@ -55246,7 +55246,7 @@ var oneLine2 = (s, max) => {
   return t.length > max ? `${t.slice(0, max - 1)}\u2026` : t;
 };
 var CHECKER_SEND_BACKS = 2;
-var checkerSendBacks = (t) => (t.history ?? []).filter((h) => h.kind === "checker-problems").length;
+var checkerSendBacks = (t) => (t.timeline ?? []).filter((h) => h.kind === "checker-problems").length;
 var CHECKER_ASK_OPTIONS = ["Merge as is", "Keep fixing", "Drop"];
 var checkerAskText = (id, n, finding2) => `${id} was sent back ${n === 2 ? "twice" : `${n} times`} by the checker: ${oneLine2(finding2, 300).replace(/[.\s]+$/, "")}. Merge as is / Keep fixing / Drop`;
 var isCheckerAsk = (q) => /^T-\d+ was sent back (twice|\d+ times) by the checker: [\s\S]*\. Merge as is \/ Keep fixing \/ Drop$/.test(String(q ?? "").trim());
@@ -55361,7 +55361,7 @@ function endedEarlyNote(id, sentence) {
   return `${id}'s answer may have ended before its work finished: "${cutLine(sentence, 200)}" (only a warning: its try goes on to the tests and merge as usual)`;
 }
 function saidBefore(t, detail) {
-  for (const { text: line } of [...t.history ?? []].reverse()) {
+  for (const { text: line } of [...t.timeline ?? []].reverse()) {
     const at3 = line.lastIndexOf(" \u2192 ");
     if (at3 < 0 || !detail.test(line.slice(at3 + 3))) continue;
     const said = line.slice(0, at3).replace(/^try \S+(?: \(role [^)]*\))?:\s*/, "").trim();
@@ -55543,7 +55543,7 @@ function shareFiles(a, b) {
     return !p || !q || p.startsWith(q) || q.startsWith(p);
   }));
 }
-var afterChanges = (t) => (t.history ?? []).filter((l) => l.text.startsWith(AFTER_CHANGED)).length;
+var afterChanges = (t) => (t.timeline ?? []).filter((l) => l.text.startsWith(AFTER_CHANGED)).length;
 function stuck(b) {
   const out = [];
   for (const t of b.tasks.filter((x) => WAITS.includes(x.status)).sort(byId)) {
@@ -55595,7 +55595,7 @@ function readyAt(b, t) {
   return times.length ? Math.max(...times) : NaN;
 }
 function todoSince(t) {
-  const moves = (t.history ?? []).filter((e) => e.kind === "moved-backlog" && !e.backlog || e.kind === "retried" || e.kind === "resumed").map((e) => Date.parse(e.at || ""));
+  const moves = (t.timeline ?? []).filter((e) => e.kind === "moved-backlog" && !e.backlog || e.kind === "retried" || e.kind === "resumed").map((e) => Date.parse(e.at || ""));
   const back = t.runs?.length ? Date.parse(t.updated_at || "") : NaN;
   return Math.max(Date.parse(t.created_at || ""), ...[...moves, back].filter(Number.isFinite));
 }
@@ -56113,7 +56113,7 @@ function joinParts(raw, files) {
     const { [PARTS_KEY]: file, ...stub } = t;
     const parts = typeof file === "string" ? files.get(file)?.[String(t.id)] : void 0;
     if (!parts) {
-      missing.push(`${String(t.id)}: its history, tries and details are missing from ${String(file)}`);
+      missing.push(`${String(t.id)}: its timeline, tries and details are missing from ${String(file)}`);
       stubbed2.push({ id: String(t.id), file: String(file) });
       return stub;
     }
@@ -56124,7 +56124,7 @@ function joinParts(raw, files) {
 function hasWholeFinished(raw, held) {
   return isObj(raw) && Array.isArray(raw.tasks) && raw.tasks.some((t) => isObj(t) && splits(t) && !(PARTS_KEY in t) && !!partsFileOf(String(t.id)) && !held?.has(partsFileOf(String(t.id))));
 }
-var VIEW_MARKS_KEY = "history_marks";
+var VIEW_MARKS_KEY = "timeline_marks";
 function viewMarks(t) {
   const m = t[VIEW_MARKS_KEY];
   return Array.isArray(m) ? m.filter(isObj) : void 0;
@@ -56228,8 +56228,8 @@ function failedRows(reasons) {
 function mergedHow(t) {
   if (isErrand(t)) return "errand";
   if (kindOf(t) === INVESTIGATION) return "answered";
-  if (t.history.some((l) => l.how === "outside")) return "outside";
-  const merged = t.history.filter((l) => l.how === "own" || l.how === "approved");
+  if (t.timeline.some((l) => l.how === "outside")) return "outside";
+  const merged = t.timeline.filter((l) => l.how === "own" || l.how === "approved");
   if (!merged.length) return null;
   return merged.some((l) => l.how === "approved") ? "approved" : "own";
 }
@@ -56245,7 +56245,7 @@ var STAGE_LABEL = { free: "waiting to start", blocked: "waiting on tasks", backl
 var zeroStages = () => ({ free: 0, blocked: 0, backlog: 0, work: 0, prep: 0, check: 0, queue: 0, tests: 0, merge: 0, owner: 0 });
 function doneAtMs(t) {
   if (t.status !== "done") return void 0;
-  const end2 = [...t.history].reverse().find((e) => e.kind === "merged" || e.kind === "done");
+  const end2 = [...t.timeline].reverse().find((e) => e.kind === "merged" || e.kind === "done");
   const ms3 = Date.parse(end2?.at ?? t.updated_at ?? "");
   return Number.isFinite(ms3) ? ms3 : void 0;
 }
@@ -56285,14 +56285,14 @@ function taskStages(t, doneAt, clip) {
   const end2 = doneAtMs(t);
   const runs = (t.runs ?? []).filter((r) => Number.isFinite(Date.parse(r.started)) && Number.isFinite(Date.parse(r.ended ?? "")));
   if (!Number.isFinite(made) || end2 === void 0 || end2 < made || !runs.length) return null;
-  if (t.history.some((e) => !Number.isFinite(Date.parse(e.at ?? "")))) return null;
-  if (!t.history.some((e) => e.kind === "stage")) return null;
+  if (t.timeline.some((e) => !Number.isFinite(Date.parse(e.at ?? "")))) return null;
+  if (!t.timeline.some((e) => e.kind === "stage")) return null;
   const idle = runs.flatMap((r) => gapsOf(r).filter((g) => g.from >= Date.parse(r.started) && g.to <= Date.parse(r.ended)));
   const early = runs.flatMap((r) => gapsOf(r).map((g) => ({ s: Date.parse(r.started), from: g.from })));
   const points = [
     ...runs.flatMap((r) => [{ ms: Date.parse(r.started), prio: 2, run: "start" }, { ms: Date.parse(r.ended), prio: 0, run: "end" }]),
     ...idle.flatMap((g) => [{ ms: g.from, prio: 0, idle: "from" }, { ms: g.to, prio: 0, idle: "to" }]),
-    ...t.history.map((e) => ({ ms: Date.parse(e.at), prio: 1, to: entryStage(e) }))
+    ...t.timeline.map((e) => ({ ms: Date.parse(e.at), prio: 1, to: entryStage(e) }))
   ].sort((a, b) => a.ms - b.ms || a.prio - b.prio);
   const depsDone = Math.max(made, ...(t.after ?? []).map((id) => doneAt(id) ?? made));
   const ms3 = zeroStages();
@@ -56303,7 +56303,7 @@ function taskStages(t, doneAt, clip) {
     const y = Math.min(b, hi);
     if (y > x) ms3[s] += y - x;
   };
-  const firstBacklog = t.history.find((e) => e.kind === "moved-backlog");
+  const firstBacklog = t.timeline.find((e) => e.kind === "moved-backlog");
   let cur = firstBacklog && !firstBacklog.backlog ? "backlog" : "free";
   let since2 = made;
   let inRun = false;
@@ -56476,10 +56476,10 @@ function statsData(input) {
   const outside = how.filter((h) => h === "outside").length;
   const unclear = finished.length - own - approved - answeredDone - errandsDone - outside;
   const reasons = Object.fromEntries(Object.keys(FAIL_LABEL).map((k) => [k, 0]));
-  for (const t of all) for (const l of t.history) {
+  for (const t of all) for (const l of t.timeline) {
     if (l.reason && l.reason in reasons) reasons[l.reason]++;
   }
-  const ended = [{ label: "merged on its own", n: own }, { label: "approved by you", n: approved }, ...outside ? [{ label: "merged outside the board", n: outside }] : [], ...answeredDone ? [{ label: "answered (investigation)", n: answeredDone }] : [], ...errandsDone ? [{ label: "errand done", n: errandsDone }] : [], ...unclear ? [{ label: "not clear from history", n: unclear }] : []];
+  const ended = [{ label: "merged on its own", n: own }, { label: "approved by you", n: approved }, ...outside ? [{ label: "merged outside the board", n: outside }] : [], ...answeredDone ? [{ label: "answered (investigation)", n: answeredDone }] : [], ...errandsDone ? [{ label: "errand done", n: errandsDone }] : [], ...unclear ? [{ label: "not clear from timeline", n: unclear }] : []];
   const failed2 = failedRows(reasons);
   const group = (key, label, ts) => {
     const d = ts.filter((t) => F(t).hasData);
@@ -56621,7 +56621,7 @@ function headlineParts(d) {
 var FAILED_TRIES_SHORT = 10;
 function failedCountsNote(d) {
   if (d.failedTries.length === d.failedTotal) return "";
-  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads each saved try's own end; that count reads the history lines, which also count tries rejected by you and restarts by a change, whose own end is a review or a restart`;
+  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads each saved try's own end; that count reads the timeline lines, which also count tries rejected by you and restarts by a change, whose own end is a review or a restart`;
 }
 var FAILED_TESTS_SHORT = 5;
 var failedShown = (d) => ({
@@ -56692,7 +56692,7 @@ function statsReport(input) {
   const maxEnd = Math.max(...d.ended.map((e) => e.n));
   for (const e of d.ended) out.push(barRow(e.label, 24, e.n, maxEnd, d.finished));
   const maxFail = Math.max(0, ...d.failed.map((f) => f.n));
-  out.push(`  Failed tries (${d.failedTotal}, from history)`);
+  out.push(`  Failed tries (${d.failedTotal}, from timeline)`);
   for (const f of d.failed) out.push(barRow(`  ${f.label}`, 24, f.n, maxFail, null, f.folded ? `(${f.folded})` : ""));
   const differ = failedCountsNote(d);
   const failed2 = failedShown(d);
@@ -56742,10 +56742,10 @@ function remember(text2, d) {
   return text2;
 }
 var unlinkedText = (n) => `${plural(n, "task")} not linked to a run`;
-var STAGES_NOTE = `read from each done task's tries (work) and its timed history lines ("prep started", "checker started", "waits in the merge queue", "tests started", "merge started", "merged", questions, answers and results); a task whose history has an entry with no time (older boards) or no stage line is left out and counted as lacking data.`;
+var STAGES_NOTE = `read from each done task's tries (work) and its timed timeline lines ("prep started", "checker started", "waits in the merge queue", "tests started", "merge started", "merged", questions, answers and results); a task whose timeline has an entry with no time (older boards) or no stage line is left out and counted as lacking data.`;
 function stageLines(f, full = false) {
-  const out = [`Time per stage (${plural(f.n, "done task")}${f.lacking ? `; ${f.lacking} without timed history, left out` : ""})`];
-  if (!f.n) return [...out, "  no done tasks with timed history"];
+  const out = [`Time per stage (${plural(f.n, "done task")}${f.lacking ? `; ${f.lacking} without timed timeline, left out` : ""})`];
+  if (!f.n) return [...out, "  no done tasks with timed timeline"];
   const shown = f.stages.filter((s) => s.ms > 0 || s.stage !== "backlog" && s.stage !== "blocked");
   const max = Math.max(...shown.map((s) => s.ms));
   const w = 16;
@@ -56865,8 +56865,8 @@ function teamDataLines(d, name = DEFAULT_NAME, full = false) {
 
 // ../../hooks/core/live.ts
 function marksOf(t) {
-  const history = Array.isArray(t.history) ? t.history : [];
-  return history.length > 0 ? history : viewMarks(t) ?? history;
+  const timeline = Array.isArray(t.timeline) ? t.timeline : [];
+  return timeline.length > 0 ? timeline : viewMarks(t) ?? timeline;
 }
 function sentBackOf(t, isToday) {
   const marks = marksOf(t);
@@ -57002,19 +57002,19 @@ function stationSince(t, station, startMs) {
   const restartMs = ms(restartsOf(t.runs?.[t.runs.length - 1]).at(-1)?.started);
   const from = station === "check" && restartMs !== void 0 ? Math.max(restartMs, startMs ?? restartMs) : startMs;
   const stageAt = (steps, first) => {
-    const hits = (t.history ?? []).filter((h) => h.kind === "stage" && h.step !== void 0 && steps.includes(h.step)).map((h) => ms(h.at)).filter((n) => n !== void 0 && (from === void 0 || n >= from));
+    const hits = (t.timeline ?? []).filter((h) => h.kind === "stage" && h.step !== void 0 && steps.includes(h.step)).map((h) => ms(h.at)).filter((n) => n !== void 0 && (from === void 0 || n >= from));
     return hits.length ? first ? Math.min(...hits) : Math.max(...hits) : void 0;
   };
   const found = station === "check" ? stageAt(["prep", "checker"], true) : station === "queue" ? stageAt(["queue"], false) : station === "tests" ? stageAt(["tests"], false) : stageAt(["merge"], false);
   return found ?? (station === "check" ? ms(t.runs?.[t.runs.length - 1]?.ended) : void 0) ?? ms(t.live?.checking?.at);
 }
 function approveSince(t, endMs) {
-  const preps = (t.history ?? []).filter((h) => h.kind === "stage" && h.step === "prep").map((h) => ms(h.at)).filter((n) => n !== void 0 && (endMs === void 0 || n >= endMs));
+  const preps = (t.timeline ?? []).filter((h) => h.kind === "stage" && h.step === "prep").map((h) => ms(h.at)).filter((n) => n !== void 0 && (endMs === void 0 || n >= endMs));
   return preps.length ? Math.max(...preps) : ms(t.live?.checking?.at);
 }
 function checkSkipped(t, stage, waiting2) {
   if (!waiting2 && (stage === "worker" || stage === "checker")) return false;
-  const ran = agentsOf(t.runs?.[t.runs.length - 1]).some((a) => a.kind === "checker") || (t.history ?? []).some((h) => h.kind === "stage" && h.step === "checker");
+  const ran = agentsOf(t.runs?.[t.runs.length - 1]).some((a) => a.kind === "checker") || (t.timeline ?? []).some((h) => h.kind === "stage" && h.step === "checker");
   if (ran) return false;
   return t.runs?.[t.runs.length - 1]?.docs_only === true;
 }
@@ -57061,7 +57061,7 @@ function liveLanes(view, nowMs) {
       ...more && total > 0 ? { more } : {},
       ...usual ? { usual } : {},
       ...usageOf(t, nowMs),
-      sentBack: (t.history ?? []).filter((h) => h.kind === "checker-problems").length,
+      sentBack: (t.timeline ?? []).filter((h) => h.kind === "checker-problems").length,
       enteredMs,
       agent: !waiting2 && stage === "worker" || stage === "checker" && !!checkerIdOf(t)
     };
@@ -57227,7 +57227,8 @@ var LABELS = [
 var MAX_GAP = 8;
 var MIN_GAP = 2;
 var TITLE_W = 12;
-var laneWidth = (idW, titleW, k, gap, sep4) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep4 + k + (k - 1) * gap;
+var LIVE_TAIL = 3;
+var laneWidth = (idW, titleW, k, gap, sep4, tail = LIVE_TAIL) => tail + LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep4 + k + (k - 1) * gap;
 function liveLayout(lanes, stations, width) {
   const idW = Math.max(4, ...lanes.map((l) => textWidth(l.id)));
   const k = stations.length;
@@ -57241,26 +57242,15 @@ function liveLayout(lanes, stations, width) {
   for (let gap = MAX_GAP; gap >= MIN_GAP; gap--) if (laneWidth(idW, base, k, gap, 2) <= width) return make(fill(gap, 2), gap, 2);
   for (let titleW = base - 1; titleW >= 3; titleW--) if (laneWidth(idW, titleW, k, MIN_GAP, 2) <= width) return make(fill(MIN_GAP, 2), MIN_GAP, 2);
   if (laneWidth(idW, 0, k, MIN_GAP, 2) <= width) return make(0, MIN_GAP, 2);
-  if (laneWidth(idW, 0, k, 1, 2) <= width) return make(0, 1, 2);
-  if (laneWidth(idW, 0, k, 1, 1) <= width) return make(0, 1, 1);
+  if (laneWidth(idW, 0, k, 1, 2, 0) <= width) return make(0, 1, 2);
+  if (laneWidth(idW, 0, k, 1, 1, 0) <= width) return make(0, 1, 1);
   return make(0, 0, 1);
 }
 var nameWidth = (l) => l.idW + (l.titleW ? 1 + l.titleW : 0);
 function liveLabelSegs(l) {
   const lead = " ".repeat(LIVE_RUN_MARK.length + nameWidth(l) + l.sep);
   const init = l.labels.slice(0, -1).map((s) => padWidth(s, l.gap + 1)).join("");
-  const prev = l.labels.length > 1 ? textWidth(l.labels[l.labels.length - 2]) : 0;
-  let last = l.labels[l.labels.length - 1] ?? "";
-  const mark = textWidth(lead + init);
-  let at3 = mark;
-  if (mark + textWidth(last) > l.width && textWidth(last) > 1) {
-    at3 = Math.max(mark - l.gap + prev, Math.min(mark, l.width - textWidth(last)));
-    if (at3 + textWidth(last) > l.width) {
-      last = last.slice(0, 1);
-      at3 = mark;
-    }
-  }
-  const text2 = lead + init.slice(0, Math.max(0, at3 - textWidth(lead))) + last;
+  const text2 = lead + init + (l.labels[l.labels.length - 1] ?? "");
   return text2.split(LIVE_AGENT_MARK).flatMap((x, i) => [...i ? [{ text: LIVE_AGENT_MARK, tone: "mark" }] : [], ...x ? [{ text: x, tone: "dim" }] : []]);
 }
 var LANE_WARN_TIMES = 2;
@@ -57407,8 +57397,8 @@ function liveToday(tasks, nowMs, offsetMin = localOffset(nowMs)) {
   let failed2 = 0;
   let tokens = 0;
   for (const t of tasks) {
-    const history = marksOf(t);
-    if (history.some((h) => h.kind === "merged" && isToday(h.at))) merged++;
+    const timeline = marksOf(t);
+    if (timeline.some((h) => h.kind === "merged" && isToday(h.at))) merged++;
     sentBack += sentBackOf(t, isToday).all;
     if (t.status === "failed" && isToday(t.updated_at)) failed2++;
     for (const r of t.runs ?? []) if (tryTokens(r) && isToday(r.ended ?? r.started)) tokens += tokenCount(tryTokens(r));
@@ -58091,13 +58081,13 @@ var cutPart = (s, n) => {
 };
 function chatTaskText(t, report, nowMs, page = 1) {
   const L = [`${t.id}: ${plain(t.title)}`];
-  const changed = historyLineText({ at: t.updated_at }, nowMs).split("  ")[0];
+  const changed = timelineLineText({ at: t.updated_at }, nowMs).split("  ")[0];
   L.push(`Status: ${STATUS_WORD[t.status]}${Number(t.attempts) > 0 ? `, try ${t.attempts}` : ""}${changed ? `, changed ${changed}` : ""}`);
   if (t.project) L.push(`Project: ${plain(t.project)}`);
   L.push(t.origin?.why ? `Why: ${plain(t.origin.why)}` : plain(fromText(t, 100)));
   if (t.status === "waiting" && t.ask?.text) L.push(...askLines(taskAsks(t)?.text ?? t.ask.text, askChoices(t, taskAsks(t))));
   L.push("What to do:", t.details.trim() ? cutPart(t.details, PART_MAX) : "(no details)");
-  if (t.history.length) L.push("Last events:", ...t.history.slice(-5).reverse().map((h) => plain(historyLineText(h, nowMs))));
+  if (t.timeline.length) L.push("Last events:", ...t.timeline.slice(-5).reverse().map((h) => plain(timelineLineText(h, nowMs))));
   if (report?.text) L.push(`Report (try ${report.try}):`, cutPart(report.text, PART_MAX));
   L.push("Say: approve, reject, tasks");
   return fitChat(L.join("\n").split("\n"), `say 'more ${t.id}'`, page);
@@ -59241,6 +59231,11 @@ function withoutStages(t) {
   });
   return out;
 }
+function withTimelineName(t) {
+  if (!("history" in t)) return null;
+  const keep = "timeline" in t;
+  return Object.fromEntries(Object.entries(t).flatMap(([k, v]) => k !== "history" ? [[k, v]] : keep ? [] : [["timeline", v]]));
+}
 function migrateRunTokens(runs) {
   if (!Array.isArray(runs) || !runs.some((r) => isObj(r) && isNum(r.tokens))) return null;
   return runs.map((r) => isObj(r) && isNum(r.tokens) ? { ...r, tokens: { unsplit: Math.max(0, r.tokens) } } : r);
@@ -59325,8 +59320,8 @@ function withoutTestRerun(t) {
   const { test_rerun, rerun_minutes: _m, ...rest } = t;
   if (test_rerun === void 0 || test_rerun === null || t.status !== "waiting" && t.status !== "doing") return rest;
   const { session: _s, finishing: _f, checking: _c, live: _l, options: _o, asked_files: _a, question: _q, ask: _k, ...todo } = rest;
-  const hist = Array.isArray(t.history) ? t.history : [];
-  return { ...todo, status: "todo", note: TEST_RERUN_GONE_NOTE, history: withHistory(hist, typeof t.updated_at === "string" ? t.updated_at : "", ["step", TEST_RERUN_GONE_NOTE]) };
+  const hist = Array.isArray(t.timeline) ? t.timeline : [];
+  return { ...todo, status: "todo", note: TEST_RERUN_GONE_NOTE, timeline: withTimeline(hist, typeof t.updated_at === "string" ? t.updated_at : "", ["step", TEST_RERUN_GONE_NOTE]) };
 }
 var OLD_LIVE = [["session", "session"], ["checking", "checking"], ["merge_wait", "merge_wait"], ["extra_minutes", "extra_minutes"], ["time_ask", "time_ask"], ["wrap_up", "wrap_up"], ["try_question", "question"], ["try_refused", "refused"]];
 var OLD_CHECKER_NOTE = "a checker agent is trying to break it before it merges";
@@ -59356,9 +59351,9 @@ function withLive(t) {
   return out;
 }
 var strs2 = (v) => Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
-function oldAskBy(text2, files, opts, history) {
+function oldAskBy(text2, files, opts, timeline) {
   if (files.length || parseGoneBranch(text2) || /secret/i.test(text2)) return "symcc";
-  const last = Array.isArray(history) ? history.at(-1) : void 0;
+  const last = Array.isArray(timeline) ? timeline.at(-1) : void 0;
   const said = isObj(last) && typeof last.text === "string" ? last.text : typeof last === "string" ? last : "";
   if (/the lead asked the owner a question/.test(said)) return "lead";
   if (/worker asked/.test(said) || opts.length) return "worker";
@@ -59375,7 +59370,7 @@ function withAsk2(t) {
   const lead = typeof question_lead === "string" ? question_lead.trim() : "";
   const lopts = strs2(options_lead);
   if (!isObj(t.ask) && t.status === "waiting" && (text2 || files.length)) {
-    out.ask = { by: oldAskBy(text2, files, opts, t.history), text: text2, asked_at: at3, ...opts.length ? { options: opts } : {}, ...files.length ? { files } : {}, ...lead ? { lead: { text: lead, ...lopts.length ? { options: lopts } : {} } } : {} };
+    out.ask = { by: oldAskBy(text2, files, opts, t.timeline), text: text2, asked_at: at3, ...opts.length ? { options: opts } : {}, ...files.length ? { files } : {}, ...lead ? { lead: { text: lead, ...lopts.length ? { options: lopts } : {} } } : {} };
   } else if (!isObj(t.ask) && t.status === "doing" && lead && isObj(t.live) && typeof t.live.time_ask === "string") {
     out.ask = { by: "symcc", text: "more time?", asked_at: t.live.time_ask, lead: { text: lead } };
   }
@@ -59462,7 +59457,7 @@ var STAGE_STEPS = [
   [/^tests started\b/, "tests"],
   [/^merge started\b/, "merge"]
 ];
-function oldHistoryFacts(e) {
+function oldTimelineFacts(e) {
   const parts = tryParts(e.text);
   const body = parts ? parts[2] : e.text;
   const out = {};
@@ -59485,7 +59480,7 @@ function oldHistoryFacts(e) {
   if (e.kind === "moved-backlog" && /^moved to the backlog\b/.test(e.text)) out.backlog = true;
   return out;
 }
-function guessHistoryKind(line) {
+function guessTimelineKind(line) {
   const parts = tryParts(line);
   if (!parts) return PLAIN_KINDS.find(([, re]) => re.test(line))?.[0] ?? "other";
   const body = parts[2];
@@ -59511,34 +59506,35 @@ function guessHistoryKind(line) {
 var FACT_FIELDS = ["try", "step", "place", "result", "reason", "how", "owner", "backlog"];
 function lacksFacts(e) {
   if (FACT_FIELDS.some((k) => e[k] !== void 0)) return false;
-  return Object.keys(oldHistoryFacts(e)).length > 0;
+  return Object.keys(oldTimelineFacts(e)).length > 0;
 }
-function oldHistoryEntry(line, t = {}) {
-  const kind = guessHistoryKind(line);
+function oldTimelineEntry(line, t = {}) {
+  const kind = guessTimelineKind(line);
   const n = tryParts(line)?.[1];
   const run2 = n ? t.runs?.[n - 1] : void 0;
   const at3 = run2 ? run2.ended ?? run2.started : kind === "created" ? t.created_at : void 0;
-  return { ...typeof at3 === "string" && at3 ? { at: at3 } : {}, kind, text: line, ...oldHistoryFacts({ kind, text: line }) };
+  return { ...typeof at3 === "string" && at3 ? { at: at3 } : {}, kind, text: line, ...oldTimelineFacts({ kind, text: line }) };
 }
-function migrateHistory(t) {
-  const h = t.history;
-  if (!Array.isArray(h) || h.every((e) => typeof e !== "string" && historyEntryOk(e) && isHistoryKind(e.kind) && !lacksFacts(e))) return null;
+function migrateTimeline(t) {
+  const h = t.timeline;
+  if (!Array.isArray(h) || h.every((e) => typeof e !== "string" && timelineEntryOk(e) && isTimelineKind(e.kind) && !lacksFacts(e))) return null;
   const out = [];
   for (const e of h) {
     if (typeof e === "string") {
-      out.push(oldHistoryEntry(e, t));
+      out.push(oldTimelineEntry(e, t));
       continue;
     }
     if (!isObj(e) || typeof e.text !== "string") continue;
     const r = e;
-    const kind = r.kind === "approved" ? "approve-failed" : isHistoryKind(r.kind) ? r.kind : "other";
+    const kind = r.kind === "approved" ? "approve-failed" : isTimelineKind(r.kind) ? r.kind : "other";
     const { at: _at, ...saved } = r;
-    const old = lacksFacts({ ...r, kind }) ? oldHistoryFacts({ kind, text: r.text }) : {};
+    const old = lacksFacts({ ...r, kind }) ? oldTimelineFacts({ kind, text: r.text }) : {};
     out.push({ ...typeof r.at === "string" && r.at ? { at: r.at } : {}, ...old, ...saved, kind, text: r.text });
   }
   return out;
 }
-function upgradeTask(t, into = "main") {
+function upgradeTask(t0, into = "main") {
+  const t = withTimelineName(t0) ?? t0;
   let out = withoutStages(t) ?? t;
   if (!(typeof t.merge_into === "string" && t.merge_into.trim())) out = { ...out, merge_into: into };
   const split = migrateRunTokens(out.runs);
@@ -59548,8 +59544,8 @@ function upgradeTask(t, into = "main") {
   if (!("origin" in t)) out = { ...out, origin: { by: "lead", why: "made before origins were kept", at: typeof t.created_at === "string" ? t.created_at : "" } };
   const role = typeof t.role === "string" ? OLD_ROLES[t.role.trim().toLowerCase()] : void 0;
   if (role) out = { ...out, role };
-  const history = migrateHistory(out);
-  if (history) out = { ...out, history };
+  const timeline = migrateTimeline(out);
+  if (timeline) out = { ...out, timeline };
   const rs = Array.isArray(out.runs) ? out.runs : [];
   const open = (r, i) => isObj(r) && typeof r.started === "string" && !r.ended && !(i === rs.length - 1 && t.status === "doing");
   if (rs.some(open)) {
@@ -59576,18 +59572,19 @@ function upgradeTask(t, into = "main") {
   const lv = isObj(out.live) ? out.live : {};
   const checking = lv.checking;
   if (queue2) out = isObj(checking) && checking.step !== "queue" ? { ...out, note: "", live: { ...lv, checking: { ...checking, step: "queue", place: Number(queue2[1]) } } } : { ...out, note: "" };
-  return out === t ? null : out;
+  return out === t0 ? null : out;
 }
 function upgradeArchiveTask(t0) {
-  const stageless = withoutStages(t0) ?? t0;
+  const named = withTimelineName(t0) ?? t0;
+  const stageless = withoutStages(named) ?? named;
   const clash = withoutConflictTries(stageless) ?? stageless;
   const split = migrateRunTokens(clash.runs);
-  const history = migrateHistory(clash);
+  const timeline = migrateTimeline(clash);
   const agents = migrateRunAgents({ ...clash, ...split ? { runs: split } : {} });
   const asked = withAsk2(clash);
   const ordered = "order" in clash;
-  if (clash === t0 && !split && !history && !agents && !asked && !ordered) return null;
-  let out = { ...agents ?? clash, ...split && !agents ? { runs: split } : {}, ...history ? { history } : {} };
+  if (clash === t0 && !split && !timeline && !agents && !asked && !ordered) return null;
+  let out = { ...agents ?? clash, ...split && !agents ? { runs: split } : {}, ...timeline ? { timeline } : {} };
   out = withPriority(out) ?? out;
   if (!asked) return out;
   const { question: _q, options: _o, asked_files: _a, question_lead: _l, options_lead: _p, ...kept } = out;
@@ -59674,7 +59671,7 @@ function migratedScoutRun(mem, report, nowIso) {
   return { run: run2, text: text2 };
 }
 function oldDataRows(i) {
-  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0, live: 0, ask: 0, qBy: 0, order: 0 };
+  const c = { unsplit: 0, numTok: 0, strHist: 0, badKind: 0, facts: 0, other: 0, attempts: 0, chk: 0, queue: 0, histName: 0, role: 0, stage: 0, origin: 0, openRun: 0, conflict: 0, rerun: 0, noInto: 0, live: 0, ask: 0, qBy: 0, order: 0 };
   const task = (t, board) => {
     const runs = (Array.isArray(t.runs) ? t.runs : []).filter(isObj);
     for (const r of runs) {
@@ -59687,9 +59684,10 @@ function oldDataRows(i) {
     if (withoutStages(t)) c.stage++;
     if (withoutConflictTries(t)) c.conflict++;
     if ("order" in t) c.order++;
-    for (const e of Array.isArray(t.history) ? t.history : []) {
+    if ("history" in t) c.histName++;
+    for (const e of Array.isArray(t.timeline) ? t.timeline : []) {
       if (typeof e === "string" || !isObj(e) || typeof e.text !== "string") c.strHist++;
-      else if (!isHistoryKind(e.kind)) c.badKind++;
+      else if (!isTimelineKind(e.kind)) c.badKind++;
       else if (e.kind === "other") c.other++;
       else if (lacksFacts(e)) c.facts++;
     }
@@ -59724,10 +59722,11 @@ function oldDataRows(i) {
     { n: c.numTok, text: "tries with tokens saved as one number", fix: true },
     { n: archTok, text: "archived totals with tokens saved as one number", fix: true },
     { n: usage, text: "scout usage totals with tokens saved as one number", fix: true },
-    { n: c.strHist, text: "history entries that are plain strings or not records", fix: true },
-    { n: c.badKind, text: "history entries with a kind symcc does not know", fix: true },
-    { n: c.facts, text: "history entries without their facts (try, step, result, reason ...)", fix: true },
-    { n: c.other, text: "history entries of kind `other` (shown as they are)", fix: false },
+    { n: c.histName, text: "tasks with their timeline still named `history`", fix: true },
+    { n: c.strHist, text: "timeline entries that are plain strings or not records", fix: true },
+    { n: c.badKind, text: "timeline entries with a kind symcc does not know", fix: true },
+    { n: c.facts, text: "timeline entries without their facts (try, step, result, reason ...)", fix: true },
+    { n: c.other, text: "timeline entries of kind `other` (shown as they are)", fix: false },
     { n: c.attempts, text: "tasks where attempts is not the number of tries (shown as they are)", fix: false },
     { n: c.chk, text: "tasks whose tries keep tokens, cost or agent ids outside their agent entries (agent, checker, tokens, checker_tokens, cost, checkers)", fix: true },
     { n: c.queue, text: 'tasks whose note is "queue (n)"', fix: true },
@@ -61036,7 +61035,7 @@ function stageLine(e, t) {
   if (!words) return null;
   return `${tryLabel({ role: t.role, attempts: e.try })}: ${words}${e.place ? ` (place ${e.place})` : ""}`;
 }
-function withStageHistory(b, events) {
+function withStageTimeline(b, events) {
   const lines = /* @__PURE__ */ new Map();
   for (const e of events) {
     const t = b.tasks.find((x) => x.id === e.task);
@@ -61049,7 +61048,7 @@ function withStageHistory(b, events) {
     ...b,
     tasks: b.tasks.map((t) => {
       const adds = lines.get(t.id);
-      return adds ? { ...t, history: adds.reduce((h, [at3, add]) => withHistory(h, at3, add), t.history) } : t;
+      return adds ? { ...t, timeline: adds.reduce((h, [at3, add]) => withTimeline(h, at3, add), t.timeline) } : t;
     })
   };
 }
@@ -61273,7 +61272,7 @@ async function saveMigrated(host) {
   if (!got) return;
   const { text: text2, read: r, whole } = got;
   if (r.broken || !whole) return;
-  const what = `the done and dropped tasks' history, tries and details were moved to ${S.N.dir}/${PARTS_DIR}/, so the board file stays small`;
+  const what = `the done and dropped tasks' timeline, tries and details were moved to ${S.N.dir}/${PARTS_DIR}/, so the board file stays small`;
   await keepCopy(host, text2, "before-migrate", (c) => `${S.N.boardFile}: ${what}${c ? `. The file as it was is kept in ${c}` : ""}.`);
   await change(host, (b) => b);
 }
@@ -61442,7 +61441,7 @@ async function saveBoard(host, b) {
 async function writeBoard(host, before, after) {
   const nowMs = Date.now();
   const events = boardEvents(before, after, nowMs);
-  const saved = withStageHistory(after, events);
+  const saved = withStageTimeline(after, events);
   await saveBoard(host, saved);
   await logTaskEvents(host, events);
   return { board: saved, events };
@@ -62046,12 +62045,12 @@ ${d.text}` : d.text;
 var AGAIN_MAX = 2;
 var MOVED_AGAIN = "main moved by hand; testing again";
 var RELOAD_AGAIN = "tests cut off by a reload; testing again";
-var againsThisTry = (t, why2) => (t.history ?? []).filter((h) => h.text === `${tryLabel(t)}: ${why2}`).length;
+var againsThisTry = (t, why2) => (t.timeline ?? []).filter((h) => h.text === `${tryLabel(t)}: ${why2}`).length;
 async function noteAgain($, t, why2) {
   await change($, (x) => {
     const cur = find(x, t.id);
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return x;
-    return patchTask(x, t.id, { history: withHistory(cur.history, now(), tryEntry(cur, "step", why2)) }, now());
+    return patchTask(x, t.id, { timeline: withTimeline(cur.timeline, now(), tryEntry(cur, "step", why2)) }, now());
   }).catch(() => void 0);
 }
 var goneResult = (target) => ({ ok: false, gone: true, reason: "notmerged", detail: `not merged: branch ${target} is gone` });
@@ -62675,7 +62674,7 @@ async function record($, t, v, why2, tokens, before, agentId, report) {
     if (!cur || cur.attempts !== t.attempts) return x;
     if (!v && movedAway.has(t.id)) return x;
     const runs = cur.runs?.length && (agentId || tokens) ? withAgentUsed(cur.runs, "checker", agentId, now(), tokens ? { tokens } : {}) : void 0;
-    return patchTask(x, t.id, { history: withHistory(cur.history, now(), ...before ? [["step", before, { try: cur.attempts }]] : [], checkerEntry(tryLabel(cur), v, why2, cur.attempts, { ...agentId ? { agent: checkerName(S.N.name, t.id) } : {}, ...report ? { report } : {} })), ...runs ? { runs } : {} }, now());
+    return patchTask(x, t.id, { timeline: withTimeline(cur.timeline, now(), ...before ? [["step", before, { try: cur.attempts }]] : [], checkerEntry(tryLabel(cur), v, why2, cur.attempts, { ...agentId ? { agent: checkerName(S.N.name, t.id) } : {}, ...report ? { report } : {} })), ...runs ? { runs } : {} }, now());
   }).catch(() => void 0);
 }
 async function saveCheckerReport($, t, answer) {
@@ -62997,7 +62996,7 @@ var OWN_GAP = SHA + 2;
 
 // ../../hooks/core/task-sections.ts
 function checkerReportOf(t, tryNo2) {
-  const e = t.history.findLast((h) => h.report && h.try === tryNo2 && (h.kind === "checker-ok" || h.kind === "checker-problems"));
+  const e = t.timeline.findLast((h) => h.report && h.try === tryNo2 && (h.kind === "checker-ok" || h.kind === "checker-problems"));
   return e?.report ? { try: tryNo2, file: e.report, agent: e.agent ?? "", ok: e.kind === "checker-ok" } : null;
 }
 
@@ -63129,7 +63128,7 @@ function statsHtml(d, project) {
   const maxFail = Math.max(0, ...d.failed.map((f2) => f2.n));
   const ended = section(
     `How tasks ended (${plural(d.finished, "done task")})`,
-    d.ended.map((e, i) => barRow2(e.label, e.n, maxEnd, `${e.n} \xB7 ${pctText(e.n, d.finished)}`, CYCLE[i % CYCLE.length])).join("") + `<h3>Failed tries by reason (${d.failedTotal}, from history)</h3>` + d.failed.map((f2) => barRow2(f2.label, f2.n, maxFail, String(f2.n), f2.key === "changed" ? "var(--grey)" : "var(--red)", f2.folded ?? "")).join("")
+    d.ended.map((e, i) => barRow2(e.label, e.n, maxEnd, `${e.n} \xB7 ${pctText(e.n, d.finished)}`, CYCLE[i % CYCLE.length])).join("") + `<h3>Failed tries by reason (${d.failedTotal}, from timeline)</h3>` + d.failed.map((f2) => barRow2(f2.label, f2.n, maxFail, String(f2.n), f2.key === "changed" ? "var(--grey)" : "var(--red)", f2.folded ?? "")).join("")
   );
   const { tries: triesShown, tests: testsShown } = failedShown(d);
   const triesDiffer = failedCountsNote(d);
@@ -63154,7 +63153,7 @@ function statsHtml(d, project) {
   const shown = f.stages.filter((x) => x.ms > 0 || x.stage !== "backlog" && x.stage !== "blocked");
   const maxStage = Math.max(0, ...shown.map((x) => x.ms));
   const stageRow = (label, ms3, avg, colour) => barRow2(label, ms3, maxStage, `${fmtDuration(ms3)} \xB7 avg ${fmtDuration(avg)} \xB7 ${pctText(ms3, f.lifetime)}`, colour);
-  const stages = section(`Time per stage (${plural(f.n, "done task")}${f.lacking ? `; ${f.lacking} without timed history, left out` : ""})`, f.n ? shown.map((x, i) => stageRow(x.label, x.ms, x.avgMs, CYCLE[i % CYCLE.length])).join("") + kv([["active", `${fmtDuration(f.active)} \xB7 avg ${fmtDuration(f.active / f.n)} \xB7 ${pctText(f.active, f.lifetime)}`], ["waiting", `${fmtDuration(f.waiting)} \xB7 avg ${fmtDuration(f.waiting / f.n)} \xB7 ${pctText(f.waiting, f.lifetime)}`], ["lifetime", `${fmtDuration(f.lifetime)} \xB7 avg ${fmtDuration(f.avgLifetime)}`]]) : '<p class="muted">No done tasks with timed history.</p>', true);
+  const stages = section(`Time per stage (${plural(f.n, "done task")}${f.lacking ? `; ${f.lacking} without timed timeline, left out` : ""})`, f.n ? shown.map((x, i) => stageRow(x.label, x.ms, x.avgMs, CYCLE[i % CYCLE.length])).join("") + kv([["active", `${fmtDuration(f.active)} \xB7 avg ${fmtDuration(f.active / f.n)} \xB7 ${pctText(f.active, f.lifetime)}`], ["waiting", `${fmtDuration(f.waiting)} \xB7 avg ${fmtDuration(f.waiting / f.n)} \xB7 ${pctText(f.waiting, f.lifetime)}`], ["lifetime", `${fmtDuration(f.lifetime)} \xB7 avg ${fmtDuration(f.avgLifetime)}`]]) : '<p class="muted">No done tasks with timed timeline.</p>', true);
   const v = d.inv;
   const inv = section(`Investigations (${d.invCount}, ${d.answered} answered)`, d.invCount ? kv([
     ["answered", `${d.answered} of ${d.invCount} (${v.readByOwner} read by you, ${v.waiting} waiting)`],
@@ -63609,7 +63608,7 @@ async function setBoardMode(host, m, who) {
       ids.push(w.task);
       await change(host, (x) => {
         const cur = find(x, w.task);
-        return patchTask(x, w.task, { status: "todo", note: `stopped by ${who}; continues when the board runs again`, ...cur ? { history: withHistory(cur.history, now(), stoppedEntry(cur, `${who} paused the board`)), ...endedBy(cur, now(), "stopped", `${who} paused the board`) } : {} }, now());
+        return patchTask(x, w.task, { status: "todo", note: `stopped by ${who}; continues when the board runs again`, ...cur ? { timeline: withTimeline(cur.timeline, now(), stoppedEntry(cur, `${who} paused the board`)), ...endedBy(cur, now(), "stopped", `${who} paused the board`) } : {} }, now());
       });
     });
     if (ids.length) extra.push(`stopped ${ids.join(", ")}`);
@@ -63676,7 +63675,7 @@ async function stopForQuit(host, why2) {
     await change(host, (x) => {
       const cur = find(x, w.task);
       if (cur?.status !== "doing") return x;
-      return patchTask(x, w.task, { status: "todo", note: `stopped: ${why2}; continues on the next run`, history: withHistory(cur.history, now(), stoppedEntry(cur, why2)), ...endedBy(cur, now(), "stopped", why2) }, now());
+      return patchTask(x, w.task, { status: "todo", note: `stopped: ${why2}; continues on the next run`, timeline: withTimeline(cur.timeline, now(), stoppedEntry(cur, why2)), ...endedBy(cur, now(), "stopped", why2) }, now());
     });
   });
   ids.push(...(await stopChecks(host, why2)).back);
@@ -63778,7 +63777,7 @@ async function timedOut(host, id, t, max, minutes) {
   const out = await change(host, (x) => {
     const cur = find(x, id);
     if (!same2(cur)) return [x, null];
-    const next = sha ? putTask(x, mergedDone(cur, sha, `stopped after ${Math.round(minutes)} min`, now())) : patchTask(x, id, { status: "failed", note: outOfTimeNote(max), history: withHistory(cur.history, now(), tryEntry(cur, "out-of-time", `stopped after ${Math.round(minutes)} min (out of time); its work so far is kept in its folder and branch`, { reason: "timeout" })), ...endedBy(cur, now(), "timed out", `ran over ${max} min`) }, now());
+    const next = sha ? putTask(x, mergedDone(cur, sha, `stopped after ${Math.round(minutes)} min`, now())) : patchTask(x, id, { status: "failed", note: outOfTimeNote(max), timeline: withTimeline(cur.timeline, now(), tryEntry(cur, "out-of-time", `stopped after ${Math.round(minutes)} min (out of time); its work so far is kept in its folder and branch`, { reason: "timeout" })), ...endedBy(cur, now(), "timed out", `ran over ${max} min`) }, now());
     return [next, cur];
   });
   if (!out) return;
@@ -63790,7 +63789,7 @@ async function askOvertime(host, b, id, limit) {
   const t = await change(host, (x) => {
     const cur = find(x, id);
     if (cur?.status !== "doing" || cur.live?.time_ask || cur.live?.wrap_up) return [x, null];
-    return [patchTask(x, id, { live: { time_ask: now() }, note: OVERTIME_NOTE, history: withHistory(cur.history, now(), tryEntry(cur, "out-of-time", `ran ${limit} min, over its time limit; asked the owner for more time`)) }, now()), cur];
+    return [patchTask(x, id, { live: { time_ask: now() }, note: OVERTIME_NOTE, timeline: withTimeline(cur.timeline, now(), tryEntry(cur, "out-of-time", `ran ${limit} min, over its time limit; asked the owner for more time`)) }, now()), cur];
   });
   if (!t) return;
   sayNeedsYou(host, b, t, overtimeQuestion(id, limit));
@@ -63800,7 +63799,7 @@ async function wrapUp(host, id, why2) {
   const t = await change(host, (x) => {
     const cur = find(x, id);
     if (cur?.status !== "doing" || cur.live?.wrap_up) return [x, null];
-    return [patchTask(x, id, { live: { time_ask: void 0, wrap_up: now() }, note: "time is up: the worker was told to hand back", history: withHistory(cur.history, now(), tryEntry(cur, "out-of-time", `time is up (${why2}); the worker was told to write down what it has and hand back`)) }, now()), cur];
+    return [patchTask(x, id, { live: { time_ask: void 0, wrap_up: now() }, note: "time is up: the worker was told to hand back", timeline: withTimeline(cur.timeline, now(), tryEntry(cur, "out-of-time", `time is up (${why2}); the worker was told to write down what it has and hand back`)) }, now()), cur];
   });
   if (!t) return false;
   for (const [agentId, w] of workers) if (w.task === id) await host.agents.send(agentId, WRAP_UP_TEXT).catch(() => void 0);
@@ -63808,9 +63807,9 @@ async function wrapUp(host, id, why2) {
 }
 var ownerAddedText = (add, limit) => `the owner gave it ${add} more min (limit now ${limit} min)`;
 var OWNER_ADDED = /^the owner gave it (\d+) more min \(limit now \d+ min\)$/;
-function ownerAddedMinutes(history, attempt) {
+function ownerAddedMinutes(timeline, attempt) {
   let sum = 0;
-  for (const h of history ?? []) {
+  for (const h of timeline ?? []) {
     if (h.kind !== "step" || h.try !== attempt) continue;
     const m = OWNER_ADDED.exec(h.text.slice(h.text.indexOf(": ") + 2));
     if (m) sum += Number(m[1]);
@@ -63819,9 +63818,9 @@ function ownerAddedMinutes(history, attempt) {
 }
 var ASKED_MORE = /^ran \d+ min, over its time limit; asked the owner for more time$/;
 var TIME_IS_UP = /^time is up \(.*\); the worker was told to write down what it has and hand back$/;
-function ownerTimeState(history, attempt, at3) {
+function ownerTimeState(timeline, attempt, at3) {
   let ask;
-  for (const h of history ?? []) {
+  for (const h of timeline ?? []) {
     if (h.try !== attempt) continue;
     const body = h.text.slice(h.text.indexOf(": ") + 2);
     if (h.kind === "out-of-time" && TIME_IS_UP.test(body)) return { wrap_up: at3 };
@@ -63844,7 +63843,7 @@ async function answerOvertime(host, id, answer) {
     const cur = find(x, t.id);
     if (cur?.status !== "doing" || !cur.live?.time_ask) return [x, null];
     const extra = (cur.live?.extra_minutes ?? 0) + pick2.add;
-    return [patchTask(x, t.id, { live: { extra_minutes: extra, time_ask: void 0 }, note: "", history: withHistory(cur.history, now(), tryEntry(cur, "step", ownerAddedText(pick2.add, timeLimitOf(x.max_minutes, { live: { extra_minutes: extra } })))) }, now()), timeLimitOf(x.max_minutes, { live: { extra_minutes: extra } })];
+    return [patchTask(x, t.id, { live: { extra_minutes: extra, time_ask: void 0 }, note: "", timeline: withTimeline(cur.timeline, now(), tryEntry(cur, "step", ownerAddedText(pick2.add, timeLimitOf(x.max_minutes, { live: { extra_minutes: extra } })))) }, now()), timeLimitOf(x.max_minutes, { live: { extra_minutes: extra } })];
   });
   if (out === null) return void 0;
   return `${t.id} has ${pick2.add} more minutes: its limit is now ${out} min, and its worker goes on.`;
@@ -63871,9 +63870,9 @@ async function moveStage($, id, word2) {
   let said = false;
   const write = (status, note2, extra = {}) => change($, (x) => {
     const cur2 = find(x, t.id) ?? t;
-    const history = said ? cur2.history : withHistory(cur2.history, now(), ["other", why2]);
+    const timeline = said ? cur2.timeline : withTimeline(cur2.timeline, now(), ["other", why2]);
     said = true;
-    return patchTask(x, t.id, { status, note: note2, test_tries: 0, ...extra, history, ...endedBy(cur2, now(), "stopped", why2) }, now(), S.N.dir);
+    return patchTask(x, t.id, { status, note: note2, test_tries: 0, ...extra, timeline, ...endedBy(cur2, now(), "stopped", why2) }, now(), S.N.dir);
   });
   if (checkingNow(t.id)) {
     if (t.live?.checking && t.live.checking.step !== "checker") throw new Error(`${CHECKING_TEXT(t.id)}; try again in a moment`);
@@ -64150,7 +64149,7 @@ function taskText(t, running, all = [], report, archivedDone = []) {
     }
     for (const n of crossBranchNotes(t, all)) L.push(`  note: ${n}`);
   }
-  if (t.history.length) L.push("", `Timeline (${t.history.length}, newest first):`, ...[...t.history].reverse().map((h) => `  \u2022 ${historyLineText(h)}`));
+  if (t.timeline.length) L.push("", `Timeline (${t.timeline.length}, newest first):`, ...[...t.timeline].reverse().map((h) => `  \u2022 ${timelineLineText(h)}`));
   if (t.runs?.length) L.push("", "Time and cost:", ...t.runs.map((r, i) => `  ${fmtRun(r, i, Date.now())}`), `  total: ${fmtTotal(sumRuns(t.runs, Date.now()))}`);
   const commits = taskCommits(t);
   if (commits.length) L.push("", "Commits (newest first):", ...commits.map((c) => `  ${commitText(c)}`));
@@ -64287,7 +64286,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
   Fields: title, details (what to do and how we know it works), files (what the worker
   may change; empty = anywhere), after (tasks that must be done first), priority (like
   Unix nice: -20 to 19, everyone starts at 0, lower runs first), role (the worker role: ${BUILT_IN_ROLES.join(", ")},
-  or one in .${S.N.name}/roles/; it brings a checklist, skills and maybe a model), plus status, note, question, tries, history, branch, when added/changed, and merge_into:
+  or one in .${S.N.name}/roles/; it brings a checklist, skills and maybe a model), plus status, note, question, tries, timeline, branch, when added/changed, and merge_into:
   the branch it merges into, which is the branch you were on when it was made.
   Statuses:
     to do            waiting for a free worker (and for its "after" tasks)
@@ -64444,7 +64443,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Pick the task type by the result wanted: project files to merge \u2192 change (or bug, feature, refactor, docs); an answer to read \u2192 investigation; anything else, including work outside the project or "don't merge" / "just make it on my Desktop" \u2192 errand. Never use a plain background agent for work the board can do as an errand.
 - Turn what the owner wants into tasks with ${S.N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes. Every change task's details say how the change will be tested, e.g. "Done when: tests show \u2026" (the test that will check it). A change task whose commit edits code but no test file is flagged before merging (setting tests_with_changes: ask, the default, merges it and tells you "T-5 changed code but no test", so follow up with a test task or ask the owner; review makes it wait for the owner's review; off does nothing). Test files: in a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder (or a folder ending .Test/.Tests), or with test/spec/e2e/cy as a name part split by . _ or - (a.test.ts, a-test.ts, a.cy.ts), or a name ending in Test/Tests (FooTest.java); latest.ts and run-tests.sh are not tests. Docs: .md/.mdx, README/CHANGELOG/LICENSE names, images/video/audio/fonts, non-code files under docs/ (not docs/build.ts or Notice.tsx). A docs-only change is never flagged.
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly (when those words are a short reply like "yes", quote \u201C<the owner's earlier ask, trimmed>\u201D \u2192 lead: \u201C<your question, short>\u201D \u2192 \u201C<the reply>\u201D); for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
-- On a workspace board (the board folder holds several repos, each in its own folder, and is no repo itself), give every task its project (change, investigation or errand): the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A task with no project can't start on a workspace board yet, even an investigation or an errand: give it the project folder it works in (or the nearest one).
+- On a workspace board (the board folder holds several repos, each in its own folder, and is no repo itself), give every change task its project (an investigation or errand may have none: it then runs in a plain folder, with no repo, and may read all the projects): the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A change task with no project is refused on a workspace board; an investigation or errand with none works in a plain folder, reads any project and writes into none (an errand may name outside folders).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - Workers can't read the board or ${S.N.dir}/ (no board tool, and their folder is their own copy). To hand a worker an earlier task's answer, give its task from_task (that task's latest report is copied into the worker's folder and its prompt names it), or name the report file (${S.N.dir}/reports/T-n-try-N.md, or T-n-try-*.md for the latest), or paste the key facts into the details.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
@@ -64469,7 +64468,7 @@ ${popup() ? `- Ask every question for the owner that isn't about one task (a set
 - A worker whose run ended on an API error (retries used up, the context limit) or a refusal fails its try with that reason, and nothing is checked or merged; its work stays in its folder and branch, so ${S.N.name} retry continues from there. But when ${S.N.name} itself stopped that worker (a reload, a takeover, driving moved to another session), the try does not fail: a new worker goes on with the same try. What a worker writes in its hand-back is only its report: symcc never reads a question or a file request out of it.
 - A worker that runs past its time limit (max_minutes, plus any time the owner added) is not stopped: it keeps working, its task stays doing with the note "over time; asked the owner", and you are told "T-5 has run 45 min. Give it more time?" with the options +30 min | +60 min | Stop it (the owner hears "needs you" too, and the board shows them as buttons). Ask the owner in the chat, offering those choices as numbered plain chat text, plus "${answerTail()}"; put their pick into the task with ${S.N.name} change and answer: "+30 min", "+60 min" (any "+N min" works) or "Stop it". More time moves that task's limit later and the worker goes on. Stop it (or no answer by the limit plus max_minutes again) tells the worker to write down what it has and hand back; a few minutes later it is stopped and the task fails, with its work kept in its folder, branch and report, so a retry continues from there.
 - Details are limited to 8,000 characters; add and change refuse longer text (never cut it). Put long pasted material (a draft, a log) in a file and name the file in the details.
-- To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its history; a running task restarts). A change to a running task's details, title or files (add_details too) restarts its try, so put a note in the same change as an answer instead of sending it a moment later. After a checker send-back (or any other retry, not a task's first try), add your note within a minute of the retry starting: a retry under a minute old starts again with the note on the same try number (no lost try); later, the note restarts it as a new try. Changing only its priority or after-list keeps it running (saved for its next try). details rewrites the whole text, so use it only for a full rewrite, never both at once.
+- To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its timeline; a running task restarts). A change to a running task's details, title or files (add_details too) restarts its try, so put a note in the same change as an answer instead of sending it a moment later. After a checker send-back (or any other retry, not a task's first try), add your note within a minute of the retry starting: a retry under a minute old starts again with the note on the same try number (no lost try); later, the note restarts it as a new try. Changing only its priority or after-list keeps it running (saved for its next try). details rewrites the whole text, so use it only for a full rewrite, never both at once.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
@@ -64515,10 +64514,10 @@ var TOOLS = () => [
   {
     name: "change",
     description: "Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version (except when only priority, after or needs_review change: those are saved and its worker keeps running); a waiting, failed or in-review one goes back to work; a paused one stays paused with the change saved (only resume or retry starts it again); a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.",
-    inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, title: { type: "string" }, stage: { type: "string", enum: ["work", "check", "tests", "review"], description: "Move the task, with its branch as it is, to this stage of its run (only on its own, nothing else changes): work = a new worker try; check = a fresh checker now, then the merge line; tests = the merge line now, no checker (merges if its tests pass); review = ready for the owner (approve then runs the tests). A running worker or checker is stopped first. Works from todo, doing, failed, waiting and review; uses no automatic retry." }, details: { type: "string", description: "The new details: replaces the whole text. To add a line, use add_details instead." }, add_details: { type: "string", description: `A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task's history too. Not together with details.` }, files: { type: "array", items: { type: "string" } }, after: { type: "array", items: { type: "string" } }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Lower runs first; 0 is normal (urgent: -1, -2\u2026; later: 1, 2\u2026). A whole number from -20 to 19." }, project: { type: "string", description: "The project (a folder below the board folder that holds its own .git) the task belongs to; only on a board over several repos. Empty on a change clears it." }, needs_review: { type: "boolean" }, backlog: { type: "boolean", description: "true: stash in the backlog (never starts); false: move from the backlog to todo." }, role: { type: "string", description: `The worker role for the task (${BUILT_IN_ROLES.join(", ")} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: "string", description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's history." }, merge_into: { type: "string", description: "Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made)." } } }
+    inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, title: { type: "string" }, stage: { type: "string", enum: ["work", "check", "tests", "review"], description: "Move the task, with its branch as it is, to this stage of its run (only on its own, nothing else changes): work = a new worker try; check = a fresh checker now, then the merge line; tests = the merge line now, no checker (merges if its tests pass); review = ready for the owner (approve then runs the tests). A running worker or checker is stopped first. Works from todo, doing, failed, waiting and review; uses no automatic retry." }, details: { type: "string", description: "The new details: replaces the whole text. To add a line, use add_details instead." }, add_details: { type: "string", description: `A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task's timeline too. Not together with details.` }, files: { type: "array", items: { type: "string" } }, after: { type: "array", items: { type: "string" } }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Lower runs first; 0 is normal (urgent: -1, -2\u2026; later: 1, 2\u2026). A whole number from -20 to 19." }, project: { type: "string", description: "The project (a folder below the board folder that holds its own .git) the task belongs to; only on a board over several repos. Empty on a change clears it." }, needs_review: { type: "boolean" }, backlog: { type: "boolean", description: "true: stash in the backlog (never starts); false: move from the backlog to todo." }, role: { type: "string", description: `The worker role for the task (${BUILT_IN_ROLES.join(", ")} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: "string", description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's timeline." }, merge_into: { type: "string", description: "Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made)." } } }
   },
   { name: "approve", description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review". For an answered investigation it is Done: the task ends done, nothing is merged, its folder is removed, and its branch too unless it has commits from earlier tries, which are kept (the reply says so); with keep_note: true (Keep as a note) a new small docs task is added too that writes docs/research/<topic>.md from the saved answer and merges as usual.', inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, keep_note: { type: "boolean", description: "Only for an answered investigation: also add a docs task that keeps its answer as docs/research/<topic>.md." } } } },
-  { name: "reject", description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its history, and a fresh worker picks it up. Only for a task in "review". For an answered investigation it is Ask more: the reason is the follow-up question; it goes back to "todo" and the fresh try gets the question and the earlier answer in its details.', inputSchema: { type: "object", required: ["task", "reason"], properties: { task: { type: "string" }, reason: { type: "string", description: "What is wrong and what to change, for the next worker (for an answered investigation: the follow-up question)." } } } },
+  { name: "reject", description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its timeline, and a fresh worker picks it up. Only for a task in "review". For an answered investigation it is Ask more: the reason is the follow-up question; it goes back to "todo" and the fresh try gets the question and the earlier answer in its details.', inputSchema: { type: "object", required: ["task", "reason"], properties: { task: { type: "string" }, reason: { type: "string", description: "What is wrong and what to change, for the next worker (for an answered investigation: the follow-up question)." } } } },
   { name: "retry", description: `Put a task (back) to "todo" so a worker picks it up again, e.g. after it failed, or to bring back a dropped task on purpose. For a task whose finished work only waits for the owner's files on its branch ("waiting for your files on ..."), it only tries the merge again, with no worker. Not for a done task.`, inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" } } } },
   { name: "ask", description: "Make a task wait for the owner with a question. Not for a done or dropped task (retry it first).", inputSchema: { type: "object", required: ["task", "question"], properties: { task: { type: "string" }, question: { type: "string" } } } },
   {
@@ -64527,10 +64526,10 @@ var TOOLS = () => [
     inputSchema: { type: "object", properties: { action: { type: "string", enum: ["add", "list", "answer", "drop"], description: "What to do; list when left out." }, text: { type: "string", description: "For add: the question, plain and short." }, options: { type: "array", items: { type: "string" }, description: "For add: 2 to 6 short choices (buttons on the board)." }, id: { type: "string", description: "For answer / drop: the question, e.g. Q-3." }, answer: { type: "string", description: "For answer: the owner's answer from the chat, their words or the option they picked." } } }
   },
   { name: "drop", description: "Stop and drop a task.", inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, reason: { type: "string" } } } },
-  { name: "merged", description: `Mark a task done whose work is already merged outside the board (by hand), e.g. after its only failure was the merge tests timing out. ${S.N.name} checks it with git first: every commit on the task's branch must be in the branch it merges into (merged, fast-forwarded, or rebased as equal changes); if not, it is refused with the reason ("T-5's branch has 2 commits that aren't in main yet"). Works for a task that is to do, running (its worker is stopped first), failed, waiting, paused, in review or dropped. The task becomes done with the history line "merged outside the board (<commit>); marked done by the lead", its commits are recorded, its folder and branch are cleaned up like after a merge, and tasks waiting on it can start. Nothing is merged and no test runs. Only on the owner's word or a rule the owner set.`, inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" } } } },
+  { name: "merged", description: `Mark a task done whose work is already merged outside the board (by hand), e.g. after its only failure was the merge tests timing out. ${S.N.name} checks it with git first: every commit on the task's branch must be in the branch it merges into (merged, fast-forwarded, or rebased as equal changes); if not, it is refused with the reason ("T-5's branch has 2 commits that aren't in main yet"). Works for a task that is to do, running (its worker is stopped first), failed, waiting, paused, in review or dropped. The task becomes done with the timeline line "merged outside the board (<commit>); marked done by the lead", its commits are recorded, its folder and branch are cleaned up like after a merge, and tasks waiting on it can start. Nothing is merged and no test runs. Only on the owner's word or a rule the owner set.`, inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" } } } },
   { name: "pause", description: `Pause one task: its worker (if running) is stopped and no new worker starts on it until ${S.N.name} resume.`, inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, reason: { type: "string" } } } },
   { name: "resume", description: 'Continue a paused task: it goes back to "todo" and a fresh worker picks it up.', inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" } } } },
-  { name: "run", description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. Only for a task that is to do; any other task is refused with a short reason (retry it or move it to todo first). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its history says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, anyway: { type: "boolean", description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
+  { name: "run", description: `Run a task now, only on the owner's word ("run T-5 now"): a worker starts on it at once instead of waiting for its turn. Only for a task that is to do; any other task is refused with a short reason (retry it or move it to todo first). It starts even when every agent slot (max_parallel) is busy (one over the limit; nothing else starts until the count is back under) and on a paused board (only this task starts; the rest stays paused). When it waits on tasks that aren't done (after), nothing starts and the reply asks "T-5 waits on T-3 (running). Start anyway?": ask the owner, and only on their yes call it again with anyway: true (it then starts without waiting; its after list is kept). Its timeline says "started now by the owner", and the health check doesn't count it as pushing others back. Everything after the start is as always (checker, tests, merge; in mode review it still waits for review).`, inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, anyway: { type: "boolean", description: 'true: the owner said "Start anyway": start it without waiting for the unfinished tasks of its after list.' } } } },
   {
     name: "scouts",
     description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt, whole last report and its last few runs: when, outcome, findings, tasks made from it and its report file). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; optional findings: auto = you decide where its tasks go, backlog = every task from its findings goes to the backlog, default (or left out) = follow the board's scout_findings setting; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (a paused scout runs too, once, and stays paused; refused with the reason when it is already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
@@ -64634,7 +64633,7 @@ function tellOnce(id, answer, tell) {
   if (!boardAnswered(id, answer, tell)) tell();
 }
 function alreadyAnsweredText(t, a) {
-  const earlier = [...t.history].reverse().find((l) => l.text.startsWith("the owner answered: "))?.text;
+  const earlier = [...t.timeline].reverse().find((l) => l.text.startsWith("the owner answered: "))?.text;
   const quoted2 = earlier ? `, ${earlier}` : "";
   const others = ["title", "details", "add_details", "files", "after", "priority", "needs_review", "backlog", "role", "kind", "merge_into", "project"].filter((k) => a[k] !== void 0);
   const also = others.length ? ` The other changes (${others.join(", ")}) were not made either; send them again without answer.` : "";
@@ -64715,6 +64714,10 @@ async function runTool($, name, a) {
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)) : void 0;
       const kind = await kindIn($, a);
       const project = await projectIn($, a);
+      if (!project && !isInvestigation(kind ?? kindFor(void 0, role))) {
+        const needs = changeNeedsProject(await projectNames($).catch(() => []));
+        if (needs) throw new Error(`Nothing added: ${needs}`);
+      }
       const tooLong = detailsTooLong(clean(str(a.details) ?? "", Infinity).length);
       if (tooLong) throw new Error(tooLong);
       if (!str(a.why)?.trim()) throw new Error("why is missing: say in one line why this task exists (and fill origin_by, plus request, scout or from_task)");
@@ -64780,6 +64783,10 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
         throw new Error(`Nothing changed: ${t.id} already has a copy in ${t.project || "the board folder"}; drop and re-add it, or finish it first`);
       }
       const kind = await kindIn($, a) ?? (role && role !== t.role && isInvestigation(kindFor(void 0, role)) ? kindFor(void 0, role) : void 0);
+      if ((project !== void 0 || kind !== void 0) && !(project ?? t.project) && !isInvestigation(kind ?? t)) {
+        const needs = changeNeedsProject(await projectNames($).catch(() => []));
+        if (needs) throw new Error(`Nothing changed: ${needs}`);
+      }
       let into = str(a.merge_into)?.trim();
       if (a.merge_into !== void 0 && !(into && await branchExists($, into, repoOf({ project: project ?? t.project })))) {
         const some = (await branchList($, repoOf({ project: project ?? t.project }))).slice(0, 8);
@@ -64801,7 +64808,8 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
 Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answerIn}` : void 0;
       const tooLong = detailsTooLong(clean(answered2 ?? noted ?? str(a.details) ?? "", Infinity).length);
       if (tooLong) throw new Error(tooLong);
-      const noteHistory = (x) => note2 ? { history: withHistory((find(x, t.id) ?? t).history, now(), ["note", noteAddedLine(note2)]) } : {};
+      if (projectMoves && project && plainTask(t) && await $.fs.exists(worktreeDir(t.id))) await removeWorktree($, t.id, worktreeDir(t.id));
+      const noteTimeline = (x) => note2 ? { timeline: withTimeline((find(x, t.id) ?? t).timeline, now(), ["note", noteAddedLine(note2)]) } : {};
       const gone = parseGoneBranch(t.status === "waiting" ? t.ask?.text ?? null : null);
       if (projectMoves && a.merge_into === void 0 && !isInvestigation(t)) into = await homeBranch($, repoOf(project ? { project } : void 0));
       if (!into && gone && saysMergeInstead(str(a.answer) ?? "", gone.instead)) into = gone.instead;
@@ -64825,28 +64833,28 @@ Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answerIn}` : void 0
         if (t.status !== "backlog" && !["todo", "doing", "paused", "failed"].includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`);
         if (wasRunning) await stopWorker($, t.id, "moved to the backlog");
         await scratchGone();
-        await change($, (x) => stashTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x), ...endedBy(find(x, t.id), now(), "stopped", "moved to the backlog") }, now(), S.N.dir), t.id, now()));
+        await change($, (x) => stashTask(patchTask(x, t.id, { ...fields(), ...noteTimeline(x), ...endedBy(find(x, t.id), now(), "stopped", "moved to the backlog") }, now(), S.N.dir), t.id, now()));
         void pump($);
         return `${t.id} is in the backlog${wasRunning ? " (its worker was stopped)" : ""}; it starts only when moved to todo`;
       }
       if (a.backlog === false) {
         if (t.status !== "backlog") throw new Error(`${t.id} is not in the backlog (it is ${STATUS_WORD[t.status]})`);
         await scratchGone();
-        await change($, (x) => promoteTask(patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir), t.id, now()));
+        await change($, (x) => promoteTask(patchTask(x, t.id, { ...fields(), ...noteTimeline(x) }, now(), S.N.dir), t.id, now()));
         void pump($);
         const nb = (await load($)).tasks;
         return backlogMovedText(nb, nb.find((x) => x.id === t.id) ?? t);
       }
       if (t.status === "backlog") {
         await scratchGone();
-        await change($, (x) => patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir));
+        await change($, (x) => patchTask(x, t.id, { ...fields(), ...noteTimeline(x) }, now(), S.N.dir));
         return `${t.id} ${note2 ? "note added" : "updated"} (still in the backlog)`;
       }
       if (project !== void 0 && ["title", "details", "add_details", "files", "after", "priority", "needs_review", "role", "kind", "answer", "merge_into"].every((k) => a[k] === void 0)) {
         const p = fields();
         await change($, (x) => {
           const lines = leadLines(changeLines(t, p, false));
-          return patchTask(x, t.id, { ...p, ...lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {} }, now(), S.N.dir);
+          return patchTask(x, t.id, { ...p, ...lines.length ? { timeline: withTimeline(find(x, t.id)?.timeline ?? t.timeline, now(), ...lines) } : {} }, now(), S.N.dir);
         });
         return `${t.id} updated (its worker keeps running if it has one; its status stays ${t.status})`;
       }
@@ -64860,7 +64868,7 @@ Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answerIn}` : void 0
         const p = fields();
         await change($, (x) => {
           const lines = leadLines(changeLines(t, p, false));
-          return patchTask(x, t.id, { ...p, ...lines.length ? { history: withHistory(find(x, t.id)?.history ?? t.history, now(), ...lines) } : {} }, now(), S.N.dir);
+          return patchTask(x, t.id, { ...p, ...lines.length ? { timeline: withTimeline(find(x, t.id)?.timeline ?? t.timeline, now(), ...lines) } : {} }, now(), S.N.dir);
         });
         return `${t.id} updated (its worker keeps running; this counts from its next try)`;
       }
@@ -64878,7 +64886,7 @@ Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answer}`;
         const cur = find(x, t.id) ?? t;
         const lines = leadLines(changeLines(t, patch, wasDoing && !fresh, answer, note2));
         const end2 = fresh ? { attempts: Math.max(0, cur.attempts - 1), runs: withoutOpenRun(cur.runs) } : wasDoing ? endedBy(cur, now(), ...stopEnd(changeRestartWhy(changedFields(t, patch)))) : {};
-        return patchTask(x, t.id, { ...patch, ...end2, ...lines.length ? { history: withHistory(cur.history, now(), ...lines) } : {} }, now(), S.N.dir);
+        return patchTask(x, t.id, { ...patch, ...end2, ...lines.length ? { timeline: withTimeline(cur.timeline, now(), ...lines) } : {} }, now(), S.N.dir);
       });
       void pump($);
       const how = fresh ? ` (its try had just started: it starts again${note2 ? " with the note" : ""} on the same try number)` : wasDoing ? ` (restarting${note2 ? " with the note" : ""})` : "";
@@ -64895,8 +64903,8 @@ Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answer}`;
       const fromDropped = t.status === "dropped";
       await change($, (x) => {
         const cur = find(x, t.id);
-        const history = fromDropped && cur ? withHistory(cur.history, now(), ["retried", "brought back from dropped"]) : void 0;
-        return patchTask(x, t.id, { status: "todo", note: fromDropped ? "brought back from dropped; queued" : "queued", test_tries: 0, merge_main: clashed || void 0, ...history ? { history } : {} }, now());
+        const timeline = fromDropped && cur ? withTimeline(cur.timeline, now(), ["retried", "brought back from dropped"]) : void 0;
+        return patchTask(x, t.id, { status: "todo", note: fromDropped ? "brought back from dropped; queued" : "queued", test_tries: 0, merge_main: clashed || void 0, ...timeline ? { timeline } : {} }, now());
       });
       void pump($);
       return fromDropped ? `${t.id} brought back from dropped and queued` : `${t.id} queued${clashed ? "; its new worker merges the latest main first" : ""}`;
@@ -64909,7 +64917,7 @@ Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answer}`;
       else if (t.status === "doing") await stopWorker($, t.id, "waiting for the owner");
       const asked = t.status === "doing" && !checkingNow(t.id);
       const line = asked ? leadLine(stoppedEntry(t, "the lead asked the owner a question")) : t.status === "todo" ? ["asked", "the lead asked the owner a question", { by: "lead" }] : null;
-      await change($, (x) => patchTask(x, t.id, { status: "waiting", ask: makeAsk("lead", (str(a.question) ?? "").slice(0, 1e3), now()), note: "waiting for you", ...failedOnClash(t) ? { merge_main: true } : {}, ...line ? { history: withHistory((find(x, t.id) ?? t).history, now(), line) } : {}, ...endedBy(find(x, t.id), now(), "stopped", "the lead asked the owner a question") }, now()));
+      await change($, (x) => patchTask(x, t.id, { status: "waiting", ask: makeAsk("lead", (str(a.question) ?? "").slice(0, 1e3), now()), note: "waiting for you", ...failedOnClash(t) ? { merge_main: true } : {}, ...line ? { timeline: withTimeline((find(x, t.id) ?? t).timeline, now(), line) } : {}, ...endedBy(find(x, t.id), now(), "stopped", "the lead asked the owner a question") }, now()));
       await haltChecker($, t.id, "the task was sent to the owner");
       return `${t.id} now waits for the owner`;
     }
@@ -64943,14 +64951,14 @@ Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answer}`;
       const wasDoing = t.status === "doing";
       if (wasDoing) await stopWorker($, t.id, reason ?? "the lead paused this task");
       const line = wasDoing ? stoppedEntry(t, paused) : t.status === "todo" ? ["stopped", paused, waitsForOwner(paused) ? { owner: true } : {}] : null;
-      await change($, (x) => patchTask(x, t.id, { status: "paused", note: paused, ...failedOnClash(t) ? { merge_main: true } : {}, ...line ? { history: withHistory((find(x, t.id) ?? t).history, now(), line) } : {}, ...endedBy(find(x, t.id), now(), "stopped", paused) }, now()));
+      await change($, (x) => patchTask(x, t.id, { status: "paused", note: paused, ...failedOnClash(t) ? { merge_main: true } : {}, ...line ? { timeline: withTimeline((find(x, t.id) ?? t).timeline, now(), line) } : {}, ...endedBy(find(x, t.id), now(), "stopped", paused) }, now()));
       void pump($);
       return `${t.id} paused${wasDoing ? " (its worker was stopped)" : ""}; ${S.N.name} resume ${t.id} continues it`;
     }
     case "resume": {
       const t = await taskOrThrow($, id);
       if (t.status !== "paused") return `${t.id} is not paused (it is ${t.status})`;
-      await change($, (x) => patchTask(x, t.id, { status: "todo", note: "resumed", history: withHistory((find(x, t.id) ?? t).history, now(), ["resumed", "resumed after a pause"]) }, now()));
+      await change($, (x) => patchTask(x, t.id, { status: "todo", note: "resumed", timeline: withTimeline((find(x, t.id) ?? t).timeline, now(), ["resumed", "resumed after a pause"]) }, now()));
       void pump($);
       return `${t.id} resumed`;
     }
@@ -65010,8 +65018,8 @@ async function runNowTool($, id, anyway) {
   const b = await load($);
   const waits = runNowWaits(b, t);
   if (waits.length && !anyway) return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`;
-  if (S.gitState === "ok" && S.gitRoot === "no-repo" && !isProjectName(t.project ?? "")) return `${noProjectText({ ...b, tasks: [t] })}; nothing started`;
-  if (S.gitState === "no-git" || !await taskGitReady($, b, t)) return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : "here"} yet`;
+  if (S.gitState === "ok" && S.gitRoot === "no-repo" && !isProjectName(t.project ?? "") && !isInvestigation(t)) return `${noProjectText({ ...b, tasks: [t] })}; nothing started`;
+  if (S.gitState === "no-git" || !plainTask(t) && !await taskGitReady($, b, t)) return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : "here"} yet`;
   const busy = workers.size + starting.size;
   const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : void 0;
   const paused = modeOf(b) === "paused";
@@ -65215,7 +65223,7 @@ async function pump(host) {
     if (workers.size + starting.size >= b.max_parallel) break;
     if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some((w) => w.task === t.id)) continue;
     const repo = repoOf(t);
-    if (repo === S.root ? S.gitRoot !== "ok" : !(repoOk.get(repo) ?? (repoOk.set(repo, await gitReady(host, b, repo)), repoOk.get(repo)))) continue;
+    if (!plainTask(t) && (repo === S.root ? S.gitRoot !== "ok" : !(repoOk.get(repo) ?? (repoOk.set(repo, await gitReady(host, b, repo)), repoOk.get(repo))))) continue;
     const q = await queueWorker(host, t.id).catch(async (err) => (await failed2(t.id)(err), null));
     if (q) queued.push(q.started.catch(failed2(t.id)));
   }
@@ -65230,7 +65238,7 @@ async function startNow2(host, id, line) {
   if (!q) return false;
   await change(host, (x) => {
     const cur = find(x, id);
-    return cur?.status === "doing" ? patchTask(x, id, { history: withHistory(cur.history, now(), tryEntry(cur, "run-now", line)) }, now()) : x;
+    return cur?.status === "doing" ? patchTask(x, id, { timeline: withTimeline(cur.timeline, now(), tryEntry(cur, "run-now", line)) }, now()) : x;
   }).catch(() => void 0);
   void q.started.catch((err) => startFailed(host, id, err));
   return true;
@@ -65247,9 +65255,10 @@ async function queueWorker(host, id) {
     const b = await load(host);
     const t0 = find(b, id);
     if (!mayStart(t0, agents.map(agentState), S.N.name)) return null;
-    if (repoOf(t0) === S.root ? S.gitRoot !== "ok" : !await taskGitReady(host, b, t0)) return null;
-    if (await mergedBeforeStart(host, t0)) return null;
-    if (await waitIfBranchGone(host, b, t0, "start")) return null;
+    const plain2 = plainTask(t0);
+    if (!plain2 && (repoOf(t0) === S.root ? S.gitRoot !== "ok" : !await taskGitReady(host, b, t0))) return null;
+    if (!plain2 && await mergedBeforeStart(host, t0)) return null;
+    if (!plain2 && await waitIfBranchGone(host, b, t0, "start")) return null;
     const tryNo2 = t0.attempts > 0 && goOnRun(t0.runs, now()) ? t0.attempts : t0.attempts + 1;
     const { dir, branch, behind, why: why2, merged, commit } = await prepareWorktree(host, { ...t0, attempts: tryNo2 }, intoOf(t0), true);
     const reports = await copyReports(host, t0, dir).catch(() => []);
@@ -65261,10 +65270,10 @@ async function queueWorker(host, id) {
       const at3 = now();
       const goOn = cur.attempts > 0 ? goOnRun(cur.runs, at3) : null;
       const attempts = goOn ? cur.attempts : cur.attempts + 1;
-      const upToDate = merged ? { history: withHistory(cur.history, at3, tryEntry({ ...cur, attempts }, "stage", `brought up to date with ${intoOf(cur)} (${plural(merged, "commit")})`)) } : {};
+      const upToDate = merged ? { timeline: withTimeline(cur.timeline, at3, tryEntry({ ...cur, attempts }, "stage", `brought up to date with ${intoOf(cur)} (${plural(merged, "commit")})`)) } : {};
       const clash = why2 === "clash" && !cur.merge_main ? { merge_main: true } : {};
-      const added = goOn ? ownerAddedMinutes(cur.history, attempts) : 0;
-      const time = goOn ? ownerTimeState(cur.history, attempts, at3) : {};
+      const added = goOn ? ownerAddedMinutes(cur.timeline, attempts) : 0;
+      const time = goOn ? ownerTimeState(cur.timeline, attempts, at3) : {};
       const y = patchTask(x, id, { status: "doing", live: { session: S.me, phase: "claimed", ...added > 0 ? { extra_minutes: added } : {}, ...time }, attempts, branch, note: claimNote(host), runs: addCommits(goOn ?? startRun(cur.runs, at3, !!cur.merge_main || why2 === "clash"), commit ? [commit] : []), ...upToDate, ...clash }, at3);
       return [y, find(y, id)];
     });
@@ -65277,8 +65286,11 @@ async function queueWorker(host, id) {
       const cur = find(await load(host), id);
       return cur?.status === "doing" && cur.live?.session === S.me && cur.attempts === t.attempts;
     };
+    const plainNote = plain2 ? `
+
+You work in a plain folder (no git, no branch). The board's projects are folders you may read, but never write into: ${(await projectNames(host)).map((n) => `${S.root}/${n}`).join(", ")}. Read them with your file tools. Nothing you leave here is kept: put what the owner needs in your report.` : "";
     const errandOut = (x) => isErrand(x) ? errandFolders(x.files, S.root, S.home) : [];
-    const spawn3 = startAgent(host, { kind: "worker", prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince2(host, t, dir, Date.parse(now()))) + (errandOut(t).length ? `
+    const spawn3 = startAgent(host, { kind: "worker", prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince2(host, t, dir, Date.parse(now()))) + plainNote + (errandOut(t).length ? `
 
 You may write here (outside the project): ${errandOut(t).join(", ")}` : "") + reportsNote(reports, t.details) + behindNote(behind, intoOf(t), why2), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...role?.tools ? { tools: role.tools } : {}, ...isProseRole(role) && !isInvestigation(t) ? { prose: true } : {}, ...errandOut(t).length || !isInvestigation(t) && t.files?.length ? { files: isErrand(t) ? errandOut(t) : t.files } : {}, cwd: dir, ...role?.model ? { model: role.model } : {} }, still);
     queued = true;
@@ -65323,7 +65335,7 @@ async function workerStarted(host, id, before, dir, branch, spawn3, claimed) {
     const at3 = now();
     const again = restartsOf(cur2.runs?.at(-1)).at(-1);
     const entry = again && !workerIdOf(cur2) ? workerRestartedEntry(cur2, again.why) : workerStartedEntry(cur2, !!cur2.runs?.at(-1)?.merge_main, workerName(S.N.name, id));
-    const line = cur2.attempts === claimed ? { history: withHistory(cur2.history, at3, entry) } : {};
+    const line = cur2.attempts === claimed ? { timeline: withTimeline(cur2.timeline, at3, entry) } : {};
     return patchTask(x, id, { runs: withWorkerStart(cur2.runs, agentId, at3), ...cur2.live?.phase === "claimed" ? { note: "worker on it", live: { phase: "worker" } } : {}, ...line }, at3);
   });
   const cur = find(await load(host), id);
@@ -65351,7 +65363,7 @@ async function waitIfBranchGone(host, b, t, when3) {
     const cur = find(x, t.id);
     if (!cur || cur.status !== t.status || cur.attempts !== t.attempts) return [x, false];
     const line = `${when3 === "start" ? "not started" : "not merged"}: branch ${into} is gone; asked the owner whether to merge into ${instead} instead`;
-    return [patchTask(x, t.id, { status: "waiting", ask: makeAsk("symcc", question, now(), { options }), live: { merge_wait: void 0 }, note: "waiting for you", history: withHistory(cur.history, now(), ["not-merged", line, { owner: true }]), ...endedBy(cur, now(), "asked", `branch ${into} is gone`) }, now()), true];
+    return [patchTask(x, t.id, { status: "waiting", ask: makeAsk("symcc", question, now(), { options }), live: { merge_wait: void 0 }, note: "waiting for you", timeline: withTimeline(cur.timeline, now(), ["not-merged", line, { owner: true }]), ...endedBy(cur, now(), "asked", `branch ${into} is gone`) }, now()), true];
   });
   if (asked) {
     sayNeedsYou(host, b, t, question);
@@ -65406,7 +65418,7 @@ async function workerFinishedNow(host, agentId, answer, end2, tokens, cost) {
         return [putTask(x, backToTodo({ ...t, ...runs ? { runs } : {} }, SYMCC_STOPPED_NOTE, ended)), null];
       }
       limitMs = finishLimitMs(mergeTestCount(x, t), testMinutesOf(x));
-      return [patchTask(x, w.task, { live: { checking: { step: "prep", at: ended }, phase: void 0, time_ask: void 0 }, history: withHistory(t.history, ended, workerHandedBackEntry(t, workerName(S.N.name, t.id))), ...t.runs?.length ? { runs: endRun(withAgentUsed(t.runs, "worker", agentId, ended, { tokens, ...cost !== void 0 ? { cost } : {} }), ended) } : {} }, ended), t.attempts];
+      return [patchTask(x, w.task, { live: { checking: { step: "prep", at: ended }, phase: void 0, time_ask: void 0 }, timeline: withTimeline(t.timeline, ended, workerHandedBackEntry(t, workerName(S.N.name, t.id))), ...t.runs?.length ? { runs: endRun(withAgentUsed(t.runs, "worker", agentId, ended, { tokens, ...cost !== void 0 ? { cost } : {} }), ended) } : {} }, ended), t.attempts];
     });
   } catch {
     keptHandBacks.set(agentId, { w, answer, end: end2, tokens, cost });
@@ -65537,7 +65549,7 @@ function ranOverTry(t, min, retries) {
   const tries = t.test_tries ?? 0;
   const retry = onTestFail(t, retries) === "retry";
   const note2 = retry ? `${ranOverNote(min)}; a new try will look at it (${tries + 1} of ${retries})` : `${ranOverNote(min)}; nothing was merged (after ${tries} automatic ${tries === 1 ? "retry" : "retries"})`;
-  return { ...rest, status: retry ? "todo" : "failed", note: note2, ...retry ? { test_tries: tries + 1 } : {}, updated_at: now(), history: withHistory(t.history, now(), tryEntry(t, "failed", note2, { reason: "timeout" })), ...t.status === "doing" ? endedBy(t, now(), "stopped", ranOverNote(min)) : {} };
+  return { ...rest, status: retry ? "todo" : "failed", note: note2, ...retry ? { test_tries: tries + 1 } : {}, updated_at: now(), timeline: withTimeline(t.timeline, now(), tryEntry(t, "failed", note2, { reason: "timeout" })), ...t.status === "doing" ? endedBy(t, now(), "stopped", ranOverNote(min)) : {} };
 }
 function ranOverText(t, min, retries) {
   if (t.status === "failed") return `\u2717 ${t.id} "${t.title}" failed: its checking and merging ran over ${min} minutes and was stopped, and it has no automatic retries left; nothing was merged. Its folder and branch are kept. Look at why the test commands are so slow or hang, then ${S.N.name} retry ${t.id}.`;
@@ -65556,7 +65568,7 @@ async function landedLate(host, t, sha, made, kind, status) {
     if (!cur || !fits(cur)) return [x, { done: false, cur }];
     const next = mergedDone({ ...cur, runs: addCommits(cur.runs, [...made, sha]) }, sha, "left as given up", now());
     const line = `${tryLabel(cur)}: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short3}), so it is done`;
-    return [putTask(x, { ...next, history: withHistory(cur.history, now(), ["merged", line, { try: cur.attempts }]) }), { done: true, cur }];
+    return [putTask(x, { ...next, timeline: withTimeline(cur.timeline, now(), ["merged", line, { try: cur.attempts }]) }), { done: true, cur }];
   }).catch((e) => {
     tellLead(host, `${t.id} "${t.title}": its given-up checking and merging ended late and its work was merged into ${into} (${short3}), but the board could not be updated (${e.message.slice(0, 200)}).`);
     return null;
@@ -65639,7 +65651,7 @@ async function stopChecks(host, why2) {
       const cur = find(x, id);
       if ((cur?.status === "review" || cur?.status === "waiting") && approving.has(id)) return [x, "review"];
       if (cur?.status !== "doing" || !finishing.has(id)) return [x, null];
-      const y = patchTask(x, id, { status: "todo", note: `stopped: ${why2} while its work was being checked; nothing merged, continues when it is on again`, history: withHistory(cur.history, now(), stoppedEntry(cur, `${why2} while its work was being checked; nothing merged, its files are kept`)), ...endedBy(cur, now(), "stopped", `${why2} while its work was being checked`) }, now());
+      const y = patchTask(x, id, { status: "todo", note: `stopped: ${why2} while its work was being checked; nothing merged, continues when it is on again`, timeline: withTimeline(cur.timeline, now(), stoppedEntry(cur, `${why2} while its work was being checked; nothing merged, its files are kept`)), ...endedBy(cur, now(), "stopped", `${why2} while its work was being checked`) }, now());
       return [y, "back"];
     });
     if (!kind) continue;
@@ -65677,7 +65689,7 @@ async function stopLeftovers(host, t, end2) {
   const text2 = stopped2 >= running ? `stopped ${cmds(stopped2)} still running at hand-back` : stopped2 > 0 ? `stopped ${cmds(stopped2)} of ${running} still running at hand-back` : `${cmds(running)} still running at hand-back (could not stop ${running === 1 ? "it" : "them"})`;
   await change(host, (x) => {
     const cur = find(x, t.id);
-    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { history: withHistory(cur.history, now(), tryEntry(t, "step", text2)) }, now()) : x;
+    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { timeline: withTimeline(cur.timeline, now(), tryEntry(t, "step", text2)) }, now()) : x;
   });
 }
 async function warnEndedEarly(host, t, answer) {
@@ -65686,7 +65698,7 @@ async function warnEndedEarly(host, t, answer) {
   const note2 = endedEarlyNote(t.id, line);
   await change(host, (x) => {
     const cur = find(x, t.id);
-    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { history: withHistory(cur.history, now(), tryEntry(t, "step", `warning: ${note2}`)) }, now()) : x;
+    return cur && cur.status === t.status && cur.attempts === t.attempts ? patchTask(x, t.id, { timeline: withTimeline(cur.timeline, now(), tryEntry(t, "step", `warning: ${note2}`)) }, now()) : x;
   });
   tellLead(host, note2);
 }
@@ -65706,7 +65718,7 @@ async function changedMeanwhile(host, t, b, r, line, worktree, agentId) {
     const cur = find(x, t.id);
     if (!cur) return [x, null];
     const late = off ? `${off} while it was being merged, too late` : `it was ${cur.status} while being merged, too late`;
-    const y = merged ? patchTask(x, t.id, { status: "done", note: off ? `merged; ${off} too late to stop it` : `merged; it was ${cur.status} too late to stop it`, merge_main: void 0, test_output: void 0, ...r.notes?.length ? { research_notes: r.notes } : {}, history: withHistory(cur.history, now(), line, tryEntry(t, "merged", `${late}: the work was already merged, so it stays done`)), ...cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, "finished", "merged", true) } : {} }, now()) : patchTask(x, t.id, { history: withHistory(cur.history, now(), notUsedEntry(line, off ?? `the task was ${cur.status} meanwhile`)) }, now());
+    const y = merged ? patchTask(x, t.id, { status: "done", note: off ? `merged; ${off} too late to stop it` : `merged; it was ${cur.status} too late to stop it`, merge_main: void 0, test_output: void 0, ...r.notes?.length ? { research_notes: r.notes } : {}, timeline: withTimeline(cur.timeline, now(), line, tryEntry(t, "merged", `${late}: the work was already merged, so it stays done`)), ...cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, "finished", "merged", true) } : {} }, now()) : patchTask(x, t.id, { timeline: withTimeline(cur.timeline, now(), notUsedEntry(line, off ?? `the task was ${cur.status} meanwhile`)) }, now());
     return [y, cur.status];
   });
   if (!was) return;
@@ -65787,7 +65799,7 @@ async function finishTryBody(host, agentId, w, answer, end2, gaveUp, release, li
       await answered(host, t, answer, summary, limit2, agentId);
       return true;
     }
-    if (await writeIfSame(host, t, (cur) => ({ status: "failed", note: outOfTimeNote(limit2), history: withHistory(cur.history, now(), tryEntry(t, "out-of-time", `out of time; handed back: ${cutLine(summary, 300)} (its work so far is kept in its folder and branch)`, { reason: "timeout", by: "worker", agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), "timed out", `ran over ${limit2} min`) }))) return false;
+    if (await writeIfSame(host, t, (cur) => ({ status: "failed", note: outOfTimeNote(limit2), timeline: withTimeline(cur.timeline, now(), tryEntry(t, "out-of-time", `out of time; handed back: ${cutLine(summary, 300)} (its work so far is kept in its folder and branch)`, { reason: "timeout", by: "worker", agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), "timed out", `ran over ${limit2} min`) }))) return false;
     tellLead(host, `${t.id} "${t.title}": its time (${limit2} minutes) was up, so its worker wrote down what it had and handed back, and the task failed. Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); a retry (${S.N.name} retry) continues from there. Or split it, or drop it.`);
     return true;
   }
@@ -65796,26 +65808,26 @@ async function finishTryBody(host, agentId, w, answer, end2, gaveUp, release, li
   if (q) {
     const question = q.text;
     const options = q.options;
-    if (await writeIfSame(host, t, (cur) => ({ status: "waiting", ask: { ...q, text: question.slice(0, 1e3), asked_at: now() }, note: "waiting for you", history: withHistory(cur.history, now(), tryEntry(t, "asked", `worker asked: ${question}`, { by: "worker", agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), "asked", "question") }))) return false;
+    if (await writeIfSame(host, t, (cur) => ({ status: "waiting", ask: { ...q, text: question.slice(0, 1e3), asked_at: now() }, note: "waiting for you", timeline: withTimeline(cur.timeline, now(), tryEntry(t, "asked", `worker asked: ${question}`, { by: "worker", agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), "asked", "question") }))) return false;
     sayNeedsYou(host, b, t, question);
     tellLead(host, workerQuestionText(t.id, question, options), { urgent: true });
   } else if (need.length) {
     const question = needFilesQuestion(t.id, need);
-    if (await writeIfSame(host, t, (cur) => ({ status: "waiting", ask: makeAsk("symcc", question.slice(0, 1e3), now(), { files: need }), note: "waiting for you", history: withHistory(cur.history, now(), tryEntry(t, "asked", `worker asked for more files: ${need.join(", ")}`, { by: "worker", agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), "asked", "files outside its list") }))) return false;
+    if (await writeIfSame(host, t, (cur) => ({ status: "waiting", ask: makeAsk("symcc", question.slice(0, 1e3), now(), { files: need }), note: "waiting for you", timeline: withTimeline(cur.timeline, now(), tryEntry(t, "asked", `worker asked for more files: ${need.join(", ")}`, { by: "worker", agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), "asked", "files outside its list") }))) return false;
     logNeedsFiles(host, t.id, Number(t.attempts) || 0, need);
     sayNeedsYou(host, b, t, question);
     tellLead(host, `${question}
 The task now waits for the owner, who can allow the files from the board (Allow on its page). If they agree here instead, ${S.N.name} change ${t.id} with the wider files (that sends it back to work; what the worker already changed is kept). Otherwise ${S.N.name} drop it, or change it to a narrower plan that fits its files.`, { urgent: true });
   } else if (end2.reason === "aborted") {
-    if (await writeIfSame(host, t, (cur) => ({ status: "failed", note: "the worker was stopped", history: withHistory(cur.history, now(), tryEntry(t, "stopped", "stopped before finishing", { reason: "stopped" })), ...endedBy(cur, now(), "stopped", `stopped from ${S.W.app}`) }))) return false;
+    if (await writeIfSame(host, t, (cur) => ({ status: "failed", note: "the worker was stopped", timeline: withTimeline(cur.timeline, now(), tryEntry(t, "stopped", "stopped before finishing", { reason: "stopped" })), ...endedBy(cur, now(), "stopped", `stopped from ${S.W.app}`) }))) return false;
     tellLead(host, `${t.id} "${t.title}": the worker was stopped before finishing.`);
   } else if (end2.reason === "error" || end2.reason === "refusal") {
     const why2 = endFailure(end2);
-    if (await writeIfSame(host, t, (cur) => ({ status: "failed", note: why2, history: withHistory(cur.history, now(), tryEntry(t, "failed", `${why2}; nothing was checked or merged`, { reason: "other" })), ...endedBy(cur, now(), "stopped", why2) }))) return false;
+    if (await writeIfSame(host, t, (cur) => ({ status: "failed", note: why2, timeline: withTimeline(cur.timeline, now(), tryEntry(t, "failed", `${why2}; nothing was checked or merged`, { reason: "other" })), ...endedBy(cur, now(), "stopped", why2) }))) return false;
     const limited = end2.reason === "error" && isUsageLimit(end2.error);
     tellLead(host, `${t.id} "${t.title}": ${why2}, so nothing was checked or merged and the task failed.${limited ? ` This is a usage or provider limit: a retry will likely fail the same way until the owner fixes the provider (or switches models), so tell the owner instead of retrying.` : ""} Its work so far is kept in its folder and branch, and its report (${S.N.name} board task ${t.id}); ${S.N.name} retry ${t.id} starts a fresh try that continues from there. Or change, split or drop it.`);
   } else if (end2.background?.length && !answer.trim()) {
-    if (await writeIfSame(host, t, (cur) => ({ status: "failed", note: ENDED_EARLY_NOTE, history: withHistory(cur.history, now(), resultEntry(t, "failed", cutLine(summary, 300), `${ENDED_EARLY_NOTE}; nothing was checked or merged`, { reason: "other", agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), "stopped", ENDED_EARLY_NOTE) }))) return false;
+    if (await writeIfSame(host, t, (cur) => ({ status: "failed", note: ENDED_EARLY_NOTE, timeline: withTimeline(cur.timeline, now(), resultEntry(t, "failed", cutLine(summary, 300), `${ENDED_EARLY_NOTE}; nothing was checked or merged`, { reason: "other", agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), "stopped", ENDED_EARLY_NOTE) }))) return false;
     tellLead(host, `${t.id} "${t.title}": ${ENDED_EARLY_NOTE} (something it started was still running, but ending its turn ends its work), so nothing was checked or merged and the task failed. Its work so far is kept in its folder and branch; ${S.N.name} retry ${t.id} starts a fresh try that continues from there.`);
   } else if (isInvestigation(t)) {
     if (gaveUp()) return false;
@@ -65909,7 +65921,7 @@ async function checkerStepAgain(host, t, b, dir, fromChecker, gaveUp, release, l
   if (fromChecker && !moved && !why2 && !adoptedCheckers.has(t.id)) await cleanFolder(host, dir);
   const adoptedWas = fromChecker && !why2 && adoptedCheckers.has(t.id);
   const waited = adoptedWas ? await afterChecker(host, t, b, dir, made, stop, true) : void 0;
-  const checker = fromChecker || checkerOn(b) && !t.history.some((h) => h.text === checkerLine(tryLabel(t), { ok: true }));
+  const checker = fromChecker || checkerOn(b) && !t.timeline.some((h) => h.text === checkerLine(tryLabel(t), { ok: true }));
   const r = why2 ? taskWasResult(why2) : await checkAndMerge(host, t, dir, b, "finish", made, stop, false, release, limit, adoptedWas ? async () => waited : checker ? checkerFirst(host, t, b, dir, made, stop, true) : void 0).catch((e) => ({ ok: false, reason: "other", detail: `checking failed: ${e.message.slice(0, 300)}` }));
   if (r.again) return;
   await finishTail(host, t, b, r, made, await reportSummary(host, t), dir, workerIdOf(t), gaveUp);
@@ -65998,11 +66010,11 @@ async function unsayProblems(host, t, report) {
     const cur = find(x, t.id);
     if (!cur || cur.attempts !== t.attempts) return x;
     const said = checkerLine(tryLabel(cur), { ok: false, report });
-    const at3 = cur.history.map((h) => h.text).lastIndexOf(said);
+    const at3 = cur.timeline.map((h) => h.text).lastIndexOf(said);
     if (at3 < 0) return x;
-    const history = [...cur.history];
-    history[at3] = historyEntry("checker", checkerLine(tryLabel(cur), null, STOPPED_AGAIN), cur.history[at3].at ?? now(), { try: cur.attempts, agent: checkerName(S.N.name, t.id) });
-    return patchTask(x, t.id, { history }, now());
+    const timeline = [...cur.timeline];
+    timeline[at3] = timelineEntry("checker", checkerLine(tryLabel(cur), null, STOPPED_AGAIN), cur.timeline[at3].at ?? now(), { try: cur.attempts, agent: checkerName(S.N.name, t.id) });
+    return patchTask(x, t.id, { timeline }, now());
   }).catch(() => void 0);
 }
 var ANSWERED_NOTE = "answered; waiting for you to read it";
@@ -66012,7 +66024,7 @@ async function answered(host, t, answer, summary, limit, agentId) {
   const kept = text2.length > ANSWER_MAX_CHARS ? `${text2.slice(0, ANSWER_MAX_CHARS - 1)}\u2026` : text2;
   const late = limit !== void 0;
   const errand = isErrand(t);
-  if (await writeIfSame(host, t, (cur) => ({ status: "review", note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: void 0, test_output: void 0, time_ask: void 0, wrap_up: void 0, history: withHistory(cur.history, now(), tryEntry(t, "answered", `answered${late ? ` (time ran out after ${limit} min)` : ""}: ${cutLine(summary, 300)}`, { agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), late ? "timed out" : "finished", late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: "", answered: true })) }))) return;
+  if (await writeIfSame(host, t, (cur) => ({ status: "review", note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: void 0, test_output: void 0, time_ask: void 0, wrap_up: void 0, timeline: withTimeline(cur.timeline, now(), tryEntry(t, "answered", `answered${late ? ` (time ran out after ${limit} min)` : ""}: ${cutLine(summary, 300)}`, { agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), late ? "timed out" : "finished", late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: "", answered: true })) }))) return;
   if (errand) {
     await endInvestigation(host, t, false, agentId);
     tellLead(host, `${t.id} "${t.title}" (errand) is done${late ? ` (its time of ${limit} minutes ran out, so this is what it had)` : ""}; nothing was merged. Its report (full: ${S.N.name} board task ${t.id}):
@@ -66045,7 +66057,7 @@ async function holdForFiles(host, t, b, r, line, worktree, agentId, quiet = fals
     if (cur.status !== t.status || cur.attempts !== t.attempts) return [x, cur];
     const first = !waitsForFiles(cur);
     const status = cur.status === "review" ? "review" : "waiting";
-    const y = patchTask(x, t.id, { status, live: { merge_wait: files }, note: note2, ...first ? { history: withHistory(cur.history, now(), line) } : {}, ...endedBy(cur, now(), "finished", "waiting for your files") }, now());
+    const y = patchTask(x, t.id, { status, live: { merge_wait: files }, note: note2, ...first ? { timeline: withTimeline(cur.timeline, now(), line) } : {}, ...endedBy(cur, now(), "finished", "waiting for your files") }, now());
     return [y, first];
   });
   if (res === "gone") return;
@@ -66094,7 +66106,7 @@ async function settle(host, t, b, r, summary, worktree, agentId, approved = fals
   };
   if (r.ask) {
     const ask = r.ask;
-    const moved = await writeIfSame(host, t, (cur) => ({ status: "waiting", ask: makeAsk("symcc", ask.slice(0, 1e3), now()), note: "waiting for you", merge_main: void 0, test_output: void 0, history: withHistory(cur.history, now(), line), ...endedBy(cur, now(), "asked", "only secret-looking files") }));
+    const moved = await writeIfSame(host, t, (cur) => ({ status: "waiting", ask: makeAsk("symcc", ask.slice(0, 1e3), now()), note: "waiting for you", merge_main: void 0, test_output: void 0, timeline: withTimeline(cur.timeline, now(), line), ...endedBy(cur, now(), "asked", "only secret-looking files") }));
     if (moved) {
       if (moved !== "gone") await changedMeanwhile(host, t, b, r, line, worktree, agentId);
       return;
@@ -66104,7 +66116,7 @@ async function settle(host, t, b, r, summary, worktree, agentId, approved = fals
     return;
   }
   if (r.review) {
-    if (!await write((cur) => ({ status: "review", note: `ready for review: ${r.noVerdict ? `the tests passed, but ${r.noVerdict}` : "the checks passed"}, nothing merged yet${r.untested ? ` (${r.untested})` : ""}`, merge_main: void 0, test_output: void 0, history: withHistory(cur.history, now(), line) }))) return;
+    if (!await write((cur) => ({ status: "review", note: `ready for review: ${r.noVerdict ? `the tests passed, but ${r.noVerdict}` : "the checks passed"}, nothing merged yet${r.untested ? ` (${r.untested})` : ""}`, merge_main: void 0, test_output: void 0, timeline: withTimeline(cur.timeline, now(), line) }))) return;
     tellLead(host, `${r.noVerdict ? `${t.id}: ${r.noVerdict}. ` : ""}${r.untested ? `${r.untested}. ` : ""}${r.secrets?.length ? `${t.id}: ${secretsLeftText(r.secrets)}. ` : ""}${t.id} "${t.title}" is ready for review. The change is on branch ${taskBranch(t)} (folder ${S.N.dir}/worktrees/${t.id}). Show the owner what changed; then ${S.N.name} approve ${t.id} merges it, or ${S.N.name} reject ${t.id} with a reason sends it back to a fresh worker. The owner may also edit the files in that folder first; approve then commits those edits with the task and runs the tests again.`);
     return;
   }
@@ -66112,7 +66124,7 @@ async function settle(host, t, b, r, summary, worktree, agentId, approved = fals
   if (sentBack >= CHECKER_SEND_BACKS) {
     const output = r.testOutput;
     const ask = checkerAskText(t.id, sentBack, firstProblemOf(output.slice(CHECKER_MARK.length)));
-    const moved = await writeIfSame(host, t, (cur) => ({ status: "waiting", ask: makeAsk("symcc", ask, now(), { options: [...CHECKER_ASK_OPTIONS] }), note: "waiting for you", merge_main: void 0, test_output: output, history: withHistory(cur.history, now(), line), ...endedBy(cur, now(), "asked", "sent back by the checker twice") }));
+    const moved = await writeIfSame(host, t, (cur) => ({ status: "waiting", ask: makeAsk("symcc", ask, now(), { options: [...CHECKER_ASK_OPTIONS] }), note: "waiting for you", merge_main: void 0, test_output: output, timeline: withTimeline(cur.timeline, now(), line), ...endedBy(cur, now(), "asked", "sent back by the checker twice") }));
     if (moved) {
       if (moved !== "gone") await changedMeanwhile(host, t, b, r, line, worktree, agentId);
       return;
@@ -66125,19 +66137,19 @@ async function settle(host, t, b, r, summary, worktree, agentId, approved = fals
   const tries = t.test_tries ?? 0;
   if (r.conflict && onTestFail(t, retries) === "retry") {
     const note2 = `conflicts with the latest ${intoOf(t)}; a new try will merge it in (${tries + 1} of ${retries})`;
-    if (!await write((cur) => ({ status: "todo", note: note2, test_tries: tries + 1, test_output: void 0, merge_main: true, history: withHistory(cur.history, now(), line) }))) return;
+    if (!await write((cur) => ({ status: "todo", note: note2, test_tries: tries + 1, test_output: void 0, merge_main: true, timeline: withTimeline(cur.timeline, now(), line) }))) return;
     noteForLead(`${t.id} "${t.title}" conflicts with the latest ${intoOf(t)}; retrying on its own, the new try merges it in first (${tries + 1} of ${retries}). Nothing to do.`);
     return;
   }
   if (r.testOutput !== void 0 && onTestFail(t, retries) === "retry") {
     const note2 = r.timedOut !== void 0 ? timedOutRetryNote(r.timedOut, tries + 1, retries) : `${r.checker ? "the checker found problems" : "tests failed"}; a new try will fix them (${tries + 1} of ${retries})`;
-    if (!await write((cur) => ({ status: "todo", note: note2, test_tries: tries + 1, test_output: r.testOutput, merge_main: void 0, history: withHistory(cur.history, now(), line) }))) return;
+    if (!await write((cur) => ({ status: "todo", note: note2, test_tries: tries + 1, test_output: r.testOutput, merge_main: void 0, timeline: withTimeline(cur.timeline, now(), line) }))) return;
     noteForLead(`${t.id} "${t.title}" ${r.checker ? "was sent back by the checker" : r.timedOut !== void 0 ? `ran out of time in its tests (${r.timedOut} min)` : "failed its tests"}; retrying on its own (${tries + 1} of ${retries}). Nothing to do.`);
     return;
   }
   const detail = r.conflict ? `conflicts with the latest ${intoOf(t)} (after ${tries} automatic ${tries === 1 ? "retry" : "retries"})` : r.detail;
   const done = resultEntry(t, resultKind(r), cutLine(summary, 300), r.checker ? CHECKER_RESULT : detail, facts);
-  if (!await write((cur) => ({ status: r.ok ? "done" : "failed", note: detail.slice(0, 300), merge_main: void 0, failed_on: r.conflict ? "clash" : void 0, test_output: r.testOutput, history: withHistory(cur.history, now(), done), ...r.ok && r.notes?.length ? { research_notes: r.notes } : {}, ...r.ok && cur.status === "waiting" && cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, "finished", "merged", true) } : {} }))) return;
+  if (!await write((cur) => ({ status: r.ok ? "done" : "failed", note: detail.slice(0, 300), merge_main: void 0, failed_on: r.conflict ? "clash" : void 0, test_output: r.testOutput, timeline: withTimeline(cur.timeline, now(), done), ...r.ok && r.notes?.length ? { research_notes: r.notes } : {}, ...r.ok && cur.status === "waiting" && cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, "finished", "merged", true) } : {} }))) return;
   if (r.ok) sayDone(host, b, t.id);
   if (r.ok && await removeWorktree(host, t.id, worktree, agentId, true)) await deleteMergedBranch(host, taskBranch(t), intoOf(t), repoOf(t));
   const triesText = `${tries} of ${retries} automatic ${retries === 1 ? "try" : "tries"} used`;
@@ -66175,6 +66187,7 @@ async function approve(host, id, keepNote = false) {
   if (!approving.has(id)) outcomes.set(id, "failed");
   const b = await load(host);
   const t = reviewTask(b, id, "approve");
+  if (isInvestigation(t) && keepNote && workspaceNow() && !t.project) throw new Error(`${t.id} has no project, and a note is a docs task that needs one on a board over several repos (${(await projectNames(host)).join(", ")}): give ${t.id} a project (${S.N.name} change project), then keep it as a note`);
   if (isInvestigation(t)) return endInvestigation(host, t, keepNote);
   if (keepNote) throw new Error(`${t.id} is a change task: keep_note is only for an answered investigation. Approve it without keep_note to merge it.`);
   return mergeFinished(host, b, t, "approve");
@@ -66187,11 +66200,11 @@ async function fullAnswer(host, t) {
 var everyReport = (t, latest) => [.../* @__PURE__ */ new Set([...taskReports(t).sort((a, b) => a.try - b.try).map((r) => r.file), ...latest ? [latest] : []])];
 async function endInvestigation(host, t, keepNote, handBackFrom) {
   const full = keepNote ? await fullAnswer(host, t) : { text: "" };
-  const merge_into = keepNote ? await homeBranch(host, repoOf(t)) : void 0;
+  const merge_into = keepNote && !plainTask(t) ? await homeBranch(host, repoOf(t)) : void 0;
   const notes = keepNote ? (await Promise.resolve().then(() => host.fs.list(path("docs/research"))).catch(() => [])).map((f) => `docs/research/${f.name}`) : [];
   const added = await change(host, (x) => {
     if (!keepNote) return [investigationDone(x, t.id, now()), void 0];
-    const [y, n] = addTask(x, { ...keepNoteTask(find(x, t.id) ?? t, full.text, everyReport(find(x, t.id) ?? t, full.file), [...notes, ...noteFilesInUse(x)]), merge_into }, now(), S.N.dir);
+    const [y, n] = addTask(x, { ...keepNoteTask(find(x, t.id) ?? t, full.text, everyReport(find(x, t.id) ?? t, full.file), [...notes, ...noteFilesInUse(x)]), merge_into, ...t.project ? { project: t.project } : {} }, now(), S.N.dir);
     return [investigationDone(y, t.id, now(), n.id), n];
   });
   const branch = taskBranch(t);
@@ -66200,7 +66213,7 @@ async function endInvestigation(host, t, keepNote, handBackFrom) {
   const keep = commits !== 0;
   const what = commits === null ? `git could not tell whether it has commits ${intoOf(t)} doesn't have` : `it has ${plural(commits, "commit")} from an earlier change try that ${intoOf(t)} doesn't have`;
   const kept = keep ? ` Its branch ${branch} was kept: ${what}. Delete it by hand once that work is not needed.` : "";
-  if (await removeWorktree(host, t.id, worktreeDir(t.id), handBackFrom, handBackFrom !== void 0).catch(() => false) && !keep) await git(host, ["branch", "-D", branch], repoOf(t));
+  if (await removeWorktree(host, t.id, worktreeDir(t.id), handBackFrom, handBackFrom !== void 0).catch(() => false) && !keep && !plainTask(t)) await git(host, ["branch", "-D", branch], repoOf(t));
   if (kept) tellLead(host, `${t.id} "${t.title}" is done.${kept}`);
   void pump(host);
   outcomes.set(t.id, "done");
@@ -66249,7 +66262,7 @@ async function mergeRanOver(host, id, status, kind, limitMs) {
       const next = ranOverTry(cur, min, retries);
       return [putTask(x, next), next];
     }
-    const y = patchTask(x, id, { note: `approved, but the merge ran over ${min} min and was given up; approve it again`, live: { merge_wait: void 0 }, history: withHistory(cur.history, now(), resultEntry(cur, "failed", "approved by the owner", `its checking and merging ran over ${min} min and was given up; nothing written, it stays ${STATUS_WORD_OF(status)}`, { by: "you" })) }, now());
+    const y = patchTask(x, id, { note: `approved, but the merge ran over ${min} min and was given up; approve it again`, live: { merge_wait: void 0 }, timeline: withTimeline(cur.timeline, now(), resultEntry(cur, "failed", "approved by the owner", `its checking and merging ran over ${min} min and was given up; nothing written, it stays ${STATUS_WORD_OF(status)}`, { by: "you" })) }, now());
     return [y, cur];
   }).catch(() => null);
   const late = out ? null : find(await load(host).catch(() => null) ?? emptyBoard(), id);
@@ -66277,7 +66290,7 @@ async function mergeWork(host, t, b, kind, gaveUp, release, limit, force = false
     await change(host, (x) => {
       const cur2 = find(x, t.id);
       if (cur2?.status !== status || gaveUp()) return x;
-      return patchTask(x, t.id, { note: PREP_NOTE, ...edits.length ? { history: withHistory(cur2.history, now(), ["files-widened", ownerEditedLine(edits)]) } : {} }, now());
+      return patchTask(x, t.id, { note: PREP_NOTE, ...edits.length ? { timeline: withTimeline(cur2.timeline, now(), ["files-widened", ownerEditedLine(edits)]) } : {} }, now());
     });
     const made = [];
     const stop = () => gaveUp() ? "given up after running too long" : stopAsked.get(t.id);
@@ -66305,7 +66318,7 @@ async function mergeWork(host, t, b, kind, gaveUp, release, limit, force = false
       if (off2 && cur.status === status) {
         await change(host, (x) => {
           const c = find(x, t.id);
-          return c?.status === "done" ? patchTask(x, t.id, { history: withHistory(c.history, now(), tryEntry(t, "merged", `${off2} while it was being merged, too late: the work was already merged, so it stays done`)) }, now()) : x;
+          return c?.status === "done" ? patchTask(x, t.id, { timeline: withTimeline(c.timeline, now(), tryEntry(t, "merged", `${off2} while it was being merged, too late: the work was already merged, so it stays done`)) }, now()) : x;
         });
         return `${t.id} was merged into ${intoOf(t)} (${sha}) before ${off2}; it is done`;
       }
@@ -66317,7 +66330,7 @@ async function mergeWork(host, t, b, kind, gaveUp, release, limit, force = false
       const again = kind === "approve" ? "approve it again" : "it merges at a later check";
       await change(host, (x) => {
         const c = find(x, t.id);
-        return c?.status === status ? patchTask(x, t.id, { note: `${kind === "approve" ? "approved, but " : ""}not merged: ${off} first; ${again}`, history: withHistory(c.history, now(), resultEntry(t, "not-merged", by.replace(/^merged /, "merging "), `not merged: ${off} while it was being merged; it ${stays}`, { by: who })) }, now()) : x;
+        return c?.status === status ? patchTask(x, t.id, { note: `${kind === "approve" ? "approved, but " : ""}not merged: ${off} first; ${again}`, timeline: withTimeline(c.timeline, now(), resultEntry(t, "not-merged", by.replace(/^merged /, "merging "), `not merged: ${off} while it was being merged; it ${stays}`, { by: who })) }, now()) : x;
       });
       return `${t.id} was not merged and ${stays}: ${off} while it was being merged. ${kind === "approve" ? "Approve it again." : `Retry it, or it merges at a later check.`}`;
     }
@@ -66330,7 +66343,7 @@ async function mergeWork(host, t, b, kind, gaveUp, release, limit, force = false
       const folder = `${S.N.dir}/worktrees/${t.id}`;
       await change(host, (x) => {
         const c = find(x, t.id);
-        return c?.status === "review" ? patchTask(x, t.id, { note: `approved, but your edits fail the tests: ${r.detail.slice(0, 220)}`, live: { merge_wait: void 0 }, test_output: r.testOutput, history: withHistory(c.history, now(), resultEntry(t, "approve-failed", "approved by the owner", `not merged, the tests failed after your edits: ${r.detail.slice(0, 250)}`)) }, now()) : x;
+        return c?.status === "review" ? patchTask(x, t.id, { note: `approved, but your edits fail the tests: ${r.detail.slice(0, 220)}`, live: { merge_wait: void 0 }, test_output: r.testOutput, timeline: withTimeline(c.timeline, now(), resultEntry(t, "approve-failed", "approved by the owner", `not merged, the tests failed after your edits: ${r.detail.slice(0, 250)}`)) }, now()) : x;
       });
       tellLead(host, `${t.id} "${t.title}" was not merged: with the owner's edits the tests fail. It stays in review; the owner can fix the files in ${folder} and approve again.
 ${r.testOutput}`);
@@ -66374,7 +66387,7 @@ async function failLost(host, agentId, w) {
     const cur = find(x, w.task);
     if (!cur || !sameTry(cur, t, agentId) || handedBack(cur)) return x;
     failed2 = true;
-    return patchTask(x, w.task, { status: "failed", note: "the worker ended without a result", history: withHistory(cur.history, now(), tryEntry(cur, "failed", "the worker ended without a result", { reason: "noresult" })), ...endedBy(cur, now(), "stopped", "the worker ended without a result") }, now());
+    return patchTask(x, w.task, { status: "failed", note: "the worker ended without a result", timeline: withTimeline(cur.timeline, now(), tryEntry(cur, "failed", "the worker ended without a result", { reason: "noresult" })), ...endedBy(cur, now(), "stopped", "the worker ended without a result") }, now());
   });
   if (!failed2) return;
   tellLead(host, `${w.task} "${t.title}": the worker ended without a result. Retry it (${S.N.name} retry), change it, or drop it.`);
@@ -66673,12 +66686,25 @@ async function gitReady($, b, repo = S.root) {
   }
   return s === "ok";
 }
+var workspaceNow = () => S.gitState === "ok" && S.gitRoot === "no-repo";
+var PLAIN_MARKER = ".symcc-plain";
+var madeAsPlain = async ($, dir) => !await $.fs.exists(`${dir}/.git`) && await $.fs.exists(`${dir}/${PLAIN_MARKER}`);
+var unmarkedText = (id) => `${id}'s folder has no .git and wasn't made as a plain folder; left as it is`;
+async function removePlain($, id, dir) {
+  if (!await $.fs.exists(dir)) return true;
+  if (await madeAsPlain($, dir)) return (await $.run(["rm", "-rf", dir])).exitCode === 0;
+  if (!keptDirty.has(`plain:${id}`)) tellLead($, `Note: ${unmarkedText(id)}.`);
+  keptDirty.add(`plain:${id}`);
+  return false;
+}
+var plainTask = (t) => workspaceNow() && !t?.project && isInvestigation(t);
+var changeNeedsProject = (names2) => names2.length ? `on a board over several repos a change task needs a project: ${names2.join(", ")} (only an investigation or an errand may have none)` : "";
 function noProjectText(b) {
-  if (S.gitState !== "ok" || S.gitRoot !== "no-repo") return "";
-  const ids = b.tasks.filter((t) => isOpenTask(t) && !isProjectName(t.project ?? "")).map((t) => t.id);
+  if (!workspaceNow()) return "";
+  const ids = b.tasks.filter((t) => isOpenTask(t) && !isProjectName(t.project ?? "") && !isInvestigation(t)).map((t) => t.id);
   if (!ids.length) return "";
   const many = ids.length > 1;
-  return `${ids.join(", ")} ${many ? "have" : "has"} no project, so ${many ? "they can't" : "it can't"} start on a board over several repos; give ${many ? "each" : "it"} a project (${S.N.name} change project)`;
+  return `${ids.join(", ")} ${many ? "have" : "has"} no project, so ${many ? "they can't" : "it can't"} start on a board over several repos (a change task needs a project); give ${many ? "each" : "it"} a project (${S.N.name} change project)`;
 }
 var workspaceText = () => `This looks like a workspace of several repos; ${S.N.name} can't run a board over several repos yet. Open ${S.W.app} in one repo instead.`;
 async function holdsRepos($) {
@@ -66785,8 +66811,19 @@ async function prepareWorktree($, t, target, catchUp = false) {
   const dir = worktreeDir(t.id);
   const branch = taskBranch(t);
   const repo = repoOf(t);
+  if (plainTask(t)) {
+    if (await $.fs.exists(dir) && !await $.fs.exists(`${dir}/.git`) && !await $.fs.exists(`${dir}/${PLAIN_MARKER}`)) throw new Error(unmarkedText(t.id));
+    if ((await $.run(["mkdir", "-p", dir])).exitCode !== 0) throw new Error(`could not make the folder ${dir}`);
+    if (!await $.fs.exists(`${dir}/${PLAIN_MARKER}`)) await $.fs.write(`${dir}/${PLAIN_MARKER}`, "made by symcc as a plain folder (no git copy); safe to delete with the task\n");
+    const plain2 = { dir, branch, behind: 0 };
+    return plain2;
+  }
   let made = false;
   if (!await $.fs.exists(`${dir}/.git`)) {
+    if (await $.fs.exists(dir)) {
+      if (!await madeAsPlain($, dir)) throw new Error(unmarkedText(t.id));
+      await $.run(["rm", "-rf", dir]);
+    }
     await git($, ["worktree", "prune"], repo);
     const has2 = (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${branch}`], repo)).exitCode === 0;
     if (has2) await gitOk($, ["worktree", "add", dir, branch], repo);
@@ -66948,6 +66985,7 @@ async function removeWorktree($, taskId, dir, except, ownCheck = false) {
   const t = find(await load($), taskId);
   if (liveWorkersFor({ id: taskId, runs: t?.runs }, agents.map(agentState), S.N.name).some((a) => a.id !== except)) return false;
   const repo = repoOf(t);
+  if (plainTask(t) || await $.fs.exists(dir) && !await $.fs.exists(`${dir}/.git`)) return removePlain($, taskId, dir);
   await git($, ["worktree", "remove", "--force", dir], repo);
   await git($, ["worktree", "prune"], repo);
   return true;
@@ -66969,6 +67007,16 @@ async function cleanupMerged($, b) {
   const existing = [];
   for (const t of b.tasks) if (isFinished(t) && await $.fs.exists(`${worktreeDir(t.id)}/.git`)) existing.push(t.id);
   let dirs = 0;
+  for (const t of b.tasks) {
+    if (!isFinished(t) || busy.has(t.id) || starting.has(t.id) || finishing.has(t.id) || approving.has(t.id)) continue;
+    if (!await $.fs.exists(worktreeDir(t.id)) || await $.fs.exists(`${worktreeDir(t.id)}/.git`)) continue;
+    if (liveWorkersFor({ id: t.id, runs: t.runs }, agents.map(agentState), S.N.name).length) continue;
+    if (!await madeAsPlain($, worktreeDir(t.id))) {
+      await removePlain($, t.id, worktreeDir(t.id));
+      continue;
+    }
+    if ((await $.run(["rm", "-rf", worktreeDir(t.id)])).exitCode === 0) dirs++;
+  }
   for (const id of worktreesToRemove(b.tasks, existing)) {
     const t = find(b, id);
     if (busy.has(id) || starting.has(id) || finishing.has(id) || approving.has(id) || liveWorkersFor({ id, runs: t?.runs }, agents.map(agentState), S.N.name).length) continue;
@@ -67200,7 +67248,7 @@ async function readTaskBranch(host, t, into, nowMs, status) {
   if (!tip) return null;
   const own = new Set(commits.map((c) => c.sha));
   const mergedLine = commits.find((c) => c.sha === merged);
-  const mergedAt = Math.max(-Infinity, ...(t.history ?? []).filter((h) => h.kind === "merged").map((h) => Date.parse(h.at ?? "") || -Infinity));
+  const mergedAt = Math.max(-Infinity, ...(t.timeline ?? []).filter((h) => h.kind === "merged").map((h) => Date.parse(h.at ?? "") || -Infinity));
   return {
     branch: branch || S.N.branch(t.id),
     into,
@@ -67893,7 +67941,7 @@ function digestText(tasks, sinceMs, nowMs, seen2 = /* @__PURE__ */ new Map()) {
   const running = (t) => t.status === "doing" || t.status === "review";
   const tries = open.filter((t) => t.status !== "backlog" && Number(t.attempts) >= 3 && (running(t) || fresh(t)));
   if (tries.length) lines.push(`On try 3 or more: ${list2(tries, (t) => `${short(t)} (try ${t.attempts})`)}.`);
-  const testFails = (t) => (t.history ?? []).filter((h) => h.kind === "failed" && h.reason === "tests");
+  const testFails = (t) => (t.timeline ?? []).filter((h) => h.kind === "failed" && h.reason === "tests");
   const testTasks = tasks.filter((t) => testFails(t).some((h) => since(h.at, sinceMs)));
   const testy = open.some((t) => testTasks.includes(t) && testFails(t).length >= 2);
   const testNew = testTasks.filter(fresh);
@@ -67901,10 +67949,10 @@ function digestText(tasks, sinceMs, nowMs, seen2 = /* @__PURE__ */ new Map()) {
     const n = testTasks.length;
     lines.push(`Tests failed since the last digest in ${n} task${n > 1 ? "s" : ""}: ${list2(testNew, (t) => `${short(t)} (${testFails(t).length}x)`)}.`);
   }
-  const back = tasks.reduce((n, t) => n + (t.history ?? []).filter((h) => h.kind === "checker-problems" && since(h.at, sinceMs)).length, 0);
+  const back = tasks.reduce((n, t) => n + (t.timeline ?? []).filter((h) => h.kind === "checker-problems" && since(h.at, sinceMs)).length, 0);
   if (back >= 2) {
     const merged = tasks.filter((t) => t.status === "done" && t.merged && since(t.updated_at, sinceMs));
-    const first = merged.filter((t) => (t.history ?? []).every((h) => h.kind !== "checker-problems") && Number(t.attempts) <= 1).length;
+    const first = merged.filter((t) => (t.timeline ?? []).every((h) => h.kind !== "checker-problems") && Number(t.attempts) <= 1).length;
     lines.push(`The checker sent work back ${back} times since the last digest${merged.length ? `; ${first} of ${merged.length} merged tasks passed on the first try` : ""}.`);
   }
   const old = (t) => nowMs - at2(t.updated_at) > DIGEST_STUCK_MS;
@@ -68854,12 +68902,12 @@ function laneSize(z) {
   const [added = "", removed = ""] = sizeText(z, false).split(" ");
   return sizePieces([{ text: added, color: "success" }, { text: " ", color: "text" }, { text: removed, color: "error" }]);
 }
-var HISTORY_SHOWN = 30;
+var TIMELINE_SHOWN = 30;
 var CHECKER_SHOWN_CHARS = 12e3;
-function panelHistory(t, nowMs) {
-  return t.history.slice(-HISTORY_SHOWN).reverse().map((h) => {
-    const e = historyEvent(h);
-    const at3 = historyTime(e.at, nowMs);
+function panelTimeline(t, nowMs) {
+  return t.timeline.slice(-TIMELINE_SHOWN).reverse().map((h) => {
+    const e = timelineEvent(h);
+    const at3 = timelineTime(e.at, nowMs);
     return { mark: e.mark, tone: e.tone, said: e.said, ...at3 ? { at: at3 } : {}, ...e.by ? { by: e.by } : {}, ...e.label ? { label: e.label } : {}, ...e.result ? { result: e.result } : {} };
   });
 }
@@ -68887,7 +68935,7 @@ function panelTask(t, nowMs, checkers = {}) {
     ...t.details?.trim() ? { details: t.details.trim() } : {},
     ...t.done?.trim() ? { done: t.done.trim() } : {},
     ...size ? { size: sizePieces(size) } : {},
-    ...t.history?.length ? { history: panelHistory(t, nowMs), historyCount: t.history.length } : {},
+    ...t.timeline?.length ? { timeline: panelTimeline(t, nowMs), timelineCount: t.timeline.length } : {},
     ...checker ? { checker } : {},
     needsYou: needsYou(t, nowMs),
     actions: actionsOf(t),
@@ -68901,11 +68949,11 @@ function newsOf(tasks, nowMs) {
   const from = nowMs - NEWS_DAYS * 864e5;
   const out = [];
   for (const t of tasks) {
-    const lines = t.history?.length ? t.history : (viewMarks(t) ?? []).map((m) => ({ kind: m.kind, at: m.at, text: m.reason ?? "" }));
+    const lines = t.timeline?.length ? t.timeline : (viewMarks(t) ?? []).map((m) => ({ kind: m.kind, at: m.at, text: m.reason ?? "" }));
     lines.forEach((h, i) => {
       const at3 = ms2(h.at);
       if (at3 === void 0 || at3 < from || !NEWS_KINDS.has(h.kind)) return;
-      const tone = isHistoryKind(h.kind) ? HISTORY_KINDS[h.kind] : "other";
+      const tone = isTimelineKind(h.kind) ? TIMELINE_KINDS[h.kind] : "other";
       const why2 = typeof h.result === "string" ? h.result.replace(/`[^`]{60,}`/g, "`\u2026`") : void 0;
       out.push({ key: `${t.id}:${i}:${h.kind}`, task: t.id, title: t.title, tone: tone === "good" ? "good" : tone === "bad" ? "bad" : "other", kind: h.kind, text: h.text, atMs: at3, ...why2 ? { why: why2 } : {} });
     });
@@ -69901,7 +69949,7 @@ ${prompt}` : prompt, ...images });
       };
     },
     async summarize() {
-      const done = session.rpc.history.compact().then(
+      const done = session.rpc.timeline.compact().then(
         (r) => r.success ? { status: "finished", result: r.summaryContent ?? "" } : { status: "error", error: "Copilot could not summarize the conversation" },
         (err) => ({ status: "error", error: err.message })
       );

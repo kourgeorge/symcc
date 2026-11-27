@@ -1,27 +1,27 @@
 // T-719: /symcc-stats time per stage, totals next to averages, the "inside" window and the scout-linkage line.
 import { expect, test } from 'claude-code/testing'
-import type { SymccHistoryEntry, SymccTask } from '../types'
+import type { SymccTimelineEntry, SymccTask } from '../types'
 import { statsData, statsReport, stageFigures, taskStages, doneAtMs, unlinkedCount } from '../hooks/board'
 import { statsHtml } from '../hooks/core/stats-html'
-import { hist } from './history-fixture'
-import { oldHistoryFacts } from '../hooks/core/old-data'
+import { hist } from './timeline-fixture'
+import { oldTimelineFacts } from '../hooks/core/old-data'
 
 const NOW = Date.now()
 const MIN = 60_000
 /** The ISO time `min` minutes ago. */
 const at = (min: number) => new Date(NOW - min * MIN).toISOString()
-const h = (min: number, kind: string, text: string): SymccHistoryEntry => ({ at: at(min), kind, text, ...oldHistoryFacts({ kind, text }) })
+const h = (min: number, kind: string, text: string): SymccTimelineEntry => ({ at: at(min), kind, text, ...oldTimelineFacts({ kind, text }) })
 const stage = (min: number, n: number, words: string) => h(min, 'stage', `try ${n}: ${words}`)
 
 function task(id: string, over: Partial<SymccTask>): SymccTask {
-  return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: 1, history: [], branch: null, created_at: at(600), updated_at: at(0), ...over }
+  return { id, title: `task ${id}`, details: '', files: [], status: 'done', note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: at(600), updated_at: at(0), ...over }
 }
 
 /** Made 600m ago; works 590..560; prep 2m, check 8m, queue 5m, tests 5m, merge 2m; merged 538m ago (lifetime 62m). */
 const plain = () => task('T-1', {
   created_at: at(600),
   runs: [{ started: at(590), ended: at(560), agents: [{ kind: 'worker' as const, started: at(590), ended: at(560), tokens: { input: 1000 } }] }],
-  history: [h(600, 'created', 'created by the owner'), stage(560, 1, 'prep started'), stage(558, 1, 'checker started'), h(550, 'checker-ok', 'try 1: checker: OK'), stage(550, 1, 'waits in the merge queue (place 1)'), stage(545, 1, 'tests started'), stage(540, 1, 'merge started'), h(538, 'merged', 'try 1: did it → merged into main (abc)')],
+  timeline: [h(600, 'created', 'created by the owner'), stage(560, 1, 'prep started'), stage(558, 1, 'checker started'), h(550, 'checker-ok', 'try 1: checker: OK'), stage(550, 1, 'waits in the merge queue (place 1)'), stage(545, 1, 'tests started'), stage(540, 1, 'merge started'), h(538, 'merged', 'try 1: did it → merged into main (abc)')],
 })
 
 /** Made 600m ago, waits on T-1 (done 538m ago): 62m waiting on it, then 8m to start; lifetime 111m. */
@@ -29,7 +29,7 @@ const waiter = () => task('T-2', {
   created_at: at(600),
   after: ['T-1'],
   runs: [{ started: at(530), ended: at(500), agents: [{ kind: 'worker' as const, started: at(530), ended: at(500), tokens: { input: 3000 } }] }],
-  history: [h(600, 'created', 'created by the lead'), stage(500, 1, 'prep started'), stage(499, 1, 'checker started'), stage(495, 1, 'waits in the merge queue'), stage(494, 1, 'tests started'), stage(490, 1, 'merge started'), h(489, 'merged', 'try 1: x → merged into main (def)')],
+  timeline: [h(600, 'created', 'created by the lead'), stage(500, 1, 'prep started'), stage(499, 1, 'checker started'), stage(495, 1, 'waits in the merge queue'), stage(494, 1, 'tests started'), stage(490, 1, 'merge started'), h(489, 'merged', 'try 1: x → merged into main (def)')],
 })
 
 /** Made 300m ago: asks (30m waiting for you), a second try, then ready for review for 115m; lifetime 206m. */
@@ -37,7 +37,7 @@ const asker = () => task('T-3', {
   created_at: at(300),
   attempts: 2,
   runs: [{ started: at(290), ended: at(280) }, { started: at(240), ended: at(220) }],
-  history: [
+  timeline: [
     h(300, 'created', 'created by the owner'),
     h(281, 'asked', 'try 1: worker asked: which file?'),
     h(250, 'answer', 'the owner answered: “a.ts”'),
@@ -51,13 +51,13 @@ const asker = () => task('T-3', {
   ],
 })
 
-/** History from an older board: no times, so no stage data. */
-const old = () => task('T-4', { runs: [{ started: at(50), ended: at(40) }], history: hist('try 1: x → merged into main (9)') })
+/** Timeline from an older board: no times, so no stage data. */
+const old = () => task('T-4', { runs: [{ started: at(50), ended: at(40) }], timeline: hist('try 1: x → merged into main (9)') })
 
 const board = () => [plain(), waiter(), asker(), old()]
 const doneAt = (ts: SymccTask[]) => (id: string) => doneAtMs(ts.find(t => t.id === id) ?? task('x', { status: 'todo' }))
 
-test('stats stages: each stage of one task is read from its tries and timed history lines', () => {
+test('stats stages: each stage of one task is read from its tries and timed timeline lines', () => {
   const ts = board()
   const m = (x: number) => x * MIN
   expect(taskStages(ts[0]!, doneAt(ts))?.ms).toEqual({ free: m(10), blocked: 0, backlog: 0, work: m(30), prep: m(2), check: m(8), queue: m(5), tests: m(5), merge: m(2), owner: 0 })
@@ -74,14 +74,14 @@ test('stats stages: a task made straight into the backlog counts that time as ba
   const t = task('T-5', {
     created_at: at(1200),
     runs: [{ started: at(540), ended: at(480) }],
-    history: [h(1200, 'created', 'created by the lead'), h(600, 'moved-backlog', 'moved from the backlog to todo'), stage(480, 1, 'prep started'), stage(478, 1, 'checker started'), stage(470, 1, 'waits in the merge queue'), stage(465, 1, 'tests started'), stage(460, 1, 'merge started'), h(458, 'merged', 'try 1: x → merged into main (b1)')],
+    timeline: [h(1200, 'created', 'created by the lead'), h(600, 'moved-backlog', 'moved from the backlog to todo'), stage(480, 1, 'prep started'), stage(478, 1, 'checker started'), stage(470, 1, 'waits in the merge queue'), stage(465, 1, 'tests started'), stage(460, 1, 'merge started'), h(458, 'merged', 'try 1: x → merged into main (b1)')],
   })
   expect(taskStages(t, () => undefined)?.ms).toEqual({ free: m(60), blocked: 0, backlog: m(600), work: m(60), prep: m(2), check: m(8), queue: m(5), tests: m(5), merge: m(2), owner: 0 })
   // one moved to the backlog later still starts as waiting to start
   const u = task('T-6', {
     created_at: at(1200),
     runs: [{ started: at(540), ended: at(480) }],
-    history: [h(1200, 'created', 'created by the lead'), h(1100, 'moved-backlog', 'moved to the backlog (was todo)'), h(600, 'moved-backlog', 'moved from the backlog to todo'), stage(480, 1, 'prep started'), h(458, 'merged', 'try 1: x → merged into main (b2)')],
+    timeline: [h(1200, 'created', 'created by the lead'), h(1100, 'moved-backlog', 'moved to the backlog (was todo)'), h(600, 'moved-backlog', 'moved from the backlog to todo'), stage(480, 1, 'prep started'), h(458, 'merged', 'try 1: x → merged into main (b2)')],
   })
   expect(taskStages(u, () => undefined)?.ms).toEqual({ free: m(160), blocked: 0, backlog: m(500), work: m(60), prep: m(22), check: 0, queue: 0, tests: 0, merge: 0, owner: 0 })
 })
@@ -90,12 +90,12 @@ test("stats stages: the lead's question and the branch-gone question count as wa
   const m = (x: number) => x * MIN
   const runs = [{ started: at(595), ended: at(590) }, { started: at(290), ended: at(280) }]
   const after = [h(300, 'answer', 'the owner answered: “yes”'), stage(280, 2, 'prep started'), h(270, 'merged', 'try 2: x → merged into main (q1)')]
-  const lead = task('T-7', { attempts: 2, runs, history: [h(600, 'created', 'created by the owner'), h(590, 'stopped', 'try 1: stopped: the lead asked the owner a question'), ...after] })
+  const lead = task('T-7', { attempts: 2, runs, timeline: [h(600, 'created', 'created by the owner'), h(590, 'stopped', 'try 1: stopped: the lead asked the owner a question'), ...after] })
   expect(taskStages(lead, () => undefined)?.ms).toEqual({ free: m(15), blocked: 0, backlog: 0, work: m(15), prep: m(10), check: 0, queue: 0, tests: 0, merge: 0, owner: m(290) })
-  const gone = task('T-8', { attempts: 2, runs, history: [h(600, 'created', 'created by the owner'), h(589, 'not-merged', 'not merged: branch x is gone; asked the owner whether to merge into main instead'), ...after] })
+  const gone = task('T-8', { attempts: 2, runs, timeline: [h(600, 'created', 'created by the owner'), h(589, 'not-merged', 'not merged: branch x is gone; asked the owner whether to merge into main instead'), ...after] })
   expect(taskStages(gone, () => undefined)?.ms).toEqual({ free: m(16), blocked: 0, backlog: 0, work: m(15), prep: m(10), check: 0, queue: 0, tests: 0, merge: 0, owner: m(289) })
   // a plain stop is not a question: it waits to start again
-  const stop = task('T-9', { attempts: 2, runs, history: [h(600, 'created', 'created by the owner'), h(590, 'stopped', 'try 1: stopped by the owner'), ...after] })
+  const stop = task('T-9', { attempts: 2, runs, timeline: [h(600, 'created', 'created by the owner'), h(590, 'stopped', 'try 1: stopped by the owner'), ...after] })
   expect(taskStages(stop, () => undefined)?.ms.owner).toBe(0)
 })
 
@@ -105,15 +105,15 @@ test('T-732: a to-do task asked about, and a pause waiting for the owner, count 
   const after = [stage(280, 2, 'prep started'), h(270, 'merged', 'try 2: x → merged into main (q1)')]
   const start = [h(600, 'created', 'created by the owner'), h(590, 'stopped', 'try 1: stopped by the owner')]
   // asked while to do 500m ago, answered 300m ago: 200m waiting for you
-  const todo = task('T-10', { attempts: 2, runs, history: [...start, h(500, 'asked', 'the lead asked the owner a question'), h(300, 'answer', 'the owner answered: “A”'), ...after] })
+  const todo = task('T-10', { attempts: 2, runs, timeline: [...start, h(500, 'asked', 'the lead asked the owner a question'), h(300, 'answer', 'the owner answered: “A”'), ...after] })
   expect(taskStages(todo, () => undefined)?.ms).toEqual({ free: m(105), blocked: 0, backlog: 0, work: m(15), prep: m(10), check: 0, queue: 0, tests: 0, merge: 0, owner: m(200) })
   // paused 500m ago waiting for the owner, resumed 300m ago
-  const pause = (why: string) => task('T-11', { attempts: 2, runs, history: [...start, h(500, 'stopped', `try 1: stopped: paused: ${why}`), h(300, 'resumed', 'resumed after a pause'), ...after] })
+  const pause = (why: string) => task('T-11', { attempts: 2, runs, timeline: [...start, h(500, 'stopped', `try 1: stopped: paused: ${why}`), h(300, 'resumed', 'resumed after a pause'), ...after] })
   expect(taskStages(pause('Waiting for the owner to choose between x and y (A or B)'), () => undefined)?.ms.owner).toBe(m(200))
   expect(taskStages(pause('this task waits for the owner'), () => undefined)?.ms.owner).toBe(m(200))
   expect(taskStages(pause('main is busy'), () => undefined)?.ms.owner).toBe(0)
   // T-737: a to-do task's pause line has no try label ("paused: <reason>")
-  const todoPause = (why: string) => task('T-12', { attempts: 2, runs, history: [...start, h(500, 'stopped', `paused: ${why}`), h(300, 'resumed', 'resumed after a pause'), ...after] })
+  const todoPause = (why: string) => task('T-12', { attempts: 2, runs, timeline: [...start, h(500, 'stopped', `paused: ${why}`), h(300, 'resumed', 'resumed after a pause'), ...after] })
   expect(taskStages(todoPause('Waiting for the owner to choose between x and y'), () => undefined)?.ms.owner).toBe(m(200))
   expect(taskStages(todoPause('main is busy'), () => undefined)?.ms.owner).toBe(0)
 })
@@ -132,7 +132,7 @@ test('stats stages: sums and averages per stage; active + waiting add up to the 
   expect(f.active + f.waiting).toBe(f.lifetime)
 
   const text = statsReport({ tasks: ts, nowMs: NOW })
-  expect(text).toContain('Time per stage (3 done tasks; 1 without timed history, left out)')
+  expect(text).toContain('Time per stage (3 done tasks; 1 without timed timeline, left out)')
   expect(text).toMatch(/\n {2}work +▇+ +1h 30m · avg +30m +24%\n/)
   expect(text).toMatch(/\n {2}waiting on tasks +▇+ +1h 02m · avg +21m +16%\n/)
   expect(text).toMatch(/\n {2}waiting for you +▇+ +2h 25m · avg +48m +38%\n/)
@@ -141,7 +141,7 @@ test('stats stages: sums and averages per stage; active + waiting add up to the 
   expect(text).toMatch(/\n {2}lifetime +6h 19m · avg +2h 06m +100%\n/)
   for (const l of text.split('\n')) expect(l.length).toBeLessThanOrEqual(80)
   const html = statsHtml(statsData({ tasks: ts, nowMs: NOW }), 'p')
-  expect(html).toContain('Time per stage (3 done tasks; 1 without timed history, left out)')
+  expect(html).toContain('Time per stage (3 done tasks; 1 without timed timeline, left out)')
   expect(html).toContain('1h 30m · avg 30m · 24%')
 })
 
@@ -166,7 +166,7 @@ test('stats: "inside" counts only the work inside the window, cutting a try that
     created_at: at(30 * H),
     updated_at: at(22 * H),
     runs: [{ started: at(26 * H), ended: at(23 * H), agents: [{ kind: 'worker' as const, started: at(26 * H), ended: at(23 * H), tokens: { input: 500 } }] }],
-    history: [h(30 * H, 'created', 'created by the owner'), stage(23 * H, 1, 'prep started'), stage(22 * H + 5, 1, 'merge started'), h(22 * H, 'merged', 'try 1: x → merged into main (1)')],
+    timeline: [h(30 * H, 'created', 'created by the owner'), stage(23 * H, 1, 'prep started'), stage(22 * H + 5, 1, 'merge started'), h(22 * H, 'merged', 'try 1: x → merged into main (1)')],
   })
   const whole = statsReport({ tasks: [t], nowMs: NOW, range: { kind: 'days', days: 1 } })
   const inside = statsReport({ tasks: [t], nowMs: NOW, range: { kind: 'days', days: 1 }, inside: true })

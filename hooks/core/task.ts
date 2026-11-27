@@ -2,7 +2,7 @@
 import type { SymccTask } from '../../types'
 import { BACKLOG_FROM, byRunOrder, isPriority, type Board, type BoardTask, cleanFiles, cleanLive, type Live, DEFAULT_KIND, INVESTIGATION, isInvestigation, isErrand, isKind, kindOf, type TaskKind, DATA_DIR, find, intoOf, isFinished, normId, STATUS_WORD, waitsForFiles } from './board-file'
 import { depDone } from './archive'
-import { historyEntry, withHistory } from './history'
+import { timelineEntry, withTimeline } from './timeline'
 import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun, keepAgentIds } from './runs'
 import { clean, num, shownPath } from './text'
@@ -48,7 +48,7 @@ export function addTask(b: Board, f: { title: string; details?: string; files?: 
     priority: isPriority(f.priority) ? f.priority : 0,
     after,
     attempts: 0,
-    history: [historyEntry('created', createdLine(origin), now)],
+    timeline: [timelineEntry('created', createdLine(origin), now)],
     origin,
     merge_into: intoOf({ merge_into: f.merge_into }),
     branch: null,
@@ -155,7 +155,7 @@ export const failedOnClash = (t: Pick<BoardTask, 'status' | 'failed_on'>): boole
 
 /**
  * "Stash": task `id` goes to the backlog, from todo, paused or failed (or doing, once its worker
- * was stopped). It keeps everything else and never starts until promoted. A history line says so.
+ * was stopped). It keeps everything else and never starts until promoted. A timeline line says so.
  */
 export function stashTask(b: Board, id: string, now: string, reason = ''): Board {
   const t = find(b, id)
@@ -163,15 +163,15 @@ export function stashTask(b: Board, id: string, now: string, reason = ''): Board
   if (t.status === 'backlog') return b
   if (!BACKLOG_FROM.includes(t.status)) throw new Error(`${t.id} is ${STATUS_WORD[t.status]}; only a task that is to do, paused or failed can go to the backlog`)
   const why = clean(reason, 280)
-  return patchTask(b, t.id, { status: 'backlog', note: why ? `in the backlog: ${why}` : 'in the backlog', ...(failedOnClash(t) ? { merge_main: true } : {}), history: withHistory(t.history, now, ['moved-backlog', `moved to the backlog (was ${t.status})${why ? `: ${why}` : ''}`, { backlog: true }]) }, now)
+  return patchTask(b, t.id, { status: 'backlog', note: why ? `in the backlog: ${why}` : 'in the backlog', ...(failedOnClash(t) ? { merge_main: true } : {}), timeline: withTimeline(t.timeline, now, ['moved-backlog', `moved to the backlog (was ${t.status})${why ? `: ${why}` : ''}`, { backlog: true }]) }, now)
 }
 
-/** "Promote": task `id` leaves the backlog for "todo", so a worker may start on it. A history line says so. */
+/** "Promote": task `id` leaves the backlog for "todo", so a worker may start on it. A timeline line says so. */
 export function promoteTask(b: Board, id: string, now: string): Board {
   const t = find(b, id)
   if (!t) throw new Error(`${id} is not on the board`)
   if (t.status !== 'backlog') throw new Error(`${t.id} is not in the backlog (it is ${STATUS_WORD[t.status]})`)
-  return patchTask(b, t.id, { status: 'todo', note: 'moved from the backlog', history: withHistory(t.history, now, ['moved-backlog', 'moved from the backlog to todo']) }, now)
+  return patchTask(b, t.id, { status: 'todo', note: 'moved from the backlog', timeline: withTimeline(t.timeline, now, ['moved-backlog', 'moved from the backlog to todo']) }, now)
 }
 
 /** Changed files outside the task's files (or touching the board / Git). Empty `allowed` = anywhere. */
@@ -209,7 +209,7 @@ export function needFilesQuestion(id: string, files: readonly string[]): string 
   return `${id} needs to change files outside its list: ${files.join(', ')}. Allow them?`
 }
 
-/** 'the owner allowed files: + a, + b': the history line when the owner allows a file request. */
+/** 'the owner allowed files: + a, + b': the timeline line when the owner allows a file request. */
 export const filesAllowedLine = (files: readonly string[]) => `the owner allowed files: ${files.map(f => `+ ${f}`).join(', ')}`
 
 /** What the lead is told when the owner allows a waiting task's file request (T-968: at once, as it may be waiting on it). */
@@ -236,7 +236,7 @@ export function allowFiles(b: Board, id: string, now: string, dir: string = DATA
   if (bad.length) throw new Error(cantAllowText(t.id, bad, dir))
   const kept = cleanFiles(asked, dir)
   const added = kept.filter(f => !t.files.includes(f))
-  return patchTask(b, t.id, { status: 'todo', note: 'files allowed; queued', files: [...t.files, ...added], history: withHistory(t.history, now, ['files-widened', filesAllowedLine(added.length ? added : kept)]) }, now, dir)
+  return patchTask(b, t.id, { status: 'todo', note: 'files allowed; queued', files: [...t.files, ...added], timeline: withTimeline(t.timeline, now, ['files-widened', filesAllowedLine(added.length ? added : kept)]) }, now, dir)
 }
 
 /** Why Allow refused a file request: `bad` can't be in a task's files. The task keeps waiting. */
@@ -247,7 +247,7 @@ export function cantAllowText(id: string, bad: readonly string[], dir: string = 
 /** The owner does not allow a waiting task's file request: it keeps waiting (for the lead to drop or narrow it). */
 export function refuseFiles(b: Board, id: string, now: string): Board {
   const [t, asked] = askedFilesOf(b, id)
-  return patchTask(b, t.id, { note: 'files not allowed', history: withHistory(t.history, now, ['files-refused', `the owner didn't allow files: ${asked.join(', ')}`]) }, now)
+  return patchTask(b, t.id, { note: 'files not allowed', timeline: withTimeline(t.timeline, now, ['files-refused', `the owner didn't allow files: ${asked.join(', ')}`]) }, now)
 }
 
 /** Why a try failed when files outside the task's list changed. `undone`: they were undone on the task's branch (a worker's try), so the next try starts without them. */
@@ -344,13 +344,13 @@ function answeredTask(b: Board, id: string, what: string): BoardTask {
 
 /**
  * "Done" on answered investigation `id`: it ends done with the note "answered"; nothing is merged.
- * `kept`: the id of the docs task that keeps its answer as a note (Keep as a note), said in its history.
+ * `kept`: the id of the docs task that keeps its answer as a note (Keep as a note), said in its timeline.
  */
 export function investigationDone(b: Board, id: string, now: string, kept?: string): Board {
   const t = answeredTask(b, id, 'marked done')
   const errand = isErrand(t)
   const line = `try ${t.attempts}: ${errand ? 'the errand is finished' : 'the owner read the answer'} → done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}`
-  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : errand ? 'done' : 'answered', merge_main: undefined, test_output: undefined, history: withHistory(t.history, now, ['done', line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}` }]) }, now)
+  return patchTask(b, t.id, { status: 'done', note: kept ? `answered; kept as a note by ${kept}` : errand ? 'done' : 'answered', merge_main: undefined, test_output: undefined, timeline: withTimeline(t.timeline, now, ['done', line, { try: Number(t.attempts) || 0, result: `done (nothing merged)${kept ? `; kept as a note by ${kept}` : ''}` }]) }, now)
 }
 
 /** `s` in lower case with every run of other characters turned into one "-", and no "-" at either end. */
@@ -497,5 +497,5 @@ export function askMoreTask(b: Board, id: string, question: string, answer: stri
   const body = answer.trim() || t.answer?.trim() || ''
   const fits = body && t.details.length + head.length + body.length + where.length + 40 <= DETAILS_MAX
   const added = fits ? `${head}${report ? ` (in full in ${report})` : ''}:\n${body}` : `${head}${where || ' was not saved'}.`
-  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, test_output: undefined, merge_main: undefined, history: withHistory(t.history, now, ['asked', `try ${t.attempts}: the owner asked more: ${q}`, { try: Number(t.attempts) || 0 }]) }, now)
+  return patchTask(b, t.id, { status: 'todo', note: `asked more: ${q.slice(0, 280)}`, details: withAsk(t.details.trimEnd(), added), answer: undefined, test_tries: 0, test_output: undefined, merge_main: undefined, timeline: withTimeline(t.timeline, now, ['asked', `try ${t.attempts}: the owner asked more: ${q}`, { try: Number(t.attempts) || 0 }]) }, now)
 }

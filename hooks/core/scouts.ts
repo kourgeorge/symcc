@@ -490,7 +490,7 @@ export function scoutToolLines(name: string, o: { symccTools?: boolean; web?: bo
   const may = o.web === false ? '- You may read files and run shell commands that only look.' : '- You may read files, run shell commands that only look, and search or fetch pages on the web.'
   const board =
     o.symccTools === false
-      ? `- To look at the board, read ${namesFor(name).dir}/board.json yourself (only read it, never change it): its tasks list has each task's id, title and status, and a try's report file is named in its runs. A done or dropped task there is short: its history, runs and details are in the file its parts field names (e.g. ${namesFor(name).dir}/tasks/T-600.json, under its id).`
+      ? `- To look at the board, read ${namesFor(name).dir}/board.json yourself (only read it, never change it): its tasks list has each task's id, title and status, and a try's report file is named in its runs. A done or dropped task there is short: its timeline, runs and details are in the file its parts field names (e.g. ${namesFor(name).dir}/tasks/T-600.json, under its id).`
       : `- To look at the board, use the ${name} tools board and stats rather than reading ${namesFor(name).dir}/board.json: board with no arguments lists the open tasks; status (e.g. ["done"]) and search (words) narrow it; task (e.g. "T-12") shows one task in full with its latest report. stats shows time and token use. scouts with action list shows the other scouts (how often each runs, paused or not, last run, the start of its last report); add name for one scout in full with its last runs. They only read: every ${name} tool that changes the board (add, change, drop, approve, ...) is refused for you.`
   return { may, board }
 }

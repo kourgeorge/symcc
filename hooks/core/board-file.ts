@@ -3,7 +3,7 @@ import type { SymccAsk, SymccMode, SymccRun, SymccStatus, SymccTask, SymccTokens
 import { dataDir } from '../name'
 import { cleanTokens, keepAgentIds } from './runs'
 import { isNum, isObj, parseStamp } from './text'
-import { historyEntryOk } from './history'
+import { timelineEntryOk } from './timeline'
 import { type OwnerQuestion, cleanAsk, cleanQuestions } from './questions'
 
 /** T-1137: the optional settings of one project. T-1153: docs_test_commands too (read, not set by the settings tool yet). */
@@ -434,10 +434,10 @@ function cleanArchived(v: unknown): ArchivedTotals | undefined {
 }
 
 /** What each list field of a task may hold; anything else in it is dropped (see cleanTask). */
-const LIST_OK: Record<'files' | 'after' | 'history', (v: unknown) => boolean> = {
+const LIST_OK: Record<'files' | 'after' | 'timeline', (v: unknown) => boolean> = {
   files: v => typeof v === 'string' && !!v.trim(),
   after: v => typeof v === 'string' && /^T-\d+$/.test(normId(v)),
-  history: historyEntryOk,
+  timeline: timelineEntryOk,
 }
 
 /**
@@ -449,7 +449,7 @@ function cleanTask(t: unknown, fixed: string[] = []): BoardTask | null {
   const x = { ...t } as Record<string, unknown>
   const id = t.id
   for (const k of ['title', 'details', 'note']) if (typeof x[k] !== 'string') x[k] = ''
-  for (const k of ['files', 'after', 'history'] as const) {
+  for (const k of ['files', 'after', 'timeline'] as const) {
     if (!Array.isArray(x[k])) {
       x[k] = []
       continue

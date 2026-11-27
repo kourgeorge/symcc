@@ -128,7 +128,7 @@ const SESSIONS: Record<string, PanelTask['sessions']> = {
   'T-39': [{ label: 'Try 1', agent: 'cursor-4-d', running: false }],
 }
 
-/** A time as the board's history writes it ("14:05"). */
+/** A time as the board's timeline writes it ("14:05"). */
 const hm = (ms: number) => new Date(ms).toTimeString().slice(0, 5)
 const step = (min: number, kind: PanelStep['kind'], text: string, more: Partial<PanelStep> = {}): PanelStep => ({ atMs: m(min), kind, text, ...more })
 const tool = (min: number, name: string, text: string, status: PanelStep['status'] = 'completed') => step(min, 'tool', text, { tool: name, status, callId: `${name}-${min}` })
@@ -240,8 +240,8 @@ function busyView(): PanelView {
         attempts: 2,
         sessions: SESSIONS['T-45']!,
         actions: [{ id: 'pause', label: 'Pause', primary: true }, { id: 'drop', label: 'Drop', ask: 'Why (optional)' }],
-        historyCount: 6,
-        history: [
+        timelineCount: 6,
+        timeline: [
           { mark: '●', tone: 'step', at: hm(m(1.1)), by: 'worker symcc-T-45', label: 'try 2', said: 'worker started' },
           { mark: '✗', tone: 'bad', at: hm(m(9)), by: 'you', label: 'try 1', said: 'sent back: retry with backoff, not at once' },
           { mark: '✗', tone: 'bad', at: hm(m(12)), by: 'checker symcc-T-45-checker', said: 'found problems: retries at once, no backoff; 2 tests skipped' },

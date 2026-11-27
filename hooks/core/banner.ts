@@ -256,7 +256,7 @@ export function driveNoticeParts(tasks: readonly DriveTask[], nowMs: number, nam
  * why it failed (whyFailed), else `note` (the task's note; the bands pass bandNote, which leaves out what the row's
  * state already says). '' when there is nothing to say.
  */
-export function rowEndText(t: Pick<SymccTask, 'note' | 'history'> & Partial<Pick<SymccTask, 'test_output' | 'runs'>> & Partial<Pick<BoardTask, 'ask'>> & Pick<BoardTask, 'status' | 'live' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = shownNote(t)): string {
+export function rowEndText(t: Pick<SymccTask, 'note' | 'timeline'> & Partial<Pick<SymccTask, 'test_output' | 'runs'>> & Partial<Pick<BoardTask, 'ask'>> & Pick<BoardTask, 'status' | 'live' | 'merge_into'>, phase: Pick<TaskPhase, 'waitsFor' | 'approved' | 'stage'>, note: string = shownNote(t)): string {
   if (phase.waitsFor === 'your-files') return fileWaitText(t)
   if (phase.approved && phase.stage) return APPROVED_NOTE
   if (phase.waitsFor === 'answer' || phase.waitsFor === 'files') return askText(t.ask) || (t.note ?? '')
@@ -285,7 +285,7 @@ export const shortCost = (usd: number): string => (!Number.isFinite(usd) || usd 
 /** What the status line reads (statusLine): the tasks (for today's numbers and what needs you), the lead's questions,
  *  the scouts, the branch (or `branch_note`, a warning shown in its place) and the board mode. */
 export type StatusBoard = {
-  tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'runs' | 'history' | 'note' | 'updated_at'>> & Partial<Pick<BoardTask, 'live'>>)[]
+  tasks: (Pick<SymccTask, 'id' | 'status'> & Partial<Pick<SymccTask, 'runs' | 'timeline' | 'note' | 'updated_at'>> & Partial<Pick<BoardTask, 'live'>>)[]
   questions?: readonly Pick<OwnerQuestion, 'answered_at' | 'dropped'>[]
   scouts?: CrewBoard['scouts']
   home_branch?: string

@@ -54,7 +54,7 @@ test('a done task kept as a stub counts as merged today, with its cost, from its
   const [b0] = addTask(emptyBoard(), { origin: { why: 'a test' }, title: 'a change', files: ['src/a.ts'] }, AT)
   const stub = { id: 'T-950', title: 'old', status: 'done', parts: 'tasks/T-950.json', created_at: at, updated_at: at }
   const board = JSON.stringify({ ...b0, mode: 'review', tasks: [stub] })
-  const parts = JSON.stringify({ tasks: { 'T-950': { id: 'T-950', history: [{ kind: 'merged', at, text: 'merged' }], runs: [{ n: 1, started: at, ended: at, agents: [{ id: 'a1', kind: 'worker', started: at, ended: at, cost: 2.5 }] }] } } })
+  const parts = JSON.stringify({ tasks: { 'T-950': { id: 'T-950', timeline: [{ kind: 'merged', at, text: 'merged' }], runs: [{ n: 1, started: at, ended: at, agents: [{ id: 'a1', kind: 'worker', started: at, ended: at, cost: 2.5 }] }] } } })
   const files = new Map([
     ['/p/.symcc/board.json', board],
     ['/p/.symcc/tasks/T-950.json', parts],

@@ -775,7 +775,7 @@ function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; ste
               <Markdown text={task.details} onTask={onTask} />
             </div>
           )}
-          {!!task.history?.length && <TaskHistory task={task} />}
+          {!!task.timeline?.length && <TaskTimeline task={task} />}
           {task.checker && <CheckerReport checker={task.checker} onTask={onTask} />}
           <TaskSession task={task} steps={steps} />
           {box ? (
@@ -817,25 +817,25 @@ function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; ste
   )
 }
 
-/** A task's history, newest first: each line's mark in its tone, when, who wrote it, its try, what was said and the try's result. */
-function TaskHistory({ task }: { task: PanelTask }) {
-  const lines = task.history ?? []
-  const older = (task.historyCount ?? lines.length) - lines.length
+/** A task's timeline, newest first: each line's mark in its tone, when, who wrote it, its try, what was said and the try's result. */
+function TaskTimeline({ task }: { task: PanelTask }) {
+  const lines = task.timeline ?? []
+  const older = (task.timelineCount ?? lines.length) - lines.length
   return (
     <details className="report">
       <summary>
-        Timeline <span className="count">{task.historyCount ?? lines.length}</span>
+        Timeline <span className="count">{task.timelineCount ?? lines.length}</span>
       </summary>
-      <ol className="history">
+      <ol className="timeline">
         {lines.map((h, i) => (
           <li key={i} className={`is-${h.tone}`}>
-            <span className="history-mark">{h.mark}</span>
+            <span className="timeline-mark">{h.mark}</span>
             <span>
-              {h.at && <span className="history-dim">{h.at} </span>}
-              {h.by && <span className="history-dim">{h.by}: </span>}
+              {h.at && <span className="timeline-dim">{h.at} </span>}
+              {h.by && <span className="timeline-dim">{h.by}: </span>}
               {h.label && <b>{h.label}: </b>}
-              <span className={h.tone === 'bad' && !h.result ? 'history-bad' : 'history-dim'}>{h.said}</span>
-              {h.result && <span className="history-result"> → {h.result}</span>}
+              <span className={h.tone === 'bad' && !h.result ? 'timeline-bad' : 'timeline-dim'}>{h.said}</span>
+              {h.result && <span className="timeline-result"> → {h.result}</span>}
             </span>
           </li>
         ))}
