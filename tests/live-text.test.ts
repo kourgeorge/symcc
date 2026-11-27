@@ -66,6 +66,9 @@ function statusTextHasLiveSections(now: number) {
   expect(tasks[tasks.indexOf(lane) + 1]).toMatch(/^   try 2\/\d · ⏱ .*change$/)
   expect(tasks[tasks.indexOf(lane) + 2]).toMatch(/^   └─◇ T-4 Write the export  waits$/)
   expect(tasks.some(l => l.startsWith(' ▶ T-3') && l.indexOf('◉') === labels.indexOf('you'))).toBe(true)
+  // T-1177: a finished lane's "merged … ago" is on its second line
+  const doneAt = tasks.findIndex(l => /^ ✓ /.test(l))
+  if (doneAt >= 0) expect(tasks[doneAt + 1]).toMatch(/^   (merged|\d+\w? ago|.*ago)/)
   // TODAY: exactly the Live tab's lines (2 merged today)
   expect(statusSection(text, 'TODAY')).toEqual(statusTodayLines(b, now))
   expect(liveToday(b.tasks, now).merged).toBe(2)

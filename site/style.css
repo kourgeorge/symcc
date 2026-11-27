@@ -143,7 +143,7 @@ main.home th, main.home td { padding: .4rem .7rem; }
 main.home h3 { font-size: 1.1rem; }
 .home .hero { padding-top: 2.5rem; }
 .home .hero h1 { font-size: clamp(2rem, 6vw, 3.4rem); letter-spacing: -.02em; margin: .2em 0 .4em; }
-.home .eyebrow { color: var(--accent); font-size: .9rem; margin: 0; }
+.home .eyebrow { color: var(--accent); font-size: .9rem; margin: 0 auto; }
 .home .hint, .home .demo-note { color: var(--dim); text-align: center; font-size: .92rem; }
 .home .demo-note { max-width: 46rem; margin: 1rem auto 0; }
 

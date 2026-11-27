@@ -85,9 +85,12 @@
 
   // ---------- the board panel (the Live tab) ----------
   const ID_W = 5
-  const TITLE_W = 12
-  const GAP = 6
+  const GAP = 8
   const LABELS = ['work✧', 'check✧', 'queue', 'tests', 'done']
+  // (T-1177) the track ends at the right edge of the panel (64 columns); the title takes all the room before it
+  const TRACK_W = LABELS.length + (LABELS.length - 1) * GAP
+  const PANEL_W = 64
+  const TITLE_W = PANEL_W - 1 - (2 + ID_W + 1) - 2 - TRACK_W
   // T-767: the lines under a ▍heading start with 1 space; a running lane then "▶ " and its id in the accent ('run' tone), its title normal text
   const LEAD_W = 1 + 2 + ID_W + 1 + TITLE_W + 2
 
@@ -98,7 +101,6 @@
   const heading = (name, rest = '') => sp('▍', 'heading') + sp(name, 'heading') + rest
   // (T-789, T-810, T-915) the Live tab's section heading: "─── ❯ ", the name in UPPERCASE, bold, then a thin rule to the right edge, all in the heading color
   // (the demo panel is 64 columns wide); an empty line above it (none above the first) and one under it
-  const PANEL_W = 64
   const LIVE_LEAD = '─── ❯ '
   const liveHead = (name, rest = '', plain = '') => sp(LIVE_LEAD, 'heading') + sp(name.toUpperCase(), 'heading') + rest + sp(' ' + '─'.repeat(Math.max(0, PANEL_W - LIVE_LEAD.length - name.length - plain.length - 1)), 'heading')
 
@@ -109,10 +111,11 @@
       // T-771: a just-merged lane has ✓ (done color) at merged, nothing blinking
       track += i < l.at ? sp('●', 'passed') : i === l.at ? (l.done ? sp('✓', 'passed') : sp(s.frame % 2 ? '◎' : '◉', 'current')) : sp('○', 'future')
     })
-    const right = l.done ? `merged ${dur(s.now - l.done)} ago` : l.place ? `#${l.place}` : dur(s.now - l.since)
+    // (T-1177) a finished lane's "merged 3m ago" starts its second line; the first line has no right column
+    const note = l.done ? `merged ${dur(s.now - l.done)} ago · ` : ''
     // T-771: a just-merged lane: "✓ " (dim), its id in the accent, title and second line dim
     const title = ' ' + pad(cut(TITLES[l.id], TITLE_W), TITLE_W)
-    const one = ' ' + (l.done ? sp('✓ ', 'dim') + sp(pad(l.id, ID_W), 'run') + sp(title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track + (l.done ? sp('  ' + right.padStart(6), 'dim') : '')
+    const one = ' ' + (l.done ? sp('✓ ', 'dim') + sp(pad(l.id, ID_W), 'run') + sp(title, 'dim') : sp('▶ ' + pad(l.id, ID_W), 'run') + title) + '  ' + track
     // T-867: no bar: the whole task's tokens (every try; the running try's are known only at its hand-back), how many
     // times the median per task (the warning tone from twice it), its time so far, who spent them, the send-backs.
     // T-931: the clock first, then the tokens, then the worker/checker split (no ⌀ inside), the task type at the end of the line. When the line is too
@@ -133,7 +136,7 @@
     // (T-1080) a finished lane ends with its change size ("+212 −48"); it is the first part dropped
     const line = (level, withSize = false) => {
       const parts = [...(level >= 1 ? [[[`⏱ ${dur(mins)}`, 'dim']]] : []), ...(level >= 2 ? [tokens(level >= 3)] : []), ...(level >= 4 ? split : []), ...(l.back ? [[[`⌕ × ${l.back}`, 'dim']]] : []), ...(withSize && l.size ? [[[l.size, 'dim']]] : [])]
-      return [[`  try ${l.tryNo}/${l.tries}`, 'dim'], ...parts.flatMap(x => [[' · ', 'dim'], ...x])]
+      return [[`  ${note}try ${l.tryNo}/${l.tries}`, 'dim'], ...parts.flatMap(x => [[' · ', 'dim'], ...x])]
     }
     const width = xs => 1 + xs.reduce((n, [t]) => n + t.length, 0)
     // (T-1074) the task type ends the second line (dim, two spaces after); dropped when it does not fit
@@ -184,7 +187,8 @@
     L.push(liveHead('Tasks'), '')
     if (s.lanes.length) {
       // the ✧ after work and check in the accent color (core/live.ts's 'mark' tone)
-      L.push((' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 1 ? pad(x, GAP + 1) : x)).join('')).split('✧').map(x => sp(x, 'dim')).join(sp('✧', 'mark')))
+      // the last name ("done") ends at the right edge: it starts 3 columns before its mark
+      L.push((' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 2 ? pad(x, GAP + 1) : i === LABELS.length - 2 ? pad(x, GAP - 2) : x)).join('')).split('✧').map(x => sp(x, 'dim')).join(sp('✧', 'mark')))
       // T-771: the running lanes on top, then the just-merged ones (kept 10 minutes, at most 3, newest first)
       const kept = s.lanes.filter(l => l.done && s.now - l.done < 10 * 60).sort((a, b) => b.done - a.done).slice(0, 3)
       for (const l of [...s.lanes.filter(l => !l.done), ...kept]) L.push(...laneLines(s, l))
