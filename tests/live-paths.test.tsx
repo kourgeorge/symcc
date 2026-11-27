@@ -81,7 +81,8 @@ test('T-846: the terminal Live tab draws the investigation, docs-only and needs-
   expect(await row('T-803')).toContain('–')
   expect(await row('T-806')).not.toContain('–')
   expect(marks(await row('T-806')).replace(/[━─]+/g, '-')).toBe('●-●-●-◉-○')
-  expect(marks(await row('T-805')).replace(/[━─]+/g, '-')).toBe('●-●-●-●-◉-○')
+  // T-1210: T-805 waits for the owner's review: it is in NEEDS YOU, with no lane here
+  expect(await ui.find({ key: 'live:T-805' })).toBeUndefined()
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })
@@ -97,10 +98,10 @@ test('T-846: the VS Code Live tab draws the same paths', async ($, on) => {
   const dots = (s: string) => (s.match(/<circle/g) ?? []).length
   expect(dots(await svg('T-801'))).toBe(2)
   expect(dots(await svg('T-806'))).toBe(5)
-  expect(dots(await svg('T-805'))).toBe(6)
+  // T-1210: T-805 waits for the owner's review: no lane here
+  expect(tracks.some(x => String(x.props.alt).startsWith('T-805 at '))).toBe(false)
   // the skipped check is no dot
   expect(dots(await svg('T-803'))).toBe(4)
-  expect(String(track('T-805').props.alt)).toContain('T-805 at you')
   await ui.press({ key: 'tab-tasks' })
   await ui.unmount()
 })

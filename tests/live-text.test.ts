@@ -5,6 +5,8 @@ import { test } from './reset'
 import { fakeHost, memoryFs } from './fake-host'
 import { type HostFeatures, ALL_FEATURES } from '../hooks/host'
 import type { Board } from '../hooks/board'
+import { addTask } from '../hooks/core/task'
+import { emptyBoard, type BoardTask } from '../hooks/core/board-file'
 import { S } from '../hooks/app/state'
 import { COMMANDS, runCommand } from '../hooks/app/symcc'
 import { manual } from '../hooks/app/tools'
@@ -65,7 +67,8 @@ function statusTextHasLiveSections(now: number) {
   // T-1074: the first line has no time; the second line under it has the try, the time and the task type
   expect(tasks[tasks.indexOf(lane) + 1]).toMatch(/^   try 2\/\d · ⏱ .*change$/)
   expect(tasks[tasks.indexOf(lane) + 2]).toMatch(/^   └─◇ T-4 Write the export  waits$/)
-  expect(tasks.some(l => l.startsWith(' ▶ T-3') && l.indexOf('◉') === labels.indexOf('you'))).toBe(true)
+  // T-1210: T-3 (review) needs the owner, so it is in NEEDS YOU only, with no lane
+  expect(tasks.some(l => l.includes('T-3'))).toBe(false)
   // T-1177: a finished lane's "merged … ago" is on its second line
   const doneAt = tasks.findIndex(l => /^ ✓ /.test(l))
   if (doneAt >= 0) expect(tasks[doneAt + 1]).toMatch(/^   (merged|\d+\w? ago|.*ago)/)
@@ -89,6 +92,39 @@ function statusTextHasLiveSections(now: number) {
   expect(statusHint()).toBe('/symcc-board opens the board · /symcc-tasks lists the tasks')
   expect(text.split('\n').every(l => textWidth(l) <= 80)).toBe(true)
 }
+
+test('T-1210: a task that needs the owner and the tasks waiting on it are not drawn in TASKS; they come back once it runs', () => {
+  const now = Date.now()
+  const iso = new Date(now).toISOString()
+  let b = emptyBoard()
+  for (const [i, title] of ['Asks', 'Waits on asks', 'Runs', 'Waits on both'].entries()) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'], after: i === 1 ? ['T-1'] : i === 3 ? ['T-1', 'T-3'] : [] }, iso)[0]
+  const run = { started: iso, agents: [] }
+  const ask = { by: 'worker', text: 'Which one?', options: ['a', 'b'], asked_at: iso }
+  const make = (asking: boolean): Board => ({
+    ...b,
+    tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? (asking ? { status: 'waiting', ask } : { status: 'doing', runs: [run] }) : t.id === 'T-3' ? { status: 'doing', runs: [run] } : {}) }) as BoardTask),
+  })
+  const tasks = (bb: Board) => statusSection(liveStatusText(bb as never, [], now), 'TASKS').join('\n')
+  const hidden = tasks(make(true))
+  expect(statusSection(liveStatusText(make(true) as never, [], now), 'NEEDS YOU').join('\n')).toContain('T-1')
+  expect(hidden).not.toContain('T-1 ')
+  expect(hidden).not.toContain('T-2')
+  // T-4 stays under T-3's lane, without naming the hidden T-1
+  expect(hidden).toMatch(/└─◇ T-4 Waits on both {2}waits$/m)
+  expect(hidden).not.toContain('also')
+  const back = tasks(make(false))
+  expect(back).toContain('▶ T-1')
+  expect(back).toContain('T-2 Waits on asks')
+  expect(back).toContain('+ also')
+})
+
+test('T-1210: when every open task needs the owner, TASKS shows the nothing running line', () => {
+  const now = Date.now()
+  const b = statusBoard(now)
+  const only = { ...b, tasks: b.tasks.filter(t => t.id === 'T-1' || t.status === 'done') }
+  const text = liveStatusText(only as never, [], now)
+  expect(statusSection(text, 'TASKS').join('\n')).toContain('Nothing running')
+})
 
 test('T-902: NEEDS YOU is left out when nothing waits; BRANCHES comes between the tasks and today once git was read', () => {
   const now = Date.now()
