@@ -479,7 +479,7 @@ words as bold headings with the same spacing):
   `✧ = an agent works here (needs an agent slot) · ⌀ = tokens`; queue and tests use none, so there can be more lanes than
   `max_parallel`. It never sits under the task rows. When the page is shorter than the screen (the panel in VS Code), the
   empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
-- The track ends at the right edge of the section, the same column for every lane, so the tracks line up (T-1177). A lane's first line has nothing after the track; the title gets all the room between the id and the track (cut with `…` only when it does not fit). The station names stay over their marks; the last one, `done`, ends at the edge, starting a few columns before its mark.
+- The track ends at the same column for every lane, 3 columns before the right edge of the section (T-1193), so the tracks line up. A lane's first line has 3 blank columns after the track; the title gets all the room between the id and the track (cut with `…` only when it does not fit). Every station name starts over its mark, `done` too: it ends at the right edge and is never cut. On very narrow screens the 3 blank columns go only after the title is gone.
 - In VS Code (T-1003, T-1017) a running lane is three lines: the mark, the id (a link) and the full title (cut with `…` only when
   the panel is too narrow), then, indented under the title, the train and the time at the right (`try 2 · 12m`; "try"
   only from the second try), then a dim numbers line (the same text as the terminal's second row below, with the task

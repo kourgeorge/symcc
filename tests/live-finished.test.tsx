@@ -31,9 +31,9 @@ test('T-771: a task merged 3m ago keeps a finished lane under the running ones; 
   const [first, second] = laneLines(lanes[1]!, layout, { nowMs: T0, frame: 0 })
   const text = segText(first)
   expect(text.startsWith('✓ T-747 Live tab: each section')).toBe(true)
-  // T-1177: the track ends at the right edge (width 99), no "ago" on the first line; "merged 3m ago" starts the second
+  // T-1177: the track ends at the right edge (width 99 - 3), no "ago" on the first line; "merged 3m ago" starts the second
   expect(text).toMatch(/●━+●━+●━+●━+✓$/)
-  expect([textWidth(text), text.includes('ago'), segText(second).startsWith('  merged 3m ago · try 1/')]).toEqual([liveInner(100), false, true])
+  expect([textWidth(text), text.includes('ago'), segText(second).startsWith('  merged 3m ago · try 1/')]).toEqual([liveInner(100) - 3, false, true])
   // T-850: "✓ " dim, the id in the accent color ('run'), the title and second line dim; the track and ✓ in the done color
   expect(first.slice(0, 3).map(s => [s.text.trim().slice(0, 4), s.tone])).toEqual([['✓', 'dim'], ['T-74', 'run'], ['Live', 'dim']])
   expect(first.find(s => s.text === '✓')?.tone).toBe('passed')

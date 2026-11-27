@@ -90,7 +90,8 @@
   // (T-1177) the track ends at the right edge of the panel (64 columns); the title takes all the room before it
   const TRACK_W = LABELS.length + (LABELS.length - 1) * GAP
   const PANEL_W = 64
-  const TITLE_W = PANEL_W - 1 - (2 + ID_W + 1) - 2 - TRACK_W
+  // (T-1193) the last 3 columns stay blank, so "done" starts over its mark
+  const TITLE_W = PANEL_W - 1 - 3 -(2 + ID_W + 1) - 2 - TRACK_W
   // T-767: the lines under a ▍heading start with 1 space; a running lane then "▶ " and its id in the accent ('run' tone), its title normal text
   const LEAD_W = 1 + 2 + ID_W + 1 + TITLE_W + 2
 
