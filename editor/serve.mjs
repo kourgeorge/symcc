@@ -64150,7 +64150,7 @@ function taskText(t, running, all = [], report, archivedDone = []) {
     }
     for (const n of crossBranchNotes(t, all)) L.push(`  note: ${n}`);
   }
-  if (t.history.length) L.push("", `What happened (${t.history.length}, newest first):`, ...[...t.history].reverse().map((h) => `  \u2022 ${historyLineText(h)}`));
+  if (t.history.length) L.push("", `Timeline (${t.history.length}, newest first):`, ...[...t.history].reverse().map((h) => `  \u2022 ${historyLineText(h)}`));
   if (t.runs?.length) L.push("", "Time and cost:", ...t.runs.map((r, i) => `  ${fmtRun(r, i, Date.now())}`), `  total: ${fmtTotal(sumRuns(t.runs, Date.now()))}`);
   const commits = taskCommits(t);
   if (commits.length) L.push("", "Commits (newest first):", ...commits.map((c) => `  ${commitText(c)}`));

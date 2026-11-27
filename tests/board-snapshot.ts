@@ -1467,7 +1467,7 @@ export const BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","History (1, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Timeline (1, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -2129,7 +2129,7 @@ export const BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (1, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (1, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -3447,7 +3447,7 @@ export const BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (1, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (1, newest first)"]},
           {
             "type": "Text",
             "children": [

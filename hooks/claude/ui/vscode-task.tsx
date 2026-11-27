@@ -8,7 +8,7 @@
 //   Details: the labelled rows the terminal and OpenCode show (detailRows: Steps, Added, Role, Kind, From, Why,
 //   Files, Into, After, …, Tries) as a two-column label / value grid that wraps (T-699); each task it waits for is a link
 //   Branch (T-761: the task's branch against main, the terminal's lines in the monospaced face)
-//   Answer · What to do (Markdown) · Changes · History (a timeline on one rail, newest first, the newest HISTORY_FIRST
+//   Answer · What to do (Markdown) · Changes · Timeline (a timeline on one rail, newest first, the newest HISTORY_FIRST
 //   with a "Show all" button) · the Time and cost fold (Runs) · Report (Markdown, its first part with a "Show all" button)
 // (a fold and a task id are links: VS Code draws a Button as a filled blue box)
 // No key hints: every action is a button.

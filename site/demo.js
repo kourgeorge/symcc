@@ -280,7 +280,7 @@
     row('Files', 'hooks/app/checker.ts, hooks/app/workers.ts, tests/', 'file')
     row('Into', 'merges into: main', 'text')
     L.push('')
-    L.push(heading(`History (${s.t740.length}, newest first)`))
+    L.push(heading(`Timeline (${s.t740.length}, newest first)`))
     for (const [t, text] of [...s.t740].reverse()) {
       const tone = /found problems/.test(text) ? 'warning' : /passed|merged/.test(text) ? 'passed' : 'text'
       L.push('   ' + sp(t, 'dim') + '  ' + sp(text, tone))

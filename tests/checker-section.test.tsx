@@ -63,7 +63,7 @@ test('T-1079: the Claude Code panel names who wrote each history line, and shows
   const tree = await ui.drawn()
   // newest first: the checker's verdict (its first problem), the worker's hand-back (no checker words), the worker's start
   // (the terminal cuts each line to its first cells, so the lines are read by their start)
-  const lines = firstLines(section(tree, 'History')!)
+  const lines = firstLines(section(tree, 'Timeline')!)
   expect(lines.length).toBe(3)
   expect(lines[0]).toMatch(/^✗ \d\d:\d\d checker symcc-T-505-checker: found/)
   expect(lines[1]).toMatch(/^✗ \d\d:\d\d worker symcc-T-505: try 2: /)
@@ -103,7 +103,7 @@ test('T-1079: an old history entry with no saved agent shows "checker:" and no i
   const old = [historyEntry('checker-ok', 'try 2: checker: OK', at, { try: 2 })]
   seed(on, TASK(old, []))
   const ui2 = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const lines = firstLines(section(await ui2.drawn(), 'History')!)
+  const lines = firstLines(section(await ui2.drawn(), 'Timeline')!)
   await ui2.unmount()
   expect(lines.length).toBe(1)
   expect(lines[0]).toMatch(/^✓ \d\d:\d\d checker: OK$/)
@@ -114,7 +114,7 @@ test('T-1079: the VS Code board shows who wrote each history line and the Checke
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const tree = await ui.drawn()
   await ui.unmount()
-  const history = textOf(section(tree, 'History')!)
+  const history = textOf(section(tree, 'Timeline')!)
   expect(history).toContain(`${historyTime(at, T0)} · checker symcc-T-505-checker`)
   expect(history).toContain('found problems: the empty input still throws')
   expect(history).toContain(`${historyTime(at, T0)} · worker symcc-T-505 · try 2`)

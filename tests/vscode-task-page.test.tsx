@@ -95,7 +95,7 @@ for (const id of RICH_IDS) {
     expect(await ui.find({ key: 'vs-header-rule' }), id).toBeUndefined()
     // T-774: the folded Time and cost row sums the task's own tries on one line (no tries: its count, 0)
     const want = ['Details', 'What to do', 'runs' in t && t.runs.length ? `▸ Time and cost ${t.runs.length} tries · ${t.id === 'T-504' ? '25m · 4.6k tokens (0.4×' : '40m · 11.6k tokens (1×'} the usual task)` : '▸ Time and cost 0']
-    if (t.history.length) want.push('History (2, newest first)')
+    if (t.history.length) want.push('Timeline (2, newest first)')
     for (const h of want) expect(all, `${id} ${h}`).toContain(h)
     // T-1104: one Report section naming whose report it shows (the running try has no report yet: try 1)
     if (t.attempts) expect(all.some(x => x.startsWith(t.status === 'doing' ? 'Report · try 1 · worker' : 'Report · try 2 · worker')), `${id} Report`).toBe(true)
@@ -211,7 +211,7 @@ test('T-1164: a waiting task\'s question box comes right after the header, befor
       expect(q > 0, surface).toBe(true)
       expect(d > 0, `${surface} shows Done`).toBe(true)
       expect(q < d, `${surface} question before Done`).toBe(true)
-      for (const heading of ['What to do', 'History']) {
+      for (const heading of ['What to do', 'Timeline']) {
         const at = all.indexOf(heading, 0)
         expect(at === -1 || q < at, `${surface} ${heading}`).toBe(true)
       }
@@ -306,7 +306,7 @@ for (const [id, want] of Object.entries(CARDS))
       expect((await ui.find({ key: 'vs-row-role' }))?.text, at).toMatch(/^Roleworker/)
       expect((await ui.find({ key: 'vs-row-tries' }))?.text, at).toMatch(/^Tries2/)
       // the sections, with their headings
-      for (const h of ['Details', 'What to do', 'History (2, newest first)']) expect(all, `${at} ${h}`).toContain(h)
+      for (const h of ['Details', 'What to do', 'Timeline (2, newest first)']) expect(all, `${at} ${h}`).toContain(h)
       // the folds, closed by default, each with its count (Time and cost: the sum of the tries, T-774); pressing one opens it
       for (const f of ['time']) {
         expect(mdPlain(String((await ui.find({ key: `fold-${f}` }))?.props.text)), `${at} ${f}`).toMatch(/^▸ Time and cost 2 tries · \d+m · [\d.]+k tokens \([\d.]+× the usual task\)$/)

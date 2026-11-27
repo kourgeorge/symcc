@@ -328,7 +328,7 @@ request, more time), its question box is the first thing under the header, above
 section, on every board. The number keys pick a choice as before.
 
 Further down, ▍Runs comes right above ▍Report, the last section (you pick a report in Runs, so Runs
-comes first; the order is ▍What to do, ▍History, ▍Runs, ▍Report). ▍Report is one section for whichever agent's report you picked in ▍Runs (T-1104):
+comes first; the order is ▍What to do, ▍Timeline, ▍Runs, ▍Report). ▍Report is one section for whichever agent's report you picked in ▍Runs (T-1104):
 its heading says exactly whose and which try, `▍Report · try 3 · worker af4…74a` or
 `▍Report · try 1 · checker a6f…53d` (`▍Report · try 2 · worker` when no agent id is known). The page
 opens on the latest try's worker report. The try keys, `1`-`9`, show that try's worker report and
@@ -677,7 +677,7 @@ task, and the ID on a commit takes you back to the task and your request.
 - **The git commit.** Each try's commit starts with the task ID (`T-3: ...`) and ends with
   trailers: `Symcc-Task`, `Symcc-From` (who asked), `Symcc-Why` and `Symcc-Try`. Find them
   with `git log --grep "T-3"`.
-- **The task page** (`/symcc-task T-3`, or open it on the board): **History** has one short
+- **The task page** (`/symcc-task T-3`, or open it on the board): **Timeline** has one short
   line per event, each with when it happened ("10:42" today, "Nov 18 22:49" before), and a
   dim label for who wrote it: `worker symcc-T-3:`, `checker symcc-T-3-checker:` (the name the
   agent ran under), `lead:` or `you:`; symcc's own steps have none. For example what the
