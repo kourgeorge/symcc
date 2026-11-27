@@ -18,11 +18,7 @@ Tasks merged on each day.
 
 {{stats:perDay}}
 
-## How tasks ended
-
-Most tasks merge on their own once the checker and the tests pass. Some wait for the owner to approve them.
-
-{{stats:endedHow}}
+## Why tries failed
 
 When a try fails, a new one starts with what went wrong. These are the reasons tries failed.
 
@@ -54,8 +50,8 @@ Per merged task:
 
 {{stats:perDone}}
 
-## Time per stage
+## A typical task's life
 
-The average time a merged task spent in each stage, from the moment it was made to the moment it merged.
+A merged task's life from the moment it was made to the moment it merged, split into its stages (the average of each stage). Grey parts are waiting; colored parts are work.
 
 {{stats:stages}}

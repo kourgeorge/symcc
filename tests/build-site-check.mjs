@@ -238,6 +238,19 @@ if (existsSync(join(out, 'style.css'))) {
   if (/<script/.test(t)) bad('whats-new.html has a script')
   if (!t.includes('<aside class="docs-side">') || !t.includes('<li><a href="whats-new.html"')) bad('whats-new.html is not in the documentation list')
   if (!read('built-with-symcc.html').includes('href="whats-new.html"')) bad('built-with-symcc.html does not link What\'s new')
+  // (T-1190) the Built with symcc charts
+  {
+    const b = read('built-with-symcc.html')
+    if (/<script/.test(b)) bad('built-with-symcc.html has a script')
+    if (/How tasks ended/.test(b)) bad('built-with-symcc.html still has How tasks ended')
+    if (!/<div class="chart cols"[^>]*aria-label="Tasks done per day"/.test(b)) bad('built-with-symcc.html: no vertical day chart')
+    if (!/<div class="chart cols turn"[^>]*aria-label="Tasks each scout found"/.test(b)) bad('built-with-symcc.html: no scouts column chart')
+    for (const n of ['Where tasks came from', 'Tasks per role']) if (!b.includes(`<div class="chart stack" role="group" aria-label="${n}"`)) bad(`built-with-symcc.html: no stacked bar for ${n}`)
+    if ((b.match(/<p class="legend">/g) || []).length !== 2) bad('built-with-symcc.html: want a legend line under each stacked bar')
+    if (!/<p class="legend"><span[^>]*>you \d+%<\/span> · /.test(b)) bad('built-with-symcc.html: origin legend line wrong')
+    if ((b.match(/<li><span class="tn">/g) || []).length < 3) bad('built-with-symcc.html: no token rows')
+    if (!/<p class="headline">A typical task takes .* spends \d+% of that waiting and \d+% being worked on/.test(b) || !b.includes('<div class="chart life"')) bad('built-with-symcc.html: no task-life bar with its headline')
+  }
   const css = readFileSync(join(out, 'style.css'), 'utf8')
   if (!/\.timeline \.release \{[^}]*overflow-wrap: anywhere/.test(css) || !/\.timeline \.release \{[^}]*min-width: 0/.test(css)) bad('style.css: timeline entries can push the page wider than 375 px')
   if (!css.includes('.timeline') || !/\.timeline \.release pre \{ max-width: 100%/.test(css)) bad('style.css: timeline code blocks are not held to the page width')
