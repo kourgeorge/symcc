@@ -150,3 +150,43 @@ test('T-1165: workspace git checks count only open, real tasks and never touch t
     await rm(board, { recursive: true, force: true })
   }
 }, 180_000)
+
+// T-1165: only open tasks count: a dropped task's broken repo is forgotten, a backlog task without a project holds nothing
+// back, and housekeeping never runs git in a board folder that is not its own repo.
+test('T-1168: a backlog task keeps no project repo checked', async () => {
+  const board = await realpath(await mkdtemp('/tmp/symcc-node-wsc-'))
+  const git = (cwd: string, ...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd })
+  try {
+    await mkdir(`${board}/client`, { recursive: true })
+    await git(`${board}/client`, 'init', '-q', '-b', 'main')
+    await writeFile(`${board}/client/c.txt`, 'c')
+    await git(`${board}/client`, 'add', '.')
+    await git(`${board}/client`, 'commit', '-qm', 'init')
+    await mkdir(`${board}/empty`, { recursive: true })
+    await git(`${board}/empty`, 'init', '-q', '-b', 'main')
+    const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
+    await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1168' })
+    try {
+      const add = (title: string, project?: string) => leadTool(s, 'add', { title, details: 'Do it', files: ['x.txt'], ...(project ? { project } : {}), why: 'test', origin_by: 'owner', request: 'test' })
+      expect(await add('Client work', 'client')).toContain('T-1')
+      expect(await add('Empty work', 'empty')).toContain('T-2')
+
+      await change(s.host, b => patchTask(b, 'T-2', { status: 'backlog' }, now()))
+      await gitReady(s.host)
+      await new Promise<void>(r => setTimeout(() => r(), 1500)) // let the panel refresh the change started finish
+      const calls: string[] = []
+      const host = s.host as { run: (cmd: string[], o?: { cwd?: string }) => Promise<unknown> }
+      const run = host.run.bind(s.host)
+      host.run = (cmd, o) => { calls.push(`${o?.cwd ?? ''} ${cmd.join(' ')}`); return run(cmd, o) }
+      expect(await recheckGit(s.host)).toContain('git is ready')
+      expect(allGitReady()).toBe(true)
+      expect(calls.filter(c => c.includes('/empty'))).toEqual([])
+      host.run = run
+    } finally {
+      await closeSession(s).catch(() => undefined)
+    }
+  } finally {
+    await rm(board, { recursive: true, force: true })
+  }
+}, 180_000)
