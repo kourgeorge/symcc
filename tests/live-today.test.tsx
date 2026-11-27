@@ -264,7 +264,7 @@ test('T-769: the terminal and VS Code Live tabs show ▍Today\'s 4 lines, and a 
   expect(await row('results')).toEqual(['Results', '✓ 3 merged · ↺ 0 sent back · ✗ 0 failed'])
   expect(await row('tokens')).toEqual(['Tokens', '10M · lead 10% · workers 57% · checkers 3% · scouts 30%'])
   expect(await row('time')).toEqual(['Agent time', '1h 15m · ≈ $12 this session'])
-  expect(await row('per-task')).toEqual(['Per task', '2M/task · 10m work · 30m start-to-merge · first try 67% · avg 1.3 tries/task'])
+  expect(await row('per-task')).toEqual(['Per task', 'median ⌀ 2M/task · 10m work · 30m start-to-merge · first try 67% · avg 1.3 tries/task'])
   const [hl, hours] = await row('hours')
   expect([hl, /^00▕[▁▂▃▄▅▆▇█]+·*▏24 {3}busiest \d\d:00 · \S+$/.test(hours ?? '')]).toEqual(['Hours', true])
   // the colors: merged green, sent back amber, failed red; the label column one width for every row

@@ -1404,7 +1404,7 @@ export function liveTodayRows(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs: 
   rows.push({ key: 'time', label: TODAY_ROW.time, segs: [{ text: fmtDuration(more.workMs), tone: 'text' }, ...(more.usd !== undefined ? [dot, { text: todayCostText(more.usd), tone: 'dim' as const }] : [])] })
   const per = more.perTask
   const perParts = [
-    ...(per?.tokens !== undefined ? [`${fmtTokens(per.tokens)}/task`] : []),
+    ...(per?.tokens !== undefined ? [`median ⌀ ${fmtTokens(per.tokens)}/task`] : []),
     ...(per?.workMs !== undefined ? [`${fmtDuration(per.workMs)} work`] : []),
     ...(per?.mergeMs !== undefined ? [`${fmtDuration(per.mergeMs)} start-to-merge`] : []),
     ...(more.firstTry !== undefined ? [`first try ${Math.round(more.firstTry)}%`] : []),
