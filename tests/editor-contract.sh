@@ -1,6 +1,6 @@
 #!/bin/sh
-# Checks that the contract between serve and the editor extension (hosts/cursor/contract.ts) wasn't changed without
-# its number being reconsidered: hosts/cursor/contract.sha256 records the PROTOCOL and the file's hash it was last
+# Checks that the contract between serve and the editor extension (hosts/vscode/contract.ts) wasn't changed without
+# its number being reconsidered: hosts/vscode/contract.sha256 records the PROTOCOL and the file's hash it was last
 # looked at with. A change an extension speaking the old number couldn't follow raises PROTOCOL; either way, record
 # the new hash. Run by scripts/typecheck.sh and tests/editor-bundle.sh.
 # Usage: sh tests/editor-contract.sh [folder]
@@ -8,8 +8,8 @@ set -eu
 root=${1:-"$(cd "$(dirname "$0")/.." && pwd)"}
 cd "$root"
 fail() { echo "editor-contract: $1" >&2; exit 1; }
-contract=hosts/cursor/contract.ts
-record=hosts/cursor/contract.sha256
+contract=hosts/vscode/contract.ts
+record=hosts/vscode/contract.sha256
 
 if command -v sha256sum >/dev/null 2>&1; then sum() { tr -d '\r' <"$1" | sha256sum | cut -d' ' -f1; }
 elif command -v shasum >/dev/null 2>&1; then sum() { tr -d '\r' <"$1" | shasum -a 256 | cut -d' ' -f1; }

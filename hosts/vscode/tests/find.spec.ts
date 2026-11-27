@@ -1,6 +1,6 @@
 // How the editor extension finds the symcc it runs (../extension/src/find.ts): the harnesses' records, what each copy
 // holds, the newest copy whose contract fits, and the one message when none does. Run with `npx -y bun test ./tests/`
-// in hosts/cursor/ (or `npm test` there).
+// in hosts/vscode/ (or `npm test` there).
 import { test, expect } from 'bun:test'
 import { CLAUDE, COPILOT, OPENCODE, choose, compareVersions, describe, devCopy, editorRipgrep, nodeFits, places, type Copy, type FindFs } from '../extension/src/find'
 
@@ -70,8 +70,8 @@ test('versions compare part by part; Node 22.13 or newer runs serve', () => {
 })
 
 test("in development the extension runs its own clone's builds", () => {
-  const fs = memFs({ ...copyAt('/src/symcc', '0.5.41'), '/src/symcc/hosts/cursor/dist/engine.mjs': '' })
-  expect(devCopy('/src/symcc/hosts/cursor/extension', 1, fs)).toEqual({ root: '/src/symcc', from: 'this clone (development)', version: '0.5.41', protocol: 1, serve: '/src/symcc/hosts/cursor/dist/engine.mjs', webview: '/src/symcc/hosts/cursor/extension/dist' })
+  const fs = memFs({ ...copyAt('/src/symcc', '0.5.41'), '/src/symcc/hosts/vscode/dist/engine.mjs': '' })
+  expect(devCopy('/src/symcc/hosts/vscode/extension', 1, fs)).toEqual({ root: '/src/symcc', from: 'this clone (development)', version: '0.5.41', protocol: 1, serve: '/src/symcc/hosts/vscode/dist/engine.mjs', webview: '/src/symcc/hosts/vscode/extension/dist' })
   expect(devCopy('/elsewhere/a/b/c', 1, fs)).toBe(undefined)
 })
 

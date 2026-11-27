@@ -1,6 +1,6 @@
 // The Cursor SDK on first use (../sdk-fetch.ts), against a registry served from this process: the pinned tarballs are
 // fetched, checked and unpacked into the cache once, a tarball that isn't the pinned one leaves nothing, and the pins
-// are hosts/cursor/package-lock.json's. Run with `npx -y bun test ./tests/` in hosts/cursor/ (or `npm test` there).
+// are hosts/vscode/package-lock.json's. Run with `npx -y bun test ./tests/` in hosts/vscode/ (or `npm test` there).
 import { test, expect } from 'bun:test'
 import { createServer, type Server } from 'node:http'
 import { mkdtemp, readdir, readFile } from 'node:fs/promises'

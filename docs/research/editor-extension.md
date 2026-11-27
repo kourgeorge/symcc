@@ -5,7 +5,7 @@ Step 1 of the store plan for PR #1 (the VS Code and Cursor extension as a client
 2.0.2, Copilot CLI 1.0.115, Claude Code 2.1.321, OpenCode 2.4.0, the Cursor CLI 2026.11.11, Cursor 3.32.4 and VS Code
 1.148.0.
 
-The probe bundled the real adapters (`hosts/cursor/sdk.ts` and `hosts/cursor/copilot.ts`) with both SDKs into one file
+The probe bundled the real adapters (`hosts/vscode/sdk.ts` and `hosts/vscode/copilot.ts`) with both SDKs into one file
 with esbuild. It ran from `/tmp`, which has no `node_modules` above it. Each run was one agent turn that had to search a
 folder for a word with its search tool. `strace` showed which programs each run started.
 
@@ -195,7 +195,7 @@ be combined, for example A with D.
   - The SDK alone doesn't load: "Cannot find package '@bufbuild/protobuf'". It needs the six others in the same
     `node_modules` (checked).
 - **B. A one-time setup command in the plugin.** It runs `npm install --omit=dev` in the installed copy's
-  `hosts/cursor`. It is simple, but needs npm. Each harness update replaces the copy, and Claude Code keeps one folder per
+  `hosts/vscode`. It is simple, but needs npm. Each harness update replaces the copy, and Claude Code keeps one folder per
   version, so it has to be run again.
 - **C. Ask Anysphere for written permission** to ship `@cursor/sdk` inside symcc. Then decision 2 stays as written.
   George would have to ask.
@@ -214,7 +214,7 @@ the update command. Another is to fetch the matching Copilot runtime package int
 
 ## 7. What was chosen
 
-- Option A: serve fetches the Cursor SDK on first use (`hosts/cursor/sdk-fetch.ts`), into
+- Option A: serve fetches the Cursor SDK on first use (`hosts/vscode/sdk-fetch.ts`), into
   `<cache>/cursor-sdk-1.3.1-<hash>/node_modules/`.
 - Copilot: serve uses `COPILOT_CLI_PATH`, else the SDK's own runtime when it is installed, else the owner's `copilot`
   CLI (on the `PATH`, or where its installers put it). A CLI on another protocol gets a plain message with the command

@@ -1,4 +1,4 @@
-# Publishes the VS Code and Cursor extension (hosts/cursor/extension, kourgeorge.symcc) to the VS Code Marketplace
+# Publishes the VS Code and Cursor extension (hosts/vscode/extension, kourgeorge.symcc) to the VS Code Marketplace
 # and Open VSX when a tag vscode-v<version> is pushed. docs/releasing.md has the steps and the one-time setup.
 # Secrets: VSCE_PAT (an Azure DevOps token with the Marketplace Manage scope) and OVSX_PAT (an Open VSX token).
 name: release-extension
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: hosts/cursor/extension
+        working-directory: hosts/vscode/extension
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -55,7 +55,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: symcc-${{ env.VERSION }}.vsix
-          path: hosts/cursor/extension/symcc-${{ env.VERSION }}.vsix
+          path: hosts/vscode/extension/symcc-${{ env.VERSION }}.vsix
           if-no-files-found: error
       # --skip-duplicate: re-running the job after one store failed publishes to the other only
       - name: Publish to the VS Code Marketplace

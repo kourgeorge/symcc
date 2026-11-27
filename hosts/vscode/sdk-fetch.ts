@@ -1,7 +1,7 @@
 // The Cursor SDK on first use. Its license (Cursor's own) keeps it out of symcc, so serve fetches it: the tarballs of
 // @cursor/sdk and the open packages it imports come from npm at the versions pinned here, each checked against its
 // sha512, into a cache folder that serve imports it from. A Node that finds @cursor/sdk by itself (after npm install
-// in hosts/cursor) uses that one. The platform packages (@cursor/sdk-<os>-<cpu>) only carry ripgrep, which serve
+// in hosts/vscode) uses that one. The platform packages (@cursor/sdk-<os>-<cpu>) only carry ripgrep, which serve
 // takes from the editor (CURSOR_RIPGREP_PATH) or the PATH.
 import { createHash } from 'node:crypto'
 import { access, mkdir, rename, rm, writeFile } from 'node:fs/promises'
@@ -13,7 +13,7 @@ import { gunzipSync } from 'node:zlib'
 /** A package at one version, and its tarball's sha512 as npm writes it ("sha512-<base64>"). */
 export type Pinned = { name: string; version: string; integrity: string }
 
-/** @cursor/sdk and what it imports when it runs, as hosts/cursor/package-lock.json has them (a test checks they agree). */
+/** @cursor/sdk and what it imports when it runs, as hosts/vscode/package-lock.json has them (a test checks they agree). */
 export const CURSOR_SDK: readonly Pinned[] = [
   { name: '@cursor/sdk', version: '1.3.1', integrity: 'sha512-Mn0gK8V+5BkOqm22J2ocU+1BrqnNH8QcK9kmA7SkRuawDOeq2ABC2BIZq9gRnF3z68x/I7J/ZU8jl6DcshCVUA==' },
   { name: '@bufbuild/protobuf', version: '1.10.0', integrity: 'sha512-QDdVFLoN93Zjg36NoQPZfsVH9tZew7wKDKyV5qRdj8ntT4wQCOradQjRaTdwMhWUYsgKsvCINKKm87FdEk96Ag==' },

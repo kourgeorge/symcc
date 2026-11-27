@@ -4,7 +4,7 @@
 # started with node on a scratch git repo, first says it is ready with symcc's version and the contract's number, then
 # answers the webview with the agents it can run, on Cursor's agents and on Copilot's; and the contract is as recorded
 # (tests/editor-contract.sh). It does not check that the committed editor/ is up to date (build-editor.sh --check does).
-# Needs node and git on PATH, and npm ci done in hosts/cursor and hosts/cursor/extension. Uses no network.
+# Needs node and git on PATH, and npm ci done in hosts/vscode and hosts/vscode/extension. Uses no network.
 # Usage: sh tests/editor-bundle.sh [folder]
 set -eu
 root=${1:-"$(cd "$(dirname "$0")/.." && pwd)"}
@@ -30,7 +30,7 @@ grep -qE 'class CopilotClient|CopilotClient = class' "$serve" || fail "the Copil
 grep -q 'import("@microsoft/copilot-sdk")' "$serve" && fail "serve.mjs loads the Copilot SDK by name (it must be inside)"
 grep -q 'from "koffi"' "$serve" && fail "serve.mjs imports koffi (the in-process Copilot runtime must stay out)"
 # nothing inside comes from above the repository (a stray ~/node_modules on the build machine): esbuild names each
-# input from hosts/cursor, so ../../ is the repository and a third ../ is outside it
+# input from hosts/vscode, so ../../ is the repository and a third ../ is outside it
 outside=$(grep -E '^// (\.\./){3,}' "$serve" | head -3 || true)
 [ -z "$outside" ] || fail "serve.mjs holds code from outside the repository: $outside"
 for p in '@microsoft/copilot-sdk' 'react' 'undici'; do
@@ -43,7 +43,7 @@ mkdir -p "$repo"
 git -C "$repo" init -q -b main
 git -C "$repo" -c user.name=t -c user.email=t@t commit -q --allow-empty -m init
 version=$(node -p 'require("./.claude-plugin/plugin.json").version')
-protocol=$(sed -n 's/^export const PROTOCOL = \([0-9][0-9]*\)$/\1/p' hosts/cursor/contract.ts)
+protocol=$(sed -n 's/^export const PROTOCOL = \([0-9][0-9]*\)$/\1/p' hosts/vscode/contract.ts)
 [ "$(cat "$tmp/editor/serve.json")" = "{\"protocol\":$protocol}" ] || fail "editor/serve.json is not {\"protocol\":$protocol}: $(cat "$tmp/editor/serve.json")"
 for agents in cursor copilot; do
   SYMCC_CACHE="$tmp/cache" SYMCC_NPM_REGISTRY=http://127.0.0.1:9 COPILOT_CLI_PATH=/nonexistent/copilot node -e '

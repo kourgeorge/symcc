@@ -5,7 +5,7 @@ For people who release symcc. symcc has two things to release, on two tracks:
 | What | Where it lives | How people get it | How you release it |
 |---|---|---|---|
 | The plugin | the whole repository | Claude Code, Copilot CLI or OpenCode installs it | bump its version, merge to `main` |
-| The extension (`kourgeorge.symcc`) | `hosts/cursor/extension/` | the VS Code Marketplace or Open VSX | bump its version, push a `vscode-v<version>` tag |
+| The extension (`kourgeorge.symcc`) | `hosts/vscode/extension/` | the VS Code Marketplace or Open VSX | bump its version, push a `vscode-v<version>` tag |
 
 The plugin is the product. The extension is only a client: it finds the plugin a harness installed, runs that copy's
 `editor/serve.mjs`, and shows that copy's `editor/webview/`. So most changes need only a plugin release, and the
@@ -20,10 +20,10 @@ extension is released rarely. See [The editor extension](architecture.md#the-edi
 | The engine (`hooks/core/`, `hooks/app/`, `hooks/process/`, `prompts/`, `kinds/`, `roles/`) | The plugin. Run `sh scripts/build-editor.sh` and `sh scripts/build-copilot.sh` first, since both bundle the engine. |
 | Claude Code's or OpenCode's parts (`hooks/claude/`, `hooks/register.tsx`, `hooks/opencode/`, `opencode/`) | The plugin. |
 | The Copilot CLI host (`hooks/copilot/`) | The plugin, after `sh scripts/build-copilot.sh`. Also `sh scripts/build-editor.sh`: serve uses its edit guard. |
-| serve or the board in the editor (`hosts/cursor/*.ts`) | The plugin, after `sh scripts/build-editor.sh`. Not the extension. |
-| The board's webview (`hosts/cursor/extension/webview/`) | The plugin, after `sh scripts/build-editor.sh`. It is built into `editor/webview/`, not into the extension. |
-| The extension's own code (`hosts/cursor/extension/src/`, its `package.json`, `media/`, `README.md`) | The extension. |
-| The contract (`hosts/cursor/contract.ts`) | See [The protocol number](#the-protocol-number). |
+| serve or the board in the editor (`hosts/vscode/*.ts`) | The plugin, after `sh scripts/build-editor.sh`. Not the extension. |
+| The board's webview (`hosts/vscode/extension/webview/`) | The plugin, after `sh scripts/build-editor.sh`. It is built into `editor/webview/`, not into the extension. |
+| The extension's own code (`hosts/vscode/extension/src/`, its `package.json`, `media/`, `README.md`) | The extension. |
+| The contract (`hosts/vscode/contract.ts`) | See [The protocol number](#the-protocol-number). |
 
 `sh scripts/build-editor.sh --check` and `sh scripts/build-copilot.sh --check` say whether the committed builds are up
 to date. `sh scripts/typecheck.sh` prints the first as a note.
@@ -42,9 +42,9 @@ to date. `sh scripts/typecheck.sh` prints the first as a note.
 
 ## Releasing the extension
 
-1. Bump `version` in `hosts/cursor/extension/package.json`, run `npm install --package-lock-only` there, and add a
-   `## <version>` section to `hosts/cursor/extension/CHANGELOG.md`.
-2. Try it: `npm run package` in `hosts/cursor/extension` writes `symcc-<version>.vsix`. Install it with
+1. Bump `version` in `hosts/vscode/extension/package.json`, run `npm install --package-lock-only` there, and add a
+   `## <version>` section to `hosts/vscode/extension/CHANGELOG.md`.
+2. Try it: `npm run package` in `hosts/vscode/extension` writes `symcc-<version>.vsix`. Install it with
    `code --install-extension symcc-<version>.vsix` (or `cursor --install-extension`).
 3. Merge to `main`.
 4. Tag that commit on `kourgeorge/symcc` and push the tag:
@@ -88,9 +88,9 @@ step.
 
 ## The protocol number
 
-The extension and serve talk through a small contract, `hosts/cursor/contract.ts`, which has a number, `PROTOCOL`.
+The extension and serve talk through a small contract, `hosts/vscode/contract.ts`, which has a number, `PROTOCOL`.
 serve says its number in its ready line and in `editor/serve.json`. The extension speaks a range (`SPEAKS` in
-`hosts/cursor/extension/src/extension.ts`: `low` up to the `PROTOCOL` it was built with), and it only runs a copy
+`hosts/vscode/extension/src/extension.ts`: `low` up to the `PROTOCOL` it was built with), and it only runs a copy
 whose number is in that range. The rule for when to raise the number is in
 [The contract and its number](architecture.md#the-contract-and-its-number).
 

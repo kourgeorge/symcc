@@ -2,7 +2,7 @@
 # Checks scripts/test-node-host.sh (T-1124). Not a `claude plugin test` file: that runtime can't run processes.
 # Run: sh tests/node-host-script.sh
 # Uses a fake `bun` first on PATH (fast: no real tests run), so it checks the script itself:
-# 1. It runs both the Node host's tests (./hosts/node/) and the Cursor host's tests (./hosts/cursor/).
+# 1. It runs both the Node host's tests (./hosts/node/) and the Cursor host's tests (./hosts/vscode/).
 # 2. When bun passes, it exits 0 with no failure summary.
 # 3. When bun fails (say a Cursor test), it exits with bun's code and names the failing test last.
 set -u
@@ -32,7 +32,7 @@ out="$(PATH="$tmp/bin:$PATH" FAKE_BUN_ARGS="$args" sh "$script" 2>&1)"; code=$?
 [ "$code" -eq 0 ] || bad "passing run: expected exit 0, got $code: $out"
 ran="$(cat "$args" 2>/dev/null)"
 echo " $ran " | grep -q " ./hosts/node/ " || bad "the Node host's tests are not run: bun got '$ran'"
-echo " $ran " | grep -q " ./hosts/cursor/ " || bad "the Cursor host's tests are not run: bun got '$ran'"
+echo " $ran " | grep -q " ./hosts/vscode/ " || bad "the Cursor host's tests are not run: bun got '$ran'"
 echo "$out" | grep -q "failed tests" && bad "passing run: a failure summary was shown: $out"
 
 out="$(PATH="$tmp/bin:$PATH" FAKE_BUN_ARGS="$args" FAKE_BUN_FAIL=1 sh "$script" 2>&1)"; code=$?

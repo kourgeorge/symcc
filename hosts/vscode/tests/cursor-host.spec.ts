@@ -1,6 +1,6 @@
-// The Cursor host (hosts/cursor/) with a fake Cursor SDK (./fake-sdk.ts): symcc's engine runs a task end to end with
+// The Cursor host (hosts/vscode/) with a fake Cursor SDK (./fake-sdk.ts): symcc's engine runs a task end to end with
 // its worker as an SDK agent, a running worker takes messages, its question tool reaches the board, and the lead chat
-// wakes at once for an update. Run with `npx -y bun test ./tests/` in hosts/cursor/ (or `npm test` there).
+// wakes at once for an update. Run with `npx -y bun test ./tests/` in hosts/vscode/ (or `npm test` there).
 import { test, expect } from 'bun:test'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
@@ -707,7 +707,7 @@ test("the engine process's first line is ready, with symcc's version and the pro
   const repo = await scratchRepo()
   try {
     // stdin is empty, so the process ends right after it is ready
-    const r = await runCommand([process.execPath, `${PLUGIN_ROOT}/hosts/cursor/main.ts`, '--root', repo], { cwd: repo, timeoutMs: 30_000 })
+    const r = await runCommand([process.execPath, `${PLUGIN_ROOT}/hosts/vscode/main.ts`, '--root', repo], { cwd: repo, timeoutMs: 30_000 })
     const first = JSON.parse(r.stdout.split('\n')[0] ?? '') as unknown
     const version = (JSON.parse(await readFile(`${PLUGIN_ROOT}/.claude-plugin/plugin.json`, 'utf8')) as { version: string }).version
     expect(first).toEqual({ event: 'ready', version, protocol: PROTOCOL })

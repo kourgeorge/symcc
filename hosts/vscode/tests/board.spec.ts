@@ -1,6 +1,6 @@
 // The board's serve side (../board.ts) with a fake session: what a webview gets when it opens, what is kept between
 // runs, a network problem and the proxy, files and sessions the lead names, worktree actions and their confirms, the
-// notices and the status bar item. Run with `npx -y bun test ./tests/` in hosts/cursor/ (or `npm test` there).
+// notices and the status bar item. Run with `npx -y bun test ./tests/` in hosts/vscode/ (or `npm test` there).
 import { test, expect } from 'bun:test'
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'

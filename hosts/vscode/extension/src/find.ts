@@ -1,7 +1,7 @@
 // Finds the symcc this extension runs. symcc is installed once, through a harness; the extension only finds that copy:
 // symcc.pluginPath when set, else the copies Claude Code, Copilot CLI and OpenCode installed. Each copy says its
 // version (.claude-plugin/plugin.json) and the contract its serve speaks (editor/serve.json). The newest copy whose
-// contract this extension speaks wins. No vscode here, so the host's tests (hosts/cursor/tests/find.spec.ts) run it.
+// contract this extension speaks wins. No vscode here, so the host's tests (hosts/vscode/tests/find.spec.ts) run it.
 import { readFileSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 
@@ -99,11 +99,11 @@ export function describe(root: string, from: string, fs: FindFs = nodeFindFs): C
   return { root, from, version, ...(typeof protocol === 'number' && fs.isFile(serve) ? { protocol } : {}), serve, webview: join(root, 'editor', 'webview') }
 }
 
-/** The clone an extension in development runs from: its hosts/cursor/dist/engine.mjs and its own webview build. */
+/** The clone an extension in development runs from: its hosts/vscode/dist/engine.mjs and its own webview build. */
 export function devCopy(extensionPath: string, protocol: number, fs: FindFs = nodeFindFs): Copy | undefined {
   const root = resolve(extensionPath, '..', '..', '..')
   const c = describe(root, 'this clone (development)', fs)
-  const serve = join(root, 'hosts', 'cursor', 'dist', 'engine.mjs')
+  const serve = join(root, 'hosts', 'vscode', 'dist', 'engine.mjs')
   return c && fs.isFile(serve) ? { ...c, protocol, serve, webview: join(extensionPath, 'dist') } : undefined
 }
 
