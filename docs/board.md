@@ -479,7 +479,7 @@ words as bold headings with the same spacing):
   `✧ = an agent works here (needs an agent slot) · ⌀ = tokens`; queue and tests use none, so there can be more lanes than
   `max_parallel`. It never sits under the task rows. When the page is shorter than the screen (the panel in VS Code), the
   empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
-- On the right: only a finished lane has text there (`merged 3m ago`); a running lane has none (the time is in the `⏱` of its second row).
+- The track ends at the right edge of the section, the same column for every lane, so the tracks line up (T-1177). A lane's first line has nothing after the track; the title gets all the room between the id and the track (cut with `…` only when it does not fit). The station names stay over their marks; the last one, `done`, ends at the edge, starting a few columns before its mark.
 - In VS Code (T-1003, T-1017) a running lane is three lines: the mark, the id (a link) and the full title (cut with `…` only when
   the panel is too narrow), then, indented under the title, the train and the time at the right (`try 2 · 12m`; "try"
   only from the second try), then a dim numbers line (the same text as the terminal's second row below, with the task
@@ -502,7 +502,7 @@ words as bold headings with the same spacing):
 - **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend at the bottom of the Live tab, below the footer, says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `median` marks a median (`median ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
 - Just merged: a task that merged in the last 10 minutes keeps its lane for a while, under the
   running ones, drawn as finished: the track filled up to `merged` with `✓` there (green), a dim `✓ `
-  where a running lane has `▶ `, the id in the accent color, the title and second row dim, and `merged 3m ago` on the right (`3m ago` on a narrow panel).
+  where a running lane has `▶ `, the id in the accent color, the title and second row dim, and `merged 3m ago` at the start of the second row, before `try` (T-1177; it shortens to `3m ago` only when every other part of the row is gone).
   At most 3 such lanes show, newest first; after 10 minutes, or when a 4th task merges, the oldest
   goes. Only merged tasks get one: answered investigations,
   failed or dropped tasks don't. Enter (or a click) on a finished lane opens its task page. A finished lane's second row ends with the change size, `+212 −48` (T-1080; no file count there); it is the first part dropped when the row is narrow.
@@ -510,8 +510,8 @@ words as bold headings with the same spacing):
   ```
    ▶ T-760 A running one ●━━━━━━━━◉────────○────────○────────○
      try 1/3 · ⏱ 2m · ⌀ at hand-back  change
-   ✓ T-747 Live tab: e…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓  merged 3m ago
-     try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M · +212 −48  change
+   ✓ T-747 Live tab: each section starts…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓
+     merged 3m ago · try 1/3 · ⏱ 38m · ⌀ 5.7M (4.6×median) · worker 4.1M · checker 1.6M · +212 −48  change
   ```
 - Waiting trains: a todo task that waits (its `after`) for a task that has not finished hangs
   under the lane of the running task it waits for, indented with `└─◇`, its id and cut title,
@@ -625,7 +625,8 @@ words as bold headings with the same spacing):
       … 36 more in the backlog
 
                                            work✧    check✧   queue    tests    done
-    ✓ T-922 Under DAM: the lead posts bo…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓   merged 3m ago
+    ✓ T-922 Under DAM: the lead posts bo…  ●━━━━━━━━●━━━━━━━━●━━━━━━━━●━━━━━━━━✓
+      merged 3m ago · try 1/3
     ```
 
     An empty line keeps these lines apart from the just-merged tasks under them. When the board

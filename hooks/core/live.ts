@@ -646,8 +646,9 @@ export const liveHeading = (name: string, width: number): LiveSeg[] => {
 /** A line under a section heading: LIVE_INDENT, then its segments. */
 export const liveIndented = (xs: readonly LiveSeg[]): LiveSeg[] => [{ text: LIVE_INDENT, tone: 'text' }, ...xs]
 
-/** How the lanes are laid out at a width: the id and title columns, the gap between stations, the station names, the right column. */
-export type LiveLayout = { width: number; idW: number; titleW: number; gap: number; labels: string[]; rightW: number; sep: number; stations: LiveStation[] }
+/** How the lanes are laid out at a width: the id and title columns, the gap between stations, the station names. The track
+ *  ends at the right edge (T-1177): the title column takes all the room between the id and the track. */
+export type LiveLayout = { width: number; idW: number; titleW: number; gap: number; labels: string[]; sep: number; stations: LiveStation[] }
 
 const LABELS: Record<LiveStation, string>[] = [
   { work: 'work✧', check: 'check✧', queue: 'queue', tests: 'tests', you: 'you', done: 'done' },
@@ -658,11 +659,9 @@ const LABELS: Record<LiveStation, string>[] = [
 const MAX_GAP = 8
 const MIN_GAP = 2
 const TITLE_W = 12
-const TITLE_MAX = 40
-const RIGHT_W = 6
 
-/** A lane line's width with these columns. With no right column (T-1074) the last station name ("done", 3 past its mark) still needs its room. */
-const laneWidth = (idW: number, titleW: number, k: number, gap: number, sep: number, rightW = 0) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap + (rightW ? sep + rightW : gap >= 4 ? 3 : 0)
+/** A lane's first line width with these columns (T-1177: no right column, the last mark is at the right edge). */
+const laneWidth = (idW: number, titleW: number, k: number, gap: number, sep: number) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap
 
 /**
  * The layout of `lanes` at `width` columns: gaps of 8 and a 12-column title (wider, up to the longest title, when the
@@ -673,36 +672,20 @@ export function liveLayout(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Par
   const idW = Math.max(4, ...lanes.map(l => textWidth(l.id)))
   const k = stations.length
   const longest = Math.max(3, ...lanes.map(l => textWidth(l.title)))
-  const make = (titleW: number, gap: number, sep: number, rightW = right): LiveLayout => {
+  const make = (titleW: number, gap: number, sep: number): LiveLayout => {
     const set = LABELS.find(s => stations.slice(0, -1).every(st => textWidth(s[st]) <= gap)) ?? LABELS[LABELS.length - 1]!
-    return { width, idW, titleW, gap, labels: stations.map(s => set[s]), rightW, sep, stations: [...stations] }
+    return { width, idW, titleW, gap, labels: stations.map(s => set[s]), sep, stations: [...stations] }
   }
   const base = Math.min(TITLE_W, longest)
-  // T-1074: a running lane's first line has no right column (its second line has the time); only a finished lane has one
-  const right = lanes.some(l => l.done) ? RIGHT_W : 0
-  // T-771: a finished lane's "merged 10m ago" wants a wider right column; when the stations and the title can't keep
-  // their room beside it, the right column stays narrow and the lane says the shorter "10m ago" (laneRight)
-  const wide = Math.max(right, ...lanes.map(l => (l.done ? textWidth(`${l.done.word} 10m ago`) : 0)))
-  if (wide > right)
-    for (let gap = MAX_GAP; gap >= MIN_GAP; gap--) {
-      if (laneWidth(idW, base, k, gap, 2, wide) <= width) {
-        const room = width - laneWidth(idW, base, k, gap, 2, wide)
-        return make(gap === MAX_GAP ? Math.min(TITLE_MAX, longest, base + room) : base, gap, 2, wide)
-      }
-    }
-  for (let gap = MAX_GAP; gap >= MIN_GAP; gap--) {
-    // the gap is chosen as if the right column were still there (the track stays as it was); the minutes' room goes to the title
-    if (laneWidth(idW, base, k, gap, 2, RIGHT_W) <= width) {
-      const room = width - laneWidth(idW, base, k, gap, 2, right)
-      return make(Math.min(TITLE_MAX, longest, base + room), gap, 2)
-    }
-  }
-  for (let titleW = base - 1; titleW >= 3; titleW--) if (laneWidth(idW, titleW, k, MIN_GAP, 2, right) <= width) return make(titleW, MIN_GAP, 2)
-  if (laneWidth(idW, 0, k, MIN_GAP, 2, right) <= width) return make(0, MIN_GAP, 2)
+  // the title column fills what the track leaves, so every lane's track ends at the same column (the right edge)
+  const fill = (gap: number, sep: number) => Math.max(0, width - laneWidth(idW, 0, k, gap, sep) - 1)
+  for (let gap = MAX_GAP; gap >= MIN_GAP; gap--) if (laneWidth(idW, base, k, gap, 2) <= width) return make(fill(gap, 2), gap, 2)
+  for (let titleW = base - 1; titleW >= 3; titleW--) if (laneWidth(idW, titleW, k, MIN_GAP, 2) <= width) return make(fill(MIN_GAP, 2), MIN_GAP, 2)
+  if (laneWidth(idW, 0, k, MIN_GAP, 2) <= width) return make(0, MIN_GAP, 2)
   // T-846: with many shared columns even that is too wide: the spacing between columns shrinks first (gap 1, then the
   // spaces around the stations, then gap 0), only then the labels (the one-letter set picks itself)
-  if (laneWidth(idW, 0, k, 1, 2, right) <= width) return make(0, 1, 2)
-  if (laneWidth(idW, 0, k, 1, 1, right) <= width) return make(0, 1, 1)
+  if (laneWidth(idW, 0, k, 1, 2) <= width) return make(0, 1, 2)
+  if (laneWidth(idW, 0, k, 1, 1) <= width) return make(0, 1, 1)
   return make(0, 0, 1)
 }
 
@@ -716,7 +699,21 @@ export function liveLabelLine(l: LiveLayout): string {
 /** T-760: liveLabelLine in pieces: the names dim, each LIVE_AGENT_MARK in the 'mark' tone (the accent color). */
 export function liveLabelSegs(l: LiveLayout): LiveSeg[] {
   const lead = ' '.repeat(LIVE_RUN_MARK.length + nameWidth(l) + l.sep)
-  const text = lead + l.labels.map((s, i) => (i < l.labels.length - 1 ? padWidth(s, l.gap + 1) : s)).join('')
+  // T-1177: the track ends at the right edge, so the last name ("done") can't hang past its mark: it ends at the edge
+  // instead (starting over the dashes before its mark), but never touches the name before it
+  const init = l.labels.slice(0, -1).map(s => padWidth(s, l.gap + 1)).join('')
+  const prev = l.labels.length > 1 ? textWidth(l.labels[l.labels.length - 2]!) : 0
+  let last = l.labels[l.labels.length - 1] ?? ''
+  const mark = textWidth(lead + init)
+  let at = mark
+  if (mark + textWidth(last) > l.width && textWidth(last) > 1) {
+    at = Math.max(mark - l.gap + prev, Math.min(mark, l.width - textWidth(last)))
+    if (at + textWidth(last) > l.width) {
+      last = last.slice(0, 1)
+      at = mark
+    }
+  }
+  const text = lead + init.slice(0, Math.max(0, at - textWidth(lead))) + last
   return text.split(LIVE_AGENT_MARK).flatMap((x, i): LiveSeg[] => [...(i ? [{ text: LIVE_AGENT_MARK, tone: 'mark' as const }] : []), ...(x ? [{ text: x, tone: 'dim' as const }] : [])])
 }
 
@@ -783,7 +780,7 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   // T-767: "▶ " before the id; the mark and id bold in the accent color ('run'), the title normal text; T-771: a finished lane's title dim
   // T-850: a finished lane has "✓ " (dim) there instead, its id stays in the accent color
   const name = segs({ text: done ? `${LIVE_DONE_MARK} ` : LIVE_RUN_MARK, tone: done ? 'dim' : 'run' }, { text: padWidth(lane.id, l.idW), tone: 'run' }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? 'dim' : 'text' })
-  const first = [...name, { text: sep, tone: 'text' as const }, ...track, ...(done && l.rightW ? [{ text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: 'dim' as const }] : [])]
+  const first = [...name, { text: sep, tone: 'text' as const }, ...track]
   // the second line (T-867: plain numbers, no bar)
   // T-982: the checker's send-backs, "⌕ × 2" (spaces around ×, at every width)
   const back: LiveSeg | false = lane.sentBack > 0 && { text: `⌕ × ${lane.sentBack}`, tone: 'dim' }
@@ -804,8 +801,12 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
    *  T-931: the clock first, then the tokens, then the split; the clock is dropped only after the tokens. */
   // T-1080: a finished lane's change size ends the line ("+539 −3,722", no files part); it is the first part dropped
   const size: LiveSeg[] = lane.size ? [{ text: sizeText(lane.size, false), tone: 'dim' }] : []
-  const line = (level: number, withSize = false): LiveSeg[] => {
-    const lead: LiveSeg = { text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }
+  // T-1177: a finished lane's "merged 3m ago" starts its second line (the first line has no right column); VS Code
+  // (noTime) draws it itself. Only after every other part is gone does it shorten to "3m ago".
+  const doneAge = lane.done && !o.noTime ? rowDuration(Math.max(0, o.nowMs - lane.done.atMs)) : ''
+  const doneNote = (short = false) => (doneAge ? `${short ? '' : `${lane.done!.word} `}${doneAge} ago · ` : '')
+  const line = (level: number, withSize = false, short = false): LiveSeg[] => {
+    const lead: LiveSeg = { text: `  ${doneNote(short)}try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }
     const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], back ? [back] : [], withSize ? size : []].filter(x => x.length)
     return segs(lead, ...parts.flatMap((x, i): LiveSeg[] => [{ text: ' · ', tone: 'dim' }, ...x]))
   }
@@ -813,6 +814,7 @@ export function laneLines(lane: LiveLane, l: LiveLayout, o: { nowMs: number; fra
   const withKind = (xs: LiveSeg[]): LiveSeg[] => [...xs, { text: `  ${lane.kind}`, tone: 'dim' as const }]
   // each level with the kind, then without it, before a part of the meta text goes
   const tries: LiveSeg[][] = [...(size.length ? [o.noKind ? line(4, true) : withKind(line(4, true))] : []), ...[4, 3, 2, 1, 0].flatMap(n => (o.noKind ? [line(n)] : [withKind(line(n)), line(n)]))]
+  tries.push(line(0, false, false), line(0, false, true))
   tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: 'dim' }))
   const second = tries.find(fits) ?? tries[tries.length - 1]!
   // T-771: a finished lane's second line is dim throughout

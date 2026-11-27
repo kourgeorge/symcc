@@ -237,11 +237,15 @@ test('T-690: lane lines fit the width with nothing cut, and the current station 
   // the freed right column goes to the title: wider than the 12 it had room beside the minutes for at 80 columns
   {
     const one = [{ ...liveLanes(view(true), T0)[0]!, id: 'T-99', title: 'A rather long title that fills the room', kind: 'bug' }]
-    expect(liveLayout(one, liveStations(true), 95).rightW).toBe(0)
+    // T-1177: the track ends at the right edge: the title column takes all the room before it
+    for (const w of [80, 120]) {
+      const lay = liveLayout(one, liveStations(true), w)
+      expect(textWidth(segText(laneLines(one[0]!, lay, { nowMs: T0, frame: 0 })[0]))).toBe(w)
+    }
     // main (before T-1074) gave titleW 12 / gap 6 at 60 columns and titleW 26 at 80; the gap stays, the title grows
     const at60 = liveLayout(one, liveStations(true), 60)
-    expect([at60.gap, at60.titleW > 12]).toEqual([6, true])
-    expect(liveLayout(one, liveStations(true), 80).titleW).toBeGreaterThan(26)
+    expect([at60.gap, at60.titleW > 12]).toEqual([8, true])
+    expect(liveLayout(one, liveStations(true), 80).titleW).toBeGreaterThan(30)
   }
   // T-867: the tokens against the median per merged task: from twice it, "(n×median)" in the warning tone
   const over = laneLines(lanes.find(x => x.id === 'T-685')!, l, { nowMs: T0, frame: 0 })[1]
@@ -311,7 +315,9 @@ test('T-760: the agent stations end in ✧ (accent color), each name still start
       const track = segText(first!)
       const dots = [...track].flatMap((c, i) => ('●◉◎○'.includes(c) ? [i] : []))
       const starts = [...line].flatMap((c, i, all) => (c !== ' ' && (i === 0 || all[i - 1] === ' ') ? [i] : []))
-      expect([width, starts]).toEqual([width, dots])
+      // T-1177: the track ends at the right edge, so the last name ("done") may start up to 3 columns before its mark
+      expect([width, starts.slice(0, -1)]).toEqual([width, dots.slice(0, -1)])
+      expect([width, starts.at(-1)! <= dots.at(-1)! && starts.at(-1)! >= dots.at(-1)! - 3, textWidth(line) <= width]).toEqual([width, true, true])
     }
 })
 
