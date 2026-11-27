@@ -94,7 +94,7 @@ test('T-809: on a narrower panel line 4 drops busiest, then the cost, then squee
   const four = todayMoreLines(m, 140)[2]!
   const spark = four.slice(four.findIndex(x => x.text.startsWith('▕')), -1).map((x): [string, string] => [x.text, x.tone])
   expect(spark).toEqual([['▕▁▁▁▁▁▁▁▁', 'dim'], ['▄', 'bar'], ['▁', 'dim'], ['▂█', 'bar'], ['▁', 'now'], ['···········▏', 'dim']])
-  expect(segText(todayMoreLines(m, 40)[1]!)).toBe('avg ⌀ 2M/task · 10m work')
+  expect(segText(todayMoreLines(m, 40)[1]!)).toBe('median ⌀ 2M/task · 10m work')
   // a squeezed day: neighbouring hours merged, `per` hours to a cell (the last cell of the past is the current hour)
   expect(squeezeHours([1, 2, 3, 4, 5, 6], 3)).toEqual([6, 15])
   expect(squeezeHours([1, 2], 5)).toEqual([3])
@@ -144,7 +144,7 @@ test('T-769: line 3 keeps the parts that fit its own width, whatever line 2 had 
     expect([w, three.includes('lead 3% · workers 84% · checkers 8% · scouts 5%'), textWidth(three) <= w]).toEqual([w, true, true])
   }
   const solo = { ...example, who: [{ who: 'workers' as const, tokens: 10 }], hours: [10] }
-  expect(todayMoreLines(solo, 40).map(segText)).toEqual(['⌀ ████████████████ workers 100%', 'avg ⌀ 2.8M/task · 9m work', '⏱ 13h 06m agent work   ⌀ 00▕█·······▏24'])
+  expect(todayMoreLines(solo, 40).map(segText)).toEqual(['⌀ ████████████████ workers 100%', 'median ⌀ 2.8M/task · 9m work', '⏱ 13h 06m agent work   ⌀ 00▕█·······▏24'])
 })
 
 // T-792: the host for readTodayTeam at `now`: a scout run and a lead answer inside today (placed between local midnight

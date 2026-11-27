@@ -495,7 +495,7 @@ words as bold headings with the same spacing):
   split, then `(×median)`, then `⌀`, and the clock `⏱` last; the try stays. The task type (dim) ends this second row, two spaces after the last part; on a panel too narrow for it, it is dropped, never wrapped (waiting child rows show no task type). A running row's first line has no time at its end (the `⏱` below says it), so its title gets that room. A
   running worker's tokens are only known when it hands back, so until then the row shows the
   earlier tries' sum with `+ …` (`⌀ 4.0M + …`), or `⌀ at hand-back` on a first try.
-- **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend at the bottom of the Live tab, below the footer, says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `avg` marks an average (`avg ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
+- **Signs on the boards:** `⌀` = tokens (a count has `⌀` in front: `⌀ 716.1k`; the legend at the bottom of the Live tab, below the footer, says so, and with no lane the same dim note, `⌀ = tokens`, ends TODAY). `median` marks a median (`median ⌀ 2M/task`). Task pages (the agent lines, the Tries summary's checker part) use it too. `/symcc-stats` and its HTML page keep the word "tokens".
 - Just merged: a task that merged in the last 10 minutes keeps its lane for a while, under the
   running ones, drawn as finished: the track filled up to `merged` with `✓` there (green), a dim `✓ `
   where a running lane has `▶ `, the id in the accent color, the title and second row dim, and `merged 3m ago` on the right (`3m ago` on a narrow panel).
@@ -579,7 +579,7 @@ words as bold headings with the same spacing):
    Now: ⏵ auto merge · agents 1/3 busy · ⌕ org-mem-review 2m · next: version-reminder in 4m
    ✓ 67 merged   ↺ 76 sent back   ✗ 0 failed   Σ ⌀ 320.7M
    ⌀ ████████████████ lead 3% · workers 84% · checkers 8% · scouts 5%
-   avg ⌀ 2.8M/task · 9m work · 23m start-to-merge   first try 34% · avg 2.4 tries/task   ⌕ 68 sent back by the checker
+   median ⌀ 2.8M/task · 9m work · 23m start-to-merge   first try 34% · avg 2.4 tries/task   ⌕ 68 sent back by the checker
    ⏱ 13h 06m agent work · ≈ $64 this session   busiest hour 14:00 · ⌀ 42M   ⌀/h 00▕▁▁▁▁▁▁▁▁▁▂▃▅▆▅█·········▏24
 
    yesterday:   ✓ 77 merged · ⌀ 355M · ⏱ 34h
