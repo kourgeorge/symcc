@@ -25,8 +25,9 @@ export function digestText(tasks: readonly DigestTask[], sinceMs: number, nowMs:
   const shown = new Map<string, string>()
   const open = tasks.filter(t => !ENDED.includes(t.status))
   const key = (t: DigestTask) => `${t.status}:${t.attempts}`
-  // A stuck or waiting task is named again only when its status or try changed since it was last named.
-  const fresh = (t: DigestTask) => seen.get(t.id) !== key(t)
+  // A task is named at most once per digest (the first line wins), and named again in a later digest only when its status
+  // or try changed since it was last named.
+  const fresh = (t: DigestTask) => !shown.has(t.id) && seen.get(t.id) !== key(t)
   // At most 3 names, then "and N more"; only the named ones count as told.
   const list = (items: DigestTask[], what: (t: DigestTask) => string) => {
     const head = items.slice(0, 3)
@@ -37,10 +38,14 @@ export function digestText(tasks: readonly DigestTask[], sinceMs: number, nowMs:
   const tries = open.filter(t => t.status !== 'backlog' && Number(t.attempts) >= 3 && (running(t) || fresh(t)))
   if (tries.length) lines.push(`On try 3 or more: ${list(tries, t => `${short(t)} (try ${t.attempts})`)}.`)
   const testFails = (t: DigestTask) => (t.history ?? []).filter(h => h.kind === 'failed' && h.reason === 'tests')
-  const testy = open.filter(t => testFails(t).length >= 2 && testFails(t).some(h => since(h.at, sinceMs)))
+  // One line for test failures: worth saying when an open task failed tests in 2 or more tries, or 2 or more tasks failed.
   const testTasks = tasks.filter(t => testFails(t).some(h => since(h.at, sinceMs)))
-  if (testy.length) lines.push(`Tests failed in 2 or more tries: ${testy.map(short).join(', ')}.`)
-  if (testTasks.length >= 2) lines.push(`Tests failed in ${testTasks.length} tasks since the last digest: ${testTasks.map(short).join(', ')}.`)
+  const testy = open.some(t => testTasks.includes(t) && testFails(t).length >= 2)
+  const testNew = testTasks.filter(fresh)
+  if ((testy || testTasks.length >= 2) && testNew.length) {
+    const n = testTasks.length
+    lines.push(`Tests failed since the last digest in ${n} task${n > 1 ? 's' : ''}: ${list(testNew, t => `${short(t)} (${testFails(t).length}x)`)}.`)
+  }
   // Every task counts, merged and dropped ones too: the usual path is send back, fix, merge.
   const back = tasks.reduce((n, t) => n + (t.history ?? []).filter(h => h.kind === 'checker-problems' && since(h.at, sinceMs)).length, 0)
   if (back >= 2) {
