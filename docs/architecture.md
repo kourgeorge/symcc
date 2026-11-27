@@ -267,7 +267,7 @@ With no files in `docs/blog/`, there is no Blog link and no blog pages.
 
 This part is for people who want to change the team animation.
 
-`docs/architecture.svg` is the moving picture at the start of "How it works" in the README.
+`docs/architecture.svg` is the moving picture in [How it works](how-it-works.md#pictures-and-the-video).
 It shows who does what in symcc: you (the owner), the lead, the board, the workers and the scouts.
 It is one SVG file with SMIL animation only: no JavaScript, no outside fonts or images, so
 GitHub plays it inside an `<img>` tag. It is 900x560, loops every 41 seconds, and uses the

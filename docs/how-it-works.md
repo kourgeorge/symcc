@@ -4,7 +4,7 @@ The parts of symcc, what each one is called, and the path a task takes from your
 
 ## The parts and their names
 
-The same names are used in the [README](../README.md) and in the rest of the documentation.
+The same names are used in the rest of the documentation.
 
 | Name | Known term | What it does |
 |---|---|---|
@@ -27,7 +27,25 @@ And the ideas that tie them together:
 | **Live status** | The board panel and the status line |
 
 symcc is proactive while your Claude Code session is open. Work stops when you close it and
-picks up again next time.
+picks up again next time. There is no extra app and no link to an issue tracker: the board is a
+plain file in your project. When two changes clash, a new worker sorts out the clash.
+
+## Pictures and the video
+
+![How symcc works: you, the lead, workers and scouts](architecture.svg)
+
+<p align="center">
+  <a href="video/symcc.mp4"><img src="video/symcc.gif" alt="symcc video preview: you talk to the lead, it puts tasks on the board, and workers move them from todo to running to done" width="800"></a>
+  <br>
+  <a href="video/symcc.mp4"><b>Watch the full video</b></a> (78 seconds, no sound)
+</p>
+
+In short: you ask, or a scout finds something. The lead makes tasks and sets their order and
+files. Workers build in parallel. symcc checks the files and runs your tests, you review, and it
+merges. The [steps in full](reference.md#how-it-works-step-by-step) and [A task's life](#a-tasks-life)
+have the rest.
+
+![symcc's loop: you direct the lead; the lead puts tasks on the board; workers build; tests and merge update the code; scouts look at the new code and find more work for the lead](organizational-loop.jpg)
 
 ### Why it is built this way
 
@@ -105,6 +123,44 @@ Each part is there for a reason. Knowing it makes the rest of the documentation 
 | `done` | Merged into your branch. This is final |
 | `dropped` | Cancelled. It never runs on its own; retry brings it back to todo on purpose |
 | `backlog` | A parked idea or unclear work. It never starts until you move it to todo. In the board panel it sits in a folded "▸ Backlog  N" row below the active tasks |
+
+## Scouts at work
+
+Examples of what scouts do while you are away:
+
+- A **gaps** scout finds a function with no tests. The lead adds a task, a tester worker writes
+  the test, the tests pass, it merges.
+- A **dependencies** scout finds an outdated package with a security notice. The lead adds a
+  task, a worker updates it and runs your tests. You review the diff.
+- A **bugs** scout finds a missing null check. The lead adds a bug task, a worker fixes it. If
+  the fix needs a choice (say, which error to show), it asks you.
+
+The lead keeps it moving; you come back to merged work and a few questions.
+
+## How symcc is different
+
+**Coding agents** (Claude Code, Codex, OpenCode, Goose) run one agent you talk to. Their helper
+agents work inside your turn, and you wait for them. Nothing keeps a list of the work after the
+chat ends. symcc adds a team on top: a lead you talk to, a board that stays between sessions,
+workers that build in the background, and scouts that look for problems on their own.
+
+**Multi-agent apps** (claudecodeui, T3 Code, cmux and others) let you run several agents side by
+side, but *you* split the work, keep track of it, check it and merge it. In symcc the lead does
+that. It turns what you say into tasks, decides their order, starts the workers, runs your
+tests, merges what passes, and asks you only when the decision is really yours.
+
+Put together, only in symcc:
+
+- every task remembers who asked for it and why ([tracing a task back](board.md#tracing-a-task-back))
+- each worker gets its own copy of the code and may change only its own files
+- nothing merges unless the tests pass; optionally, a checker tries to break each change first
+- questions come back as answers, and never as code changes ([investigation tasks](tasks.md#investigation-tasks))
+- scouts, retries and a health check keep the work going without you pushing it
+
+**Where it runs.** symcc runs inside Claude Code, OpenCode, Copilot CLI, and VS Code or Cursor
+(see [Clients](clients.md)). Work runs while your session is open. A small command-line version
+that runs the same engine without a chat window exists as a test of the idea (see
+[Running symcc without Claude Code](architecture.md#running-symcc-without-claude-code)).
 
 ## Read more
 
