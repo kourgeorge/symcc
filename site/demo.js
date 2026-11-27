@@ -188,8 +188,8 @@
     L.push(liveHead('Tasks'), '')
     if (s.lanes.length) {
       // the ✧ after work and check in the accent color (core/live.ts's 'mark' tone)
-      // the last name ("done") ends at the right edge: it starts 3 columns before its mark
-      L.push((' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 2 ? pad(x, GAP + 1) : i === LABELS.length - 2 ? pad(x, GAP - 2) : x)).join('')).split('✧').map(x => sp(x, 'dim')).join(sp('✧', 'mark')))
+      // every name, "done" too, starts over its mark (the track ends 3 columns before the edge)
+      L.push((' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 1 ? pad(x, GAP + 1) : x)).join('')).split('✧').map(x => sp(x, 'dim')).join(sp('✧', 'mark')))
       // T-771: the running lanes on top, then the just-merged ones (kept 10 minutes, at most 3, newest first)
       const kept = s.lanes.filter(l => l.done && s.now - l.done < 10 * 60).sort((a, b) => b.done - a.done).slice(0, 3)
       for (const l of [...s.lanes.filter(l => !l.done), ...kept]) L.push(...laneLines(s, l))
