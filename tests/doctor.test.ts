@@ -481,3 +481,12 @@ test('T-1033: the manual and the command say fix deletes a dropped task\'s unsav
   const cmd = COMMANDS().find(c => c.name === 'symcc-doctor')!
   expect(cmd.description).toContain('for a dropped task, fix also deletes its folder with unsaved changes and its unmerged branch')
 })
+
+test('T-1196: a finished task whose project is not in the project table keeps its clean folder listed, and the doctor does not throw', async () => {
+  const w = world({ tasks: [task('T-5', 'done', { project: 'gone' })] })
+  const text = await doctor(w.host, '')
+  expect(text).toContain('T-5')
+  expect(text).toContain("project 'gone' is not in this board's project table")
+  await doctor(w.host, 'fix')
+  expect(w.dirs.has(`${D}/worktrees/T-5`)).toBe(true)
+})

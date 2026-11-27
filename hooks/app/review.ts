@@ -1,7 +1,7 @@
 import type { SymccTask } from '../../types'
 import { type ChangeSize, parseNumstat, hasMergedChanges, parseShortstat, type Blockers, type BoardTask, type TurnStep, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, type Board, commitMessage, outOfScope, outOfScopeText, testTail, needsReview, find, patchTask, addCommits, moveTarget, researchNotes, intoOf, isTaskCommit, testTimeoutMs, isInvestigation, testsWithChangesOf, untestedChange, untestedText, shortSha, secretFiles, secretsLeftText, onlySecretsQuestion, nameList, isPlainRelPath, SCRATCH_DIR, movedText, tryLabel, tryEntry, taskWasResult, type FailReason, withTimeline, findRole, roleOf, isProseRole, notProse, notProseText, docsOnly, PROSE_TESTS_SKIPPED, PROSE_DOCS_CHECKS, testCommandsOf, docsTestCommandsOf } from '../board'
 import { loadRoles } from './roles'
-import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn, repoOf } from './git'
+import { gitOk, git, worktreeDir, asSymcc, taskBranch, branchExists, scratchOn, repoOf, projectGone } from './git'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
 import { change, load, now, path, safeWrite } from './store'
@@ -18,6 +18,7 @@ import { PASSED_TREES_FILE, parsePassedTrees, treePassed, addPassedTree, passedT
 export const diffRange = (target: string, t: Pick<SymccTask, 'id' | 'branch'>) => `${target}...${taskBranch(t)}`
 
 export function gitDiff($: Host, target: string, t: SymccTask, opts: string[], file = ''): Promise<string> {
+  if (projectGone(t)) return Promise.reject(new Error(projectGone(t))) // an unknown project has no repo to read
   const key = `${t.id}|${t.updated_at}|${target}|${opts.join(' ')}|${file}`
   let p = changesCache.get(key)
   if (!p) {
@@ -662,7 +663,7 @@ export function resetMergedChanges() {
  * the task recorded; null for an investigation or errand, a task with no merged commit, or when git has none of it.
  */
 export async function mergedChanges($: Host, t: SymccTask): Promise<MergedChanges | null> {
-  if (!hasMergedChanges(t)) return null
+  if (!hasMergedChanges(t) || projectGone(t)) return null
   const merged = (t as BoardTask).merged!
   const key = `${t.id}:${merged}`
   if (mergedMemo.has(key)) return mergedMemo.get(key)!

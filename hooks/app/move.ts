@@ -33,6 +33,7 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
   if (stage !== 'work' && t.status === 'doing' && !checkingNow(t.id) && t.live?.phase !== 'checker') throw new Error(`${t.id}'s worker is still running; move it to work, or wait until it hands back`)
   if (stage !== 'work') {
     if (isInvestigation(t)) throw new Error(`${t.id} is an investigation: it has no work to check, test or review`)
+    if (projectGone(t)) throw new Error(`${t.id} can't be moved to ${stage} now: ${projectGone(t)}`)
     if (!(await branchExists($, taskBranch(t), repoOf(t)))) throw new Error(`${t.id} has no branch yet (no worker has made work for it); move it to work instead`)
     if (!(await taskGitReady($, await load($), t))) throw new Error(`${t.id} can't be moved to ${stage} now: ${projectGone(t) || gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`)
   }

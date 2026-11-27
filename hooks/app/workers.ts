@@ -330,6 +330,7 @@ async function mergedBeforeStart(host: Host, t: BoardTask): Promise<boolean> {
  * Written only while the task is still as it was (same status and try).
  */
 export async function waitIfBranchGone(host: Host, b: Board, t: SymccTask, when: 'start' | 'merge'): Promise<boolean> {
+  if (projectGone(t)) return false // an unknown project can't start or merge; taskGitReady says so
   const into = intoOf(t)
   if (await branchExists(host, into, repoOf(t))) return false
   const instead = await homeBranch(host, repoOf(t))
@@ -1434,6 +1435,7 @@ export async function retryFileWaits(host: Host) {
   const current = new Map<string, string>()
   const status = new Map<string, string>()
   for (const t of waiting) {
+    if (projectGone(t)) continue // its repo is unknown; the board's notes say so
     const repo = repoOf(t)
     if (!current.has(repo)) current.set(repo, (await git(host, ['symbolic-ref', '--short', '-q', 'HEAD'], repo)).stdout.trim())
     if (current.get(repo) === intoOf(t)) {
@@ -1603,7 +1605,8 @@ const everyReport = (t: BoardTask, latest?: string): string[] => [...new Set([..
  */
 async function endInvestigation(host: Host, t: BoardTask, keepNote: boolean, handBackFrom?: string): Promise<string> {
   const full = keepNote ? await fullAnswer(host, t) : { text: '' }
-  const merge_into = keepNote && !plainTask(t) ? await homeBranch(host, repoOf(t)) : undefined
+  // T-1196: a project that left the table has no repo to look in: its branch is left alone
+  const merge_into = keepNote && !plainTask(t) && !projectGone(t) ? await homeBranch(host, repoOf(t)) : undefined
   // notes already written: a new note never overwrites one (it gets -2, -3… instead)
   const notes = keepNote ? (await Promise.resolve().then(() => host.fs.list(path('docs/research'))).catch(() => [])).map(f => `docs/research/${f.name}`) : []
   const added = await change(host, x => {
@@ -1617,7 +1620,7 @@ async function endInvestigation(host: Host, t: BoardTask, keepNote: boolean, han
   const keep = commits !== 0
   const what = commits === null ? `git could not tell whether it has commits ${intoOf(t)} doesn't have` : `it has ${plural(commits, 'commit')} from an earlier change try that ${intoOf(t)} doesn't have`
   const kept = keep ? ` Its branch ${branch} was kept: ${what}. Delete it by hand once that work is not needed.` : ''
-  if ((await removeWorktree(host, t.id, worktreeDir(t.id), handBackFrom, handBackFrom !== undefined).catch(() => false)) && !keep && !plainTask(t)) await git(host, ['branch', '-D', branch], repoOf(t))
+  if ((await removeWorktree(host, t.id, worktreeDir(t.id), handBackFrom, handBackFrom !== undefined).catch(() => false)) && !keep && !plainTask(t) && !projectGone(t)) await git(host, ['branch', '-D', branch], repoOf(t))
   if (kept) tellLead(host, `${t.id} "${t.title}" is done.${kept}`)
   void pump(host)
   outcomes.set(t.id, 'done')

@@ -200,6 +200,11 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
       keptDirs.set(wt, 'has uncommitted changes')
       continue
     }
+    if (projectGone(t)) { // its repo is not known now, so nothing can be checked or removed with git
+      listed.push({ kind: 'worktree', fixable: false, bytes, text: `folder ${shown(wt)}/ (${why}): ${projectGone(t)}, kept` })
+      keptDirs.set(wt, 'its project is not in the project table')
+      continue
+    }
     if (!(await headKept(host, wt, into, repoOf(t)))) {
       listed.push({ kind: 'worktree', fixable: false, bytes, text: `folder ${shown(wt)}/ (${why}) holds commits on no branch, kept` })
       keptDirs.set(wt, 'holds commits on no branch')
