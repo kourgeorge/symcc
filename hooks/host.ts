@@ -130,6 +130,8 @@ export type HostWords = {
   app?: string
   /** the keys that go back to the open board panel, in "(... goes back to it.)" after the board opens (Claude Code: "ctrl+x tab"); '' (the default) says nothing */
   backToBoard?: string
+  /** how to update symcc here, the part after "To update: " (Claude Code: its plugin commands); '' (the default) says only "update it" */
+  updateSteps?: string
 }
 
 /**
@@ -144,6 +146,7 @@ export const SYMCC_WORDS: Required<HostWords> = {
   assistant: 'the assistant',
   app: 'the app',
   backToBoard: '',
+  updateSteps: '',
 }
 
 /** A host's words with symcc's own for every word it leaves out. */

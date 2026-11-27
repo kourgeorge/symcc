@@ -36,6 +36,7 @@ export const CLAUDE_WORDS: Required<HostWords> = {
   assistant: 'Claude',
   app: 'Claude Code',
   backToBoard: 'ctrl+x tab',
+  updateSteps: 'claude plugin marketplace update symcc, then claude plugin update symcc@symcc, then /reload-plugins',
 }
 
 /** An error from a start, marked when it only means the agent type isn't there yet (see notReadyYet in host.ts). */
