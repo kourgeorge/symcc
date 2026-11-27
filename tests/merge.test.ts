@@ -6717,6 +6717,34 @@ test('two tasks in the merge line take turns; the second waits noted "queue (2)"
   expect(w.files.has(LINE)).toBe(false)
 })
 
+test('T-1181: tasks of different repos merge side by side; tasks of one repo take turns, and the queue place counts only that repo', async () => {
+  S.me = 'me'
+  const w = world()
+  const [t1, t2] = await twoChecking(w)
+  const log: string[] = []
+  let open = () => {}
+  const gate = new Promise<void>(r => (open = r))
+  let openClient = () => {}
+  const clientGate = new Promise<void>(r => (openClient = r))
+  const server1 = inMergeLine(w.$, 'T-1', async () => (log.push('server T-1 start'), await gate, log.push('server T-1 end'), 'a'), { t: t1, repo: '/b/server' })
+  const client = inMergeLine(w.$, 'T-3', async () => (log.push('client T-3 start'), await clientGate, log.push('client T-3 end'), 'b'), { repo: '/b/client' })
+  await turns(w, () => log.length === 2)
+  // the client task's turn started while the server task's turn was still going
+  expect(log).toEqual(['server T-1 start', 'client T-3 start'])
+  // a second server task waits behind the first only: it is second in its repo's line, not third
+  const server2 = inMergeLine(w.$, 'T-2', async () => (log.push('server T-2'), 'c'), { t: t2, repo: '/b/server' })
+  await turns(w, () => noteOf(w, 'T-2') === inLineNote(2))
+  expect(noteOf(w, 'T-2')).toBe(inLineNote(2))
+  expect(log).toEqual(['server T-1 start', 'client T-3 start'])
+  openClient()
+  expect(await client).toBe('b')
+  open()
+  expect(await server1).toBe('a')
+  expect(await server2).toBe('c')
+  expect(log).toEqual(['server T-1 start', 'client T-3 start', 'client T-3 end', 'server T-1 end', 'server T-2'])
+  expect(w.files.has(LINE)).toBe(false)
+})
+
 test('two tasks finishing at once and an approve take turns in order through one line; the second catches up with the first one\'s merge before its tests', async () => {
   S.me = 'me'
   const w = world()

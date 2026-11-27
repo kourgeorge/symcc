@@ -346,7 +346,7 @@ test('T-1173: a symcc agent report is muted while symcc is on; owner and other m
   await $.session.start({ cwd: '/repo' } as never)
   const frame = (name: string) => `<agent-message from="${name}">\n[Subagent hand-back] done\n</agent-message>`
   const peer = (text: string) => $.prompt.submit({ text, isMeta: true, origin: { kind: 'peer' } } as never) as Promise<{ drop?: string }>
-  for (const name of ['symcc-T-5', 'symcc-T-5-checker', 'symcc-scout-board-review']) expect((await peer(frame(name))).drop).toBe('▸ agent report')
+  for (const name of ['symcc-T-5', 'symcc-T-3-2', 'symcc-T-3-checker-2', 'symcc-T-5-checker','symcc-scout-board-review']) expect((await peer(frame(name))).drop).toBe('▸ agent report')
   expect((await peer(`Another Claude session sent a message:\n${frame('symcc-T-5')}`)).drop).toBe('▸ agent report')
   // the name decides, not a claim inside the text; a real cross-session message passes
   expect((await peer(frame('other-session'))).drop).toBeUndefined()
