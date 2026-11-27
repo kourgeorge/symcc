@@ -956,6 +956,8 @@ async function reloadDuringChecker(w: ReturnType<typeof world>, status: string) 
   void workerFinished(w.$, 'ag1', 'made the change')
   await until(() => checkerRuns.size > 0)
   expect(shownNote(find(await load(w.$), 'T-1')!)).toBe(CHECKER_NOTE)
+  // the board records the checker's id a little later than the run starts
+  for (let i = 0; i < 200 && checkerIdOf(find(await load(w.$), 'T-1')) !== 'chk1'; i++) await turn()
   resetPlugin()
   S.root = ROOT
   S.driving = true

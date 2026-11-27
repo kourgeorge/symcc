@@ -32,7 +32,7 @@ function seed(on: On) {
   inProject(on)
   const seeded: Record<string, unknown> = { opened: 'T-1', view: { shape: 'view-1', value: { tasks: [answered], working: [], scouts: [], mode: 'auto', test_commands: [] } } }
   on('state.get', (_, e, next) => (keys.has(e.key) ? next(e) : e.key in seeded ? { value: { value: seeded[e.key], version: 1 } } : e.key === 'tab' ? { value: { value: 'tasks', version: 1 } } : next(e)))
-  const board = JSON.stringify({ version: 1, next_id: 2, tasks: [answered], mode: 'auto', test_commands: [] })
+  const board = JSON.stringify({ data_version: 2, next_id: 2, tasks: [answered], mode: 'auto', test_commands: [] })
   const report = 'The cache is never cleared.\n'
   on('fs.exists', (_, e, next) => (/\/board\.json$/.test(e.path) || /T-1-try-1\.md$/.test(e.path) ? { value: true } : /\/board\.lock$/.test(e.path) ? { value: false } : next(e)))
   on('fs.list', (_, e, next) => (/\.symcc$/.test(e.path) ? { value: [entry('board.json')] } : next(e)))

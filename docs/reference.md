@@ -80,6 +80,8 @@ claude plugin marketplace update symcc && claude plugin update symcc@symcc
 claude plugin uninstall symcc@symcc && claude plugin marketplace remove symcc
 ```
 
+When a new minor release is out (0.6.0 when you have 0.5.x), the driving session checks GitHub once at start and the lead tells you; patch releases stay quiet.
+
 **Check it works.** Start Claude Code in your project. Once symcc is set up there (in a new project, after `/symcc-init`), the board panel opens by itself on
 a wide enough terminal; if not, run `/symcc`. The status line starts with the mode, e.g. `⏵ auto merge`.
 

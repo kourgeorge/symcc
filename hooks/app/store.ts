@@ -3,7 +3,7 @@ import { VIEW_LEFT_OUT, PARTS_DIR, PARTS_KEY, safePartsFile, viewStubFilled, wit
 import { checkHealth } from './health'
 import { publish } from './lead'
 import { tellLead } from './tell'
-import { migrateIfOld } from './migrate-data'
+import { migrateIfOld, newerDataText } from './migrate-data'
 import { S, onHere, sizeNotes } from './state'
 import { timed } from './slow-log'
 import { boardEvents, withStageTimeline } from '../core/events'
@@ -599,6 +599,9 @@ async function safeWriteIn(host: Host, file: string, text: string, what: string)
  * entries no task needs any more are taken out (a file left with none is removed).
  */
 export async function saveBoard(host: Host, b: Board) {
+  // T-1202: data in a newer shape than this symcc knows is never written over
+  const newer = await newerDataText(host)
+  if (newer) throw new Error(newer)
   // a finished task whose parts file is missing stays whole, unless it loaded as a stub (it keeps pointing there)
   const hold = new Set(b.tasks.filter(t => !stubbed.has(t.id) && missingParts.has(partsFileOf(t.id))).map(t => t.id))
   const { board: slim, parts } = splitBoard(b, hold)

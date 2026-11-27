@@ -36,6 +36,7 @@ export const CLAUDE_WORDS: Required<HostWords> = {
   assistant: 'Claude',
   app: 'Claude Code',
   backToBoard: 'ctrl+x tab',
+  updateSteps: 'claude plugin marketplace update symcc, then claude plugin update symcc@symcc, then /reload-plugins',
 }
 
 /** An error from a start, marked when it only means the agent type isn't there yet (see notReadyYet in host.ts). */
@@ -215,6 +216,7 @@ export function claudeHost($: EngineInterface): ClaudeHost {
     // moves (into a task's worktree that is later removed: then every command fails to start); the project root stays
     run: async (argv, init) => $.process.run(argv, init?.cwd ? init : { ...init, cwd: await $.session.root() }),
     processes: claudeProcesses($),
+    httpFetch: url => $.http.fetch(url),
     clock: { after: (ms, fn) => $.clock.after(ms, fn), every: (ms, fn) => $.clock.every(ms, fn), sleep: ms => $.clock.sleep(ms) },
     ui: {
       toast: text => $.ui.toast(text),

@@ -6,7 +6,9 @@ import { emptyBoard, readBoard, readArchive, tryTokens, tryCost, checkerTokensOf
 import { doctor } from '../hooks/app/doctor'
 import { load, change } from '../hooks/app/store'
 import { migrateIfOld, forgetMigrationFailure, oldDataFound } from '../hooks/app/migrate-data'
-import { S, leadQueue } from'../hooks/app/state'
+import { S, leadQueue, workers, starting } from '../hooks/app/state'
+import { pump } from '../hooks/app/workers'
+import { DATA_VERSION } from '../hooks/core/board-file'
 import { agentLines } from '../hooks/core/runs'
 import { oldDataRows, migrateRunAgents } from '../hooks/core/old-data'
 import type { SymccRun } from '../types'
@@ -673,4 +675,64 @@ test('T-1192: a task timeline still named `history` (board, its parts file, the 
   expect((await oldDataFound(w.host)).rows.filter(r => r.fix)).toEqual([])
   expect(await migrateIfOld(w.host)).toBe('')
   expect(backups(w).size).toBe(1)
+})
+
+// T-1202: the board's data shape number
+const shapeBoard = (extra: Record<string, unknown>) => {
+  const { data_version: _d, ...rest } = emptyBoard()
+  const task = { ...base, id: 'T-1', title: 'one', status: 'todo', note: '', attempts: 0, origin: { by: 'lead', why: 'w', at: T }, merge_into: 'main', runs: [] }
+  return JSON.stringify({ ...rest, next_id: 2, tasks: [task], ...extra }, null, 2)
+}
+const shapeWorld = (extra: Record<string, unknown>) => {
+  const w = world()
+  w.files.set(`${D}/board.json`, shapeBoard(extra))
+  w.files.set(`${D}/archive.json`, JSON.stringify({ version: 1, tasks: [] }))
+  w.files.set(`${D}/scouts.json`, JSON.stringify({ scouts: {}, usage: {} }))
+  w.files.delete(`${D}/field-guide.md`)
+  S.enabledNow = true
+  leadQueue.length = 0
+  return w
+}
+
+test('T-1202: a version 1 board with history is moved and saved with data_version; later saves keep the number', async () => {
+  const w = shapeWorld({ version: 1 })
+  const raw = JSON.parse(w.files.get(`${D}/board.json`)!)
+  raw.tasks[0].history = [{ at: T, kind: 'created', text: 'created by the lead because w' }]
+  w.files.set(`${D}/board.json`, JSON.stringify(raw))
+  expect(await migrateIfOld(w.host)).toBe('')
+  const saved = JSON.parse(w.files.get(`${D}/board.json`)!)
+  expect(saved.data_version).toBe(DATA_VERSION)
+  expect('version' in saved).toBe(false)
+  await change(w.host, b => ({ ...b, max_parallel: 2 }))
+  expect(JSON.parse(w.files.get(`${D}/board.json`)!).data_version).toBe(DATA_VERSION)
+  expect(JSON.parse(w.files.get(`${D}/board.json`)!).max_parallel).toBe(2)
+})
+
+test('T-1202: a board with a higher data_version is not written, the message shows once and no worker starts', async () => {
+  const w = shapeWorld({ data_version: DATA_VERSION + 1 })
+  const before = new Map(w.files)
+  S.startupDone = true
+  S.driving = true
+  const msg = await migrateIfOld(w.host)
+  expect(msg).toContain(`shape ${DATA_VERSION + 1}, this window knows ${DATA_VERSION}`)
+  expect(msg).toContain('claude plugin update symcc@symcc')
+  expect(S.newerData).toBe(DATA_VERSION + 1)
+  const told = leadQueue.length
+  await migrateIfOld(w.host)
+  let refused = ''
+  await change(w.host, b => ({ ...b, max_parallel: 2 })).catch((e: Error) => void (refused = e.message))
+  expect(refused).toContain('newer than this symcc')
+  expect(leadQueue.length).toBe(told)
+  await pump(w.host)
+  expect(workers.size + starting.size).toBe(0)
+  expect([...w.files.keys()]).toEqual([...before.keys()])
+  for (const [f, text] of before) expect(w.files.get(f)).toBe(text)
+})
+
+test('T-1202: a board with an equal data_version saves normally', async () => {
+  const w = shapeWorld({ data_version: DATA_VERSION })
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(S.newerData).toBe(0)
+  await change(w.host, b => ({ ...b, max_parallel: 2 }))
+  expect(JSON.parse(w.files.get(`${D}/board.json`)!).max_parallel).toBe(2)
 })

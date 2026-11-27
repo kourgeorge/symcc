@@ -18,6 +18,7 @@ import { check, pump } from './workers'
 import { cleanLeftoverTmp } from './cleanup'
 import { isDamSession } from './dam'
 import { digestTick } from './digest'
+import { checkForUpdate } from './update-check'
 
 /** Counts sessionStart runs, so a late claimLead of an earlier start doesn't end a newer one's wait. */
 let starts = 0
@@ -121,6 +122,7 @@ export async function sessionStart(host: Host) {
     const done = () => {
       if (run !== starts) return
       S.startupDone = true
+      void checkForUpdate(host)
       void pump(host).catch(() => undefined)
     }
     if (leadDone) done()
