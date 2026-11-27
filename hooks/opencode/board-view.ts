@@ -1272,8 +1272,9 @@ function rolePage(f: ViewFile, x: ViewDef, w: number): Body {
   else b.add([{ text: '  (none: a plain worker)', color: 'inactive' }])
   b.blank()
   b.heading('Placeholders')
-  for (const l of wrapSegs([{ text: '  the checklist may use these; each is filled in for the task (any other {{word}} is left as written)', color: 'inactive' }], w)) b.add(l)
-  for (const [p, m] of Object.entries(ROLE_PLACEHOLDERS)) for (const l of wrapSegs([{ text: `  {{${p}}}`, color: 'text', bold: true }, { text: ` ${m}`, color: 'inactive' }], w)) b.add(l)
+  const indented = (segs: Parameters<typeof wrapSegs>[0]) => { for (const l of wrapSegs(segs, w - 2)) b.add([{ text: '  ', color: 'text' }, ...l]) }
+  indented([{ text: 'the checklist may use these; each is filled in for the task (any other {{word}} is left as written)', color: 'inactive' }])
+  for (const [p, m] of Object.entries(ROLE_PLACEHOLDERS)) indented([{ text: `{{${p}}}`, color: 'text', bold: true }, { text: ` ${m}`, color: 'inactive' }])
   b.blank()
   b.heading('File')
   b.add([{ text: `  ${x.file}`, color: 'autoAccept' }])
