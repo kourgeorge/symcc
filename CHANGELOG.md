@@ -2,6 +2,16 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here. Before a release, rerun `bun scripts/site-stats.ts` and commit `docs/data/symcc-stats.json`: it feeds the "Built with symcc" numbers on the website.
 
+## 0.5.51 (2026-11-27)
+
+### Added
+- On a board over several repos, tasks with no project now work: investigations and errands run in the plain folder. Change tasks still need a project.
+- The "Built with symcc" page has new charts.
+
+### Changed
+- A task's history is now called "Timeline" everywhere, including the `board.json` field. Existing boards are moved once when loaded.
+- Live lanes keep 3 blank columns, so "done" sits right over its mark.
+
 ## 0.5.50 (2026-11-27)
 
 ### Added
