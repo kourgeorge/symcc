@@ -22,35 +22,45 @@ export async function gitOk($: Host, args: string[], cwd = S.root, timeoutMs = 1
   return r.stdout.trim()
 }
 
+/**
+ * T-1152: the repo a task's git work happens in: its project folder (below the board folder) when it has one, else the
+ * board folder. Every git call that belongs to a task takes its folder from here.
+ */
+export const repoOf = (t?: object | null): string => {
+  const pj = (t as { project?: unknown } | null | undefined)?.project
+  const p = typeof pj === 'string' ? pj.trim() : ''
+  return p ? `${S.root}/${p}` : S.root
+}
+
 /** The branch checked out in the project, '' when none (a detached HEAD). */
-export async function currentBranch($: Host): Promise<string> {
+export async function currentBranch($: Host, cwd = S.root): Promise<string> {
   if (!S.root) return ''
-  return (await git($, ['symbolic-ref', '--short', '-q', 'HEAD']).catch(() => null))?.stdout.trim() ?? ''
+  return (await git($, ['symbolic-ref', '--short', '-q', 'HEAD'], cwd).catch(() => null))?.stdout.trim() ?? ''
 }
 
 /** The project's local branches. */
-export async function branchList($: Host): Promise<string[]> {
-  const r = await git($, ['for-each-ref', '--format=%(refname:short)', 'refs/heads']).catch(() => null)
+export async function branchList($: Host, cwd = S.root): Promise<string[]> {
+  const r = await git($, ['for-each-ref', '--format=%(refname:short)', 'refs/heads'], cwd).catch(() => null)
   return (r?.stdout ?? '').split('\n').map(x => x.trim()).filter(Boolean)
 }
 
 /** Whether `name` is a local branch. */
-export async function branchExists($: Host, name: string): Promise<boolean> {
+export async function branchExists($: Host, name: string, cwd = S.root): Promise<boolean> {
   if (!name || name.startsWith('-')) return false
-  return (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${name}`]).catch(() => null))?.exitCode === 0
+  return (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${name}`], cwd).catch(() => null))?.exitCode === 0
 }
 
 /**
  * The branch a task added now merges into: the branch checked out in the main project folder; on
  * a detached checkout, the repo's main branch (see startBranch).
  */
-export async function homeBranch($: Host): Promise<string> {
+export async function homeBranch($: Host, cwd = S.root): Promise<string> {
   if (!S.root) return 'main'
-  const cur = await currentBranch($)
+  const cur = await currentBranch($, cwd)
   if (cur) return startBranch(cur, '', [])
   // a detached HEAD: only now are the origin head and the branch list needed
-  const origin = (await git($, ['symbolic-ref', '--short', '-q', 'refs/remotes/origin/HEAD']).catch(() => null))?.stdout.trim() ?? ''
-  return startBranch('', origin, await branchList($))
+  const origin = (await git($, ['symbolic-ref', '--short', '-q', 'refs/remotes/origin/HEAD'], cwd).catch(() => null))?.stdout.trim() ?? ''
+  return startBranch('', origin, await branchList($, cwd))
 }
 
 /** Whether `git --version` output says the Mac's command-line tools are missing (the /usr/bin/git stub). */
@@ -289,18 +299,19 @@ export const taskBranch = (t: Pick<SymccTask, 'id' | 'branch'>) => t.branch ?? S
 export async function prepareWorktree($: Host, t: SymccTask, target: string, catchUp = false) {
   const dir = worktreeDir(t.id)
   const branch = taskBranch(t)
+  const repo = repoOf(t)
   let made = false
   if (!(await $.fs.exists(`${dir}/.git`))) {
-    await git($, ['worktree', 'prune'])
-    const has = (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`])).exitCode === 0
-    if (has) await gitOk($, ['worktree', 'add', dir, branch])
+    await git($, ['worktree', 'prune'], repo)
+    const has = (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`], repo)).exitCode === 0
+    if (has) await gitOk($, ['worktree', 'add', dir, branch], repo)
     else {
-      await gitOk($, ['worktree', 'add', '-b', branch, dir, target])
+      await gitOk($, ['worktree', 'add', '-b', branch, dir, target], repo)
       made = true
     }
   }
   const kept: CatchUp = catchUp && !made ? await catchUpBranch($, dir, branch, target, t).catch(() => ({ behind: 0 })) : { behind: 0 }
-  await copyTypes($, dir).catch(() => false)
+  await copyTypes($, dir, repo).catch(() => false)
   await prepareScratch($, dir).catch(() => false)
   return { dir, branch, ...kept }
 }
@@ -436,8 +447,8 @@ export const TYPES_DIR = '.claude-plugin/types'
  * when the main folder has none, and when git in `dir` would not ignore it, so it never lands in the task's
  * commit or scope check. Returns whether the folder has the copy.
  */
-export async function copyTypes($: Host, dir: string): Promise<boolean> {
-  const from = `${S.root}/${TYPES_DIR}`
+export async function copyTypes($: Host, dir: string, repo = S.root): Promise<boolean> {
+  const from = `${repo}/${TYPES_DIR}`
   const to = `${dir}/${TYPES_DIR}`
   if (!(await $.fs.exists(from))) return false
   // Only where git in `dir` ignores it (exit 0; tracked files are never "ignored"): else it could land in the
@@ -502,8 +513,9 @@ export async function copyReports($: Host, t: Pick<SymccTask, 'details'> & { ori
 export async function taskWork($: Host, t: SymccTask): Promise<{ commits: number | null; dirty: boolean }> {
   const branch = taskBranch(t)
   let commits: number | null = 0
-  if (await branchExists($, branch)) {
-    const r = await git($, ['rev-list', '--count', `refs/heads/${intoOf(t)}..refs/heads/${branch}`]).catch(() => null)
+  const repo = repoOf(t)
+  if (await branchExists($, branch, repo)) {
+    const r = await git($, ['rev-list', '--count', `refs/heads/${intoOf(t)}..refs/heads/${branch}`], repo).catch(() => null)
     const n = r && r.exitCode === 0 ? Number(r.stdout.trim() || '0') : NaN
     commits = Number.isFinite(n) ? n : null
   }
@@ -535,8 +547,9 @@ export async function removeWorktree($: Host, taskId: string, dir: string, excep
   if (!agents) return false
   const t = find(await load($), taskId)
   if (liveWorkersFor({ id: taskId, runs: t?.runs }, agents.map(agentState), S.N.name).some(a => a.id !== except)) return false
-  await git($, ['worktree', 'remove', '--force', dir])
-  await git($, ['worktree', 'prune'])
+  const repo = repoOf(t)
+  await git($, ['worktree', 'remove', '--force', dir], repo)
+  await git($, ['worktree', 'prune'], repo)
   return true
 }
 
@@ -546,15 +559,15 @@ export async function removeWorktree($: Host, taskId: string, dir: string, excep
  * branch's tip is read, checked to be in `into`, and the branch is deleted only if it is still at that tip (so work
  * added meanwhile is never lost). A branch checked out in a worktree is kept. Returns whether it was deleted.
  */
-export async function deleteMergedBranch($: Host, branch: string, into: string): Promise<boolean> {
+export async function deleteMergedBranch($: Host, branch: string, into: string, repo = S.root): Promise<boolean> {
   const ref = `refs/heads/${branch}`
-  const tip = await git($, ['rev-parse', '--verify', '-q', ref])
+  const tip = await git($, ['rev-parse', '--verify', '-q', ref], repo)
   const sha = tip.stdout.trim()
   if (tip.exitCode !== 0 || !/^[0-9a-f]{7,64}$/i.test(sha)) return false
-  if ((await git($, ['merge-base', '--is-ancestor', sha, `refs/heads/${into}`])).exitCode !== 0) return false
-  const list = await git($, ['worktree', 'list', '--porcelain'])
+  if ((await git($, ['merge-base', '--is-ancestor', sha, `refs/heads/${into}`], repo)).exitCode !== 0) return false
+  const list = await git($, ['worktree', 'list', '--porcelain'], repo)
   if (list.exitCode !== 0 || list.stdout.split('\n').some(l => l.trim() === `branch ${ref}`)) return false
-  return (await git($, ['update-ref', '-d', ref, sha])).exitCode === 0
+  return (await git($, ['update-ref', '-d', ref, sha], repo)).exitCode === 0
 }
 
 /**
