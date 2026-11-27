@@ -681,8 +681,8 @@ export async function cleanupMerged($: Host, b: Board) {
   }
   // T-1154: each repo a task works in (the board's, and each project's) is pruned and cleaned on its own
   const repoTasks = (repo: string) => b.tasks.filter(t => repoOf(t) === repo)
-  // T-1165: the board folder only when it is its own repo or an open task without a project works in it (never a parent repo)
-  const rootNeeded = S.gitRoot === 'ok' || b.tasks.some(t => isOpenTask(t) && repoOf(t) === S.root)
+  // T-1165/T-1179: the board folder only when it is its own repo (never a parent repo)
+  const rootNeeded = S.gitRoot === 'ok'
   const repos = [...new Set(b.tasks.map(t => repoOf(t)))].filter(r => r !== S.root || rootNeeded)
   if (!repos.includes(S.root) && rootNeeded) repos.push(S.root)
   for (const repo of repos) await git($, ['worktree', 'prune'], repo)

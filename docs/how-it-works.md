@@ -66,7 +66,8 @@ Each part is there for a reason. Knowing it makes the rest of the documentation 
   tokens. It sends work back only for what is worse than main; gaps main already has are listed
   as follow-ups. After two send-backs the task waits for you: Merge as is (tests, no checker),
   Keep fixing (one more try) or Drop.
-- **One merge queue.** Finished tasks take turns. Only the task at the front catches up with
+- **One merge queue per repo.** Finished tasks of one repo take turns (on a board with several
+  project repos, each repo has its own queue, so a slow merge in one never holds up another). Only the task at the front catches up with
   your branch, runs the tests and merges, so your branch cannot move in between and the code
   that was tested is exactly the code that merges. Before the queue, several tasks could merge
   into a moving branch at once, and each had to catch up, test again and sometimes clash with the

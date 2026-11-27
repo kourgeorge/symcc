@@ -231,3 +231,44 @@ test('T-1178: a no-project todo task does not stop a project task from starting'
     await rm(board, { recursive: true, force: true })
   }
 }, 180_000)
+
+// T-1179: no git in the board folder of a workspace board (it may sit in an unrelated repo); run now names only its task.
+test('T-1179: cleanupMerged leaves an outer repo alone; run now names only its own task', async () => {
+  const outer = await realpath(await mkdtemp('/tmp/symcc-node-wso-'))
+  const board = `${outer}/ws`
+  const git = (cwd: string, ...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd })
+  try {
+    await mkdir(`${board}/client`, { recursive: true })
+    await git(`${board}/client`, 'init', '-q', '-b', 'main')
+    await writeFile(`${board}/client/c.txt`, 'c')
+    await git(`${board}/client`, 'add', '.')
+    await git(`${board}/client`, 'commit', '-qm', 'init')
+    await git(outer, 'init', '-q', '-b', 'main')
+    await writeFile(`${outer}/o.txt`, 'o')
+    await git(outer, 'add', 'o.txt')
+    await git(outer, 'commit', '-qm', 'init')
+    // a stale worktree entry in the outer repo: a prune there would remove it
+    await git(outer, 'worktree', 'add', '-q', `${outer}/gone`, '-b', 'gone')
+    await rm(`${outer}/gone`, { recursive: true, force: true })
+    const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
+    await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1179' })
+    try {
+      const add = (title: string) => leadTool(s, 'add', { title, details: 'Do it', files: ['x.txt'], why: 'test', origin_by: 'owner', request: 'test' })
+      expect(await add('Loose')).toContain('T-1')
+      expect(await add('Loose two')).toContain('T-2')
+      await recheckGit(s.host)
+      expect(S.gitRoot).toBe('no-repo')
+      await cleanupMerged(s.host, await load(s.host))
+      const wt = (await git(outer, 'worktree', 'list', '--porcelain')).stdout
+      expect(wt).toContain('gone')
+      const text = await msg(runNowTool(s.host, 'T-1', false))
+      expect(text).toContain('T-1 has no project')
+      expect(text).not.toContain('T-2')
+    } finally {
+      await closeSession(s).catch(() => undefined)
+    }
+  } finally {
+    await rm(outer, { recursive: true, force: true })
+  }
+}, 180_000)

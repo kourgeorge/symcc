@@ -280,6 +280,7 @@ export async function checkAndMerge($: Host, t: SymccTask, dir: string, b: Board
   const turn = () => inMergeLine<CheckResult>($, t.id, refresh => upToDateTestMove($, t, dir, repo, b, mode, made, stopped, retest, target, head, changed, refresh, noVerdict, prose), {
     t,
     stopped,
+    repo,
     ...(release ? { release } : {}),
     ...(limit ? { limit } : {}),
   })

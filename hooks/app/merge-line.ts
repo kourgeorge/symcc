@@ -97,8 +97,8 @@ async function staleOf($: Host, others: readonly LineEntry[]): Promise<Set<strin
 }
 
 /** Task `task` joins the back of the line. Its place among this copy's tasks is taken at once (before any wait), so calls in a row keep their order. */
-function join($: Host, task: string): { me: Mine; joined: Promise<unknown> } {
-  const entry: LineEntry = { task, key: `${S.me || 'unknown'}:${++count}:${Math.random().toString(36).slice(2, 8)}`, session: S.me || 'unknown', joined: now(), at: Date.now() }
+function join($: Host, task: string, repo: string): { me: Mine; joined: Promise<unknown> } {
+  const entry: LineEntry = { task, repo, key: `${S.me || 'unknown'}:${++count}:${Math.random().toString(36).slice(2, 8)}`, session: S.me || 'unknown', joined: now(), at: Date.now() }
   const me: Mine = { entry, gone: false }
   local.push(me)
   // an entry of the same task not of a go running now is an earlier go's (a task that was in line before a reload joins again)
@@ -148,7 +148,8 @@ async function place($: Host, me: Mine): Promise<{ ahead: number; others: number
     if (!line.some(e => e.key === me.entry.key)) line = [...line, ...missing(line)]
   }
   const at = Math.max(0, line.findIndex(e => e.key === me.entry.key))
-  const ahead = line.slice(0, at)
+  // only tasks of the same repo are in front: other repos' tasks merge at the same time (T-1181)
+  const ahead = line.slice(0, at).filter(e => (e.repo ?? '') === (me.entry.repo ?? ''))
   return { ahead: ahead.length, others: ahead.filter(e => !keys.has(e.key)).length }
 }
 
@@ -177,6 +178,8 @@ export type LineOptions<T> = {
   release?: Promise<unknown>
   /** the turn's time limit (see TurnLimit): started when the turn begins, stopped when it ends, so waiting in line never counts */
   limit?: TurnLimit
+  /** the task's repo (repoOf): only tasks of the same repo wait for each other; none is the board's own repo */
+  repo?: string
 }
 
 /**
@@ -187,12 +190,12 @@ export type TurnLimit = { start(): void; stop(): void }
 
 /**
  * Runs `run` (task `task`'s turn: catch up with its target branch, test, move the branch) once it is at the front of
- * the project-wide merge line (MERGE_LINE_FILE), so only one task merges at a time, across tasks, target branches
- * and sessions, oldest first. `run` gets `refresh`, which dates this copy's entries again (call it before each long
+ * the merge line of its repo (MERGE_LINE_FILE keeps one line per repo), so only one task of a repo merges at a time,
+ * across tasks, target branches and sessions, oldest first; tasks of other repos take their turns at the same time. `run` gets `refresh`, which dates this copy's entries again (call it before each long
  * step, say each test command). The task leaves the line however `run` ends. See LineOptions for the rest.
  */
 export async function inMergeLine<T>($: Host, task: string, run: (refresh: () => Promise<void>) => Promise<T>, o: LineOptions<T> = {}): Promise<T> {
-  const { me, joined } = join($, task)
+  const { me, joined } = join($, task, o.repo && o.repo !== S.root ? o.repo : '')
   void o.release?.then(() => leave($, me), () => leave($, me))
   let shown = 0
   let before: Checking | undefined

@@ -48,6 +48,10 @@ for f in $files; do
   cp "$root/$f" "$tmp/plugin/$f"
 done
 
+# tests never play a sound or voice (T-1186)
+SYMCC_MUTE=1
+export SYMCC_MUTE
+
 set +e
 claude plugin test "$tmp/plugin"
 code=$?

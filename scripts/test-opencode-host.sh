@@ -12,6 +12,9 @@
 set -eu
 root=${1:-"$(cd "$(dirname "$0")/.." && pwd)"}
 cd "$root"
+# tests never play a sound or voice (T-1186)
+SYMCC_MUTE=1
+export SYMCC_MUTE
 if ! command -v bun >/dev/null 2>&1; then
   echo "test-opencode-host: bun is not on PATH." >&2
   exit 2
