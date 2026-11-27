@@ -174,7 +174,7 @@ test('T-1168: a backlog task keeps no project repo checked', async () => {
 
       await change(s.host, b => patchTask(b, 'T-2', { status: 'backlog' }, now()))
       await gitReady(s.host)
-      await new Promise(r => setTimeout(r, 1500)) // let the panel refresh the change started finish
+      await new Promise<void>(r => setTimeout(() => r(), 1500)) // let the panel refresh the change started finish
       const calls: string[] = []
       const host = s.host as { run: (cmd: string[], o?: { cwd?: string }) => Promise<unknown> }
       const run = host.run.bind(s.host)
