@@ -4,7 +4,7 @@ import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, know
 import { checkerReportOf } from '../core/task-sections'
 import { sizeSegs } from '../core/page-header'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
-import { gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, projectNames, projectRefusal, taskWork, resetScratch } from './git'
+import { repoOf, gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, projectNames, projectRefusal, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
 import { S, heard, workers, starting, toolName } from './state'
@@ -725,7 +725,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (scout && !(await isKnownScout($, scout))) throw new Error(unknownScoutText(scout, known))
       const said = { by: a.origin_by, scout: scout || a.scout, task: a.from_task, how: a.how, request: a.request, why: a.why }
       // it merges into the branch checked out now (on a detached checkout, the repo's main branch)
-      const merge_into = await homeBranch($)
+      const merge_into = await homeBranch($, repoOf(project ? { project } : undefined))
       let forced = false
       const own = scout && a.origin_by === 'scout' ? await scoutFindingsFor($, scout) : undefined
       let reviewMode = false
@@ -797,8 +797,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const kind = (await kindIn($, a)) ?? (role && role !== t.role && isInvestigation(kindFor(undefined, role)) ? kindFor(undefined, role) : undefined)
       // Another branch to merge into: given, or the owner said yes to "branch x is gone: merge into main instead?".
       let into = str(a.merge_into)?.trim()
-      if (a.merge_into !== undefined && !(into && (await branchExists($, into)))) {
-        const some = (await branchList($)).slice(0, 8)
+      if (a.merge_into !== undefined && !(into && (await branchExists($, into, repoOf({ project: project ?? t.project }))))) {
+        const some = (await branchList($, repoOf({ project: project ?? t.project }))).slice(0, 8)
         throw new Error(`Nothing changed: '${into ?? String(a.merge_into)}' is not a branch in this project. merge_into must be an existing branch${some.length ? `, e.g. ${some.join(', ')}` : ''}.`)
       }
       const both = detailsBothRefusal(a)
