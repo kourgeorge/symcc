@@ -124,3 +124,44 @@ test('T-1182: tasks with no project on a workspace board: an investigation and a
     for (const f of ['args', 'prompt', 'cwd']) await rm(`${log}.${f}`, { recursive: true, force: true })
   }
 }, 300_000)
+
+test('T-1182: an investigation given a project after its plain try: keep as a note leaves no folder; a retry still starts', async () => {
+  const board = await realpath(await mkdtemp('/tmp/symcc-node-wsp-'))
+  const log = `${board}.fake`
+  const git = (cwd: string, ...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd })
+  try {
+    for (const name of ['client', 'server']) {
+      const d = `${board}/${name}`
+      await mkdir(d, { recursive: true })
+      await git(d, 'init', '-q', '-b', 'main')
+      await writeFile(`${d}/${name}.txt`, name)
+      await writeFile(`${d}/.gitignore`, '.scratch/\n')
+      await git(d, 'add', '.')
+      await git(d, 'commit', '-qm', 'init')
+    }
+    const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, ...args], { cwd: board, env: { FAKE_LOG: log }, timeoutMs: 120_000 })
+    const add = (input: Record<string, unknown>) => cli('tool', 'add', JSON.stringify({ details: 'Do it', why: 'test', origin_by: 'owner', request: 'test', ...input }))
+    const status = async (id: string) => (JSON.parse(await readFile(`${board}/.symcc/board.json`, 'utf8')) as { tasks: { id: string; status: string }[] }).tasks.find(t => t.id === id)?.status
+    await cli('cmd', 'symcc-init')
+    await cli('tool', 'settings', JSON.stringify({ project: 'client', test_commands: ['test -f hello.txt'] }))
+    for (const title of ['Look one', 'Look two']) expect((await add({ title, kind: 'investigation' })).stdout).toContain('added T-')
+    await cli('tick')
+    expect(await status('T-1')).toBe('review')
+    expect(await status('T-2')).toBe('review')
+    // T-1: project given, then kept as a note: no folder is left behind
+    await cli('tool', 'change', JSON.stringify({ task: 'T-1', project: 'client' }))
+    await cli('tool', 'approve', JSON.stringify({ task: 'T-1', keep_note: true }))
+    await cli('tick')
+    expect(await status('T-1')).toBe('done')
+    expect(await isThere(`${board}/.symcc/worktrees/T-1`)).toBe(false)
+    // T-2: project given, then sent back: the next try starts in a git copy
+    await cli('tool', 'change', JSON.stringify({ task: 'T-2', project: 'client' }))
+    await cli('tool', 'reject', JSON.stringify({ task: 'T-2', reason: 'look deeper' }))
+    await cli('tick')
+    expect(await status('T-2')).not.toBe('failed')
+    expect(await isThere(`${board}/.symcc/worktrees/T-2/.git`)).toBe(true)
+  } finally {
+    await rm(board, { recursive: true, force: true })
+    for (const f of ['args', 'prompt', 'cwd']) await rm(`${log}.${f}`, { recursive: true, force: true })
+  }
+}, 300_000)

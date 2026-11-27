@@ -402,6 +402,8 @@ export async function prepareWorktree($: Host, t: SymccTask, target: string, cat
   }
   let made = false
   if (!(await $.fs.exists(`${dir}/.git`))) {
+    // T-1182: a leftover plain folder (from a try with no project) is only scratch
+    if (await $.fs.exists(dir)) await $.run(['rm', '-rf', dir])
     await git($, ['worktree', 'prune'], repo)
     const has = (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`], repo)).exitCode === 0
     if (has) await gitOk($, ['worktree', 'add', dir, branch], repo)
@@ -649,7 +651,7 @@ export async function removeWorktree($: Host, taskId: string, dir: string, excep
   if (liveWorkersFor({ id: taskId, runs: t?.runs }, agents.map(agentState), S.N.name).some(a => a.id !== except)) return false
   const repo = repoOf(t)
   // T-1182: a plain folder (no project on a workspace board) is only a folder
-  if (plainTask(t)) return (await $.run(['rm', '-rf', dir])).exitCode === 0
+  if (plainTask(t) || (await $.fs.exists(dir) && !(await $.fs.exists(`${dir}/.git`)))) return (await $.run(['rm', '-rf', dir])).exitCode === 0
   await git($, ['worktree', 'remove', '--force', dir], repo)
   await git($, ['worktree', 'prune'], repo)
   return true
@@ -686,7 +688,7 @@ export async function cleanupMerged($: Host, b: Board) {
   let dirs = 0
   // T-1182: the plain folders of finished tasks with no project (no git in them)
   for (const t of b.tasks) {
-    if (!isFinished(t) || !plainTask(t) || busy.has(t.id) || starting.has(t.id) || finishing.has(t.id) || approving.has(t.id)) continue
+    if (!isFinished(t) || busy.has(t.id) || starting.has(t.id) || finishing.has(t.id) || approving.has(t.id)) continue
     if (!(await $.fs.exists(worktreeDir(t.id))) || (await $.fs.exists(`${worktreeDir(t.id)}/.git`))) continue
     if (liveWorkersFor({ id: t.id, runs: t.runs }, agents.map(agentState), S.N.name).length) continue
     if ((await $.run(['rm', '-rf', worktreeDir(t.id)])).exitCode === 0) dirs++

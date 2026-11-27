@@ -817,6 +817,8 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         const needs = changeNeedsProject(await projectNames($).catch(() => [] as string[]))
         if (needs) throw new Error(`Nothing changed: ${needs}`)
       }
+      // T-1182: a plain folder (no project) holds only scratch; a task given a project starts clean in a git copy
+      if (projectMoves && project && plainTask(t) && (await $.fs.exists(worktreeDir(t.id)))) await removeWorktree($, t.id, worktreeDir(t.id))
       // Another branch to merge into: given, or the owner said yes to "branch x is gone: merge into main instead?".
       let into = str(a.merge_into)?.trim()
       if (a.merge_into !== undefined && !(into && (await branchExists($, into, repoOf({ project: project ?? t.project }))))) {
