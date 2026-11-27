@@ -337,6 +337,49 @@ export function longDate(d: string): string {
   return `${Number(day)} ${MONTHS[Number(m) - 1]} ${y}`
 }
 
+export type Release = { version: string; date: string; lines: string[] }
+
+// The releases of CHANGELOG.md ("## <version> (<date>)", newest first as written); the text above the first one is dropped.
+export function releases(md: string): Release[] {
+  const out: Release[] = []
+  let cur: Release | undefined
+  for (const line of md.replace(/\r\n?/g, '\n').split('\n')) {
+    const h = /^## (\S+)(.*)$/.exec(line)
+    if (h) {
+      cur = { version: h[1]!, date: /(\d{4}-\d{2}-\d{2})/.exec(h[2]!)?.[1] ?? '', lines: [] }
+      out.push(cur)
+    } else cur?.lines.push(line)
+  }
+  return out
+}
+
+// The "What's new" page: a count and date range, then one entry per release down a vertical line.
+function timeline(rels: Release[], ctx: Ctx): { body: string; md: string } {
+  const dates = rels.map(r => r.date).filter(Boolean).sort()
+  const range = dates.length ? ` from ${longDate(dates[0]!)} to ${longDate(dates[dates.length - 1]!)}` : ''
+  const intro = `${rels.length} releases${range}.`
+  const entries = rels.map(r => {
+    const parts: string[] = []
+    let group: string[] = []
+    let title = ''
+    const flush = () => {
+      const inner = blocks(group, ctx)
+      if (title || inner) parts.push(`${title ? `<h3>${escapeHtml(title)}</h3>\n` : ''}${inner}`)
+      group = []
+    }
+    for (const l of r.lines) {
+      const h = /^### (.*)$/.exec(l)
+      if (h) { flush(); title = h[1]!.trim() } else group.push(l)
+    }
+    flush()
+    const id = `v${slug(r.version)}`
+    return `<li class="release" id="${escapeHtml(id)}"><h2><span class="rel-version">${escapeHtml(r.version)}</span>${r.date ? ` <span class="rel-date">${longDate(r.date)}</span>` : ''}</h2>\n${parts.join('\n')}\n</li>`
+  })
+  const body = `<h1 id="whats-new">What's new</h1>\n<p>${intro}</p>\n<ol class="timeline">\n${entries.join('\n')}\n</ol>`
+  const md = `# What's new\n\n${intro}\n\n${rels.map(r => `## ${r.version}${r.date ? ` (${r.date})` : ''}\n${r.lines.join('\n')}`).join('\n')}\n`
+  return { body, md }
+}
+
 // Posts in docs/blog/YYYY-MM-DD-<slug>.md, newest first.
 export function readPosts(root: string): Post[] {
   const dir = join(root, 'docs/blog')
@@ -413,6 +456,8 @@ const TOP: Page[] = [
 ]
 export const DOCS_INDEX: Page = { src: 'docs/docs.md', out: 'docs.html', title: 'Documentation' }
 const RESEARCH_INDEX: Page = { src: 'docs/research/index.md', out: 'research/index.html', title: 'Research notes' }
+// T-1163: built from CHANGELOG.md at build time (a timeline, see timeline())
+const WHATS_NEW: Page = { src: 'CHANGELOG.md', out: 'whats-new.html', title: "What's new" }
 export const DOC_GROUPS: { name: string; pages: Page[] }[] = [
   { name: 'Using symcc', pages: [
     { src: 'docs/board.md', out: 'board.html', title: 'The board' },
@@ -422,6 +467,7 @@ export const DOC_GROUPS: { name: string; pages: Page[] }[] = [
     { src: 'docs/clients.md', out: 'clients.html', title: 'Clients' },
     { src: 'docs/troubleshooting.md', out: 'troubleshooting.html', title: 'Troubleshooting' },
     { src: 'docs/reference.md', out: 'reference.html', title: 'Reference' },
+    WHATS_NEW,
   ] },
   { name: 'For contributors', pages: [
     { src: 'docs/architecture.md', out: 'architecture.html', title: 'Architecture' },
@@ -616,7 +662,8 @@ export function build(root: string, out: string): string[] {
     const file = join(out, page.out)
     mkdirSync(dirname(file), { recursive: true })
     const post = posts.findIndex(p => p.page === page)
-    let body = blocks(md.split('\n'), ctx)
+    let body: string
+    if (page === WHATS_NEW) { const t = timeline(releases(md), ctx); body = t.body; md = t.md } else body = blocks(md.split('\n'), ctx)
     if (md.includes('{{stats:')) body = fillStats(body, needStats(page.src), 'html', true)
     let head = ''
     if (post >= 0) {

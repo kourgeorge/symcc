@@ -32,7 +32,7 @@ bun "$here/tests/home-page-check.mjs" "$tmp/real" "$here" || bad "checks on the 
 # a small copy with tricky text in docs/tasks.md
 mkdir -p "$tmp/src/docs/research"
 cp -R "$here/site" "$tmp/src/site"
-cp "$here/README.md" "$tmp/src/README.md"
+cp "$here/README.md" "$here/CHANGELOG.md" "$tmp/src/"
 cp "$here/docs/"*.md "$tmp/src/docs/"
 mkdir -p "$tmp/src/docs/data" && cp "$here/docs/data/"*.json "$tmp/src/docs/data/"
 cp "$here/docs/"*.svg "$here/docs/"*.jpg "$tmp/src/docs/" 2>/dev/null
