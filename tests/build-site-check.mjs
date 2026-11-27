@@ -229,6 +229,8 @@ if (existsSync(join(out, 'style.css'))) {
   if (!log.length) bad('CHANGELOG.md has no releases')
   if (got.join() !== log.join()) bad(`whats-new.html lists ${got.length} releases (${got.slice(0, 3)}...), CHANGELOG.md has ${log.length} (${log.slice(0, 3)}...)`)
   if (t.includes('When a set of user-facing changes')) bad('whats-new.html shows the changelog header paragraph')
+  const wl = existsSync(llmsFile) ? readFileSync(llmsFile, 'utf8').split('\n').find(l => l.includes('/whats-new.md')) : ''
+  if (!wl || !wl.startsWith("- [What's new](") || wl.includes('When a set of user-facing changes')) bad(`llms.txt line for whats-new.md is wrong: ${wl}`)
   if (!t.includes(`<p>${log.length} releases from `)) bad('whats-new.html has no release count and date range')
   if (!/<h3>Added<\/h3>/.test(t)) bad('whats-new.html has no Added lists')
   if (/<script/.test(t)) bad('whats-new.html has a script')

@@ -298,13 +298,14 @@ const MAIN_SUMMARY: Record<string, string> = {
   'docs/docs.md': 'The list of every documentation page.',
   'docs/reference.md': 'Every command, setting, file and board key of symcc, in one place.',
   'docs/architecture.md': 'For people who change symcc: where the code is, the engine and the clients, running the tests, renaming the plugin, and the team picture.',
+  'CHANGELOG.md': 'Every release of symcc, newest first, with what was added, changed and fixed.',
   'docs/research/index.md': 'The list of research notes, newest first, one line each.',
 }
 
 export function llmsTxt(pages: Page[], root: string): string {
   const line = (p: Page) => {
     const md = readFileSync(join(root, p.src), 'utf8').replace(/\r\n?/g, '\n')
-    const title = firstHeading(md) ?? p.title
+    const title = p.src === 'CHANGELOG.md' ? p.title : firstHeading(md) ?? p.title
     const sum = MAIN_SUMMARY[p.src] ?? (summary(md) || p.title)
     return `- [${title}](${SITE}/${mdOut(p)})${sum ? `: ${sum}` : ''}`
   }
