@@ -52,7 +52,8 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
       const [first, second] = laneLines(l, layout, { nowMs, frame: 0, steady: true })
       out.push((LIVE_INDENT + segText(first) + (l.done ? '' : tryText(l.tryNo))).trimEnd())
       // T-1074: a running row's first line has no time or queue place; its second line (try, time, tokens, task type) goes under it
-      if (!l.done) under(second)
+      // T-1177: a finished row's second line starts with "merged 3m ago", so it shows too
+      under(second)
       for (const r of trainRows(trains.lanes[l.id] ?? [], inner)) under(r.segs)
     }
   }
