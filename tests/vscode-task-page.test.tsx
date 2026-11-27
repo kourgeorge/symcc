@@ -199,17 +199,26 @@ test('in VS Code a waiting question shows plainly, with its answers as numbered 
 })
 
 test('T-1164: a waiting task\'s question box comes right after the header, before every section, on the terminal and in VS Code', async ($, on) => {
-  seedRich(on, 'T-503')
-  for (const surface of ['terminal', 'vscode'] as const) {
-    const ui = await $.ui.mount({ ...PANE, surface })
-    const all = texts(drawnData(await ui.drawn())).join('\n')
-    const q = all.indexOf('Should the report show all of its lines')
-    expect(q > 0, surface).toBe(true)
-    for (const heading of ['What to do', 'History']) {
-      const at = all.indexOf(heading, 0)
-      expect(at === -1 || q < at, `${surface} ${heading}`).toBe(true)
+  const waiting = RICH_TASKS.find(t => t.id === 'T-503') as Record<string, unknown>
+  waiting.done = 'DONETEXT the whole task so far'
+  try {
+    seedRich(on, 'T-503')
+    for (const surface of ['terminal', 'vscode'] as const) {
+      const ui = await $.ui.mount({ ...PANE, surface })
+      const all = texts(drawnData(await ui.drawn())).join('\n')
+      const q = all.indexOf('Should the report show all of its lines')
+      const d = all.indexOf('DONETEXT')
+      expect(q > 0, surface).toBe(true)
+      expect(d > 0, `${surface} shows Done`).toBe(true)
+      expect(q < d, `${surface} question before Done`).toBe(true)
+      for (const heading of ['What to do', 'History']) {
+        const at = all.indexOf(heading, 0)
+        expect(at === -1 || q < at, `${surface} ${heading}`).toBe(true)
+      }
+      await ui.unmount()
     }
-    await ui.unmount()
+  } finally {
+    delete waiting.done
   }
 })
 
