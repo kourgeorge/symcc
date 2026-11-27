@@ -36,6 +36,7 @@ import {
 import { notSetUpAnswer } from '../core/settings'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
 import { restFrame } from '../core/logo'
+import { ROLE_PLACEHOLDERS } from '../core/prompts'
 import { taskSections, runLines, type ReportPick, type TaskSection } from '../core/task-sections'
 import { taskReports } from '../core/reports'
 import type { TaskBranchFacts } from '../core/task-branch'
@@ -1269,6 +1270,10 @@ function rolePage(f: ViewFile, x: ViewDef, w: number): Body {
   b.heading('Checklist')
   if (x.text.trim()) for (const l of textLines(x.text.trim(), 'text', w)) b.add(l)
   else b.add([{ text: '  (none: a plain worker)', color: 'inactive' }])
+  b.blank()
+  b.heading('Placeholders')
+  for (const l of wrapSegs([{ text: '  the checklist may use these; each is filled in for the task (any other {{word}} is left as written)', color: 'inactive' }], w)) b.add(l)
+  for (const [p, m] of Object.entries(ROLE_PLACEHOLDERS)) for (const l of wrapSegs([{ text: `  {{${p}}}`, color: 'text', bold: true }, { text: ` ${m}`, color: 'inactive' }], w)) b.add(l)
   b.blank()
   b.heading('File')
   b.add([{ text: `  ${x.file}`, color: 'autoAccept' }])
