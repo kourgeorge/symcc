@@ -2,7 +2,7 @@
 // finishWork (workers.ts) runs a checker here after the prep step and before the task joins the merge line, and waits
 // for its verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
-import { emptyBoard, type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, checkerEntry, checkerPrompt, checkerVerdict, checkerReportFile, reportText, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
+import { emptyBoard, type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, testCommandsOf, checkerEntry, checkerPrompt, checkerVerdict, checkerReportFile, reportText, cutLine, find, findRole, intoOf, patchTask, tryLabel, withHistory, withAgentUsed, type HistoryAdd } from '../board'
 import { git, taskBranch } from './git'
 import { markStep } from './review'
 import { loadRoles } from './roles'
@@ -59,7 +59,7 @@ export async function runChecker($: Host, t: SymccTask, b: Board, dir: string, s
     const n = await git($, ['diff', '--name-only', '--no-renames', '-z', `refs/heads/${into}...HEAD`], dir).catch(() => null)
     const changed = n && n.exitCode === 0 ? n.stdout.split('\0').filter(Boolean) : []
     // T-551: the project's tests run once, in the merge line, after the checker: it is told not to run them
-    const tests = checkerTestsText(S.N.name, b.test_commands)
+    const tests = checkerTestsText(S.N.name, testCommandsOf(b, t))
     // the checker role's checklist gets the same placeholders a change worker's role does (the task's files, kind, ...); its {{test_command}} is the checker's own tests line
     const facts = { ...changeValues(t, b, dir), test_command: tests }
     const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, t), kind_name: t.kind ?? 'change', diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ''), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) }, t)

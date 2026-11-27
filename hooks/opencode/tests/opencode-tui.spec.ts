@@ -9,7 +9,7 @@
 // and loadTuiRuntime names a package that is missing or lacks a function instead of failing with a bare import error.
 import { test, expect } from 'bun:test'
 import { choiceNote, settingAbout } from '../../core/setting-notes'
-import { LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_IDLE, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveNowSegs, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, SETTINGS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
+import { ROLE_PLACEHOLDERS, LIVE_TABS, tabRow as coreTabRow, roleKeys, rolesKeys, kindsKeys, scoutHowTo, LIVE_IDLE, liveLegend, liveLanes, liveLayout, liveStations, liveHeader, liveNowSegs, liveLabelLine, laneLines, segText, liveTrains, trainRows, liveToday, todayLines, modeLabel, modeButton, promptsOfRole, ROLE_SLOT, SETTING_GROUPS, SETTINGS, groupSummaryParts, taskActions, actionButtonLabel, settingsKeys, mergeRoles, mergeKinds, when, addTask, emptyBoard, patchTask, bandNote, gitNote, statusCell, STATUS_MARK, showsHeader, roleTools, roleNameError, leadScoutNameError, type BoardPage, type Board } from '../../board'
 import type { PaneView } from '../../app/state'
 import type { SymccMode, SymccTask } from '../../../types'
 import { ICON } from '../../name'
@@ -4635,6 +4635,12 @@ test('T-918: the Roles table drops MODEL, then WEB, then WRITES when narrow, the
   expect(writes('general')).toBe('Writes: code (tests run before merging)')
   expect(writes('writer')).toBe('Writes: prose only (code: false; only docs checks run)')
   expect(writes('researcher')).toBe('Writes: nothing (answers questions; nothing is merged)')
+  // T-1151: a Placeholders section sits between Checklist and File, with every placeholder
+  const page = panelLines(g, { tab: 'settings', opened: 'role:general', cursor: 0 }, NOW, 140).lines.map(lineText)
+  const headAt = (h: string) => page.findIndex(l => l.replace('▍', '') === h)
+  expect(headAt('Checklist') > -1 && headAt('Placeholders') > headAt('Checklist') && headAt('File') > headAt('Placeholders')).toBe(true)
+  const between = page.slice(headAt('Placeholders'), headAt('File')).join('\n')
+  for (const [p, m] of Object.entries(ROLE_PLACEHOLDERS)) expect(between.includes(`{{${p}}} ${m.split(' ')[0]}`)).toBe(true)
   // the edit page's Writes pick shows its words
   const edit = defDraftOf('roles', g.view.roles!.find(r => r.name === 'writer')!)
   expect(edit.values.code).toBe('false')

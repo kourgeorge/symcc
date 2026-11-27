@@ -1,7 +1,7 @@
 // The values a worker's prompt is filled in with, for each task (see fillPrompt in hooks/core/prompts.ts). A role's
 // checklist is filled in from the same values (see roleSection), for a worker and for a checker alike.
 import type { SymccTask } from '../../types'
-import { type Board, type BoardTask, kindOf, isErrand, kindSection, ASK_TOOL, ASK_LINE, askedMore, roleOf } from '../board'
+import { type Board, type BoardTask, kindOf, isErrand, kindSection, ASK_TOOL, ASK_LINE, askedMore, roleOf, testCommandsOf } from '../board'
 import { filesBody } from '../core/prompt-sections'
 import { taskBranch } from './git'
 import { S, toolName } from './state'
@@ -64,6 +64,6 @@ export const changeValues = (t: SymccTask, b: Board, dir: string): Record<string
   // the host's words for its file tools (see HostWords), so the prompt names no host's tools itself
   file_tools: S.W.fileTools,
   files: `Files you may change: ${filesBody(t.files)}`,
-  test_command: workerTestText(S.N.name, b.test_commands),
+  test_command: workerTestText(S.N.name, testCommandsOf(b, t)),
 })
 

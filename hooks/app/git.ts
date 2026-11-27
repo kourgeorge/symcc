@@ -1,5 +1,5 @@
 import type { SymccTask } from '../../types'
-import { isFinished, liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, gitNotice, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, latestReportPattern, latestReportOf,SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
+import { isFinished, liveWorkersFor, startBranch, type Board, intoOf, type GitState, gitStateOf, noGitText, setupAskText, gitInstallStep, gitNotice, type InstallFacts, gitignoreWith, gitignoreBase, riskyFiles, parseLsTree, ignoreLineFor, setupDoneText, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, latestReportPattern, latestReportOf,SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit, isProjectName } from '../board'
 import { publish } from './lead'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
 import { type Host, agentState } from '../host'
@@ -27,9 +27,11 @@ export async function gitOk($: Host, args: string[], cwd = S.root, timeoutMs = 1
  * board folder. Every git call that belongs to a task takes its folder from here.
  */
 export const repoOf = (t?: object | null): string => {
-  const pj = (t as { project?: unknown } | null | undefined)?.project
-  const p = typeof pj === 'string' ? pj.trim() : ''
-  return p ? `${S.root}/${p}` : S.root
+  const p = (t as { project?: unknown } | null | undefined)?.project
+  if (p === undefined || p === null || p === '') return S.root
+  // T-1153: never a path out of the board folder ("..", "/abs", "a/b"); the board's loader drops such names already
+  if (!isProjectName(p)) throw new Error(`'${String(p).slice(0, 80)}' is not a project folder name`)
+  return `${S.root}/${p}`
 }
 
 /** The branch checked out in the project, '' when none (a detached HEAD). */
@@ -167,12 +169,13 @@ async function holdsRepos($: Host): Promise<boolean> {
 /**
  * T-1137: the projects of this board: the folders directly below the board folder that hold their own .git (found by
  * folder name, nothing stored), sorted. None when the board folder is itself a repo (a board inside one repo).
+ * Only folders whose names pass isProjectName count: a folder like "my app" is simply not offered as a project.
  */
 export async function projectNames($: Host): Promise<string[]> {
   if (await $.fs.exists(`${S.root}/.git`)) return []
   const dirs = (await $.fs.list(S.root).catch(() => [])).filter(e => e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== S.N.dir).map(e => e.name)
   const found: string[] = []
-  for (const d of dirs) if (await $.fs.exists(`${S.root}/${d}/.git`)) found.push(d)
+  for (const d of dirs) if (isProjectName(d) && await $.fs.exists(`${S.root}/${d}/.git`)) found.push(d)
   return found.sort()
 }
 
