@@ -219,7 +219,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
         key: 'branch',
         label: 'Branch',
         value: [
-          v.branch_note ? <Text key="b" wrap="wrap" color={C('warning')}>{v.branch_note}</Text> : <Text key="b" color={C('text')}>{v.home_branch || 'no branch'}</Text>,
+          v.branch_note ? <Text key="b" wrap="wrap" color={C('warning')}>{v.branch_note}</Text> : <Text key="b" color={C('text')}>{v.branch_line || v.home_branch || 'no branch'}</Text>,
           <Text key="d" color={C('inactive')}>{driving ? '· this window drives' : '· another window drives'}</Text>,
         ],
       },

@@ -357,7 +357,7 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 const projectTestsList = (b: { projects?: Record<string, { test_commands?: string[] }> }): string[] =>
   Object.entries(b.projects ?? {}).filter(([, x]) => x?.test_commands?.length).map(([p, x]) => `${p}: ${testsShort(x.test_commands ?? [])}`)
 
-export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived' | 'projects'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; home_branch?: string; branch_note?: string; mode?: SymccMode; on_here?: boolean; off_here?: OffHere; /** T-952: the driving window (from lead.json) when this one doesn't drive */ driver?: DriverFacts }
+export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived' | 'projects'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; home_branch?: string; branch_line?: string; branch_note?: string; mode?: SymccMode; on_here?: boolean; off_here?: OffHere; /** T-952: the driving window (from lead.json) when this one doesn't drive */ driver?: DriverFacts }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask, 'live'>)[], order: SymccStatus[], nowMs: number = Date.now()): string[] {
@@ -429,7 +429,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
   ]
   const l2 = join([
     ...(root ? [fact(shortHome(root, home))] : []),
-    ...(b.branch_note ? [[{ text: b.branch_note, tone: 'warning' as const }]] : b.home_branch ? [fact(b.home_branch)] : []),
+    ...(b.branch_note ? [[{ text: b.branch_note, tone: 'warning' as const }]] : (b.branch_line || b.home_branch) ? [fact(b.branch_line || b.home_branch || '')] : []),
     fact(driving ? 'this session drives' : 'driven by another session'),
   ])
   const l3 = join([

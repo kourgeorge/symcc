@@ -186,7 +186,10 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
   }
   const real = await probeGit($)
   S.gitRoot = real
-  const s: GitState = real === 'no-repo' && (await projectNames($).catch(() => [] as string[])).length ? 'ok' : real
+  // a task with no project still needs the board folder's own repo: only without such a task is the folder fine as it is
+  const board = b ?? (await load($))
+  const loose = board.tasks.some(t => !isFinished(t) && !((t as { project?: string }).project && isProjectName((t as { project?: string }).project!)))
+  const s: GitState = real === 'no-repo' && !loose && (await projectNames($).catch(() => [] as string[])).length ? 'ok' : real
   if (s === 'no-git' && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => '')
   if (s !== 'no-git') S.gitInstall = ''
   const ws = (s === 'no-repo' || s === 'no-commits') && (await holdsRepos($)) ? workspaceText() : ''
