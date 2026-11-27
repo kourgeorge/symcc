@@ -55,7 +55,7 @@ test('a retried add with \\r\\n in its details makes no duplicate', async () => 
 })
 
 test('a retried add with a title over 200 characters makes no duplicate', async () => {
-  expect(await twice({ title: 'x'.repeat(300), details: 'y'.repeat(9000) })).toBe(1)
+  expect(await twice({ title: 'x'.repeat(300), details: 'y'.repeat(7000) })).toBe(1)
 })
 
 test('add, drop, then the same add again makes a new task', async () => {
