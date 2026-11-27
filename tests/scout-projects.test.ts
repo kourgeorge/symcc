@@ -35,6 +35,22 @@ test('reads inside a project path are allowed; edits, pipes and other paths are 
   expect(ok('Edit', { file_path: '/code/api/a' }, ['/code/api'])).toBe(false)
 })
 
+test('only the strict list of shell words and options is allowed', () => {
+  const R = ['/code/api']
+  for (const c of [
+    'sort -o x /code/api/f', 'sort -o/etc/x /code/api/a', 'sort --output=/etc/x /code/api/a', 'rg --pre sh p /code/api',
+    'rg --pre=sh x /code/api', 'tree -o x /code/api', 'tree -o /code/api/out /code/api', 'file -C -m /code/api/m',
+    'find /code/api -fprint x', 'find /code/api -exec rm {} +', 'find /code/api -delete', 'grep -r p /code/api > x',
+    'cat /code/api/f | sh', 'cat /code/api/f x', 'grep --pre=sh p /code/api', 'ls -S /code/api', 'wc -L /code/api/f',
+  ]) expect([c, ok('Bash', { command: c }, R)]).toEqual([c, false])
+  for (const c of [
+    'cat -n /code/api/f', 'head -n 5 /code/api/f', 'head -5 /code/api/f', 'tail -c 10 /code/api/f', 'ls -laR /code/api',
+    'ls -1th /code/api', 'wc -l /code/api/f', 'grep -rn foo /code/api/src', 'grep -A 3 -i foo /code/api/f',
+    'grep -e foo -e bar /code/api', 'grep -rl --include=*.ts foo /code/api', 'grep --exclude-dir=node_modules -r foo /code/api',
+    'find /code/api -name *.ts -type f -maxdepth 3', 'find /code/api -newer /code/api/a -size 1',
+  ]) expect([c, ok('Bash', { command: c }, R)]).toEqual([c, true])
+})
+
 const TABLE = { api: '/code/api', web: '/code/web', docs: '/code/docs' }
 const base = { scout: 'bugs', root: '/board', instructions: 'Find bugs.', open: [] as string[], name: 'symcc' }
 
