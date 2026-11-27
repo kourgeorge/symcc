@@ -1237,8 +1237,8 @@ export function todayMoreLines(m: TodayMore, width: number): LiveSeg[][] {
   const line3 = (keep: number): LiveSeg[] => {
     const out: LiveSeg[] = []
     const p = perParts.slice(0, keep)
-    // T-855: "avg ⌀ 2M/task · 10m work · 30m start-to-merge" (avg dim; ⌀ is the token sign now)
-    if (p.length) out.push({ text: 'avg ', tone: 'dim' }, { text: p.map((x, i) => (i ? x : `${x}/task`)).join(' · '), tone: 'text' })
+    // T-855: "median ⌀ 2M/task · 10m work · 30m start-to-merge" (avg dim; ⌀ is the token sign now)
+    if (p.length) out.push({ text: 'median ', tone: 'dim' }, { text: p.map((x, i) => (i ? x : `${x}/task`)).join(' · '), tone: 'text' })
     const rest = keep > perParts.length ? extras3.slice(0, keep - perParts.length) : []
     rest.forEach((x, i) => out.push({ text: out.length ? (i && !x.startsWith('⌕') ? ' · ' : '   ') : '', tone: i && !x.startsWith('⌕') ? 'dim' : 'text' }, { text: x, tone: 'dim' }))
     return out
@@ -1404,7 +1404,7 @@ export function liveTodayRows(v: Pick<LiveView, 'tasks' | 'today_team'>, nowMs: 
   rows.push({ key: 'time', label: TODAY_ROW.time, segs: [{ text: fmtDuration(more.workMs), tone: 'text' }, ...(more.usd !== undefined ? [dot, { text: todayCostText(more.usd), tone: 'dim' as const }] : [])] })
   const per = more.perTask
   const perParts = [
-    ...(per?.tokens !== undefined ? [`${fmtTokens(per.tokens)}/task`] : []),
+    ...(per?.tokens !== undefined ? [`median ⌀ ${fmtTokens(per.tokens)}/task`] : []),
     ...(per?.workMs !== undefined ? [`${fmtDuration(per.workMs)} work`] : []),
     ...(per?.mergeMs !== undefined ? [`${fmtDuration(per.mergeMs)} start-to-merge`] : []),
     ...(more.firstTry !== undefined ? [`first try ${Math.round(more.firstTry)}%`] : []),
