@@ -1,5 +1,5 @@
 // T-699: VS Code's task page shows the same labelled Details list as the terminal and OpenCode (detailRows: same rows,
-// labels, order and colours) as a two-column grid, with no tags row; its History is one rail with each event's mark on
+// labels, order and colours) as a two-column grid, with no tags row; its Timeline is one rail with each event's mark on
 // it (no "│" rows), newest first, the newest 10 with a "Show all" button; and the page draws whole at a narrow and a
 // wide width.
 import { expect } from 'claude-code/testing'
@@ -119,7 +119,7 @@ const LONG = Array.from({ length: 14 }, (_, i) =>
   i === 13 ? historyEntry('merged', `try ${i}: done → merged into main`, iso(T0 - 60_000)) : historyEntry(i % 3 ? 'note' : 'failed', i % 3 ? `the lead added a note: “note ${i}”` : `try ${i}: tried → tests failed: number ${i}`, iso(T0 - (20 - i) * 60_000)),
 )
 
-test('VS Code\'s History is one rail: each event\'s mark on it, no "│" rows, newest first; "Show all" past 10 events', async ($, on) => {
+test('VS Code\'s Timeline is one rail: each event\'s mark on it, no "│" rows, newest first; "Show all" past 10 events', async ($, on) => {
   seed(on, 'T-691', [{ ...BUG, history: LONG }, DEP])
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const events = [...LONG].reverse().map(historyEvent)
@@ -141,7 +141,7 @@ test('VS Code\'s History is one rail: each event\'s mark on it, no "│" rows, n
   }
   // newest first: the merge on top
   expect(textOf(rows[0])).toContain('merged into main')
-  // no "│" Text anywhere in the History
+  // no "│" Text anywhere in the Timeline
   const section = (await ui.find({ key: 'vs-sec-history' })) as Node
   expect(elements(section).filter(n => n.type === 'Text' && /│/.test(textOf(n)))).toEqual([])
   // Show all: every event; the oldest has no line below it
@@ -156,7 +156,7 @@ test('VS Code\'s History is one rail: each event\'s mark on it, no "│" rows, n
   await ui.unmount()
 })
 
-test('VS Code\'s History with 10 events or fewer has no "Show all", and its oldest event no line below it', async ($, on) => {
+test('VS Code\'s Timeline with 10 events or fewer has no "Show all", and its oldest event no line below it', async ($, on) => {
   seed(on, 'T-691', [BUG, DEP])
   const ui = await $.ui.mount({ ...PANE, surface: 'vscode' })
   const rows = kids((await ui.find({ key: 'vs-history' })) as Node)

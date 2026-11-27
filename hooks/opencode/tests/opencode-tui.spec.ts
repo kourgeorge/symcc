@@ -2140,9 +2140,9 @@ test('T-580: OpenCode\'s task page has the same sections as Claude Code\'s (core
   expect(parseViewFile(viewFileText(f))?.view.changes).toEqual(f.view.changes)
   const page = (id: string, report?: { file: string; text: string | null | undefined }) => panelLines(f, { opened: id, cursor: 0, ...(report ? { taskReport: report } : {}) }, NOW, 100)
   const heads = (id: string) => page(id).lines.map(lineText).filter(l => l.startsWith('▍'))
-  expect(heads('T-2')).toEqual(['▍Details', '▍Changes (1 file, against main)', '▍What to do', '▍History (2, newest first)', '▍Runs   2 tries · 0s', '▍Report · try 2 · worker'])
-  expect(heads('T-4')).toEqual(['▍Why it failed', '▍Details', '▍What to do', '▍History (2, newest first)', '▍Runs   2 tries · 0s', '▍Report · try 2 · worker'])
-  expect(heads('T-5')).toEqual(['▍Details', '▍What to do', '▍History (1, newest first)'])
+  expect(heads('T-2')).toEqual(['▍Details', '▍Changes (1 file, against main)', '▍What to do', '▍Timeline (2, newest first)', '▍Runs   2 tries · 0s', '▍Report · try 2 · worker'])
+  expect(heads('T-4')).toEqual(['▍Why it failed', '▍Details', '▍What to do', '▍Timeline (2, newest first)', '▍Runs   2 tries · 0s', '▍Report · try 2 · worker'])
+  expect(heads('T-5')).toEqual(['▍Details', '▍What to do', '▍Timeline (1, newest first)'])
   // each section's lines are the shared model's, in order
   const report = { file: '.symcc/reports/T-2-try-2.md', text: 'Fixed it.\n\nAll tests pass.' }
   const t2 = f.view.tasks.find(t => t.id === 'T-2')!
@@ -2626,7 +2626,7 @@ test('T-627: a long task page scrolls by drawn lines under its fixed title and b
   expect(title.some(l => l.startsWith('[Approve]'))).toBe(true)
   expect(title.at(-1)).toMatch(/^─+$/)
   expect(title.join(' ')).toContain('onto a second line here')
-  expect(text.slice(all.fixed).some(l => l.includes('▍History'))).toBe(true)
+  expect(text.slice(all.fixed).some(l => l.includes('▍Timeline'))).toBe(true)
   // the long history and report lines are broken into rows the panel's width, keeping every word in order
   expect(text.join(' ').replace(/\s+/g, ' ')).toContain('report line 1 is a long one that says a lot about what was done, so it has to wrap in a narrow panel')
   const firstTitle = title.findIndex(l => l.startsWith('T-2'))
@@ -3544,7 +3544,7 @@ test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at 
     // T-1177: the track ends at the right edge, no "ago" on the first line; "merged 3m ago" starts the second
     if (w === 120) {
       expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓$/)
-      expect(texts[at]!.length).toBe(w)
+      expect(texts[at]!.length).toBe(w - 3)
       expect(texts[at + 1]!).toMatch(/^ +merged 3m ago · try 1\//)
     }
     const lane = d.lines[at]!

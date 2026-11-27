@@ -824,7 +824,7 @@ function TaskHistory({ task }: { task: PanelTask }) {
   return (
     <details className="report">
       <summary>
-        History <span className="count">{task.historyCount ?? lines.length}</span>
+        Timeline <span className="count">{task.historyCount ?? lines.length}</span>
       </summary>
       <ol className="history">
         {lines.map((h, i) => (

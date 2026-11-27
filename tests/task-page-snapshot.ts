@@ -408,7 +408,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -1211,7 +1211,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -1980,7 +1980,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -2820,7 +2820,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -3601,7 +3601,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -4392,7 +4392,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -5093,7 +5093,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -5636,7 +5636,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -6147,7 +6147,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -6950,7 +6950,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -9466,7 +9466,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -10169,7 +10169,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -10847,7 +10847,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -11564,7 +11564,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -12467,7 +12467,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -13412,7 +13412,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -14153,7 +14153,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion","weight":"semibold"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [
@@ -14942,7 +14942,7 @@ export const TASK_BEFORE: Record<string, unknown> = {
         "type": "Box",
         "props": {"flexDirection":"column"},
         "children": [
-          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","History (2, newest first)"]},
+          {"type":"Text","props":{"bold":true,"color":"suggestion"},"children":["▍","Timeline (2, newest first)"]},
           {
             "type": "Text",
             "children": [

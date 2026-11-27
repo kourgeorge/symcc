@@ -45,10 +45,10 @@ test('T-580: a todo task shows Details and What to do (its details, headings and
   expect(detailsLines('- ' + 'word '.repeat(30), 30).every(l => l.segs.map(g => g.text).join('').length <= 30)).toBe(true)
 })
 
-test('T-580: a doing task shows its History (newest first, as a timeline), its Report "reading" until read, and its Runs', () => {
+test('T-580: a doing task shows its Timeline (newest first, as a timeline), its Report "reading" until read, and its Runs', () => {
   const t = task('doing', { attempts: 1, history: hist('try 1: started'), runs: [run(R1, false)] })
   const s = taskSections(t, facts())
-  expect(titles(s)).toEqual(['Details', 'What to do', 'History (1, newest first)', 'Runs   1 try · 10m', 'Report · try 1 · worker'])
+  expect(titles(s)).toEqual(['Details', 'What to do', 'Timeline (1, newest first)', 'Runs   1 try · 10m', 'Report · try 1 · worker'])
   expect(text(sec(s, 'report'))).toEqual([`  ${R1}`, '  (reading the report…)'])
   expect(text(sec(s, 'runs'))[0]).toContain('(running)')
   expect(text(sec(s, 'runs')).at(-1)).toMatch(/^ {2}total: /)

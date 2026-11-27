@@ -1,5 +1,5 @@
 // The task page's sections (T-580), as plain data: what the Claude Code terminal's task page shows under its title and
-// buttons, in its order and with its headings: ▍Done (T-1080, what the whole task has done so far), ▍Why it failed, ▍Answer, ▍Details, ▍Branch (T-761), ▍Changes, ▍What to do, ▍History,
+// buttons, in its order and with its headings: ▍Done (T-1080, what the whole task has done so far), ▍Why it failed, ▍Answer, ▍Details, ▍Branch (T-761), ▍Changes, ▍What to do, ▍Timeline,
 // ▍Runs (time and cost, with a one-line sum) and ▍Report (T-1104: the report of the agent picked in ▍Runs, worker or checker). Each section is lines of colored pieces (Seg), some with what a press or click on
 // them does (a changed file opens its diff). The terminal (hooks/claude/ui/task-page.tsx) and OpenCode's panel
 // (hooks/opencode/board-view.ts) draw them; VS Code's card (vscode-task.tsx) takes their contents but keeps its own
@@ -242,7 +242,7 @@ export function taskSections(t: SymccTask, f: TaskSectionFacts): TaskSection[] {
     })
   }
   out.push({ id: 'what', title: 'What to do', lines: t.details.trim() ? detailsLines(t.details.trimEnd(), width) : [plainLine('(no details)', 'inactive')] })
-  if (t.history.length) out.push({ id: 'history', title: `History (${t.history.length}, newest first)`, lines: historyLines(t, width, f.nowMs) })
+  if (t.history.length) out.push({ id: 'history', title: `Timeline (${t.history.length}, newest first)`, lines: historyLines(t, width, f.nowMs) })
   // T-1104: one Report section for the agent picked in Runs (its heading says whose report and which try)
   const shown = resolveReport(t, f.shown)
   const summary = t.runs?.length ? runsSummary(t.runs, f.nowMs, usualTokens(f.detail.all)) : ''

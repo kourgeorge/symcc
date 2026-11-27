@@ -90,7 +90,8 @@
   // (T-1177) the track ends at the right edge of the panel (64 columns); the title takes all the room before it
   const TRACK_W = LABELS.length + (LABELS.length - 1) * GAP
   const PANEL_W = 64
-  const TITLE_W = PANEL_W - 1 - (2 + ID_W + 1) - 2 - TRACK_W
+  // (T-1193) the last 3 columns stay blank, so "done" starts over its mark
+  const TITLE_W = PANEL_W - 1 - 3 -(2 + ID_W + 1) - 2 - TRACK_W
   // T-767: the lines under a ▍heading start with 1 space; a running lane then "▶ " and its id in the accent ('run' tone), its title normal text
   const LEAD_W = 1 + 2 + ID_W + 1 + TITLE_W + 2
 
@@ -187,8 +188,8 @@
     L.push(liveHead('Tasks'), '')
     if (s.lanes.length) {
       // the ✧ after work and check in the accent color (core/live.ts's 'mark' tone)
-      // the last name ("done") ends at the right edge: it starts 3 columns before its mark
-      L.push((' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 2 ? pad(x, GAP + 1) : i === LABELS.length - 2 ? pad(x, GAP - 2) : x)).join('')).split('✧').map(x => sp(x, 'dim')).join(sp('✧', 'mark')))
+      // every name, "done" too, starts over its mark (the track ends 3 columns before the edge)
+      L.push((' '.repeat(LEAD_W) + LABELS.map((x, i) => (i < LABELS.length - 1 ? pad(x, GAP + 1) : x)).join('')).split('✧').map(x => sp(x, 'dim')).join(sp('✧', 'mark')))
       // T-771: the running lanes on top, then the just-merged ones (kept 10 minutes, at most 3, newest first)
       const kept = s.lanes.filter(l => l.done && s.now - l.done < 10 * 60).sort((a, b) => b.done - a.done).slice(0, 3)
       for (const l of [...s.lanes.filter(l => !l.done), ...kept]) L.push(...laneLines(s, l))
@@ -280,7 +281,7 @@
     row('Files', 'hooks/app/checker.ts, hooks/app/workers.ts, tests/', 'file')
     row('Into', 'merges into: main', 'text')
     L.push('')
-    L.push(heading(`History (${s.t740.length}, newest first)`))
+    L.push(heading(`Timeline (${s.t740.length}, newest first)`))
     for (const [t, text] of [...s.t740].reverse()) {
       const tone = /found problems/.test(text) ? 'warning' : /passed|merged/.test(text) ? 'passed' : 'text'
       L.push('   ' + sp(t, 'dim') + '  ' + sp(text, tone))

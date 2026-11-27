@@ -121,7 +121,7 @@ function section(tree: unknown, head: string): unknown[] {
 test('the terminal task page draws the history as a timeline, newest first, with a connector line between events', async ($, on) => {
   seed(on)
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const lines = section(await ui.drawn(), 'History').slice(1).map(textOf)
+  const lines = section(await ui.drawn(), 'Timeline').slice(1).map(textOf)
   await ui.unmount()
   // newest first: the checker's OK, waits changed, the note, the failed try, created; a "│" line between each
   const firsts = lines.filter(l => /^[✓✗●○] /.test(l))
@@ -148,7 +148,7 @@ test('the VS Code task page uses the same kinds and marks, on one rail with no "
   expect(marks).toEqual([...HISTORY].reverse().map(l => old(l).mark))
   expect(marks).toEqual(['✓', '○', '○', '✗', '○'])
   // the line of the rail is a Box beside each event (all but the oldest), never a "│" text
-  expect(textOf(section(await ui.drawn(), 'History'))).not.toContain('│')
+  expect(textOf(section(await ui.drawn(), 'Timeline'))).not.toContain('│')
   const lines: boolean[] = []
   for (let i = 0; i < HISTORY.length; i++) lines.push(!!(await ui.find({ key: `vs-history-${i}` }))?.children?.flat(9).some(c => c && typeof c === 'object' && ((c as Node).children ?? []).flat(9).some(d => d && typeof d === 'object' && (d as Node).type === 'Box')))
   expect(lines).toEqual([true, true, true, true, false])
@@ -164,13 +164,13 @@ test('both task pages show when each entry happened, beside its mark; an entry w
   on('ui.toast', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  const firsts = section(await ui.drawn(), 'History').slice(1).map(textOf).filter(l => /^[✓✗●○] /.test(l))
+  const firsts = section(await ui.drawn(), 'Timeline').slice(1).map(textOf).filter(l => /^[✓✗●○] /.test(l))
   await ui.unmount()
   expect(firsts).toEqual(['○ lead: the lead added a note: “old”', `✓ ${historyTime(today, T0)} checker: OK`, `○ ${historyTime(older, T0)} created by the owner because x`])
   expect(historyTime(today, T0)).toMatch(/^\d\d:\d\d$/)
   expect(historyTime(older, T0)).toMatch(/^Nov \d+ \d\d:\d\d$/)
   const vs = await $.ui.mount({ ...PANE, surface: 'vscode' })
-  const body = textOf(section(await vs.drawn(), 'History'))
+  const body = textOf(section(await vs.drawn(), 'Timeline'))
   await vs.unmount()
   expect(body).toContain(`${historyTime(today, T0)} · checker`)
   expect(body).toContain(`${historyTime(older, T0)}created by the owner`)

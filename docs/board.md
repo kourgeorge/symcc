@@ -328,7 +328,7 @@ request, more time), its question box is the first thing under the header, above
 section, on every board. The number keys pick a choice as before.
 
 Further down, ▍Runs comes right above ▍Report, the last section (you pick a report in Runs, so Runs
-comes first; the order is ▍What to do, ▍History, ▍Runs, ▍Report). ▍Report is one section for whichever agent's report you picked in ▍Runs (T-1104):
+comes first; the order is ▍What to do, ▍Timeline, ▍Runs, ▍Report). ▍Report is one section for whichever agent's report you picked in ▍Runs (T-1104):
 its heading says exactly whose and which try, `▍Report · try 3 · worker af4…74a` or
 `▍Report · try 1 · checker a6f…53d` (`▍Report · try 2 · worker` when no agent id is known). The page
 opens on the latest try's worker report. The try keys, `1`-`9`, show that try's worker report and
@@ -479,7 +479,7 @@ words as bold headings with the same spacing):
   `✧ = an agent works here (needs an agent slot) · ⌀ = tokens`; queue and tests use none, so there can be more lanes than
   `max_parallel`. It never sits under the task rows. When the page is shorter than the screen (the panel in VS Code), the
   empty room goes between the content and the footer. On a narrow screen the legend is cut at spaces onto more lines, never wider than the screen, still under the key line.
-- The track ends at the right edge of the section, the same column for every lane, so the tracks line up (T-1177). A lane's first line has nothing after the track; the title gets all the room between the id and the track (cut with `…` only when it does not fit). The station names stay over their marks; the last one, `done`, ends at the edge, starting a few columns before its mark.
+- The track ends at the same column for every lane, 3 columns before the right edge of the section (T-1193), so the tracks line up. A lane's first line has 3 blank columns after the track; the title gets all the room between the id and the track (cut with `…` only when it does not fit). Every station name starts over its mark, `done` too: it ends at the right edge and is never cut. On very narrow screens the 3 blank columns go only after the title is gone.
 - In VS Code (T-1003, T-1017) a running lane is three lines: the mark, the id (a link) and the full title (cut with `…` only when
   the panel is too narrow), then, indented under the title, the train and the time at the right (`try 2 · 12m`; "try"
   only from the second try), then a dim numbers line (the same text as the terminal's second row below, with the task
@@ -667,7 +667,7 @@ words as bold headings with the same spacing):
 Every task records who made it, why, and the words that started it.
 
 Open the board with `/symcc`, or one task with `/symcc-task T-3`. The `from:` line says, for
-example, `from: owner — “add a search command…”` or `from: scout bugs`. The history lists each try.
+example, `from: owner — “add a search command…”` or `from: scout bugs`. The timeline lists each try.
 
 Every merge commit starts with the task ID. So `git log --grep "T-3"` finds the work for a
 task, and the ID on a commit takes you back to the task and your request.
@@ -677,7 +677,7 @@ task, and the ID on a commit takes you back to the task and your request.
 - **The git commit.** Each try's commit starts with the task ID (`T-3: ...`) and ends with
   trailers: `Symcc-Task`, `Symcc-From` (who asked), `Symcc-Why` and `Symcc-Try`. Find them
   with `git log --grep "T-3"`.
-- **The task page** (`/symcc-task T-3`, or open it on the board): **History** has one short
+- **The task page** (`/symcc-task T-3`, or open it on the board): **Timeline** has one short
   line per event, each with when it happened ("10:42" today, "Nov 18 22:49" before), and a
   dim label for who wrote it: `worker symcc-T-3:`, `checker symcc-T-3-checker:` (the name the
   agent ran under), `lead:` or `you:`; symcc's own steps have none. For example what the
@@ -726,7 +726,7 @@ Two things listen today:
 
 - **The activity log**, `.symcc/events.jsonl`: every event as one JSON line, the last 5,000
   kept.
-- **The history**: each step a try goes into (prep, checker, queue, test, merge) gets a
+- **The timeline**: each step a try goes into (prep, checker, queue, test, merge) gets a
   line with its time, such as "try 1: checker started" or "try 1: waits in the merge queue
   (place 2)", so the task page shows the whole path. The outcome lines (checker OK, merged,
   failed, ...) are written as before. These stage lines are left out of the "Earlier tries"
