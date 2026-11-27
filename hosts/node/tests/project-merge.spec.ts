@@ -4,6 +4,7 @@
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, writeFile, readFile, rm, realpath, access } from 'node:fs/promises'
 import { runCommand, PLUGIN_ROOT } from '../host'
+import { registerProjects } from './register-projects'
 import { openSession, closeSession, leadTool } from '../session'
 import { claudeRunner } from '../../../hooks/process/claude-runner'
 import { nodeProcessSystem } from '../system'
@@ -32,6 +33,7 @@ test('T-1153: a client task is tested with client\'s command and merged into cli
     const serverHead = (await git(`${board}/server`, 'rev-parse', 'HEAD')).stdout.trim()
     const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
     await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    await registerProjects(board)
     const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1153' })
     try {
       // the board's own test command would fail: only client's own one may run for a client task

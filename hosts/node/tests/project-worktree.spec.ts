@@ -2,6 +2,7 @@
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises'
 import { runCommand, PLUGIN_ROOT } from '../host'
+import { registerProjects } from './register-projects'
 import { openSession, closeSession, leadTool } from '../session'
 import { claudeRunner } from '../../../hooks/process/claude-runner'
 import { nodeProcessSystem } from '../system'
@@ -26,6 +27,7 @@ test('T-1152: a task with project client gets its copy as a worktree of client, 
     }
     const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
     await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    await registerProjects(board)
     const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1152' })
     try {
       const out = await leadTool(s, 'add', { title: 'Client work', details: 'Do it', files: ['client.txt'], project: 'client', why: 'test', origin_by: 'owner', request: 'test' })

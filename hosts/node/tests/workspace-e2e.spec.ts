@@ -4,6 +4,7 @@
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, writeFile, readFile, rm, realpath, access } from 'node:fs/promises'
 import { runCommand, PLUGIN_ROOT } from '../host'
+import { registerProjects } from './register-projects'
 
 const FAKE = `${PLUGIN_ROOT}/hosts/node/tests/fake-claude.sh`
 const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
@@ -25,6 +26,7 @@ test('T-1155: two projects below one board: each task runs, is tested with its o
     }
     const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, ...args], { cwd: board, env: { FAKE_LOG: log }, timeoutMs: 120_000 })
     await cli('cmd', 'symcc-init')
+    await registerProjects(board)
     // the board's own command would fail: each task may only run its project's command
     await cli('tool', 'settings', JSON.stringify({ test_commands: ['false'] }))
     await cli('tool', 'settings', JSON.stringify({ project: 'client', test_commands: ['test -f hello.txt && test -f client.txt'] }))
@@ -77,6 +79,7 @@ test('T-1182: tasks with no project on a workspace board: an investigation and a
     const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, ...args], { cwd: board, env: { FAKE_LOG: log }, timeoutMs: 120_000 })
     const add = (input: Record<string, unknown>) => cli('tool', 'add', JSON.stringify({ details: 'Do it', why: 'test', origin_by: 'owner', request: 'test', ...input }))
     await cli('cmd', 'symcc-init')
+    await registerProjects(board)
     await cli('tool', 'settings', JSON.stringify({ project: 'client', test_commands: ['test -f hello.txt'] }))
     // a change task with no project is refused, and the reason names the projects
     const refused = await add({ title: 'Loose change', files: ['hello.txt'] })
@@ -143,6 +146,7 @@ test('T-1182: an investigation given a project after its plain try: keep as a no
     const add = (input: Record<string, unknown>) => cli('tool', 'add', JSON.stringify({ details: 'Do it', why: 'test', origin_by: 'owner', request: 'test', ...input }))
     const status = async (id: string) => (JSON.parse(await readFile(`${board}/.symcc/board.json`, 'utf8')) as { tasks: { id: string; status: string }[] }).tasks.find(t => t.id === id)?.status
     await cli('cmd', 'symcc-init')
+    await registerProjects(board)
     await cli('tool', 'settings', JSON.stringify({ project: 'client', test_commands: ['test -f hello.txt'] }))
     for (const title of ['Look one', 'Look two']) expect((await add({ title, kind: 'investigation' })).stdout).toContain('added T-')
     await cli('tick')
@@ -184,6 +188,7 @@ test('T-1194: only a plain folder symcc marked is deleted; a folder with no .git
     const add = (input: Record<string, unknown>) => cli('tool', 'add', JSON.stringify({ details: 'Do it', why: 'test', origin_by: 'owner', request: 'test', ...input }))
     const status = async (id: string) => (JSON.parse(await readFile(`${board}/.symcc/board.json`, 'utf8')) as { tasks: { id: string; status: string }[] }).tasks.find(t => t.id === id)?.status
     await cli('cmd', 'symcc-init')
+    await registerProjects(board)
     await cli('tool', 'settings', JSON.stringify({ project: 'client', test_commands: ['test -f hello.txt'] }))
     for (const title of ['Look one', 'Look two']) expect((await add({ title, kind: 'investigation' })).stdout).toContain('added T-')
     await cli('tick')

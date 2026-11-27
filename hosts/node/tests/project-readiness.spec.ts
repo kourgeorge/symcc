@@ -4,6 +4,7 @@
 import { test, expect } from 'bun:test'
 import { mkdtemp, mkdir, writeFile, rm, realpath } from 'node:fs/promises'
 import { runCommand, PLUGIN_ROOT } from '../host'
+import { registerProjects } from './register-projects'
 import { openSession, closeSession, leadTool } from '../session'
 import { claudeRunner } from '../../../hooks/process/claude-runner'
 import { nodeProcessSystem } from '../system'
@@ -40,6 +41,7 @@ test('T-1154: readiness, Changes, Branch facts and the doctor look at each task\
     await git(`${board}/empty`, 'init', '-q', '-b', 'main')
     const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
     await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    await registerProjects(board)
     const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1154' })
     try {
       const add = (title: string, project?: string) => leadTool(s, 'add', { title, details: 'Do it', files: ['x.txt'], ...(project ? { project } : {}), why: 'test', origin_by: 'owner', request: 'test' })
@@ -118,6 +120,7 @@ test('T-1165: workspace git checks count only open, real tasks and never touch t
     await git(`${board}/empty`, 'init', '-q', '-b', 'main')
     const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
     await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    await registerProjects(board)
     const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1165' })
     try {
       const add = (title: string, project?: string) => leadTool(s, 'add', { title, details: 'Do it', files: ['x.txt'], ...(project ? { project } : {}), why: 'test', origin_by: 'owner', request: 'test' })
@@ -171,6 +174,7 @@ test('T-1168: a backlog task keeps no project repo checked', async () => {
     await git(`${board}/empty`, 'init', '-q', '-b', 'main')
     const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
     await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    await registerProjects(board)
     const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1168' })
     try {
       const add = (title: string, project?: string) => leadTool(s, 'add', { title, details: 'Do it', files: ['x.txt'], ...(project ? { project } : {}), why: 'test', origin_by: 'owner', request: 'test' })
@@ -208,6 +212,7 @@ test('T-1178: a no-project todo task does not stop a project task from starting'
     await git(`${board}/client`, 'commit', '-qm', 'init')
     const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
     await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    await registerProjects(board)
     process.env.FAKE_SLEEP = '600' // the fake worker waits, so the task stays doing
     const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1178' })
     try {
@@ -255,6 +260,7 @@ test('T-1179: cleanupMerged leaves an outer repo alone; run now names only its o
     await rm(`${outer}/gone`, { recursive: true, force: true })
     const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
     await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    await registerProjects(board)
     const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1179' })
     try {
       await oldLoose(s.host, 'Loose')
