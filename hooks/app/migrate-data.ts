@@ -3,7 +3,7 @@
 // backup of the data files and saves every file once in today's shape. migrateIfOld does the same on its own (at session
 // start, before every board save and in the hourly archive step) when it finds old data, with at most one backup an hour;
 // old data that comes back soon after a migration means an older symcc copy writes to the board, and the owner is told (T-886).
-import { isProjectName, readBoardValue } from '../core/board-file'
+import { DATA_VERSION, isProjectName, readBoardValue } from '../core/board-file'
 import { archiveChunkFile, PARTS_DIR } from '../core/board-parts'
 import { orgMemFile } from '../core/org-mem'
 import { reportText } from '../core/reports'
@@ -58,6 +58,33 @@ async function repoFolders(host: Host): Promise<string[]> {
   return found.sort()
 }
 
+/** T-1202: the data shape number in board.json (the old `version: 1` counts as 1); null when the file is missing, unreadable or has none. Never throws. */
+export async function boardDataVersion(host: Host): Promise<number | null> {
+  const raw = jsonOf(await host.fs.read(path(S.N.boardFile)).catch(() => null))
+  if (!isObj(raw)) return null
+  if (typeof raw.data_version === 'number') return raw.data_version
+  return raw.version === 1 ? 1 : null
+}
+
+let toldNewer = 0
+
+/**
+ * T-1202: when board.json's data shape is newer than this symcc knows, the board is read-only here: sets S.newerData, tells
+ * the owner and the lead once, and answers the message (the caller must not write); '' when the data is not newer.
+ */
+export async function newerDataText(host: Host): Promise<string> {
+  const v = await boardDataVersion(host)
+  if (v === null || v <= DATA_VERSION) return (S.newerData = 0), ''
+  S.newerData = v
+  const msg = `This board's data is newer than this symcc (shape ${v}, this window knows ${DATA_VERSION}). Update symcc (claude plugin update symcc@symcc) and reload.`
+  if (toldNewer !== v) {
+    toldNewer = v
+    host.ui.toast(S.N.toast(msg))
+    tellLead(host, msg)
+  }
+  return msg
+}
+
 /** Everything the count reads (read-only). */
 async function oldInput(host: Host, all = true): Promise<OldInput> {
   if (!all) return { board: await boardForCount(host), archive: [], scouts: null, withRuns: new Set<string>(), fieldGuide: false, orgMem: false, repoFolders: await repoFolders(host), root: S.root }
@@ -100,6 +127,8 @@ export async function migrateIfOld(host: Host, all = true): Promise<string> {
   backupOfThisTry = undefined
   try {
     if (S.guardOnly || !S.root) return ''
+    const newer = await newerDataText(host)
+    if (newer) return newer
     const input = await oldInput(host, all)
     if (!oldDataRows(input).some(r => r.fix)) return ''
     // A migration that failed once is not tried again until the data files change (or the owner runs the doctor's fix).
@@ -177,6 +206,8 @@ export function forgetMigrationFailure(): void {
   toldFailure = ''
   migratedAt = 0
   toldOlderCopy = false
+  toldNewer = 0
+  S.newerData = 0
 }
 
 /** An automatic migration reuses a backup folder younger than this (T-886). */

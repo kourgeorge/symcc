@@ -5,7 +5,7 @@
 import type { SymccTimelineEntry, SymccRun } from '../../types'
 import { type FailReason, type TimelineFacts, type TimelineKind, AFTER_CHANGED, timelineEntryOk, isTimelineKind, onPurposeStop, tryParts, withTimeline } from './timeline'
 import { addTokens, cleanTokens, isAgentId, sumTokens, tokenCount } from './runs'
-import { isPriority, isSoundSet, soundNotify, soundSetFor } from './board-file'
+import { DATA_VERSION, isPriority, isSoundSet, soundNotify, soundSetFor } from './board-file'
 import { parseGoneBranch } from './git-setup'
 import { countFindings, isNothing } from './scouts'
 import type { ScoutRunOutcome, ScoutRunRecord } from './scouts'
@@ -503,6 +503,9 @@ export function upgradeBoard(raw: unknown, root: string, repoFolders: readonly s
   if (projects) out.projects = projects
   if (out.notify === 'sound') out.notify = soundNotify(isSoundSet(out.sound_set) ? out.sound_set : soundSetFor(root))
   delete out.sound_set
+  // T-1202: the shape number: the old fixed `version: 1` becomes data_version (a number already at or above today's stays)
+  delete out.version
+  if (!(isNum(raw.data_version) && raw.data_version >= DATA_VERSION)) out.data_version = DATA_VERSION
   if (out.mode === 'off') out.mode = 'paused'
   const into = typeof raw.target_branch === 'string' && raw.target_branch.trim() ? raw.target_branch.trim() : 'main'
   delete out.target_branch
@@ -675,6 +678,8 @@ export function oldDataRows(i: OldInput): OldRow[] {
   const used = (Array.isArray(b.tasks) && b.tasks.length > 0) || (isNum(b.next_id) && b.next_id > 1)
   const hasPath = isObj(b.projects) && Object.values(b.projects).some(e => isObj(e) && typeof e.path === 'string')
   const moveFolders = isObj(i.board) && used && !hasPath ? (i.repoFolders ?? []).length : 0
+  // T-1202: a board file with the old fixed `version`, or a shape number below today's
+  const shape = isObj(i.board) && ('version' in b || (isNum(b.data_version) && b.data_version < DATA_VERSION)) ? 1 : 0
   const rows: OldRow[] = [
     { n: c.unsplit, text: 'tries with `unsplit` tokens (counts saved before the kinds were kept apart; shown as they are)', fix: false },
     { n: c.numTok, text: 'tries with tokens saved as one number', fix: true },
@@ -704,6 +709,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: lastReport, text: 'scouts whose last report is not yet in a runs file', fix: true },
     { n: unsafe.length, text: `scouts whose name can't be a file name; rename them (${unsafe.join(', ')})`, fix: false },
     { n: i.fieldGuide && !i.orgMem ? 1 : 0, text: 'field-guide.md not yet moved to org-mem.md', fix: true },
+    { n: shape, text: 'board files saved with an old data shape number (version instead of data_version)', fix: true },
     { n: moveFolders, text: 'project folders below the board with no path in the project table', fix: true },
   ]
   return rows.filter(r => r.n > 0)

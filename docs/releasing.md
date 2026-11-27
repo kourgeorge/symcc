@@ -32,7 +32,10 @@ to date. `sh scripts/typecheck.sh` prints the first as a note.
 
 1. Run `sh scripts/build-editor.sh --check` and `sh scripts/build-copilot.sh --check`. If one says "out of date", run
    it without `--check` and commit what it wrote.
-2. Bump the version in `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, and add an entry to
+2. If the release changes the data shape (new or renamed fields in `board.json` and the like), raise `DATA_VERSION`
+   in `hooks/core/board-file.ts` and add the matching step to `hooks/core/old-data.ts`. An older symcc then sees the
+   higher `data_version` in the file and refuses to write over it.
+3. Bump the version in `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, and add an entry to
    `CHANGELOG.md`.
 3. Merge to `main`. People update with their harness:
    - Claude Code: `claude plugin marketplace update symcc && claude plugin update symcc@symcc`

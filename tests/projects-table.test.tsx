@@ -11,6 +11,7 @@ import { taskBranchFacts, taskBranchesView } from '../hooks/app/branches'
 import { mergedChanges, gitDiff } from '../hooks/app/review'
 import { projectNames, repoOf, projectGone, taskGitReady, projectNotes, openProjects, cleanupMerged } from '../hooks/app/git'
 import { emptyBoard, find } from '../hooks/board'
+import { DATA_VERSION } from '../hooks/core/board-file'
 import { oldDataRows, upgradeBoard, withProjectPaths } from '../hooks/core/old-data'
 import { fakeHost, memoryFs, done } from './fake-host'
 
@@ -72,7 +73,7 @@ test('the one-time move writes <root>/<name> for repo folders below the board, a
   // a fresh board (no tasks) is not old data
   expect(oldDataRows(input(['client'], { ...raw2, tasks: [] })).find(r => r.text.startsWith('project folders'))).toBe(undefined)
   // a board that is its own repo has no repo folders: nothing is written
-  expect(upgradeBoard({ version: 1 }, '/ws', [])).toEqual({ version: 1 })
+  expect(upgradeBoard({ version: 1 }, '/ws', [])).toEqual({ data_version: DATA_VERSION })
   expect(oldDataRows(input([], { version: 1, tasks: [] })).find(r => r.text.startsWith('project folders'))).toBe(undefined)
 })
 

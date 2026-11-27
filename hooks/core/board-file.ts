@@ -33,8 +33,17 @@ export const docsTestCommandsOf = (b: { docs_test_commands?: string[]; projects?
   return own?.length ? own : (b.docs_test_commands ?? [])
 }
 
+/**
+ * T-1202: the number of the data shape this symcc writes (board.json's `data_version`). Raise it in any release that
+ * changes the data shape (a new or renamed field, anything an older copy would drop or misread when it saves), together
+ * with a step in core/old-data.ts that moves old data. The move writes it; a normal save keeps the number it read; a
+ * symcc that finds a higher number in the file does not write (it is older than the data). Shape 1 is the board's old
+ * `version: 1`; 2 is the shape after the history -> timeline move (T-1192).
+ */
+export const DATA_VERSION = 2
+
 export type Board = {
-  version: 1
+  data_version: number
   next_id: number
   /** paused: nothing runs; review: work runs and finished work waits for the owner; auto (the default): finished work that passes merges on its own */
   mode: SymccMode
@@ -384,7 +393,7 @@ export const DEFAULT_ARCHIVE_DAYS = 14
 
 /** A new board. There is no board-wide branch: each task merges into the branch it was made on (see intoOf). */
 export function emptyBoard(): Board {
-  return { version: 1, next_id: 1, mode: 'auto', test_commands: [], max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, enabled: true, archive_days: DEFAULT_ARCHIVE_DAYS, tasks: [] }
+  return { data_version: DATA_VERSION, next_id: 1, mode: 'auto', test_commands: [], max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, enabled: true, archive_days: DEFAULT_ARCHIVE_DAYS, tasks: [] }
 }
 
 /** What reading board.json found: the board, and what was wrong with the file (if anything). */
@@ -402,7 +411,7 @@ const STATUSES: SymccStatus[] = ['backlog', 'todo', 'doing', 'paused', 'waiting'
 
 
 /** Each setting with the test its value must pass; a value that fails is replaced by the default. */
-const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' | 'archived' | 'archived_done' | 'questions' | 'next_question'>]: (v: unknown) => boolean } = {
+const SETTING_OK: { [K in Exclude<keyof Board, 'data_version' | 'tasks' | 'next_id' | 'archived' | 'archived_done' | 'questions' | 'next_question'>]: (v: unknown) => boolean } = {
   mode: v => isMode(v),
   test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),
   docs_test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),
@@ -546,6 +555,9 @@ export function readBoardValue(raw: unknown): BoardRead {
   if (!isObj(raw)) return { board: emptyBoard(), broken: 'it is not a board (the file holds no JSON object)', skipped: 0, fixed: [] }
   if ('tasks' in raw && !Array.isArray(raw.tasks)) return { board: emptyBoard(), broken: '"tasks" is not a list', skipped: 0, fixed: [] }
   const board = emptyBoard()
+  // the file's own shape number (an old `version: 1` is shape 1); a file with neither is taken as today's
+  if (isNum(raw.data_version) && Number.isInteger(raw.data_version) && raw.data_version >= 1) board.data_version = raw.data_version
+  else if (raw.version === 1) board.data_version = 1
   const fixed: string[] = []
   for (const k of Object.keys(SETTING_OK) as (keyof typeof SETTING_OK)[]) {
     if (!(k in raw)) continue // a setting not in the file: the default, nothing to report

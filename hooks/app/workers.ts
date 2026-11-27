@@ -110,6 +110,7 @@ export async function pump(host: Host) {
   if (!S.startupDone) return // session.start hasn't finished; it pumps itself at its end
   if (!S.driving) return // another session drives the board and starts its work
   if (inPlan(S.plan)) return // plan mode: nothing starts; workers already running keep going
+  if (S.newerData) return // T-1202: the board's data is newer than this symcc: read-only, nothing starts
   const b = await load(host)
   if (modeOf(b) === 'paused' || !onHere(b)) return
   if (!ready(b).length) return
