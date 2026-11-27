@@ -25,14 +25,15 @@ It works in Claude Code, OpenCode, GitHub Copilot CLI, and VS Code or Cursor.
 
 You need **git** and one of these programs:
 
-| Program | Install |
-|---|---|
-| Claude Code | `claude plugin install symcc --marketplace kourgeorge/symcc` |
-| OpenCode 2.3+ | `opencode plugin add github:kourgeorge/symcc` |
-| Copilot CLI | `copilot plugin marketplace add kourgeorge/symcc` then `copilot plugin install symcc@symcc` (start it with `copilot --experimental`) |
-| VS Code or Cursor | Install symcc with one of the above, then the **symcc** extension (`code --install-extension kourgeorge.symcc`) |
+| Program | Install | Full steps |
+|---|---|---|
+| Claude Code (terminal) | `claude plugin install symcc --marketplace kourgeorge/symcc` | [Claude Code](https://kourgeorge.github.io/symcc/clients.html#install-in-claude-code) |
+| Claude Code in VS Code | the same command, then `/symcc-init` in the Claude Code extension's panel (no symcc extension needed) | [Claude Code in VS Code](https://kourgeorge.github.io/symcc/clients.html#install-in-claude-code-in-vs-code) |
+| OpenCode 2.3+ | `opencode plugin add github:kourgeorge/symcc` | [OpenCode](https://kourgeorge.github.io/symcc/clients.html#install-in-opencode) |
+| Copilot CLI | `copilot plugin marketplace add kourgeorge/symcc` then `copilot plugin install symcc@symcc` (start it with `copilot --experimental`) | [Copilot CLI](https://kourgeorge.github.io/symcc/clients.html#install-in-copilot-cli) |
+| VS Code or Cursor, symcc extension (Cursor's or Copilot's agents) | Not in the Marketplace yet: install symcc with one of the above, then build the extension from a clone | [symcc extension](https://kourgeorge.github.io/symcc/clients.html#install-the-symcc-extension-in-vs-code-or-cursor) |
 
-Other ways to install, and fixes, are in [Get started](https://kourgeorge.github.io/symcc/get-started.html) and [Clients](https://kourgeorge.github.io/symcc/clients.html).
+Each link has what you need first, the commands, how to start and update, and common trouble.
 
 ## Your first task
 
