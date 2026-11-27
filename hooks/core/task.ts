@@ -7,8 +7,15 @@ import { createdLine, makeOrigin, type OriginInput } from './origin'
 import { endRun, keepAgentIds } from './runs'
 import { clean, num, shownPath } from './text'
 
-/** The most a task's details may hold (addTask and patchTask cut the rest). */
+/** The most a task's details may hold (add and change refuse longer text; addTask and patchTask cut only as a last safety). */
 export const DETAILS_MAX = 8000
+
+/** Why details of this length are refused (they are never cut silently); null when they fit. */
+export function detailsTooLong(length: number): string | null {
+  if (length <= DETAILS_MAX) return null
+  const n = (x: number) => x.toLocaleString('en-US')
+  return `Nothing changed: the details would be ${n(length)} characters; the limit is ${n(DETAILS_MAX)}. Shorten it, or put the long text in a file and name the file in the details.`
+}
 
 /** Whether `id` may stand in a task's `after`: on the board, or archived as done (it then counts as done). */
 const knownDep = (b: Board, id: string) => !!find(b, id) || (b.archived_done ?? []).includes(id)
