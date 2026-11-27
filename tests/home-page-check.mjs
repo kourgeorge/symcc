@@ -13,6 +13,16 @@ const bad = m => fails.push(m)
 const page = readFileSync(join(out, 'index.html'), 'utf8')
 const has = (text, what) => { if (!page.includes(text)) bad(`home page: no ${what} (${text})`) }
 
+// (T-1174) the eyebrow line names every host and is centered like the title: its rule must not set a left-only margin
+has('<p class="eyebrow">Free and open source · for Claude Code, OpenCode, Copilot CLI and VS Code</p>', 'eyebrow text')
+{
+  const css = readFileSync(join(root, 'site', 'style.css'), 'utf8')
+  const rule = /\.home \.eyebrow\s*\{([^}]*)\}/.exec(css)?.[1] ?? ''
+  const m = /margin:\s*([^;]*)/.exec(rule)?.[1].trim()
+  if (!m || !/^0 auto$/.test(m)) bad(`style.css: .home .eyebrow margin is "${m}"; it must be "0 auto" so it sits centered in the hero like the title`)
+  if (/text-align\s*:\s*(left|start)|max-width/.test(rule)) bad('style.css: .home .eyebrow sets its own text-align or max-width')
+}
+
 // the hero demo, its tabs (radio buttons + labels, so they work without JS) and its script
 has('id="demo"', 'hero demo')
 for (const [id, label] of [['v-chat', 'Chat + board'], ['v-live', 'Live tab'], ['v-task', 'Task page'], ['v-scouts', 'Scouts']]) {
