@@ -232,3 +232,12 @@ test('Settings has no Prompts row, even with a .symcc/prompts/change.md file', a
   expect(await ui.find({ type: 'Text', text: /^Prompts/ })).toBeUndefined()
   await ui.unmount()
 })
+
+test('T-1155: a task with a project names it and says its files are relative to the repo; one without does not', () => {
+  setup()
+  const b = boardWith(['npm test'])
+  const t = { ...b.tasks[0]!, project: 'client' } as typeof b.tasks[0]
+  const p = WORKER_PROMPT(t, b, WT)
+  expect(p).toContain("The task's project is client: your folder is a copy of that repo, and the task's files are relative to it (`README.md`, not `client/README.md`).")
+  expect(WORKER_PROMPT(b.tasks[0]!, b, WT)).not.toContain("The task's project is")
+})

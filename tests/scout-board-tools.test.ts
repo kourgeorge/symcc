@@ -205,3 +205,10 @@ test("T-895: a scout's base prompt names the scouts tool (action list); a checke
   expect(SCOUT_BASE('symcc', tool)).not.toContain('scouts tool')
   expect(basePromptFor('scout', 'symcc', tool, { symccTools: false })).not.toContain('scouts tool')
 })
+
+test('T-1155: a scout on a workspace board is told the project folders; none on a one-repo board', () => {
+  const p = scoutPrompt({ scout: 'bugs', root: '/w', instructions: 'Find crashes.', open: [], name: 'symcc', projects: ['client', 'server'] })
+  expect(p).toContain('The project is in /w. That folder is not a repo itself')
+  expect(p).toContain('/w/client, /w/server')
+  expect(scoutPrompt({ scout: 'bugs', root: '/w', instructions: 'x', open: [], name: 'symcc' })).not.toContain('not a repo itself')
+})
