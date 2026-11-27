@@ -52,6 +52,8 @@ else {
   if (!llms.startsWith('# symcc\n')) bad('llms.txt does not start with "# symcc"')
   if (!/^> \S/m.test(llms)) bad('llms.txt has no "> " summary')
   if (/swarm/i.test(llms.split('## Docs')[0])) bad('llms.txt calls symcc a swarm')
+  // (T-1176) the summary names every host, as the home page's top line does
+  if (!/^> .*Claude Code, OpenCode, Copilot CLI and VS Code/m.test(llms)) bad('llms.txt summary does not name Claude Code, OpenCode, Copilot CLI and VS Code')
   for (const s of ['## Docs', '## Research notes']) if (!llms.includes(`\n${s}\n`)) bad(`llms.txt has no ${s} section`)
   const listed = [...llms.matchAll(/^- \[[^\]]+\]\(([^)]+)\)(: .+)?$/gm)]
   for (const m of listed) {

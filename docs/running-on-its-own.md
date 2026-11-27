@@ -26,7 +26,9 @@ branch. The task's files are relative to the repo (`README.md`, not `client/READ
 commands (settings tool: `project` plus `test_commands`); a project without its own uses the board's. Git readiness is
 checked per project, so a repo that is not ready holds back only its own tasks. A change that touches two repos is two
 tasks, linked with `after`. The prompts of workers and checkers name the task's project, and scouts are told the list of
-project folders, because the board folder is not a repo. To start, ask the lead: "add this to client".
+project folders, because the board folder is not a repo. A task with no project can't start on such a board yet (even an answer to read or an errand): it waits, and
+only it; the board notes which task it is ("T-12 has no project, so it can't start on a board over several repos; give it a
+project"), and the lead is told once. Give it a project (`symcc change project`) and it starts. To start, ask the lead: "add this to client".
 
 ### A folder without git
 
@@ -46,7 +48,7 @@ gets its own git worktree. It checks this when a session starts and before a wor
 - In the two cases below, git is there, so symcc looks again by itself every 2 minutes and
   when the board panel opens: a `git init` and a first commit made by hand clear the notice.
 - **No git repo, or no commits yet**: the board still works, and shows "No git repo here: symcc
-  needs git for task branches. No worker starts until it is set up." with a **Set up git** button. In a folder whose subfolders are their own git repos (a workspace), the banner says "This looks like a workspace of several repos; symcc can't run a board over several repos yet" instead, with no button.
+  needs git for task branches. No worker starts until it is set up." with a **Set up git** button. A folder whose subfolders are their own git repos (a workspace) is ready as it is: see "Projects" above.
   The lead asks you too; say yes, or press **g** in the board panel.
   Nothing starts until it's done. The setup:
   - runs `git init -b main` (skipped if a repo is already there);

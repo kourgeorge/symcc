@@ -314,7 +314,7 @@ export function llmsTxt(pages: Page[], root: string): string {
   const posts = pages.filter(p => p.src.startsWith('docs/blog/'))
   return `# symcc
 
-> symcc is an agent organization for coding agents, as a plugin for Claude Code and OpenCode. You talk to one lead, which plans the work and keeps a shared task board. Workers build the tasks in parallel, each in its own git worktree and branch, and may change only the files their task allows. Scouts look for bugs, missing tests and outdated parts on their own timers. One merge queue tests each finished task and merges it into main, and the lead asks the owner only for real decisions.
+> symcc is an agent organization for coding agents, for Claude Code, OpenCode, Copilot CLI and VS Code. You talk to one lead, which plans the work and keeps a shared task board. Workers build the tasks in parallel, each in its own git worktree and branch, and may change only the files their task allows. Scouts look for bugs, missing tests and outdated parts on their own timers. One merge queue tests each finished task and merges it into main, and the lead asks the owner only for real decisions.
 
 Each link below is a plain Markdown copy of a page on ${SITE}/.
 
