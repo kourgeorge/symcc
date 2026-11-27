@@ -118,9 +118,9 @@ export async function installStepOf($: Host): Promise<string> {
   return gitInstallStep(f)
 }
 
-/** T-1154: the projects (folders below the board) that unfinished tasks work in, sorted. */
+/** T-1154: the projects (folders below the board) that open tasks (not backlog, done or dropped) work in, sorted. */
 const isOpenTask = (t: { status?: unknown }) => !isFinished(t) && t.status !== 'backlog'
-export const openProjects = (b: Board): string[] => [...new Set(b.tasks.filter(t => !isFinished(t)).map(t => (t as { project?: string }).project).filter((p): p is string => !!p && isProjectName(p)))].sort()
+export const openProjects = (b: Board): string[] => [...new Set(b.tasks.filter(t => isOpenTask(t)).map(t => (t as { project?: string }).project).filter((p): p is string => !!p && isProjectName(p)))].sort()
 
 /** T-1154: what the last check found in the repo task `t` works in (the board's own repo when it has no project). */
 export const gitStateOfTask = (t?: object | null): GitState => {
