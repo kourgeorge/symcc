@@ -119,6 +119,7 @@ export async function installStepOf($: Host): Promise<string> {
 }
 
 /** T-1154: the projects (folders below the board) that unfinished tasks work in, sorted. */
+const isOpenTask = (t: { status?: unknown }) => !isFinished(t) && t.status !== 'backlog'
 export const openProjects = (b: Board): string[] => [...new Set(b.tasks.filter(t => !isFinished(t)).map(t => (t as { project?: string }).project).filter((p): p is string => !!p && isProjectName(p)))].sort()
 
 /** T-1154: what the last check found in the repo task `t` works in (the board's own repo when it has no project). */
@@ -149,14 +150,22 @@ export async function taskGitReady($: Host, b: Board, t: object | null | undefin
   return gitReady($, b, repo)
 }
 
+/** T-1165: forgets the repos of projects with no open (todo/doing/waiting/review/failed/paused) task: they no longer count. */
+function forgetClosedRepos(b: Board): void {
+  const open = new Set(b.tasks.filter(t => isOpenTask(t)).map(t => (t as { project?: string }).project).filter((p): p is string => !!p && isProjectName(p)).map(p => `${S.root}/${p}`))
+  for (const r of [...S.repoGit.keys()]) if (!open.has(r)) S.repoGit.delete(r)
+}
+
 /** T-1154: looks at the repo of each project that has open tasks (not the board's own). */
 export async function checkProjects($: Host, b: Board): Promise<void> {
+  forgetClosedRepos(b)
   if (S.gitState === 'no-git') return
   for (const p of openProjects(b)) await gitReady($, b, `${S.root}/${p}`).catch(() => false)
 }
 
 /** Looks at git again while it is not ready (the watchdog, the panel opening, the Check again button); when it just became ready, work starts. Returns a short answer. */
 export async function recheckGit($: Host): Promise<string> {
+  forgetClosedRepos(await load($))
   const was = allGitReady()
   const ok = await gitReady($)
   const b = await load($)
@@ -188,7 +197,7 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
   S.gitRoot = real
   // a task with no project still needs the board folder's own repo: only without such a task is the folder fine as it is
   const board = b ?? (await load($))
-  const loose = board.tasks.some(t => !isFinished(t) && !((t as { project?: string }).project && isProjectName((t as { project?: string }).project!)))
+  const loose = board.tasks.some(t => isOpenTask(t) && !((t as { project?: string }).project && isProjectName((t as { project?: string }).project!)))
   const s: GitState = real === 'no-repo' && !loose && (await projectNames($).catch(() => [] as string[])).length ? 'ok' : real
   if (s === 'no-git' && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => '')
   if (s !== 'no-git') S.gitInstall = ''
@@ -659,8 +668,10 @@ export async function cleanupMerged($: Host, b: Board) {
   }
   // T-1154: each repo a task works in (the board's, and each project's) is pruned and cleaned on its own
   const repoTasks = (repo: string) => b.tasks.filter(t => repoOf(t) === repo)
-  const repos = [...new Set(b.tasks.map(t => repoOf(t)))]
-  if (!repos.includes(S.root)) repos.push(S.root)
+  // T-1165: the board folder only when it is its own repo or an open task without a project works in it (never a parent repo)
+  const rootNeeded = S.gitRoot === 'ok' || b.tasks.some(t => isOpenTask(t) && repoOf(t) === S.root)
+  const repos = [...new Set(b.tasks.map(t => repoOf(t)))].filter(r => r !== S.root || rootNeeded)
+  if (!repos.includes(S.root) && rootNeeded) repos.push(S.root)
   for (const repo of repos) await git($, ['worktree', 'prune'], repo)
   let branches = 0
   // Each done task merged into its own branch: ask git per branch which work branches it holds.
