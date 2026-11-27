@@ -2,6 +2,22 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here. Before a release, rerun `bun scripts/site-stats.ts` and commit `docs/data/symcc-stats.json`: it feeds the "Built with symcc" numbers on the website.
 
+## 0.5.50 (2026-11-27)
+
+### Added
+- Agents' reports no longer wake the lead: they are muted and show a short "▸ agent report" line. Board updates carry the report where it is needed.
+- The lead gets a short digest of stuck or repeating work, at most every 2 hours.
+- Merges in different repos run side by side, with one merge line per repo.
+
+### Changed
+- On a board over several repos, a task with no project waits alone instead of stopping every task.
+- Live lanes: the track sits at the right edge, titles get more room, and "merged … ago" moves to the second line.
+- The install steps are clearer for each host.
+- The home page's top line is centered and names every host.
+
+### Fixed
+- Tests never play a sound.
+
 ## 0.5.49 (2026-11-27)
 
 ### Added
