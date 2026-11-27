@@ -4,7 +4,7 @@ import { type BoardTask, find, putTask, intoOf, isInvestigation, isSha, isTaskCo
 import { S } from './state'
 import { type Host } from '../host'
 import { load, change, now } from './store'
-import { git, gitReady, branchExists, taskBranch, worktreeDir, removeWorktree, deleteMergedBranch, repoOf } from './git'
+import { git, taskGitReady, gitStateOfTask, projectNotes, branchExists, taskBranch, worktreeDir, removeWorktree, deleteMergedBranch, repoOf } from './git'
 import { pump, checkingNow, mergingNow, CHECKING_TEXT, MERGING_TEXT } from './workers'
 import { stopWorker } from './board-mode'
 
@@ -99,7 +99,7 @@ export async function markMerged($: Host, id: string, by: string): Promise<strin
   if (isInvestigation(t)) throw new Error(`${t.id} is an investigation: it has nothing to merge`)
   if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id))
   if (checkingNow(t.id)) throw new Error(`${CHECKING_TEXT(t.id)}; try again when that ends`)
-  if (!(await gitReady($, b))) throw new Error(`${t.id} was not marked as merged: ${gitNote(S.gitState)}`)
+  if (!(await taskGitReady($, b, t))) throw new Error(`${t.id} was not marked as merged: ${gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`)
   const found = await findMerged($, t)
   const into = intoOf(t)
   const wasDoing = t.status === 'doing'

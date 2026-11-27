@@ -1,5 +1,5 @@
 import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, beatText, driverTimes, carriedText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, driveNoticeParts, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
-import { homeBranch } from './git'
+import { homeBranch, openProjects, projectNotes } from './git'
 import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, fitView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
 import { timed } from './slow-log'
@@ -482,6 +482,21 @@ export async function readTodayTeam(host: Host, scouts: readonly string[], nowMs
   return out.lead === undefined && out.scouts === undefined && out.scout_ms === undefined && out.usd === undefined ? undefined : out
 }
 
+/**
+ * T-1154: the branch line: the board repo's branch, then "project: branch" for each project that has open tasks and a
+ * repo that is ready ("main · client: dev"). Without projects it is the board repo's branch alone, as before.
+ */
+async function branchLine(host: Host, b: Board, own: string): Promise<string> {
+  const parts = own ? [own] : []
+  for (const p of openProjects(b)) {
+    const repo = `${S.root}/${p}`
+    if (S.repoGit.get(repo) && S.repoGit.get(repo) !== 'ok') continue
+    const br = await homeBranch(host, repo).catch(() => '')
+    if (br) parts.push(`${p}: ${br}`)
+  }
+  return parts.join(' · ')
+}
+
 export function publish(host: Host, b: Board) {
   return timed(host, 'publish', () => publishView(host, b))
 }
@@ -492,20 +507,22 @@ async function publishView(host: Host, b: Board) {
   const working = [...workers.values()].map(w => ({ task: w.task, since: w.since }))
   // Which branch the owner is on is looked at here, once per publish, not on every render.
   // (new tasks merge into it; a task that merges elsewhere shows "→ branch" in the list)
-  const branch = S.gitState === 'ok' ? await homeBranch(host) : ''
+  const own = S.gitState === 'ok' && S.gitRoot === 'ok' ? await homeBranch(host) : ''
+  const branch = await branchLine(host, b, own)
   // T-675: a data file close to the 4 MB read limit is warned about where the git warning goes (banner and status line)
   const size_note = [...sizeNotes.values()].join('; ')
-  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), size_note].filter(Boolean).join('; ')
+  const projectNote = projectNotes(openProjects(b)) // T-1154: a project whose repo is not ready holds back only its own tasks
+  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, size_note].filter(Boolean).join('; ')
   // The banner's facts ride along in the view (extra fields; SymccView itself is shared with other code).
   const can = await playable(host)
   // T-727: the Live tab's Branches figures: the last ones read (a stale read starts in the background, never waited for here)
-  const branches = branchFacts(host, b, branch || 'main').facts
+  const branches = branchFacts(host, b, own || 'main').facts
   // T-769: ▍Today's lead, scout and cost figures, the last ones read (a stale read starts in the background);
   // read on every host, not only those with a panel: OpenCode draws ▍Today from the published view.json
   const team = todayTeam(host, [...scoutState.keys()]).team
   // T-761: each task page's Branch section, read the same way (OpenCode's panel draws only what the view holds)
   const task_branches = taskBranchesView(host, b).facts
-  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s)), mode: modeOf(b), test_commands: b.test_commands, ...(b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}), home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify_now: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...(!S.driving && S.driver ? { driver: S.driver } : {}), ...(S.offHere ? { off_here: 'off' as const } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, ...(S.gitInstall ? { git_install: S.gitInstall } : {}), ...(S.gitWorkspace ? { git_workspace: S.gitWorkspace } : {}), plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
+  const v: PaneView = { tasks: b.tasks, working, scouts: [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s)), mode: modeOf(b), test_commands: b.test_commands, ...(b.projects && Object.keys(b.projects).length ? { projects: b.projects } : {}), ...(b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}), home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...(b.archived ? { archived: b.archived } : {}), ...(b.archived_done?.length ? { archived_done: b.archived_done } : {}), open_on_start: openOnStart(b), notify_now: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...(!S.driving && S.driver ? { driver: S.driver } : {}), ...(S.offHere ? { off_here: 'off' as const } : S.fresh ? { off_here: 'new' as const } : {}), driving: S.driving, branch_note, ...(size_note ? { size_note } : {}), git_state: S.gitState, ...(S.gitInstall ? { git_install: S.gitInstall } : {}), ...(S.gitWorkspace ? { git_workspace: S.gitWorkspace } : {}), plan_mode: inPlan(S.plan), ...(branches ? { branches } : {}), ...(team ? { today_team: team } : {}), ...(Object.keys(task_branches).length ? { task_branches } : {}), ...(openQuestions(b).length ? { questions: openQuestions(b) } : {}) }
   // T-891: the view as it is stored (trimmed by slimView), worked out once here and written as it is: the owner is
   // told when trimming had to leave tasks out of the panel
   const fit = fitView(host, v)
@@ -515,7 +532,7 @@ async function publishView(host: Host, b: Board) {
   const size_now = [...sizeNotes.values()].join('; ')
   if (size_now !== size_note) {
     for (const x of new Set([v, fit.view as PaneView])) {
-      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), size_now].filter(Boolean).join('; ')
+      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, size_now].filter(Boolean).join('; ')
       if (size_now) x.size_note = size_now
       else delete x.size_note
     }
@@ -535,8 +552,8 @@ async function publishView(host: Host, b: Board) {
 /** T-902: what /<name>-status draws for board `b`: the Live tab's fields of the view publish() writes, from the same
  *  sources (the branch and ▍Today team figures as last read; a stale read starts in the background, never waited for). */
 export async function statusView(host: Host, b: Board): Promise<StatusView> {
-  const branch = S.gitState === 'ok' ? await homeBranch(host) : ''
-  const branches = branchFacts(host, b, branch || 'main').facts
+  const own = S.gitState === 'ok' && S.gitRoot === 'ok' ? await homeBranch(host) : ''
+  const branches = branchFacts(host, b, own || 'main').facts
   const team = todayTeam(host, [...scoutState.keys()]).team
   const scouts = [...scoutState.values()].map(s => (s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s))
   const questions = openQuestions(b)

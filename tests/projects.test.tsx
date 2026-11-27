@@ -7,7 +7,7 @@ import { change, load } from '../hooks/app/store'
 import { runTool } from '../hooks/app/tools'
 import { S } from '../hooks/app/state'
 import { projectNames, repoOf } from '../hooks/app/git'
-import { rowTitle, readBoard, parseBoard, isProjectName, testCommandsOf, docsTestCommandsOf, mergeTestCount } from '../hooks/board'
+import { bandItems, bannerLines, emptyBoard, settingWithProjects, rowTitle, readBoard, parseBoard, isProjectName, testCommandsOf, docsTestCommandsOf, mergeTestCount } from '../hooks/board'
 import { chatTasksText } from '../hooks/core/chat-text'
 import { tasksListText } from '../hooks/core/task-list'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -30,6 +30,7 @@ async function world(repos: string[], own = false) {
       const [x, y] = a.filter(v => !v.startsWith('-'))
       if (cmd === 'ln') return files.has(y!) ? done({ exitCode: 1 }) : (files.set(y!, files.get(x!)!), done())
       if (cmd === 'mv') return (files.set(y!, files.get(x!)!), files.delete(x!), done())
+      if (cmd === 'git' && a.includes('rev-parse')) return done({ exitCode: 1 }) // no branch of any task yet
       if (cmd === 'rm') for (const f of a.filter(v => !v.startsWith('-'))) files.delete(f)
       return done()
     },
@@ -119,6 +120,11 @@ test('T-1146: a change that sets only the project keeps a running or finished ta
   await runTool(w.host, 'add', { ...WISH, title: 'Fix login', project: 'client' })
   await runTool(w.host, 'add', { ...WISH, title: 'Other', project: 'client' })
   await change(w.host, b => ({ ...b, tasks: b.tasks.map(t => (t.id === 'T-1' ? { ...t, status: 'doing' as const } : { ...t, status: 'review' as const })) }))
+  // T-1154: a task that already has a copy in client stays there: the change is refused
+  files.set('/ws/.symcc/worktrees/T-1/.git', '')
+  expect(await runTool(w.host, 'change', { task: 'T-1', project: 'server' }).catch((e: Error) => e.message)).toContain('T-1 already has a copy in client; drop and re-add it, or finish it first')
+  expect((await load(w.host)).tasks.find(t => t.id === 'T-1')!.project).toBe('client')
+  files.delete('/ws/.symcc/worktrees/T-1/.git')
   expect(await runTool(w.host, 'change', { task: 'T-1', project: 'server' })).toContain('keeps running')
   const doing = (await load(w.host)).tasks.find(t => t.id === 'T-1')!
   expect(doing.status).toBe('doing')
@@ -174,4 +180,15 @@ test("T-1153: a task of a project runs its own test commands (and docs ones) whe
   expect(mergeTestCount({ ...b, test_commands: ['a', 'b', 'c'] }, { project: 'client' })).toBe(1)
   // boards with no projects work as before
   expect(testCommandsOf({ test_commands: ['x'] }, { project: 'client' })).toEqual(['x'])
+})
+
+test('T-1154: the band\'s "yours" rows carry the project tag, and the banner shows a project\'s own test commands next to the board\'s', () => {
+  const t = { ...BOARD_TASKS.find(x => x.status === 'review') ?? BOARD_TASKS[0]!, id: 'T-9', status: 'review' as const, title: 'Fix login', project: 'client' }
+  const items = bandItems({ tasks: [t], checker: false, mode: 'auto' as const, max_parallel: 3 } as never, Date.now())
+  expect(items.find(i => i.id === 'T-9')?.title).toBe('[client] Fix login')
+  const b = { ...emptyBoard(), test_commands: ['npm test'], projects: { client: { test_commands: ['pytest'] } }, tasks: [] }
+  const text = bannerLines(b, '/ws', '/home', true, 120).map(l => l.parts.map(p => p.text).join('')).join('\n')
+  expect(text).toContain('tests: npm test · client: pytest')
+  expect(settingWithProjects(b, 'test_commands')).toBe('npm test · client: pytest')
+  expect(settingWithProjects({ ...b, projects: {} }, 'test_commands')).toBe('npm test')
 })

@@ -19,6 +19,7 @@ import { newestFirst, offStatusParts, testsShort, type OffHere } from './setting
 import { type DriverFacts, type NoticePart, fitForm, followForms, noticeText } from './driver-notice'
 import { type OwnerQuestion, askText, openQuestions, questionLine, questionsLabel } from './questions'
 import { needsYou } from './commands'
+import { rowTitle } from './panel'
 import { fmtCost } from './runs'
 import { shortSizeWarns } from './board-parts'
 import { type LiveView, liveLanes, liveToday, liveTrains, todayCost } from './live'
@@ -163,7 +164,7 @@ export function bandItems(view: LiveView, nowMs: number, since: (id: string) => 
   })
   const next = liveTrains(view, nowMs).next.find(x => !x.stuck.length)
   const nextRow: BandItem[] = next ? [{ id: next.id, title: next.title, kind: 'next', icon: STATUS_MARK.todo, forms: [NEXT_UP_STATE], tail: '' }] : []
-  const yours = you.map((t): BandItem => ({ id: t.id, title: t.title, kind: 'you', icon: rowMark(t, nowMs), forms: [statusCell(t, nowMs, since(t.id))], tail: tail(t) }))
+  const yours = you.map((t): BandItem => ({ id: t.id, title: rowTitle(t), kind: 'you', icon: rowMark(t, nowMs), forms: [statusCell(t, nowMs, since(t.id))], tail: tail(t) }))
   return [...runs, ...nextRow, ...yours]
 }
 
@@ -352,7 +353,11 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 /** What the banner needs from the board. */
 /** `branch`: the branch checked out in the project now (new tasks merge into it); `branch_note`: a warning (e.g. no git), shown in place of it.
  *  `enabled` false (symcc disabled) or `mode` 'paused' puts a warning on the first line, after the name. */
-export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; home_branch?: string; branch_note?: string; mode?: SymccMode; on_here?: boolean; off_here?: OffHere; /** T-952: the driving window (from lead.json) when this one doesn't drive */ driver?: DriverFacts }
+/** T-1154: each project's own test commands, short ("client: pytest"), for the banner's tests fact. */
+const projectTestsList = (b: { projects?: Record<string, { test_commands?: string[] }> }): string[] =>
+  Object.entries(b.projects ?? {}).filter(([, x]) => x?.test_commands?.length).map(([p, x]) => `${p}: ${testsShort(x.test_commands ?? [])}`)
+
+export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived' | 'projects'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; home_branch?: string; branch_note?: string; mode?: SymccMode; on_here?: boolean; off_here?: OffHere; /** T-952: the driving window (from lead.json) when this one doesn't drive */ driver?: DriverFacts }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask, 'live'>)[], order: SymccStatus[], nowMs: number = Date.now()): string[] {
@@ -428,7 +433,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     fact(driving ? 'this session drives' : 'driven by another session'),
   ])
   const l3 = join([
-    b.test_commands.length ? fact(`tests: ${testsShort(b.test_commands)}`) : [{ text: 'no test command', tone: 'warning' as const }],
+    b.test_commands.length || projectTestsList(b).length ? fact(`tests: ${[b.test_commands.length ? testsShort(b.test_commands) : '', ...projectTestsList(b)].filter(Boolean).join(' · ')}`) : [{ text: 'no test command', tone: 'warning' as const }],
     fact(`${b.max_parallel} at once`),
     fact(`${b.max_minutes} min`),
     fact(`${b.auto_retries} ${b.auto_retries === 1 ? 'retry' : 'retries'}`),

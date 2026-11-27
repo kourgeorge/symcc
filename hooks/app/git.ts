@@ -69,12 +69,13 @@ export async function homeBranch($: Host, cwd = S.root): Promise<string> {
 export const macToolsMissing = (out: string) => /xcrun: error: invalid active developer path|No developer tools were found|requires the command line developer tools/i.test(out)
 
 /** Looks whether git is installed, the project is inside a git work tree, and it has a commit. */
-export async function probeGit($: Host): Promise<GitState> {
+export async function probeGit($: Host, repo = S.root): Promise<GitState> {
   if (!S.root) return 'ok'
+  const last = repo === S.root ? S.gitRoot : S.repoGit.get(repo) ?? 'ok'
   // T-870: a timeout or any other failure is "unknown" (null): the last known state stays, and the next check tries again
   const run = async (args: string[]) => {
     try {
-      const r = await git($, args, S.root, 15_000)
+      const r = await git($, args, repo, 15_000)
       return r.exitCode === 124 ? null : r
     } catch {
       return null
@@ -83,7 +84,7 @@ export async function probeGit($: Host): Promise<GitState> {
   let v: Awaited<ReturnType<typeof git>> | null = null
   let missing = false
   try {
-    v = await git($, ['--version'], S.root, 15_000)
+    v = await git($, ['--version'], repo, 15_000)
     // T-861: the macOS /usr/bin/git stub without the command-line tools exits 1 with an xcrun message: git is missing too
     missing = v.exitCode === 127 || (v.exitCode !== 0 && v.exitCode !== 124 && macToolsMissing(`${v.stderr}\n${v.stdout}`))
     if (v.exitCode === 124) v = null
@@ -92,16 +93,16 @@ export async function probeGit($: Host): Promise<GitState> {
     missing = /ENOENT|not found|no such file/i.test(msg) && !/time(d)? ?out/i.test(msg)
   }
   if (missing) return gitStateOf({ hasGit: false, inside: false, hasHead: false })
-  if (!v || v.exitCode !== 0) return S.gitState
+  if (!v || v.exitCode !== 0) return last
   const hasGit = true
   // T-844: the project's own repo only: a repo above the project folder (its show-cdup is "../") is not used
   const [inRepo, up] = hasGit ? await Promise.all([run(['rev-parse', '--is-inside-work-tree']), run(['rev-parse', '--show-cdup'])]) : [null, null]
-  if (hasGit && (!inRepo || !up)) return S.gitState
+  if (hasGit && (!inRepo || !up)) return last
   const inside = hasGit && inRepo?.stdout.trim() === 'true' && !up?.stdout.trim()
   let hasHead = false
   if (inside) {
     const h = await run(['rev-parse', '--verify', '-q', 'HEAD'])
-    if (!h) return S.gitState
+    if (!h) return last
     hasHead = h.exitCode === 0
   }
   return gitStateOf({ hasGit, inside, hasHead })
@@ -117,21 +118,75 @@ export async function installStepOf($: Host): Promise<string> {
   return gitInstallStep(f)
 }
 
+/** T-1154: the projects (folders below the board) that unfinished tasks work in, sorted. */
+export const openProjects = (b: Board): string[] => [...new Set(b.tasks.filter(t => !isFinished(t)).map(t => (t as { project?: string }).project).filter((p): p is string => !!p && isProjectName(p)))].sort()
+
+/** T-1154: what the last check found in the repo task `t` works in (the board's own repo when it has no project). */
+export const gitStateOfTask = (t?: object | null): GitState => {
+  const repo = repoOf(t)
+  return repo === S.root ? S.gitRoot : S.repoGit.get(repo) ?? 'ok'
+}
+
+/** T-1154: a short note per project whose repo is not ready ("client: no commits yet"); '' when all are. */
+export const projectNotes = (names?: readonly string[]): string =>
+  [...S.repoGit]
+    .map(([r, s]) => [r.slice(S.root.length + 1), s] as const)
+    .filter(([p, s]) => s !== 'ok' && (!names || names.includes(p)))
+    .map(([p, s]) => `${p}: ${s === 'no-git' ? 'git is not installed' : s === 'no-repo' ? 'no git repo' : 'no commits yet'}`)
+    .join('; ')
+
+/** T-1154: whether every repo looked at so far is ready (the board's and each project's). */
+export const allGitReady = () => S.gitState === 'ok' && [...S.repoGit.values()].every(s => s === 'ok')
+
+/** T-1154: whether git is ready in the repo task `t` works in: looks at that repo (the board's, or its project's). */
+export async function taskGitReady($: Host, b: Board, t: object | null | undefined): Promise<boolean> {
+  const repo = repoOf(t)
+  if (repo === S.root) {
+    await gitReady($, b)
+    return S.gitRoot === 'ok'
+  }
+  if (S.gitState === 'no-git') return false
+  return gitReady($, b, repo)
+}
+
+/** T-1154: looks at the repo of each project that has open tasks (not the board's own). */
+export async function checkProjects($: Host, b: Board): Promise<void> {
+  if (S.gitState === 'no-git') return
+  for (const p of openProjects(b)) await gitReady($, b, `${S.root}/${p}`).catch(() => false)
+}
+
 /** Looks at git again while it is not ready (the watchdog, the panel opening, the Check again button); when it just became ready, work starts. Returns a short answer. */
 export async function recheckGit($: Host): Promise<string> {
-  const was = S.gitState
+  const was = allGitReady()
   const ok = await gitReady($)
-  if (ok && was !== 'ok') void pump($).catch(() => undefined)
-  return ok ? 'git is ready: this folder is a git repo with commits' : gitNotice(S.gitState, S.gitInstall, S.N.name)
+  const b = await load($)
+  await checkProjects($, b)
+  const bad = [...S.repoGit].filter(([, s]) => s !== 'ok')
+  if (ok && !was && !bad.length) void pump($).catch(() => undefined)
+  if (!ok) return gitNotice(S.gitState, S.gitInstall, S.N.name)
+  if (bad.length) return projectNotes()
+  return 'git is ready: this folder is a git repo with commits'
 }
 
 /**
  * Whether git is ready for work (a repo with a commit). If not, nothing starts or fails: the
  * banner and status line say so, and the lead (only the driver) is told once per state: how
  * to install git, or the question whether to set up a repo.
+ * T-1154: with `repo` (a project's folder) it looks at that repo only, and says nothing to the lead (its tasks wait). The
+ * board folder of a workspace (no .git of its own, projects below) counts as ready: each task needs only its own repo.
  */
-export async function gitReady($: Host, b?: Board): Promise<boolean> {
-  const s = await probeGit($)
+export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boolean> {
+  if (repo !== S.root) {
+    const s = await probeGit($, repo)
+    if (s !== (S.repoGit.get(repo) ?? 'ok')) {
+      S.repoGit.set(repo, s)
+      await publish($, b ?? (await load($)))
+    } else if (!S.repoGit.has(repo)) S.repoGit.set(repo, s)
+    return s === 'ok'
+  }
+  const real = await probeGit($)
+  S.gitRoot = real
+  const s: GitState = real === 'no-repo' && (await projectNames($).catch(() => [] as string[])).length ? 'ok' : real
   if (s === 'no-git' && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => '')
   if (s !== 'no-git') S.gitInstall = ''
   const ws = (s === 'no-repo' || s === 'no-commits') && (await holdsRepos($)) ? workspaceText() : ''
@@ -231,6 +286,7 @@ export async function setupGit($: Host, who: string): Promise<string> {
     await change($, b => ({ ...b, tasks: b.tasks.map(t => (isFinished(t) ? t : { ...t, merge_into: branch })) }))
     S.toldGit = 'ok'
     S.gitState = 'ok'
+    S.gitRoot = 'ok'
     await publish($, await load($))
     const out = setupDoneText({ init, branch, files, left, gitignore: old === null ? 'made' : text === old ? 'kept' : 'added', name: S.N.name })
     // T-968: the lead's own setup_git call hears it in its tool answer; anyone else's (the board, a command) wakes the lead now
@@ -596,16 +652,23 @@ export async function cleanupMerged($: Host, b: Board) {
       keptDirty.add(id)
       continue
     }
-    if ((await git($, ['worktree', 'remove', dir])).exitCode === 0) dirs++
+    if ((await git($, ['worktree', 'remove', dir], repoOf(t))).exitCode === 0) dirs++
   }
-  await git($, ['worktree', 'prune'])
+  // T-1154: each repo a task works in (the board's, and each project's) is pruned and cleaned on its own
+  const repoTasks = (repo: string) => b.tasks.filter(t => repoOf(t) === repo)
+  const repos = [...new Set(b.tasks.map(t => repoOf(t)))]
+  if (!repos.includes(S.root)) repos.push(S.root)
+  for (const repo of repos) await git($, ['worktree', 'prune'], repo)
   let branches = 0
   // Each done task merged into its own branch: ask git per branch which work branches it holds.
-  for (const into of [...new Set(b.tasks.filter(t => t.status === 'done').map(intoOf))]) {
-    const merged = await git($, ['branch', '--merged', into, '--format=%(refname:short)'])
-    if (merged.exitCode !== 0) continue
-    const done = b.tasks.filter(t => intoOf(t) === into)
-    for (const br of branchesToDelete(done, merged.stdout.split('\n'), S.N.branch(''))) if (await deleteMergedBranch($, br, into)) branches++
+  for (const repo of repos) {
+    const here = repoTasks(repo)
+    for (const into of [...new Set(here.filter(t => t.status === 'done').map(intoOf))]) {
+      const merged = await git($, ['branch', '--merged', into, '--format=%(refname:short)'], repo)
+      if (merged.exitCode !== 0) continue
+      const done = here.filter(t => intoOf(t) === into)
+      for (const br of branchesToDelete(done, merged.stdout.split('\n'), S.N.branch(''))) if (await deleteMergedBranch($, br, into, repo)) branches++
+    }
   }
   const text = S.toldCleanup ? '' : cleanupText(branches, dirs)
   if (text) {

@@ -2,7 +2,7 @@ import type { SymccTask, SymccTokens } from '../../types'
 import { doneLine, PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withHistory, historyEntry, type HistoryAdd, type HistoryFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type HistoryKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, mergeTestCount, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerProblems, problemsBlockLines, CHECKER_PROBLEMS_MAX, checkerRetryText, kindOf, isInvestigation, isErrand, errandFolders, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, isUsageLimit, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs, isProseRole, checkerSendBacks, CHECKER_SEND_BACKS, checkerAskText, CHECKER_ASK_OPTIONS, firstProblemOf, CHECKER_MARK } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
-import { repoOf, gitReady, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
+import { repoOf, gitReady, taskGitReady, gitStateOfTask, projectNotes, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
 import { publish, drivesHere, drivenElsewhere, readLeadText } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
 import type { TurnLimit } from './merge-line'
@@ -117,6 +117,8 @@ export async function pump(host: Host) {
   // Check again or a new session looks again, and Check again pumps when git is there.
   if (S.gitState === 'no-git') return
   if (!(await gitReady(host, b))) return // no git, no repo or no commit yet: nothing starts until it is set up
+  // T-1154: each project is its own repo: a task starts only when its repo is ready (looked at once per project here)
+  const repoOk = new Map<string, boolean>()
   const failed = (id: string) => (err: Error) => startFailed(host, id, err)
   // Each task is made ready and claimed in turn; their starts then wait in the queue together (see app/starts.ts),
   // so one wake-up starts them all. A worker still in the queue counts as running (it is in `starting`).
@@ -124,6 +126,8 @@ export async function pump(host: Host) {
   for (const t of ready(b)) {
     if (workers.size + starting.size >= b.max_parallel) break
     if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
+    const repo = repoOf(t)
+    if (repo === S.root ? S.gitRoot !== 'ok' : !(repoOk.get(repo) ?? (repoOk.set(repo, await gitReady(host, b, repo)), repoOk.get(repo)))) continue
     const q = await queueWorker(host, t.id).catch(async (err: Error) => (await failed(t.id)(err), null))
     if (q) queued.push(q.started.catch(failed(t.id)))
   }
@@ -184,6 +188,8 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
     const b = await load(host)
     const t0 = find(b, id)
     if (!mayStart(t0, agents.map(agentState), S.N.name)) return null
+    // T-1154: its own repo must be ready (run now, which skips the pump's look, checks here)
+    if (repoOf(t0) === S.root ? S.gitRoot !== 'ok' : !(await taskGitReady(host, b, t0))) return null
     // Its last try's work is already on the branch it merges into (e.g. a reload sent it back, or
     // the owner retried it after it was wrongly failed): it is done, not tried again.
     if (await mergedBeforeStart(host, t0!)) return null
@@ -1417,22 +1423,24 @@ export async function retryFileWaits(host: Host) {
   const b = await load(host)
   if (modeOf(b) === 'paused') return
   const waiting = b.tasks.filter(t => waitsForFiles(t) && !checkingNow(t.id))
-  let current: string | null = null
-  let status: string | null = null
+  // T-1154: the branch checked out and the files in the way are looked at in each task's own repo
+  const current = new Map<string, string>()
+  const status = new Map<string, string>()
   for (const t of waiting) {
-    current ??= (await git(host, ['symbolic-ref', '--short', '-q', 'HEAD'])).stdout.trim()
-    if (current === intoOf(t)) {
-      if (status === null) {
-        const st = await git(host, ['status', '--porcelain', '-z', '--untracked-files=all', '--ignored=matching'])
+    const repo = repoOf(t)
+    if (!current.has(repo)) current.set(repo, (await git(host, ['symbolic-ref', '--short', '-q', 'HEAD'], repo)).stdout.trim())
+    if (current.get(repo) === intoOf(t)) {
+      if (!status.has(repo)) {
+        const st = await git(host, ['status', '--porcelain', '-z', '--untracked-files=all', '--ignored=matching'], repo)
         if (st.exitCode !== 0) return
-        status = st.stdout
+        status.set(repo, st.stdout)
       }
-      if (stillBlocks(status, blockerFiles(asBlockers(t.live?.merge_wait)!), S.N.dir)) continue
+      if (stillBlocks(status.get(repo)!, blockerFiles(asBlockers(t.live?.merge_wait)!), S.N.dir)) continue
     }
     await mergeWaiting(host, t.id).catch(() => undefined)
     // that merge may have changed the owner's files: look again for the next one
-    current = null
-    status = null
+    current.delete(repo)
+    status.delete(repo)
   }
 }
 
@@ -1629,7 +1637,7 @@ export async function mergeWaiting(host: Host, id: string): Promise<string> {
 export async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'approve' | 'merge', force = false): Promise<string> {
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
   if (approving.has(t.id)) return `${t.id} is already being merged`
-  if (!(await gitReady(host, b))) return `${t.id} ${stays}: ${gitNote(S.gitState)}`
+  if (!(await taskGitReady(host, b, t))) return `${t.id} ${stays}: ${gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`
   if (await waitIfBranchGone(host, b, t, 'merge')) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`
   approving.add(t.id)
   // The same time limit as a finished worker's check (finishLimitMs): past it the merge is

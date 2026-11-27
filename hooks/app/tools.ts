@@ -4,7 +4,7 @@ import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, know
 import { checkerReportOf } from '../core/task-sections'
 import { sizeSegs } from '../core/page-header'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
-import { repoOf, gitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, projectNames, projectRefusal, taskWork, resetScratch } from './git'
+import { repoOf, taskBranch, taskGitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, projectNames, projectRefusal, taskWork, resetScratch } from './git'
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
 import { S, heard, workers, starting, toolName } from './state'
@@ -648,6 +648,8 @@ async function kindIn($: Host, a: In): Promise<string | undefined> {
 /** T-1137: the project a tool call gives, checked against the project folders (undefined when not given; '' clears it on a change). A name that is not such a folder is refused, listing the folders that are. */
 async function projectIn($: Host, a: In): Promise<string | undefined> {
   if (a.project === undefined || a.project === null) return undefined
+  // T-1154: a number or list would turn into '' below and clear the project: refused, as settings does
+  if (typeof a.project !== 'string') throw new Error('Nothing changed: project must be a project folder name (text)')
   const name = str(a.project)?.trim() ?? ''
   if (!name) return ''
   const refusal = projectRefusal(name, await projectNames($))
@@ -793,6 +795,11 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (str(a.answer)?.trim() && t.status !== 'waiting') return alreadyAnsweredText(t, a)
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
       const project = await projectIn($, a)
+      // T-1154: a task that already has a copy or a branch stays in the repo they are in; with none yet, a new project means a new repo and its current branch
+      const projectMoves = project !== undefined && project !== (t.project ?? '')
+      if (projectMoves && ((await $.fs.exists(`${worktreeDir(t.id)}/.git`)) || (await branchExists($, taskBranch(t), repoOf(t))))) {
+        throw new Error(`Nothing changed: ${t.id} already has a copy in ${t.project || 'the board folder'}; drop and re-add it, or finish it first`)
+      }
       // A task given the researcher role becomes an investigation, unless kind is given too.
       const kind = (await kindIn($, a)) ?? (role && role !== t.role && isInvestigation(kindFor(undefined, role)) ? kindFor(undefined, role) : undefined)
       // Another branch to merge into: given, or the owner said yes to "branch x is gone: merge into main instead?".
@@ -819,6 +826,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const noted = note ? addDetailsText(t.details, note, dayOf(Date.now(), localOffset())) : undefined
       const noteHistory = (x: Board): Partial<SymccTask> => (note ? { history: withHistory((find(x, t.id) ?? t).history, now(), ['note', noteAddedLine(note)]) } : {})
       const gone = parseGoneBranch(t.status === 'waiting' ? (t.ask?.text ?? null) : null)
+      if (projectMoves && a.merge_into === undefined && !isInvestigation(t)) into = await homeBranch($, repoOf(project ? { project } : undefined))
       if (!into && gone && saysMergeInstead(str(a.answer) ?? '', gone.instead)) into = gone.instead
       const fields = (): Partial<BoardTask> => {
         const p: Partial<BoardTask> = {}
@@ -857,7 +865,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         await change($, x => patchTask(x, t.id, { ...fields(), ...noteHistory(x) }, now(), S.N.dir))
         return `${t.id} ${note ? 'note added' : 'updated'} (still in the backlog)`
       }
-      // A change that sets only the project keeps the status and the worker: the project is only a label for now.
+      // A change that sets only the project keeps the status (the task has no copy or branch yet, see above, so no worker either).
       if (project !== undefined && ['title', 'details', 'add_details', 'files', 'after', 'priority', 'needs_review', 'role', 'kind', 'answer', 'merge_into'].every(k => a[k] === undefined)) {
         const p = fields()
         await change($, x => {
@@ -1046,7 +1054,7 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   const b = await load($)
   const waits = runNowWaits(b, t)
   if (waits.length && !anyway) return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`
-  if (S.gitState === 'no-git' || !(await gitReady($, b))) return `${t.id} didn't start: git isn't set up here yet`
+  if (S.gitState === 'no-git' || !(await taskGitReady($, b, t))) return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : 'here'} yet`
   const busy = workers.size + starting.size
   const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : undefined
   const paused = modeOf(b) === 'paused'

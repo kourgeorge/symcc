@@ -1,7 +1,7 @@
 // Opening the board panel, and choosing what it shows. Host-free: a host with no panel (features.panel off) opens
 // nothing. What only Claude Code's panel needs (taking the keys back after an Esc) is in claude/ui/open.ts.
 import { boardTitle } from '../board'
-import { recheckGit } from './git'
+import { recheckGit, allGitReady } from './git'
 import { S, updateOpened, updateScoutOpen, updateTab } from './state'
 import { resetRoleView } from './roles'
 import { resetKindView } from './kinds'
@@ -34,7 +34,7 @@ export async function openPane($: Host, o: { tab?: PaneTab; task?: string; focus
   if (!$.features.panel) return { isPlaced: false }
   const go = async () => {
     // the notice is fresh when the panel opens; not while git is missing (T-887: the Mac's git stand-in opens Apple's install pop-up)
-    if (!S.fresh && S.gitState !== 'ok' && S.gitState !== 'no-git') await recheckGit($).catch(() => undefined)
+    if (!S.fresh && !allGitReady() && S.gitState !== 'no-git') await recheckGit($).catch(() => undefined)
     await resetPane($, o.tab, o.task)
     return $.ui.open(paneArgs(o.focus !== false))
   }

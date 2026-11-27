@@ -583,6 +583,12 @@ test('T-1136: a folder whose subfolders are their own repos: the view carries th
     w.files.set('/home/me/proj/b/.git', '')
     await sessionStart(w.host)
     await runCommand(w.host, 'symcc-init', '')
+    // T-1154: with no repo at the top and repos directly below, each task needs only its own repo: the folder counts as ready
+    if (!noCommit) {
+      expect(await gitReady(w.host)).toBe(true)
+      expect((w.panel.view() as unknown as { git_state: string }).git_state).toBe('ok')
+      continue
+    }
     expect(await gitReady(w.host)).toBe(false)
     const v = w.panel.view() as unknown as { git_state: string; git_workspace?: string }
     expect(v.git_state).toBe(noCommit ? 'no-commits' : 'no-repo')

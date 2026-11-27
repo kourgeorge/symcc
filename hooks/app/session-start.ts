@@ -5,7 +5,7 @@ import { type Board, settingShown, LEAD_BEAT_MS, openOnStart, modeText, modeOf, 
 import type { Host } from '../host'
 import { moveOldOrgMem } from './org-mem'
 import { migrateIfOld } from './migrate-data'
-import { gitReady, initGitIn, recheckGit } from './git'
+import { gitReady, checkProjects, allGitReady, initGitIn, recheckGit } from './git'
 import { claimLead, carryDriver, publish, handOver, releaseLead, startHere, offHereBeat } from './lead'
 import { loadRoles } from './roles'
 import { loadKinds } from './kinds'
@@ -35,7 +35,7 @@ export function watchdogTick(host: Host) {
   if (S.guardOnly) return // a worker folder only guards: the timers touch nothing
   // git init by hand clears the notice. T-887: not while git is missing: on a Mac without the command-line tools,
   // running the /usr/bin/git stand-in opens Apple's install pop-up each time; Check again or a new session looks then
-  if (!S.fresh && S.gitState !== 'ok' && S.gitState !== 'no-git') void recheckGit(host).catch(() => undefined)
+  if (!S.fresh && !allGitReady() && S.gitState !== 'no-git') void recheckGit(host).catch(() => undefined)
   void check(host).catch(() => undefined)
 }
 
@@ -145,6 +145,7 @@ async function startSteps(host: Host, o: { cleanTmp: boolean; unreadable: 'skip'
   const b = o.unreadable === 'skip' ? await load(host).catch(() => null) : await load(host)
   if (!b) return null
   await gitReady(host, b).catch(() => undefined)
+  await checkProjects(host, b).catch(() => undefined)
   await publish(host, b)
   if (await o.openIf(b)) await openPane(host, { tab: 'live', focus: false, quiet: true })
   return b

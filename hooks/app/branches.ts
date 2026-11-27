@@ -13,7 +13,7 @@ import type { BranchCommit } from '../core/live'
 import type { SymccTask } from '../../types'
 import type { Host } from '../host'
 import { type PaneView, S, updateView } from './state'
-import { git } from './git'
+import { git, repoOf, gitStateOfTask } from './git'
 
 /** How long the figures are kept before they are read again. */
 export const BRANCH_CACHE_MS = 30_000
@@ -125,15 +125,18 @@ export function resetTaskBranches() {
   tips.running = undefined
 }
 
+/** T-1154: main's tips are kept per repo: the same branch name in two projects is two branches. */
+const tipKey = (repo: string, into: string) => `${repo}\n${into}`
+
 /** Reads the tip of each of `intos` (one git process each), when the last read is older than BRANCH_CACHE_MS. */
-function readTips(host: Host, intos: string[], nowMs: number): Promise<void> | undefined {
+function readTips(host: Host, intos: { repo: string; into: string }[], nowMs: number): Promise<void> | undefined {
   if (tips.running) return tips.running
   if (!intos.length || nowMs - tips.at < BRANCH_CACHE_MS) return undefined
   tips.at = nowMs
   tips.running = Promise.all(
-    intos.map(async into => {
-      const r = safe(into) ? await git(host, ['rev-parse', `refs/heads/${into}`], S.root, GIT_MS).catch(() => null) : null
-      mainTips.set(into, r && r.exitCode === 0 ? String(r.stdout ?? '').trim() : '')
+    intos.map(async ({ repo, into }) => {
+      const r = safe(into) ? await git(host, ['rev-parse', `refs/heads/${into}`], repo, GIT_MS).catch(() => null) : null
+      mainTips.set(tipKey(repo, into), r && r.exitCode === 0 ? String(r.stdout ?? '').trim() : '')
     }),
   )
     .then(() => undefined)
@@ -182,7 +185,8 @@ const shaTimes = (stdout: string): BranchCommit[] =>
 export async function readTaskBranch(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs: number, status?: { failed: boolean }): Promise<TaskBranchFacts | null> {
   if (!safe(into)) return null
   // T-1126: `status.failed` tells a git failure (or timeout) apart from "nothing to show" (both return null)
-  const run = (args: string[]) => git(host, args, S.root, GIT_MS).then(r => (r.exitCode === 0 ? String(r.stdout ?? '') : (status && (status.failed = true), null)), () => (status && (status.failed = true), null))
+  const repo = repoOf(t) // T-1154: read in the task's own repo
+  const run = (args: string[]) => git(host, args, repo, GIT_MS).then(r => (r.exitCode === 0 ? String(r.stdout ?? '') : (status && (status.failed = true), null)), () => (status && (status.failed = true), null))
   const branch = typeof t.branch === 'string' ? t.branch : ''
   const merged = t.status === 'done' && isSha(t.merged) ? t.merged : ''
   let commits: LogLine[] = []
@@ -264,10 +268,10 @@ export const hasTaskBranch = (t: Pick<SymccTask, 'status' | 'branch' | 'merged'>
  * `done` (tests) is the read started, if any.
  */
 export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'history' | 'attempts'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs = Date.now(), onRead?: () => void): { facts: TaskBranchFacts | undefined; done?: Promise<void> } {
-  if (S.gitState !== 'ok' || !S.root || !hasTaskBranch(t)) return { facts: undefined }
+  if (S.gitState !== 'ok' || !S.root || !hasTaskBranch(t) || gitStateOfTask(t) !== 'ok') return { facts: undefined }
   // T-1117: a finished task's answer only changes when main moves, so its key holds main's tip and it has no timer
   const finished = isFinished(t)
-  const key = [into, t.status, t.branch ?? '', t.merged ?? '', t.attempts, finished ? (mainTips.get(into) ?? '') : ''].join(' ')
+  const key = [into, t.status, t.branch ?? '', t.merged ?? '', t.attempts, finished ? (mainTips.get(tipKey(repoOf(t), into)) ?? '') : ''].join(' ')
   const got = taskCache.get(t.id)
   const facts = got?.key === key ? (got.facts ?? undefined) : undefined
   const waiting = taskRunning.get(t.id)
@@ -331,7 +335,7 @@ export function taskBranchesView(host: Host, b: Pick<Board, 'tasks'>, nowMs = Da
       if (got.facts) facts[t.id] = got.facts
     }
   }
-  const tipsRead = S.gitState === 'ok' && S.root ? readTips(host, [...new Set(finished.map(t => intoOf(t)))], nowMs) : undefined
+  const tipsRead = S.gitState === 'ok' && S.root ? readTips(host, [...new Map(finished.map(t => [tipKey(repoOf(t), intoOf(t)), { repo: repoOf(t), into: intoOf(t) }] as const)).values()], nowMs) : undefined
   const done = (async () => {
     if (tipsRead) await tipsRead
     for (const t of finished) read(t)

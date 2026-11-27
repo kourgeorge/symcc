@@ -1,5 +1,5 @@
 // The board panel's Settings view.
-import { SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, settingRowValue, settingsHelpOf, settingInfo, settingDots, settingsRuleWidth, groupHint, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, mergeRoles, roleKeys, roleEditKeys, rolesKeys, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, isCheckerRole, checkerOn } from '../../board'
+import { SETTING_GROUPS, groupSummaryParts, isSettingPage, settingChoices, settingShown, settingWithProjects, settingRowValue, settingsHelpOf, settingInfo, settingDots, settingsRuleWidth, groupHint, cantPlayNotify, type SettingsInput, type SettingName, type SettingPage, settingValue, viewAsBoard, parseSettingValue, settingsKeys, boxHint, pickHint, type RoleDef, mergeRoles, roleKeys, roleEditKeys, rolesKeys, rolePromptKeys, ROLE_PLACEHOLDERS, ROLE_SLOT, ROLE_PROMPTS, promptsOfRole, type RolePromptKind, type KindDef, mergeKinds, kindsKeys, findKind, isCheckerRole, checkerOn } from '../../board'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel } from '../../core/def-files'
 import { S } from '../../app/state'
 import { type $ } from '../panel'
@@ -610,10 +610,10 @@ export async function settingsPage($: $, pane: PaneParts) {
     const x = settingInfo(name)!
     const key = row(`setting:${x.name}`)
     return [
-      <Button key={key} plain label={`${x.label}: ${settingRowValue(x.name, settingValue(viewAsBoard(v), x.name))}`} onPress={pressRow(x.name)}>
+      <Button key={key} plain label={`${x.label}: ${settingRowValue(x.name, settingWithProjects(viewAsBoard(v), x.name))}`} onPress={pressRow(x.name)}>
         <Text color={C('text')}>{`${mark(key)}${x.label}`}</Text>
         <Text color={C('inactive')}>{settingDots(x.label)}</Text>
-        <Text bold color={C('claude')}>{settingRowValue(x.name, settingValue(viewAsBoard(v), x.name))}</Text>
+        <Text bold color={C('claude')}>{settingRowValue(x.name, settingWithProjects(viewAsBoard(v), x.name))}</Text>
         {x.name === 'notify' && cantPlayNotify(v) ? <Text color={C('warning')}> (can't play here: nothing plays)</Text> : null}
       </Button>,
       ...[editBox(x.name), pickBox(x.name)].filter(Boolean),

@@ -491,6 +491,14 @@ export function testsShort(cmds: readonly string[]): string {
   return `${list.length} ${list.length === 1 ? 'command' : 'commands'}`
 }
 
+/** T-1154: a setting's value as the Settings rows show it: the board's test commands, then each project's own ("npm test · client: pytest"). Not for edit boxes (settingValue). */
+export function settingWithProjects(b: Partial<Board>, name: SettingName, root = ''): string {
+  const v = settingValue(b, name, root)
+  if (name !== 'test_commands') return v
+  const ps = Object.entries(b.projects ?? {}).filter(([, x]) => x?.test_commands?.length).map(([p, x]) => `${p}: ${testCommandsText(x.test_commands ?? [])}`)
+  return ps.length ? [v, ...ps].join(' · ') : v
+}
+
 /** A setting's current value as text: "npm test", '["npm test", "npm run lint"]', "on", "5", "none". */
 export function settingValue(b: Partial<Board>, name: SettingName, root = ''): string {
   const d = emptyBoard()

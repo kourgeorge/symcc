@@ -22,7 +22,7 @@ export function gitDiff($: Host, target: string, t: SymccTask, opts: string[], f
   let p = changesCache.get(key)
   if (!p) {
     if (changesCache.size > 50) changesCache.clear()
-    p = gitOk($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', ...opts, diffRange(target, t), ...(file ? ['--', file] : [])])
+    p = gitOk($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', ...opts, diffRange(target, t), ...(file ? ['--', file] : [])], repoOf(t))
     changesCache.set(key, p)
     p.catch(() => changesCache.delete(key))
   }
@@ -608,30 +608,31 @@ export async function sizeOf($: Host, from: string, to: string, cwd = S.root): P
 /** T-1086: what main was before a done task's merged commit: the second parent of symcc's catch-up merge (its parents are the task's tip, then main);
  *  else the first commit down the first-parent line that is not the task's own. '' when git does not have the commit; null when a git call failed (try again). */
 export async function mergedBefore($: Host, t: Pick<SymccTask, 'id' | 'runs'>, merged: string): Promise<string | null> {
+  const repo = repoOf(t) // T-1154: the task's own repo
   // T-1096: commits the worker made itself have no Task line; the try saved them, so they count as the task's own too
   const saved = new Set((t.runs ?? []).flatMap(r => (Array.isArray(r?.commits) ? r.commits : [])))
   const own = (sha: string, msg: string) => saved.has(sha) || isTaskCommit(msg, t.id, S.N.name)
-  const p = await git($, ['rev-list', '--parents', '-n', '1', merged]).catch(() => null)
+  const p = await git($, ['rev-list', '--parents', '-n', '1', merged], repo).catch(() => null)
   if (!p || p.exitCode !== 0) {
     // a failed call (timeout, failed start) is not "no commit": only a commit git says it has not got is final
-    const c = await git($, ['cat-file', '-e', `${merged}^{commit}`]).catch(() => null)
+    const c = await git($, ['cat-file', '-e', `${merged}^{commit}`], repo).catch(() => null)
     return c && (c.exitCode === 1 || c.exitCode === 128) ? '' : null
   }
   const [, first, second] = String(p.stdout ?? '').trim().split(/\s+/)
   if (!first) return ''
   if (second) {
     // symcc's own merge commit (the task's trailer): main is its second parent. A merge made by hand on main: its first parent is main.
-    const m = await git($, ['log', '-n', '1', '--format=%B', merged]).catch(() => null)
+    const m = await git($, ['log', '-n', '1', '--format=%B', merged], repo).catch(() => null)
     if (!m || m.exitCode !== 0) return null
     if (isTaskCommit(String(m.stdout ?? ''), t.id, S.N.name)) return second
     // the worker's own merge of main (saved in the runs) sits on the task's line: its first parent is the task's own commit
     if (saved.has(merged)) {
-      const f = await git($, ['log', '-n', '1', '--format=%B', first]).catch(() => null)
+      const f = await git($, ['log', '-n', '1', '--format=%B', first], repo).catch(() => null)
       if (f && f.exitCode === 0 && own(first, String(f.stdout ?? ''))) return second
     }
     return first
   }
-  const log = await git($, ['log', '--first-parent', '-n', '200', '--format=%H%x1f%P%x1f%B%x1e', merged]).catch(() => null)
+  const log = await git($, ['log', '--first-parent', '-n', '200', '--format=%H%x1f%P%x1f%B%x1e', merged], repo).catch(() => null)
   if (!log || log.exitCode !== 0) return first
   for (const entry of String(log.stdout ?? '').split('\x1e')) {
     const [sha, parents, msg] = entry.trim().split('\x1f')
@@ -666,7 +667,7 @@ export async function mergedChanges($: Host, t: SymccTask): Promise<MergedChange
   if (mergedMemo.has(key)) return mergedMemo.get(key)!
   const before = await mergedBefore($, t, merged)
   if (before === null) return null // git could not be read: not kept, the next open tries again
-  const r = before ? await git($, ['diff', '--numstat', '--no-renames', before, merged]).catch(() => null) : null
+  const r = before ? await git($, ['diff', '--numstat', '--no-renames', before, merged], repoOf(t)).catch(() => null) : null
   const files = r && r.exitCode === 0 ? parseNumstat(String(r.stdout ?? '')) : []
   const got = files.length ? { files, error: '', merged, before } : null
   // a missing commit or an empty diff is a final answer (kept); a failed git diff is tried again next time
@@ -681,7 +682,7 @@ export const DIFF_GONE = 'diff not available'
 export async function mergedDiff($: Host, t: SymccTask, file = ''): Promise<string> {
   const c = await mergedChanges($, t).catch(() => null)
   if (!c) return DIFF_GONE
-  const r = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', c.before, c.merged, ...(file ? ['--', file] : [])]).catch(() => null)
+  const r = await git($, ['diff', '--no-color', '--no-ext-diff', '--no-renames', c.before, c.merged, ...(file ? ['--', file] : [])], repoOf(t)).catch(() => null)
   return r && r.exitCode === 0 ? String(r.stdout ?? '') : DIFF_GONE
 }
 

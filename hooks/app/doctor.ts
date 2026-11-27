@@ -11,7 +11,7 @@ import { S, workers, starting, finishing, approving } from './state'
 import { load, path } from './store'
 import { readLeadText } from './lead'
 import { readArchiveFile } from './archive'
-import { git, deleteMergedBranch } from './git'
+import { git, deleteMergedBranch, repoOf, projectNames } from './git'
 import { oldDataFound, oldRowsText, migrateData } from './migrate-data'
 import { plural } from '../core/text'
 
@@ -28,10 +28,16 @@ async function mergeRuns(host: Host, b: Board | null): Promise<Merging | null> {
   if (t) return { id: t.id }
   const mine = [...finishing, ...approving][0]
   if (mine) return { id: mine }
-  const m = await git(host, ['rev-parse', '-q', '--verify', 'MERGE_HEAD']).catch(() => null)
-  if (m?.exitCode === 0 && m.stdout.trim()) return {}
+  // T-1154: a git merge going on in the board folder or in any project's folder
+  for (const repo of await repoList(host)) {
+    const m = await git(host, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], repo).catch(() => null)
+    if (m?.exitCode === 0 && m.stdout.trim()) return {}
+  }
   return null
 }
+
+/** T-1154: the repos to look at: the board folder and each project folder. */
+const repoList = async (host: Host): Promise<string[]> => [S.root, ...(await projectNames(host).catch(() => [] as string[])).map(p => `${S.root}/${p}`)]
 
 /** The live agents of this session, or null when they can't be told. */
 const agentsNow = (host: Host) => host.agents.list().then(a => a.map(agentState), () => null)
@@ -53,13 +59,13 @@ async function changedFiles(host: Host, dir: string): Promise<number | null> {
  * Whether folder `dir`'s HEAD commit is safe to lose the folder over: already in `into` or on some branch. False
  * also when git can't tell, so a detached HEAD with commits on no branch is never removed.
  */
-async function headKept(host: Host, dir: string, into: string): Promise<boolean> {
+async function headKept(host: Host, dir: string, into: string, repo = S.root): Promise<boolean> {
   const h = await git(host, ['rev-parse', '-q', '--verify', 'HEAD'], dir).catch(() => null)
   const head = h?.exitCode === 0 ? h.stdout.trim() : ''
   if (!/^[0-9a-f]{7,64}$/i.test(head)) return false
-  const anc = await git(host, ['merge-base', '--is-ancestor', head, `refs/heads/${into}`]).catch(() => null)
+  const anc = await git(host, ['merge-base', '--is-ancestor', head, `refs/heads/${into}`], repo).catch(() => null)
   if (anc?.exitCode === 0) return true
-  const on = await git(host, ['branch', '--contains', head, '--format=%(refname:short)']).catch(() => null)
+  const on = await git(host, ['branch', '--contains', head, '--format=%(refname:short)'], repo).catch(() => null)
   return on?.exitCode === 0 && !!on.stdout.trim()
 }
 
@@ -194,7 +200,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
       keptDirs.set(wt, 'has uncommitted changes')
       continue
     }
-    if (!(await headKept(host, wt, into))) {
+    if (!(await headKept(host, wt, into, repoOf(t)))) {
       listed.push({ kind: 'worktree', fixable: false, bytes, text: `folder ${shown(wt)}/ (${why}) holds commits on no branch, kept` })
       keptDirs.set(wt, 'holds commits on no branch')
       continue
@@ -209,96 +215,108 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
         if (inUse(id, nt, await agentsNow(host))) return 'an agent may still use it'
         // only a dropped task's folder may go with its changes; for any other git itself refuses (no --force)
         if (!(lose && nt?.status === 'dropped') && (await changedFiles(host, wt)) !== 0) return 'it has uncommitted changes now'
-        if (!(await headKept(host, wt, into))) return 'it holds commits on no branch now'
-        const r = await git(host, ['worktree', 'remove', ...(lose ? ['--force'] : []), wt])
+        if (!(await headKept(host, wt, into, repoOf(t)))) return 'it holds commits on no branch now'
+        const r = await git(host, ['worktree', 'remove', ...(lose ? ['--force'] : []), wt], repoOf(t))
         return r.exitCode === 0 ? '' : `git worktree remove: ${(r.stderr || r.stdout).trim().slice(0, 150)}`
       },
     })
   }
 
-  // 3. git worktree entries whose folder is gone
-  const dry = await git(host, ['worktree', 'prune', '--dry-run', '-v']).catch(() => null)
-  const stale = dry && dry.exitCode === 0 ? pruneLines(`${dry.stdout}\n${dry.stderr}`) : []
-  if (stale.length)
+  // 3. git worktree entries whose folder is gone (T-1154: in the board's repo and in each project's)
+  const repos = await repoList(host)
+  const staleIn: string[] = []
+  let stale = 0
+  for (const repo of repos) {
+    const dry = await git(host, ['worktree', 'prune', '--dry-run', '-v'], repo).catch(() => null)
+    const n = dry && dry.exitCode === 0 ? pruneLines(`${dry.stdout}\n${dry.stderr}`).length : 0
+    if (n) staleIn.push(repo)
+    stale += n
+  }
+  if (stale)
     prunes.push({
-      kind: 'prune', fixable: true, id: PRUNE_ID, text: `${stale.length} git worktree ${stale.length === 1 ? 'entry' : 'entries'} whose folder is gone (git worktree prune)`,
+      kind: 'prune', fixable: true, id: PRUNE_ID, text: `${stale} git worktree ${stale === 1 ? 'entry' : 'entries'} whose folder is gone (git worktree prune)`,
       fix: async () => {
-        const r = await git(host, ['worktree', 'prune'])
-        return r.exitCode === 0 ? '' : `git worktree prune: ${(r.stderr || r.stdout).trim().slice(0, 150)}`
+        for (const repo of staleIn) {
+          const r = await git(host, ['worktree', 'prune'], repo)
+          if (r.exitCode !== 0) return `git worktree prune: ${(r.stderr || r.stdout).trim().slice(0, 150)}`
+        }
+        return ''
       },
     })
 
   // 4. task branches (<name>/T-n) of done and dropped tasks: deleted only when their tip is in the branch they merge into
   // where each branch is checked out (git worktree list): such a branch can't be deleted while its folder stays
-  const wl = await git(host, ['worktree', 'list', '--porcelain']).catch(() => null)
-  const outAt = new Map<string, string>()
-  let at = ''
-  for (const l of (wl?.exitCode === 0 ? wl.stdout : '').split('\n').map(x => x.trim())) {
-    if (l.startsWith('worktree ')) at = l.slice('worktree '.length)
-    else if (l.startsWith('branch refs/heads/')) outAt.set(l.slice('branch refs/heads/'.length), at)
-  }
-  const offered = new Set(trees.map(f => f.id))
-  const refs = await git(host, ['for-each-ref', '--format=%(refname:short) %(objectname)', `refs/heads/${S.N.branch('')}`]).catch(() => null)
-  const rows = (refs?.exitCode === 0 ? refs.stdout : '').split('\n').map(l => l.trim().split(/\s+/)).filter(r => r.length === 2) as [string, string][]
-  for (const [br, sha] of rows.sort((x, y) => x[0].localeCompare(y[0], undefined, { numeric: true }))) {
-    const id = br.slice(S.N.branch('').length)
-    const t = taskOf(id)
-    if (id === mergingId) {
-      listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is being merged), left alone` })
-      continue
+  for (const repo of repos) {
+    const wl = await git(host, ['worktree', 'list', '--porcelain'], repo).catch(() => null)
+    const outAt = new Map<string, string>()
+    let at = ''
+    for (const l of (wl?.exitCode === 0 ? wl.stdout : '').split('\n').map(x => x.trim())) {
+      if (l.startsWith('worktree ')) at = l.slice('worktree '.length)
+      else if (l.startsWith('branch refs/heads/')) outAt.set(l.slice('branch refs/heads/'.length), at)
     }
-    if (!t || !isFinished(t)) continue
-    // as for folders (T-1032): a branch an agent may still use is only listed, never offered
-    if (inUse(id, t, agents)) {
-      listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}): an agent may still use it, kept` })
-      continue
-    }
-    const into = intoOf(t)
-    const anc = await git(host, ['merge-base', '--is-ancestor', sha, `refs/heads/${into}`]).catch(() => null)
-    if (anc?.exitCode === 0) {
+    const offered = new Set(trees.map(f => f.id))
+    const refs = await git(host, ['for-each-ref', '--format=%(refname:short) %(objectname)', `refs/heads/${S.N.branch('')}`], repo).catch(() => null)
+    const rows = (refs?.exitCode === 0 ? refs.stdout : '').split('\n').map(l => l.trim().split(/\s+/)).filter(r => r.length === 2) as [string, string][]
+    for (const [br, sha] of rows.sort((x, y) => x[0].localeCompare(y[0], undefined, { numeric: true }))) {
+      const id = br.slice(S.N.branch('').length)
+      const t = taskOf(id)
+      if (id === mergingId) {
+        listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is being merged), left alone` })
+        continue
+      }
+      if (!t || !isFinished(t) || repoOf(t) !== repo) continue
+      // as for folders (T-1032): a branch an agent may still use is only listed, never offered
+      if (inUse(id, t, agents)) {
+        listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}): an agent may still use it, kept` })
+        continue
+      }
+      const into = intoOf(t)
+      const anc = await git(host, ['merge-base', '--is-ancestor', sha, `refs/heads/${into}`], repo).catch(() => null)
+      if (anc?.exitCode === 0) {
+        const folder = outAt.get(br)
+        // checked out in a folder that is kept (or the project folder itself): git refuses to delete it, so only list it
+        if (wl?.exitCode !== 0 || (folder !== undefined && !(folder === `${wtRoot}/${id}` && offered.has(folderId(id))))) {
+          const why = wl?.exitCode !== 0 ? 'git could not tell where it is checked out' : keptDirs.get(folder!) === 'has uncommitted changes' ? 'checked out in a folder with uncommitted changes' : `checked out in ${shown(folder!)}/`
+          listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into}): kept: ${why}` })
+          continue
+        }
+        const after = folder !== undefined ? ` (goes after its folder, ${folderId(id)})` : ''
+        branches.push({
+          kind: 'branch', fixable: true, id: branchId(id), text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into})${after}`,
+          fix: async () => ((await deleteMergedBranch(host, br, into, repo)) ? '' : `it is no longer all in ${into}, or it is still checked out in a folder${after ? ` (clean up ${folderId(id)} too)` : ''}`),
+        })
+        continue
+      }
+      const n = anc?.exitCode === 1 ? await git(host, ['rev-list', '--count', `refs/heads/${into}..${sha}`], repo).catch(() => null) : null
+      const count = n?.exitCode === 0 ? Number(n.stdout.trim()) : NaN
+      const lost = Number.isFinite(count) && count > 0 ? ` (${plural(count, 'commit')} not in ${into})` : ''
+      if (t.status !== 'dropped') {
+        listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}) holds unmerged work${lost}; never deleted by the doctor` })
+        continue
+      }
+      // a dropped task's unmerged branch can go (T-1031), after its folder when that is offered too
       const folder = outAt.get(br)
-      // checked out in a folder that is kept (or the project folder itself): git refuses to delete it, so only list it
       if (wl?.exitCode !== 0 || (folder !== undefined && !(folder === `${wtRoot}/${id}` && offered.has(folderId(id))))) {
-        const why = wl?.exitCode !== 0 ? 'git could not tell where it is checked out' : keptDirs.get(folder!) === 'has uncommitted changes' ? 'checked out in a folder with uncommitted changes' : `checked out in ${shown(folder!)}/`
-        listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into}): kept: ${why}` })
+        const why = wl?.exitCode !== 0 ? 'git could not tell where it is checked out' : `checked out in ${shown(folder!)}/`
+        listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is dropped) holds unmerged work${lost}; kept: ${why}` })
         continue
       }
       const after = folder !== undefined ? ` (goes after its folder, ${folderId(id)})` : ''
       branches.push({
-        kind: 'branch', fixable: true, id: branchId(id), text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into})${after}`,
-        fix: async () => ((await deleteMergedBranch(host, br, into)) ? '' : `it is no longer all in ${into}, or it is still checked out in a folder${after ? ` (clean up ${folderId(id)} too)` : ''}`),
+        kind: 'branch', fixable: true, id: branchId(id), text: `branch ${br} (${id} is dropped): deletes ${count > 0 ? plural(count, 'commit') : 'commits'} not in ${into}${after}`,
+        fix: async () => {
+          const nb = await load(host).catch(() => null)
+          if (!nb) return "the board can't be read now"
+          const nt = nb.tasks.find(x => x.id === id) ?? taskOf(id)
+          if (nt?.status !== 'dropped') return `${id} is not dropped now`
+          if (inUse(id, nt, await agentsNow(host))) return 'an agent may still use it'
+          const cur = await git(host, ['rev-parse', '--verify', '-q', `refs/heads/${br}`], repo).catch(() => null)
+          if (cur?.exitCode !== 0 || cur.stdout.trim() !== sha) return 'it changed since the list'
+          const r = await git(host, ['branch', '-D', br], repo)
+          return r.exitCode === 0 ? '' : `git branch -D: ${(r.stderr || r.stdout).trim().slice(0, 150)}${after ? ` (clean up ${folderId(id)} too)` : ''}`
+        },
       })
-      continue
     }
-    const n = anc?.exitCode === 1 ? await git(host, ['rev-list', '--count', `refs/heads/${into}..${sha}`]).catch(() => null) : null
-    const count = n?.exitCode === 0 ? Number(n.stdout.trim()) : NaN
-    const lost = Number.isFinite(count) && count > 0 ? ` (${plural(count, 'commit')} not in ${into})` : ''
-    if (t.status !== 'dropped') {
-      listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}) holds unmerged work${lost}; never deleted by the doctor` })
-      continue
-    }
-    // a dropped task's unmerged branch can go (T-1031), after its folder when that is offered too
-    const folder = outAt.get(br)
-    if (wl?.exitCode !== 0 || (folder !== undefined && !(folder === `${wtRoot}/${id}` && offered.has(folderId(id))))) {
-      const why = wl?.exitCode !== 0 ? 'git could not tell where it is checked out' : `checked out in ${shown(folder!)}/`
-      listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is dropped) holds unmerged work${lost}; kept: ${why}` })
-      continue
-    }
-    const after = folder !== undefined ? ` (goes after its folder, ${folderId(id)})` : ''
-    branches.push({
-      kind: 'branch', fixable: true, id: branchId(id), text: `branch ${br} (${id} is dropped): deletes ${count > 0 ? plural(count, 'commit') : 'commits'} not in ${into}${after}`,
-      fix: async () => {
-        const nb = await load(host).catch(() => null)
-        if (!nb) return "the board can't be read now"
-        const nt = nb.tasks.find(x => x.id === id) ?? taskOf(id)
-        if (nt?.status !== 'dropped') return `${id} is not dropped now`
-        if (inUse(id, nt, await agentsNow(host))) return 'an agent may still use it'
-        const cur = await git(host, ['rev-parse', '--verify', '-q', `refs/heads/${br}`]).catch(() => null)
-        if (cur?.exitCode !== 0 || cur.stdout.trim() !== sha) return 'it changed since the list'
-        const r = await git(host, ['branch', '-D', br])
-        return r.exitCode === 0 ? '' : `git branch -D: ${(r.stderr || r.stdout).trim().slice(0, 150)}${after ? ` (clean up ${folderId(id)} too)` : ''}`
-      },
-    })
   }
 
   // 5. the board: who drives it, and running tasks with no worker
