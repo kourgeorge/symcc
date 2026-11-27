@@ -26,6 +26,7 @@ import { markMerged } from './merged'
 import { publish, enableHere, statusView } from './lead'
 import { orgMemTool, orgMemNow } from './org-mem'
 import { tasksListText } from '../core/task-list'
+import { clean } from '../core/text'
 import { liveStatusText } from '../core/live-text'
 import { chatTasksText, chatStatusText, chatTaskText } from '../core/chat-text'
 import { ORG_MEM_MAX_LINES, TOPIC_MAX_CHARS } from '../core/org-mem'
@@ -718,7 +719,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)!) : undefined
       const kind = await kindIn($, a)
       const project = await projectIn($, a)
-      const tooLong = detailsTooLong((str(a.details) ?? '').trim().length)
+      const tooLong = detailsTooLong(clean(str(a.details) ?? '', Infinity).length)
       if (tooLong) throw new Error(tooLong)
       if (!str(a.why)?.trim()) throw new Error('why is missing: say in one line why this task exists (and fill origin_by, plus request, scout or from_task)')
       // a scout's agent name ("symcc-scout-bugs", what its message comes from) counts as the scout's name ("bugs");
@@ -820,7 +821,10 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       // A note from the lead added to the details; the old text stays.
       const note = str(a.add_details)?.trim()
       const noted = note ? addDetailsText(t.details, note, dayOf(Date.now(), localOffset())) : undefined
-      const tooLong = detailsTooLong(noted ? noted.length : (str(a.details) ?? '').trim().length)
+      // The owner's answer is appended to the details too, so it counts toward the limit.
+      const answerIn = str(a.answer)?.trim()
+      const answered = answerIn ? `${(noted ?? (str(a.details) || t.details)).trimEnd()}\n\nOwner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ''}: ${answerIn}` : undefined
+      const tooLong = detailsTooLong(clean(answered ?? noted ?? str(a.details) ?? '', Infinity).length)
       if (tooLong) throw new Error(tooLong)
       const noteHistory = (x: Board): Partial<SymccTask> => (note ? { history: withHistory((find(x, t.id) ?? t).history, now(), ['note', noteAddedLine(note)]) } : {})
       const gone = parseGoneBranch(t.status === 'waiting' ? (t.ask?.text ?? null) : null)
