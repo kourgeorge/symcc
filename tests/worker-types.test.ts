@@ -149,6 +149,7 @@ test('a project that keeps files under .scratch/ in git: no exclude line is writ
   const w = world({ excludes: true, tracked: ['.scratch/keep.txt'] })
   w.files.set(EXCLUDE, '# local ignores\n')
   const dir = worktreeDir('T-1')
+  w.files.set(`${dir}/.git`, 'gitdir: x')
   w.files.set(`${dir}/.scratch/keep.txt`, 'mine')
   await prepareWorktree(w.$, task, 'main')
   expect(w.files.get(EXCLUDE)).toBe('# local ignores\n')
