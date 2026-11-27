@@ -4,7 +4,7 @@
 // figures (readTodayTeam), and the terminal and VS Code Live tabs draw it (OpenCode's: hooks/opencode/tests).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { LIVE_INDENT, LIVE_TONE, liveTodayLines, segText, squeezeHours, todayBar, todayMore, todayMoreLines, type LiveSeg, type TodayTeam } from '../hooks/core/live'
+import { LIVE_INDENT, LIVE_TONE, liveTodayLines, liveTodayRows, segText, squeezeHours, todayBar, todayMore, todayMoreLines, type LiveSeg, type TodayTeam } from '../hooks/core/live'
 import { textWidth } from '../hooks/core/width'
 import { dayOf, localOffset } from '../hooks/core/days'
 import { publish, readTodayTeam, resetTodayTeam, todayTeam } from '../hooks/app/lead'
@@ -296,4 +296,11 @@ test('T-806: the slim view\'s marks carry the reason, so a clash and a failed te
   const t = { id: 'T-1', status: 'done' as const, history: [{ at, kind: 'failed', text: 'try 1: x → y', reason: 'tests' }, { at, kind: 'failed', text: 'try 2: x → y', reason: 'clash' }, { at, kind: 'failed', text: 'try 3: x → y', reason: 'nochange' }, { at, kind: 'checker-problems', text: 'try 4: checker found problems: y' }], runs: [] }
   const slim = viewTask(t as never) as unknown as { history_marks: { kind: string; reason?: string }[] }
   expect(slim.history_marks.map(m => [m.kind, m.reason])).toEqual([['failed', 'tests'], ['failed', 'clash'], ['checker-problems', undefined]])
+})
+
+test('T-1159: the VS Code Per task row starts with "median" even when no task has a token figure', () => {
+  const tasks = (todayTasks(T0) as any[]).map(t => ({ ...t, runs: t.runs.map((r: any) => ({ ...r, agents: r.agents.map(({ tokens: _t, ...a }: any) => a) })) }))
+  const rows = liveTodayRows({ tasks: tasks as never, today_team: undefined }, T0, 0)
+  const per = rows.find(r => r.key === 'per-task')
+  expect(per ? segText(per.segs).startsWith('median 10m work') : per).toBe(true)
 })
