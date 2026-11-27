@@ -33,6 +33,15 @@ export const WIN_SETS: Record<SoundSet, [string, string]> = { 1: ['Asterisk', 'E
 /** A sound file for each set and each of done / needs you: [done, needs]. */
 type SetFiles = Record<SoundSet, [string, string]>
 
+/** Tests set this environment variable (the test scripts do): nothing is ever played while it is set. */
+export const MUTE_VAR = 'SYMCC_MUTE'
+async function muted(host: Host): Promise<boolean> {
+  // Only the Node and OpenCode hosts can answer this (Claude Code's envGet doesn't list it, and its tests use a fake host)
+  const read = host.env
+  const v = await read(MUTE_VAR).catch(() => undefined)
+  return !!v && v !== '0'
+}
+
 function run(host: Host, argv: string[]) {
   return host.run(argv, { timeoutMs: 5000 }).catch(() => null)
 }
@@ -197,7 +206,7 @@ function queueSay(host: Host, b: Board, item: string): boolean {
  */
 export async function playsFor(host: Host, wanted: Notify | null, items: string[]): Promise<Play[]> {
   const text = spokenLine(items)
-  if (!text) return []
+  if (!text || (await muted(host))) return []
   const p = await players(host)
   const can = await playable(host)
   const n = notifyOf({ notify: wanted ?? undefined }, can)
@@ -239,7 +248,7 @@ export async function sayNext(host: Host) {
  * Nothing when this machine has no sound player; never waits, never shows an error.
  */
 export async function playSample(host: Host, set: SoundSet): Promise<Play | null> {
-  if (!SOUND_SETS.includes(set)) return null
+  if (!SOUND_SETS.includes(set) || (await muted(host))) return null
   try {
     for (const make of (await players(host)).sound) {
       const c = make('', false, set)
