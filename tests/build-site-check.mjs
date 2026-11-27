@@ -220,9 +220,6 @@ if (existsSync(join(out, 'style.css'))) {
   if (!/main\.home tbody tr:nth-child\(even\) td\s*\{\s*background:\s*none/.test(css)) bad('style.css: main.home tables still get zebra rows')
 }
 
-for (const f of fails) console.log(`FAIL: ${f}`)
-process.exit(fails.length ? 1 : 0)
-
 // (T-1163) whats-new.html: one entry per "## " release of CHANGELOG.md, same order (newest first), no header paragraph,
 // no outside scripts, and a style that keeps it inside 375 px
 {
@@ -235,9 +232,12 @@ process.exit(fails.length ? 1 : 0)
   if (!t.includes(`<p>${log.length} releases from `)) bad('whats-new.html has no release count and date range')
   if (!/<h3>Added<\/h3>/.test(t)) bad('whats-new.html has no Added lists')
   if (/<script/.test(t)) bad('whats-new.html has a script')
-  if (!t.includes('<aside class="docs-side">') || !t.includes('<li><a href="whats-new.html">')) bad('whats-new.html is not in the documentation list')
+  if (!t.includes('<aside class="docs-side">') || !t.includes('<li><a href="whats-new.html"')) bad('whats-new.html is not in the documentation list')
   if (!read('built-with-symcc.html').includes('href="whats-new.html"')) bad('built-with-symcc.html does not link What\'s new')
   const css = readFileSync(join(out, 'style.css'), 'utf8')
   if (!/\.timeline \.release \{[^}]*overflow-wrap: anywhere/.test(css) || !/\.timeline \.release \{[^}]*min-width: 0/.test(css)) bad('style.css: timeline entries can push the page wider than 375 px')
   if (!css.includes('.timeline') || !/\.timeline \.release pre \{ max-width: 100%/.test(css)) bad('style.css: timeline code blocks are not held to the page width')
 }
+
+for (const f of fails) console.log(`FAIL: ${f}`)
+process.exit(fails.length ? 1 : 0)
