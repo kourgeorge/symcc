@@ -5422,6 +5422,11 @@ ${lines.may}
 ${lines.board}
 - End with a short plain report of your findings. If there is nothing worth reporting, answer exactly: NOTHING`;
 }
+var LEAD_REPORT_CHARS = 3000;
+var reportPart = (text) => {
+  const t = (text ?? "").trim();
+  return t.length > LEAD_REPORT_CHARS ? `${t.slice(0, LEAD_REPORT_CHARS - 1)}… (cut)` : t;
+};
 function scoutLeadMessage(scout, answer, paused = false) {
   if (isNothing(answer))
     return null;
@@ -5429,7 +5434,10 @@ function scoutLeadMessage(scout, answer, paused = false) {
   const found = n ? `found ${n} thing${n > 1 ? "s" : ""}` : "found something";
   const note = paused ? `
 The owner has paused "${scout}": it doesn't run on its timer until the owner resumes it (run now still runs it once).` : "";
-  return `Scout "${scout}" ${found} (its report is the scout's own message to you). Add tasks for anything worth doing, tell the owner what matters, or ignore it.${note}`;
+  return `Scout "${scout}" ${found}. Its report:
+${reportPart(answer)}
+
+Add tasks for anything worth doing, tell the owner what matters, or ignore it.${note}`;
 }
 var OUTCOMES = ["found", "nothing", "stopped", "error", "refusal", "not started"];
 var SCOUT_RUNS_KEPT = 50;
@@ -8247,63 +8255,53 @@ var LABELS = [
 var MAX_GAP = 8;
 var MIN_GAP = 2;
 var TITLE_W = 12;
-var TITLE_MAX = 40;
-var RIGHT_W = 6;
-var laneWidth = (idW, titleW, k, gap, sep, rightW = 0) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap + (rightW ? sep + rightW : gap >= 4 ? 3 : 0);
+var laneWidth = (idW, titleW, k, gap, sep) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap;
 function liveLayout(lanes, stations, width) {
   const idW = Math.max(4, ...lanes.map((l) => textWidth(l.id)));
   const k = stations.length;
   const longest = Math.max(3, ...lanes.map((l) => textWidth(l.title)));
-  const make = (titleW, gap, sep, rightW = right) => {
+  const make = (titleW, gap, sep) => {
     const set = LABELS.find((s) => stations.slice(0, -1).every((st) => textWidth(s[st]) <= gap)) ?? LABELS[LABELS.length - 1];
-    return { width, idW, titleW, gap, labels: stations.map((s) => set[s]), rightW, sep, stations: [...stations] };
+    return { width, idW, titleW, gap, labels: stations.map((s) => set[s]), sep, stations: [...stations] };
   };
   const base = Math.min(TITLE_W, longest);
-  const right = lanes.some((l) => l.done) ? RIGHT_W : 0;
-  const wide = Math.max(right, ...lanes.map((l) => l.done ? textWidth(`${l.done.word} 10m ago`) : 0));
-  if (wide > right)
-    for (let gap = MAX_GAP;gap >= MIN_GAP; gap--) {
-      if (laneWidth(idW, base, k, gap, 2, wide) <= width) {
-        const room = width - laneWidth(idW, base, k, gap, 2, wide);
-        return make(gap === MAX_GAP ? Math.min(TITLE_MAX, longest, base + room) : base, gap, 2, wide);
-      }
-    }
-  for (let gap = MAX_GAP;gap >= MIN_GAP; gap--) {
-    if (laneWidth(idW, base, k, gap, 2, RIGHT_W) <= width) {
-      const room = width - laneWidth(idW, base, k, gap, 2, right);
-      return make(Math.min(TITLE_MAX, longest, base + room), gap, 2);
-    }
-  }
+  const fill = (gap, sep) => Math.max(0, width - laneWidth(idW, 0, k, gap, sep) - 1);
+  for (let gap = MAX_GAP;gap >= MIN_GAP; gap--)
+    if (laneWidth(idW, base, k, gap, 2) <= width)
+      return make(fill(gap, 2), gap, 2);
   for (let titleW = base - 1;titleW >= 3; titleW--)
-    if (laneWidth(idW, titleW, k, MIN_GAP, 2, right) <= width)
-      return make(titleW, MIN_GAP, 2);
-  if (laneWidth(idW, 0, k, MIN_GAP, 2, right) <= width)
+    if (laneWidth(idW, titleW, k, MIN_GAP, 2) <= width)
+      return make(fill(MIN_GAP, 2), MIN_GAP, 2);
+  if (laneWidth(idW, 0, k, MIN_GAP, 2) <= width)
     return make(0, MIN_GAP, 2);
-  if (laneWidth(idW, 0, k, 1, 2, right) <= width)
+  if (laneWidth(idW, 0, k, 1, 2) <= width)
     return make(0, 1, 2);
-  if (laneWidth(idW, 0, k, 1, 1, right) <= width)
+  if (laneWidth(idW, 0, k, 1, 1) <= width)
     return make(0, 1, 1);
   return make(0, 0, 1);
 }
 var nameWidth = (l) => l.idW + (l.titleW ? 1 + l.titleW : 0);
 function liveLabelSegs(l) {
   const lead = " ".repeat(LIVE_RUN_MARK.length + nameWidth(l) + l.sep);
-  const text = lead + l.labels.map((s, i) => i < l.labels.length - 1 ? padWidth(s, l.gap + 1) : s).join("");
+  const init = l.labels.slice(0, -1).map((s) => padWidth(s, l.gap + 1)).join("");
+  const prev = l.labels.length > 1 ? textWidth(l.labels[l.labels.length - 2]) : 0;
+  let last = l.labels[l.labels.length - 1] ?? "";
+  const mark = textWidth(lead + init);
+  let at = mark;
+  if (mark + textWidth(last) > l.width && textWidth(last) > 1) {
+    at = Math.max(mark - l.gap + prev, Math.min(mark, l.width - textWidth(last)));
+    if (at + textWidth(last) > l.width) {
+      last = last.slice(0, 1);
+      at = mark;
+    }
+  }
+  const text = lead + init.slice(0, Math.max(0, at - textWidth(lead))) + last;
   return text.split(LIVE_AGENT_MARK).flatMap((x, i) => [...i ? [{ text: LIVE_AGENT_MARK, tone: "mark" }] : [], ...x ? [{ text: x, tone: "dim" }] : []]);
 }
 var LANE_WARN_TIMES = 2;
 function laneTimes(x) {
   const r = Math.round(x * 10) / 10;
   return { text: r < 0.1 ? "<0.1" : r.toFixed(1).replace(/\.0$/, ""), warn: r >= LANE_WARN_TIMES };
-}
-function laneRight(lane, nowMs, room = Infinity) {
-  if (lane.done) {
-    const time = rowDuration(Math.max(0, nowMs - lane.done.atMs));
-    return [`${lane.done.word} ${time} ago`, `${time} ago`].find((x) => textWidth(x) <= room) ?? time;
-  }
-  if (lane.station === "queue" && lane.place)
-    return `#${lane.place}`;
-  return lane.sinceMs !== undefined ? rowDuration(Math.max(0, nowMs - lane.sinceMs)) : "";
 }
 var segs = (...xs) => xs.filter((x) => !!x && !!x.text);
 var segText = (xs) => xs.map((x) => x.text).join("");
@@ -8333,7 +8331,7 @@ function laneLines(lane, l, o) {
       track.push(k < lane.at ? { text: "●", tone: "passed" } : k === lane.at ? done ? { text: LIVE_DONE_MARK, tone: "passed" } : { text: liveBlink(o.frame, o.steady), tone: "current" } : { text: "○", tone: "future" });
   });
   const name = segs({ text: done ? `${LIVE_DONE_MARK} ` : LIVE_RUN_MARK, tone: done ? "dim" : "run" }, { text: padWidth(lane.id, l.idW), tone: "run" }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? "dim" : "text" });
-  const first = [...name, { text: sep, tone: "text" }, ...track, ...done && l.rightW ? [{ text: sep + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: "dim" }] : []];
+  const first = [...name, { text: sep, tone: "text" }, ...track];
   const back = lane.sentBack > 0 && { text: `⌕ × ${lane.sentBack}`, tone: "dim" };
   const fits = (xs) => textWidth(segText(xs)) <= l.width;
   const times = lane.tokens !== undefined && lane.usual ? lane.tokens / lane.usual : undefined;
@@ -8344,13 +8342,16 @@ function laneLines(lane, l, o) {
   const agents = [lane.workerTokens && `worker ${fmtTokens(lane.workerTokens)}`, lane.checkerTokens && `checker ${fmtTokens(lane.checkerTokens)}`].filter((x) => !!x);
   const split = agents.length ? [{ text: agents.join(" · "), tone: "dim" }] : [];
   const size = lane.size ? [{ text: sizeText(lane.size, false), tone: "dim" }] : [];
-  const line = (level, withSize = false) => {
-    const lead = { text: `  try ${lane.tryNo}/${lane.tries}`, tone: "dim" };
+  const doneAge = lane.done && !o.noTime ? rowDuration(Math.max(0, o.nowMs - lane.done.atMs)) : "";
+  const doneNote = (short = false) => doneAge ? `${short ? "" : `${lane.done.word} `}${doneAge} ago · ` : "";
+  const line = (level, withSize = false, short = false) => {
+    const lead = { text: `  ${doneNote(short)}try ${lane.tryNo}/${lane.tries}`, tone: "dim" };
     const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], back ? [back] : [], withSize ? size : []].filter((x) => x.length);
     return segs(lead, ...parts.flatMap((x, i) => [{ text: " · ", tone: "dim" }, ...x]));
   };
   const withKind = (xs) => [...xs, { text: `  ${lane.kind}`, tone: "dim" }];
   const tries = [...size.length ? [o.noKind ? line(4, true) : withKind(line(4, true))] : [], ...[4, 3, 2, 1, 0].flatMap((n) => o.noKind ? [line(n)] : [withKind(line(n)), line(n)])];
+  tries.push(line(0, false, false), line(0, false, true));
   tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: "dim" }));
   const second = tries.find(fits) ?? tries[tries.length - 1];
   return [first, done ? second.map((x) => x.tone === "text" && !x.text.trim() ? x : { ...x, tone: "dim" }) : second];
@@ -9094,7 +9095,7 @@ function pickMove(before, after, isNothing2) {
 
 // hooks/core/chat-text.ts
 var CHAT_MAX = 3500;
-var TITLE_MAX2 = 70;
+var TITLE_MAX = 70;
 var PART_MAX = 600;
 function plain(s) {
   return s.replace(/\S*\.symcc\/\S*/g, "a saved file").replace(/[𝄞♟◆◇‖⧗⊛✎⌕⇢⏵⏸✧⌀⏱Σ•●○◉◎─━│┃┌┐└┘├┤┬┴┼▍▕▏█▁▂▃▄▅▆▇]/gu, "").replace(/\s+/g, " ").trim();
@@ -9158,7 +9159,7 @@ function askChoices(t, a) {
 }
 function taskLines(t, all, nowMs, running = false) {
   const detail = running ? runningState(t, nowMs) : "";
-  const head = `${t.id} ${running ? "running" : stateWord2(t, all)}: ${detail ? `${detail}: ` : ""}${cut(rowTitle(t), TITLE_MAX2)}`;
+  const head = `${t.id} ${running ? "running" : stateWord2(t, all)}: ${detail ? `${detail}: ` : ""}${cut(rowTitle(t), TITLE_MAX)}`;
   const out = [head];
   if (needsYou(t, nowMs) && (t.status === "waiting" || asksMoreTime(t))) {
     const a = taskAsks(t);
@@ -9555,7 +9556,9 @@ var startS = () => ({
   repoGit: new Map,
   gitInstall: "",
   gitWorkspace: "",
+  lastDigest: 0,
   toldGit: "ok",
+  toldLoose: "",
   settingUp: false,
   startupDone: false,
   backlogOpen: false,
@@ -12859,8 +12862,8 @@ async function staleOf($, others) {
   }
   return out;
 }
-function join($, task2) {
-  const entry = { task: task2, key: `${S.me || "unknown"}:${++count}:${Math.random().toString(36).slice(2, 8)}`, session: S.me || "unknown", joined: now(), at: Date.now() };
+function join($, task2, repo) {
+  const entry = { task: task2, repo, key: `${S.me || "unknown"}:${++count}:${Math.random().toString(36).slice(2, 8)}`, session: S.me || "unknown", joined: now(), at: Date.now() };
   const me = { entry, gone: false };
   local.push(me);
   const joined = editLine($, (line) => {
@@ -12902,7 +12905,7 @@ async function place2($, me) {
       line = [...line, ...missing(line)];
   }
   const at = Math.max(0, line.findIndex((e) => e.key === me.entry.key));
-  const ahead = line.slice(0, at);
+  const ahead = line.slice(0, at).filter((e) => (e.repo ?? "") === (me.entry.repo ?? ""));
   return { ahead: ahead.length, others: ahead.filter((e) => !keys.has(e.key)).length };
 }
 async function markLine($, t, mark, stopped2) {
@@ -12919,7 +12922,7 @@ async function markLine($, t, mark, stopped2) {
   });
 }
 async function inMergeLine($, task2, run, o = {}) {
-  const { me, joined } = join($, task2);
+  const { me, joined } = join($, task2, o.repo && o.repo !== S.root ? o.repo : "");
   o.release?.then(() => leave($, me), () => leave($, me));
   let shown = 0;
   let before;
@@ -13260,6 +13263,7 @@ async function checkAndMerge($, t, dir, b, mode = "finish", made = [], stop = ()
   const turn = () => inMergeLine($, t.id, (refresh) => upToDateTestMove($, t, dir, repo, b, mode, made, stopped2, retest, target, head, changed, refresh, noVerdict, prose), {
     t,
     stopped: stopped2,
+    repo,
     ...release ? { release } : {},
     ...limit ? { limit } : {}
   });
@@ -14059,6 +14063,14 @@ var FD_SOUNDS = "/usr/share/sounds/freedesktop/stereo";
 var MAC_SETS = { 1: ["Glass", "Ping"], 2: ["Hero", "Pop"], 3: ["Submarine", "Funk"] };
 var FD_SETS = { 1: ["complete", "bell"], 2: ["message-new-instant", "dialog-warning"], 3: ["service-login", "window-attention"] };
 var WIN_SETS = { 1: ["Asterisk", "Exclamation"], 2: ["tada.wav", "chord.wav"], 3: ["chimes.wav", "notify.wav"] };
+var MUTE_VAR = "SYMCC_MUTE";
+async function muted(host) {
+  const read = host.env;
+  const v = await read(MUTE_VAR).catch(() => {
+    return;
+  });
+  return !!v && v !== "0";
+}
 function run(host, argv) {
   return host.run(argv, { timeoutMs: 5000 }).catch(() => null);
 }
@@ -14197,7 +14209,7 @@ function queueSay(host, b, item) {
 }
 async function playsFor(host, wanted, items) {
   const text = spokenLine(items);
-  if (!text)
+  if (!text || await muted(host))
     return [];
   const p = await players(host);
   const can = await playable(host);
@@ -14236,7 +14248,7 @@ async function sayNext(host) {
     sayNext(host);
 }
 async function playSample(host, set) {
-  if (!SOUND_SETS.includes(set))
+  if (!SOUND_SETS.includes(set) || await muted(host))
     return null;
   try {
     for (const make of (await players(host)).sound) {
@@ -15479,8 +15491,7 @@ function liveStatusText(view, notes, nowMs, name = DEFAULT_NAME, width2 = 80, of
     for (const l of lanes) {
       const [first, second] = laneLines(l, layout, { nowMs, frame: 0, steady: true });
       out.push((LIVE_INDENT + segText(first) + (l.done ? "" : tryText(l.tryNo))).trimEnd());
-      if (!l.done)
-        under(second);
+      under(second);
       for (const r of trainRows(trains.lanes[l.id] ?? [], inner))
         under(r.segs);
     }
@@ -15873,13 +15884,13 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Pick the task type by the result wanted: project files to merge → change (or bug, feature, refactor, docs); an answer to read → investigation; anything else, including work outside the project or "don't merge" / "just make it on my Desktop" → errand. Never use a plain background agent for work the board can do as an errand.
 - Turn what the owner wants into tasks with ${S.N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes. Every change task's details say how the change will be tested, e.g. "Done when: tests show …" (the test that will check it). A change task whose commit edits code but no test file is flagged before merging (setting tests_with_changes: ask, the default, merges it and tells you "T-5 changed code but no test", so follow up with a test task or ask the owner; review makes it wait for the owner's review; off does nothing). Test files: in a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder (or a folder ending .Test/.Tests), or with test/spec/e2e/cy as a name part split by . _ or - (a.test.ts, a-test.ts, a.cy.ts), or a name ending in Test/Tests (FooTest.java); latest.ts and run-tests.sh are not tests. Docs: .md/.mdx, README/CHANGELOG/LICENSE names, images/video/audio/fonts, non-code files under docs/ (not docs/build.ts or Notice.tsx). A docs-only change is never flagged.
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly (when those words are a short reply like "yes", quote “<the owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<the reply>”); for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
-- On a workspace board (the board folder holds several repos, each in its own folder, and is no repo itself), give every change task its project: the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A task that needs no repo (an answer to read, an errand) needs no project.
+- On a workspace board (the board folder holds several repos, each in its own folder, and is no repo itself), give every task its project (change, investigation or errand): the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A task with no project can't start on a workspace board yet, even an investigation or an errand: give it the project folder it works in (or the nearest one).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - Workers can't read the board or ${S.N.dir}/ (no board tool, and their folder is their own copy). To hand a worker an earlier task's answer, give its task from_task (that task's latest report is copied into the worker's folder and its prompt names it), or name the report file (${S.N.dir}/reports/T-n-try-N.md, or T-n-try-*.md for the latest), or paste the key facts into the details.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
 - Keeping the board in order (triage): older tasks go first unless the owner says a task is urgent; bugs and safety fixes go before features. Use priority for urgency: lower runs first; every task starts at 0; give urgent work -1, -2…, later work 1, 2… (a whole number from -20 to 19; ties go to the older task). Use it, not only after. Chain tasks with after only when they really share files; tasks with different files should run side by side. Never leave a task waiting forever. When a new task shares files with an older task that is still waiting, the new one goes behind it (the new one gets after: the older one), not the other way round.
 - ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / priority, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
-- Workers start by themselves on ready tasks, each in its own copy of the code. When a change task finishes, its change is tested and, if it passes, merged (investigations and errands are not merged). Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
+- Workers start by themselves on ready tasks, each in its own copy of the code. When a change task finishes, its change is tested and, if it passes, merged (investigations and errands are not merged). Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). Agents' own reports do not reach you as messages (${S.N.name} mutes them): you get board updates (the outcome; an answered investigation's, an errand's and a scout's update carry the report), "Meanwhile" lines, and now and then a short digest of what is stuck or repeating. Read any task's report with ${S.N.name} board task T-n.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers to a task) and merges they approved don't send you a message: they come as "Meanwhile" lines (also quiet retries, reload restarts and plain merges): at the top of the next board update, or beside the owner's next message if that comes first. They need no reply; just take them into account. Only the owner setting up git, or allowing or refusing a task's files on the board, wakes you at once with a board update.
 ${popup() ? `- Ask every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") with ${popup()} (2 to 4 short options). ${S.N.name} puts each such question on the board by itself as a Q-n, so don't also add a ${S.N.name} question for it. Whichever the owner answers first closes the other: a board answer comes back as the pop-up's answer, and a pop-up answer closes the Q-n (the tool result says so). If the owner closes the pop-up without answering, the Q-n stays on the board, and a later board answer wakes you with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it." (already closed: act on it and don't ask again). Only for a question with 5 or 6 options, first add it with ${S.N.name} question (action add), then ask it with ${popup()} with the same question text and the first 3 options plus "the rest on the board": the pop-up is tied to that Q-n. Drop a question that no longer matters (${S.N.name} question action drop). A question about one task stays ${S.N.name} ask.
 - Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask in the chat with ${popup()}, with the same options (where a line here says numbered plain chat text, use ${popup()} with those options), with the question's header set to exactly the task id (T-5; an id only mentioned in the question text doesn't tie it). ${S.N.name} ties that pop-up to the task's own board question (no Q-n is added): whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into the task for you (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a note), and the tool result says what was done and what is left for you (e.g. a reject's reason: then ${S.N.name} reject yourself). ${popup()} takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board" (or the owner types one under Other); when the owner picks "the rest on the board", the board question stays open and a board update brings their answer. Don't stack two questions under the same numbers: ask one at a time.` : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "${answerTail()}". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (…): <answer>. … Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
@@ -16517,6 +16528,8 @@ async function runNowTool($, id, anyway) {
   const waits = runNowWaits(b, t);
   if (waits.length && !anyway)
     return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`;
+  if (S.gitState === "ok" && S.gitRoot === "no-repo" && !isProjectName(t.project ?? ""))
+    return `${noProjectText({ ...b, tasks: [t] })}; nothing started`;
   if (S.gitState === "no-git" || !await taskGitReady($, b, t))
     return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : "here"} yet`;
   const busy = workers.size + starting.size;
@@ -17694,10 +17707,16 @@ async function answered(host, t, answer, summary, limit, agentId) {
     return;
   if (errand) {
     await endInvestigation(host, t, false, agentId);
-    tellLead(host, `${t.id} "${t.title}" (errand) is done${late ? ` (its time of ${limit} minutes ran out, so this is what it had)` : ""}; nothing was merged. Its report is on the task (${S.N.name} board task ${t.id}). Tell the owner what it did.`);
+    tellLead(host, `${t.id} "${t.title}" (errand) is done${late ? ` (its time of ${limit} minutes ran out, so this is what it had)` : ""}; nothing was merged. Its report (full: ${S.N.name} board task ${t.id}):
+${reportPart(text)}
+
+Tell the owner what it did.`);
     return;
   }
-  tellLead(host, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ""} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`);
+  tellLead(host, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ""} and waits for the owner to read it (nothing was committed, tested or merged). Its answer (full: ${S.N.name} board task ${t.id}):
+${reportPart(text)}
+
+Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`);
 }
 async function doneAfterMerge(host, t, sha) {
   const done = await change(host, (x) => {
@@ -18403,7 +18422,7 @@ async function installStepOf($) {
   return gitInstallStep(f);
 }
 var isOpenTask = (t) => !isFinished(t) && t.status !== "backlog";
-var openProjects = (b) => [...new Set(b.tasks.filter((t) => !isFinished(t)).map((t) => t.project).filter((p) => !!p && isProjectName(p)))].sort();
+var openProjects = (b) => [...new Set(b.tasks.filter((t) => isOpenTask(t)).map((t) => t.project).filter((p) => !!p && isProjectName(p)))].sort();
 var gitStateOfTask = (t) => {
   const repo = repoOf(t);
   return repo === S.root ? S.gitRoot : S.repoGit.get(repo) ?? "ok";
@@ -18463,8 +18482,7 @@ async function gitReady($, b, repo = S.root) {
   const real = await probeGit($);
   S.gitRoot = real;
   const board = b ?? await load($);
-  const loose = board.tasks.some((t) => isOpenTask(t) && !(t.project && isProjectName(t.project)));
-  const s = real === "no-repo" && !loose && (await projectNames($).catch(() => [])).length ? "ok" : real;
+  const s = real === "no-repo" && (await projectNames($).catch(() => [])).length ? "ok" : real;
   if (s === "no-git" && (s !== S.gitState || !S.gitInstall))
     S.gitInstall = await installStepOf($).catch(() => "");
   if (s !== "no-git")
@@ -18475,6 +18493,12 @@ async function gitReady($, b, repo = S.root) {
     S.gitWorkspace = ws;
     await publish($, b ?? await load($));
   }
+  const loose = noProjectText(board);
+  if (S.driving && loose !== S.toldLoose) {
+    S.toldLoose = loose;
+    if (loose)
+      tellLead($, loose);
+  }
   if (s === "ok") {
     if (S.toldGit !== "ok" && S.driving && !S.settingUp)
       tellLead($, gitFoundText());
@@ -18484,6 +18508,15 @@ async function gitReady($, b, repo = S.root) {
     tellLead($, s === "no-git" ? noGitText(S.N.name, S.gitInstall) : ws ? ws : setupAskText(s, S.N.name));
   }
   return s === "ok";
+}
+function noProjectText(b) {
+  if (S.gitState !== "ok" || S.gitRoot !== "no-repo")
+    return "";
+  const ids = b.tasks.filter((t) => isOpenTask(t) && !isProjectName(t.project ?? "")).map((t) => t.id);
+  if (!ids.length)
+    return "";
+  const many = ids.length > 1;
+  return `${ids.join(", ")} ${many ? "have" : "has"} no project, so ${many ? "they can't" : "it can't"} start on a board over several repos; give ${many ? "each" : "it"} a project (${S.N.name} change project)`;
 }
 var workspaceText = () => `This looks like a workspace of several repos; ${S.N.name} can't run a board over several repos yet. Open ${S.W.app} in one repo instead.`;
 async function holdsRepos($) {
@@ -18854,7 +18887,7 @@ async function cleanupMerged($, b) {
       dirs++;
   }
   const repoTasks = (repo) => b.tasks.filter((t) => repoOf(t) === repo);
-  const rootNeeded = S.gitRoot === "ok" || b.tasks.some((t) => isOpenTask(t) && repoOf(t) === S.root);
+  const rootNeeded = S.gitRoot === "ok";
   const repos = [...new Set(b.tasks.map((t) => repoOf(t)))].filter((r) => r !== S.root || rootNeeded);
   if (!repos.includes(S.root) && rootNeeded)
     repos.push(S.root);
@@ -19610,7 +19643,7 @@ async function publishView(host, b) {
   const branch = await branchLine(host, b, own);
   const size_note = [...sizeNotes.values()].join("; ");
   const projectNote = projectNotes(openProjects(b));
-  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, size_note].filter(Boolean).join("; ");
+  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, noProjectText(b), size_note].filter(Boolean).join("; ");
   const can = await playable(host);
   const branches = branchFacts(host, b, own || "main").facts;
   const team = todayTeam(host, [...scoutState.keys()]).team;
@@ -19624,7 +19657,7 @@ async function publishView(host, b) {
   const size_now = [...sizeNotes.values()].join("; ");
   if (size_now !== size_note) {
     for (const x of new Set([v, fit.view])) {
-      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, size_now].filter(Boolean).join("; ");
+      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, noProjectText(b), size_now].filter(Boolean).join("; ");
       if (size_now)
         x.size_note = size_now;
       else
@@ -19915,6 +19948,79 @@ async function isDamSession(host) {
   }));
 }
 
+// hooks/core/digest.ts
+var DIGEST_EVERY_MS = 2 * 3600000;
+var DIGEST_STUCK_MS = 3 * 3600000;
+var ENDED = ["done", "dropped"];
+var at2 = (s) => s ? Date.parse(s) : NaN;
+var since = (s, sinceMs) => at2(s) > sinceMs;
+var short = (t) => `${t.id} "${t.title.length > 50 ? `${t.title.slice(0, 49)}…` : t.title}"`;
+var hours = (ms2) => `${Math.max(1, Math.round(ms2 / 3600000))}h`;
+function digestText(tasks, sinceMs, nowMs, seen = new Map) {
+  const lines = [];
+  const shown = new Map;
+  const open = tasks.filter((t) => !ENDED.includes(t.status));
+  const key = (t) => `${t.status}:${t.attempts}`;
+  const fresh = (t) => !shown.has(t.id) && seen.get(t.id) !== key(t);
+  const list2 = (items, what) => {
+    const head = items.slice(0, 3);
+    head.forEach((t) => shown.set(t.id, key(t)));
+    return head.map(what).join(", ") + (items.length > 3 ? ` and ${items.length - 3} more` : "");
+  };
+  const running = (t) => t.status === "doing" || t.status === "review";
+  const tries = open.filter((t) => t.status !== "backlog" && Number(t.attempts) >= 3 && (running(t) || fresh(t)));
+  if (tries.length)
+    lines.push(`On try 3 or more: ${list2(tries, (t) => `${short(t)} (try ${t.attempts})`)}.`);
+  const testFails = (t) => (t.history ?? []).filter((h) => h.kind === "failed" && h.reason === "tests");
+  const testTasks = tasks.filter((t) => testFails(t).some((h) => since(h.at, sinceMs)));
+  const testy = open.some((t) => testTasks.includes(t) && testFails(t).length >= 2);
+  const testNew = testTasks.filter(fresh);
+  if ((testy || testTasks.length >= 2) && testNew.length) {
+    const n = testTasks.length;
+    lines.push(`Tests failed since the last digest in ${n} task${n > 1 ? "s" : ""}: ${list2(testNew, (t) => `${short(t)} (${testFails(t).length}x)`)}.`);
+  }
+  const back = tasks.reduce((n, t) => n + (t.history ?? []).filter((h) => h.kind === "checker-problems" && since(h.at, sinceMs)).length, 0);
+  if (back >= 2) {
+    const merged = tasks.filter((t) => t.status === "done" && t.merged && since(t.updated_at, sinceMs));
+    const first = merged.filter((t) => (t.history ?? []).every((h) => h.kind !== "checker-problems") && Number(t.attempts) <= 1).length;
+    lines.push(`The checker sent work back ${back} times since the last digest${merged.length ? `; ${first} of ${merged.length} merged tasks passed on the first try` : ""}.`);
+  }
+  const old = (t) => nowMs - at2(t.updated_at) > DIGEST_STUCK_MS;
+  const idle = open.filter((t) => t.status === "todo" && !(t.after ?? []).length && old(t) && fresh(t));
+  if (idle.length)
+    lines.push(`Waiting to start for a long time: ${list2(idle, (t) => `${short(t)} (${hours(nowMs - at2(t.updated_at))})`)}.`);
+  const owner2 = open.filter((t) => t.status === "waiting" && old(t) && fresh(t));
+  if (owner2.length)
+    lines.push(`Waiting on the owner for a long time: ${list2(owner2, (t) => `${short(t)} (${hours(nowMs - at2(t.updated_at))})`)}.`);
+  shown.forEach((v, k) => seen.set(k, v));
+  return lines.length ? `Digest (what is stuck or repeating; agent reports are muted, read one with board task T-n):
+${lines.map((l) => `- ${l}`).join(`
+`)}` : null;
+}
+
+// hooks/app/digest.ts
+var seen = new Map;
+async function digestTick(host, nowMs = Date.now()) {
+  if (!S.enabledNow || !S.driving || S.fresh || S.guardOnly)
+    return false;
+  if (!S.lastDigest) {
+    S.lastDigest = nowMs;
+    seen.clear();
+    return false;
+  }
+  if (nowMs - S.lastDigest < DIGEST_EVERY_MS)
+    return false;
+  const b = await load(host).catch(() => null);
+  if (!b)
+    return false;
+  const text = digestText(b.tasks, S.lastDigest, nowMs, seen);
+  if (!text)
+    return false;
+  S.lastDigest = nowMs;
+  tellLead(host, text);
+  return true;
+}
+
 // hooks/app/session-start.ts
 var starts = 0;
 function sessionStarting() {
@@ -19928,6 +20034,9 @@ function watchdogTick(host) {
       return;
     });
   check(host).catch(() => {
+    return;
+  });
+  digestTick(host).catch(() => {
     return;
   });
 }
@@ -20456,9 +20565,9 @@ async function toolCall(host, tool, agentId, input) {
   if (on?.kind === "ended")
     return refuse(stoppedText(), "stopped", { role: "agent", task: on.task });
   if (agentId && (scoutRuns.has(agentId) || checkerRuns.has(agentId) || on?.kind === "checker")) {
-    const short = tool === toolName(ASK_TOOL) ? ASK_TOOL : toolNames().find((t) => tool === toolName(t));
+    const short2 = tool === toolName(ASK_TOOL) ? ASK_TOOL : toolNames().find((t) => tool === toolName(t));
     const scout = scoutRuns.get(agentId);
-    const why = short ? scoutToolRefusal(short, S.N.name, input, scout !== undefined ? "scout" : "checker") : null;
+    const why = short2 ? scoutToolRefusal(short2, S.N.name, input, scout !== undefined ? "scout" : "checker") : null;
     const task2 = checkerRuns.get(agentId)?.task ?? (on?.kind === "checker" ? on.task : undefined);
     if (why)
       return refuse(why, "tools", scout !== undefined ? { role: "scout", scout } : { role: "checker", ...task2 ? { task: task2 } : {} });
@@ -20841,9 +20950,9 @@ function copilotCommandList(host) {
   const main = list2.find((c) => c.name === S.N.name);
   if (main)
     main.description = `Show the ${S.N.name} board as text in the chat: tasks and scouts`;
-  const at2 = list2.findIndex((c) => c.name === `${S.N.name}-status`);
+  const at3 = list2.findIndex((c) => c.name === `${S.N.name}-status`);
   if (!list2.some((c) => c.name === board))
-    list2.splice(at2 < 0 ? list2.length : at2 + 1, 0, { name: board, description: `Show the ${S.N.name} board as text in the chat (as /${S.N.name}; there is no board panel here)`, runs: S.N.name });
+    list2.splice(at3 < 0 ? list2.length : at3 + 1, 0, { name: board, description: `Show the ${S.N.name} board as text in the chat (as /${S.N.name}; there is no board panel here)`, runs: S.N.name });
   return list2;
 }
 function copilotCommands(host, session, sent = () => {
@@ -20912,10 +21021,10 @@ var MODELS_ENV = "SYMCC_COPILOT_MODELS";
 function parseModels(text) {
   const out = {};
   for (const pair of (text ?? "").split(",")) {
-    const at2 = pair.indexOf("=");
-    const k = pair.slice(0, at2).trim();
-    const v = pair.slice(at2 + 1).trim();
-    if (at2 > 0 && k && v)
+    const at3 = pair.indexOf("=");
+    const k = pair.slice(0, at3).trim();
+    const v = pair.slice(at3 + 1).trim();
+    if (at3 > 0 && k && v)
       out[k] = v;
   }
   return out;

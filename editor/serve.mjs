@@ -6724,7 +6724,7 @@ var require_client_h1 = __commonJS({
            * @param {number} len
            * @returns {number}
            */
-          wasm_on_url: (p, at2, len) => {
+          wasm_on_url: (p, at3, len) => {
             return 0;
           },
           /**
@@ -6733,9 +6733,9 @@ var require_client_h1 = __commonJS({
            * @param {number} len
            * @returns {number}
            */
-          wasm_on_status: (p, at2, len) => {
+          wasm_on_status: (p, at3, len) => {
             assert(currentParser.ptr === p);
-            const start = at2 - currentBufferPtr + currentBufferRef.byteOffset;
+            const start = at3 - currentBufferPtr + currentBufferRef.byteOffset;
             return currentParser.onStatus(new FastBuffer(currentBufferRef.buffer, start, len));
           },
           /**
@@ -6752,9 +6752,9 @@ var require_client_h1 = __commonJS({
            * @param {number} len
            * @returns {number}
            */
-          wasm_on_header_field: (p, at2, len) => {
+          wasm_on_header_field: (p, at3, len) => {
             assert(currentParser.ptr === p);
-            const start = at2 - currentBufferPtr + currentBufferRef.byteOffset;
+            const start = at3 - currentBufferPtr + currentBufferRef.byteOffset;
             return currentParser.onHeaderField(new FastBuffer(currentBufferRef.buffer, start, len));
           },
           /**
@@ -6763,9 +6763,9 @@ var require_client_h1 = __commonJS({
            * @param {number} len
            * @returns {number}
            */
-          wasm_on_header_value: (p, at2, len) => {
+          wasm_on_header_value: (p, at3, len) => {
             assert(currentParser.ptr === p);
-            const start = at2 - currentBufferPtr + currentBufferRef.byteOffset;
+            const start = at3 - currentBufferPtr + currentBufferRef.byteOffset;
             return currentParser.onHeaderValue(new FastBuffer(currentBufferRef.buffer, start, len));
           },
           /**
@@ -6785,9 +6785,9 @@ var require_client_h1 = __commonJS({
            * @param {number} len
            * @returns {number}
            */
-          wasm_on_body: (p, at2, len) => {
+          wasm_on_body: (p, at3, len) => {
             assert(currentParser.ptr === p);
-            const start = at2 - currentBufferPtr + currentBufferRef.byteOffset;
+            const start = at3 - currentBufferPtr + currentBufferRef.byteOffset;
             return currentParser.onBody(new FastBuffer(currentBufferRef.buffer, start, len));
           },
           /**
@@ -50566,8 +50566,8 @@ function goOnRun(runs, now3) {
   if (!runs || !last || !selfRestart(last)) return null;
   const { ended, ended_by: _b, ended_note, ...rest } = last;
   const step = { at: ended ?? now3, why: ended_note ?? "", started: now3 };
-  const at2 = rest.agents?.findLastIndex((a) => a.kind === "worker" && a.ended_by !== "restarted") ?? -1;
-  const agents = rest.agents ? { agents: rest.agents.map((a, i) => i === at2 ? { ...a, ended: a.ended ?? step.at, ended_by: "restarted" } : a.ended ? a : { ...a, ended: step.at }) } : {};
+  const at3 = rest.agents?.findLastIndex((a) => a.kind === "worker" && a.ended_by !== "restarted") ?? -1;
+  const agents = rest.agents ? { agents: rest.agents.map((a, i) => i === at3 ? { ...a, ended: a.ended ?? step.at, ended_by: "restarted" } : a.ended ? a : { ...a, ended: step.at }) } : {};
   return [...runs.slice(0, -1), { ...rest, ...agents, restarts: [...restartsOf(last), step] }];
 }
 function undoGoOn(runs) {
@@ -50576,17 +50576,17 @@ function undoGoOn(runs) {
   if (!runs || !last || last.ended || workerOf(last) || !step) return null;
   const { restarts: _r, ...rest } = last;
   const left = restartsOf(last).slice(0, -1);
-  const at2 = rest.agents?.findLastIndex((a) => a.ended_by === "restarted") ?? -1;
-  const agents = rest.agents && at2 >= 0 ? { agents: rest.agents.map((a, i) => {
-    if (i !== at2) return a;
+  const at3 = rest.agents?.findLastIndex((a) => a.ended_by === "restarted") ?? -1;
+  const agents = rest.agents && at3 >= 0 ? { agents: rest.agents.map((a, i) => {
+    if (i !== at3) return a;
     const { ended_by: _e, ...keep } = a;
     return keep;
   }) } : {};
   return [...runs.slice(0, -1), { ...rest, ...agents, ended: step.at, ended_by: "restarted", ...step.why ? { ended_note: step.why } : {}, ...left.length ? { restarts: left } : {} }];
 }
 function workerSince(r) {
-  const at2 = Date.parse(restartsOf(r).at(-1)?.started ?? r?.started ?? "");
-  return Number.isFinite(at2) ? at2 : null;
+  const at3 = Date.parse(restartsOf(r).at(-1)?.started ?? r?.started ?? "");
+  return Number.isFinite(at3) ? at3 : null;
 }
 var restartedAgent = (r, id) => !!id && agentsOf(r).some((a) => a.id === id && a.ended_by === "restarted");
 var AGENT_TRIES_KEPT = 5;
@@ -50672,13 +50672,13 @@ function withAgentUsed(runs, kind, id, now3, used = {}) {
   if (i < 0) i = runs.length - 1;
   const r = runs[i];
   let agents = [...agentsOf(r)];
-  let at2 = id === void 0 ? agents.findLastIndex((a) => a.kind === kind && !a.ended) : agents.findIndex((a) => a.id === id);
-  if (at2 < 0) {
-    const since = kind === "worker" ? restartsOf(r).at(-1)?.started ?? r.started : now3;
-    agents = [...agents, { ...id !== void 0 ? { id } : {}, kind, started: isIso(since) ? since : now3 }];
-    at2 = agents.length - 1;
+  let at3 = id === void 0 ? agents.findLastIndex((a) => a.kind === kind && !a.ended) : agents.findIndex((a) => a.id === id);
+  if (at3 < 0) {
+    const since2 = kind === "worker" ? restartsOf(r).at(-1)?.started ?? r.started : now3;
+    agents = [...agents, { ...id !== void 0 ? { id } : {}, kind, started: isIso(since2) ? since2 : now3 }];
+    at3 = agents.length - 1;
   }
-  agents = withUse(agents, at2, used).map((a, k) => k === at2 ? { ...a, ended: a.ended ?? now3 } : a);
+  agents = withUse(agents, at3, used).map((a, k) => k === at3 ? { ...a, ended: a.ended ?? now3 } : a);
   const out = [...runs];
   out[i] = { ...r, agents };
   return keepAgentIds(out);
@@ -50690,13 +50690,13 @@ function withAgentExtra(runs, id, fallback, used) {
   const r = runs[i];
   if (!r) return runs;
   let agents = [...agentsOf(r)];
-  let at2 = agents.findIndex((a) => a.id === id);
-  if (at2 < 0) {
+  let at3 = agents.findIndex((a) => a.id === id);
+  if (at3 < 0) {
     agents = [...agents, { id, kind: "worker", started: r.started, ended: r.ended ?? r.started }];
-    at2 = agents.length - 1;
+    at3 = agents.length - 1;
   }
   const out = [...runs];
-  out[i] = { ...r, agents: withUse(agents, at2, used) };
+  out[i] = { ...r, agents: withUse(agents, at3, used) };
   return keepAgentIds(out);
 }
 function withStoppedUsed(runs, id, now3, used) {
@@ -51489,8 +51489,8 @@ var PROMPT_PLACEHOLDERS = lazyTable(PROMPT_KINDS, (kind) => kind === "change" ? 
   ask: "how to ask the owner and what a refused edit means",
   [TASK_PLACEHOLDER]: TASK_PLACEHOLDER_ABOUT
 });
-function fillPrompt(kind, values, task, board, commits, since) {
-  return buildPrompt({ kind, values, ...task ? { task } : {}, ...board ? { board } : {}, ...commits ? { commits } : {}, ...since ? { since } : {} });
+function fillPrompt(kind, values, task, board, commits, since2) {
+  return buildPrompt({ kind, values, ...task ? { task } : {}, ...board ? { board } : {}, ...commits ? { commits } : {}, ...since2 ? { since: since2 } : {} });
 }
 var ROLE_PLACEHOLDERS = {
   task_id: SHARED_PLACEHOLDERS.task_id,
@@ -51770,9 +51770,9 @@ var WORKER_HANDED_BACK = "worker handed back";
 function workerStartedEntry(t, mergeMain, agent) {
   const history = t.history ?? [];
   const last = history.findLastIndex((h) => h.kind === "stage" && h.step === "worker-start" && h.try === (Number(t.attempts) || 0));
-  const since = last < 0 ? [] : history.slice(last + 1);
-  const changed = last >= 0 && !since.some((h) => h.kind === "restarted" || h.kind === "stopped");
-  const again = !changed ? "" : since.some((h) => h.kind === "note") ? " \xB7 same try number (note joined)" : " \xB7 same try number (task changed)";
+  const since2 = last < 0 ? [] : history.slice(last + 1);
+  const changed = last >= 0 && !since2.some((h) => h.kind === "restarted" || h.kind === "stopped");
+  const again = !changed ? "" : since2.some((h) => h.kind === "note") ? " \xB7 same try number (note joined)" : " \xB7 same try number (task changed)";
   return ["stage", `try ${t.attempts}: ${WORKER_STARTED} (role ${roleOf(t)})${mergeMain ? " \xB7 merges main in first" : ""}${again}`, { try: Number(t.attempts) || 0, step: "worker-start", ...agent ? { agent } : {} }];
 }
 var workerHandedBackEntry = (t, agent) => ["stage", `try ${t.attempts}: ${WORKER_HANDED_BACK}`, { try: Number(t.attempts) || 0, step: "handed-back", ...agent ? { agent } : {} }];
@@ -51865,13 +51865,13 @@ var HISTORY_KINDS = {
 };
 var ranNow = (t) => (t.history ?? []).some((e) => e.kind === "run-now");
 var isHistoryKind = (k) => typeof k === "string" && Object.prototype.hasOwnProperty.call(HISTORY_KINDS, k);
-var historyEntry = (kind, text2, at2, facts = {}) => ({ at: at2, kind, text: text2, ...facts });
-function withHistory(history, at2, ...adds) {
-  return [...history ?? [], ...adds.map(([kind, text2, facts]) => historyEntry(kind, text2, at2, facts))];
+var historyEntry = (kind, text2, at3, facts = {}) => ({ at: at3, kind, text: text2, ...facts });
+function withHistory(history, at3, ...adds) {
+  return [...history ?? [], ...adds.map(([kind, text2, facts]) => historyEntry(kind, text2, at3, facts))];
 }
 var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-function historyTime(at2, nowMs = Date.now()) {
-  const ms3 = at2 ? Date.parse(at2) : NaN;
+function historyTime(at3, nowMs = Date.now()) {
+  const ms3 = at3 ? Date.parse(at3) : NaN;
   if (!Number.isFinite(ms3)) return "";
   const d = new Date(ms3);
   const today = new Date(nowMs);
@@ -51957,8 +51957,8 @@ function cleanAsk(v) {
   }
   return a;
 }
-function makeAsk(by, text2, at2, extra = {}) {
-  return { by, text: text2, asked_at: at2, ...extra.options?.length ? { options: [...extra.options] } : {}, ...extra.files?.length ? { files: [...extra.files] } : {} };
+function makeAsk(by, text2, at3, extra = {}) {
+  return { by, text: text2, asked_at: at3, ...extra.options?.length ? { options: [...extra.options] } : {}, ...extra.files?.length ? { files: [...extra.files] } : {} };
 }
 var askText = (a) => a?.lead?.text || a?.text || "";
 var QUESTION_OPTIONS = { min: 2, max: 6 };
@@ -51979,13 +51979,13 @@ var questionsLabel = (n) => `Questions for you (${n})`;
 function cleanQuestions(v) {
   if (!Array.isArray(v)) return void 0;
   const out = [];
-  const seen = /* @__PURE__ */ new Set();
+  const seen2 = /* @__PURE__ */ new Set();
   for (const x of v) {
     if (!x || typeof x !== "object") continue;
     const r = x;
     const id = normQid(r.id);
-    if (!/^Q-\d+$/.test(id) || seen.has(id) || typeof r.text !== "string") continue;
-    seen.add(id);
+    if (!/^Q-\d+$/.test(id) || seen2.has(id) || typeof r.text !== "string") continue;
+    seen2.add(id);
     const base = cleanAsk({ ...r, by: "lead" }) ?? { by: "lead", text: r.text, asked_at: "" };
     const q = { ...base, id, options: base.options ?? [] };
     if (typeof r.answer === "string") q.answer = r.answer;
@@ -52010,31 +52010,31 @@ function trimmed(qs) {
   const gone = new Set(closed.slice(0, extra).map((q) => q.id));
   return qs.filter((q) => !gone.has(q.id));
 }
-function addQuestion(b, text2, options, at2) {
+function addQuestion(b, text2, options, at3) {
   const words = clean(squash(String(text2 ?? "")), QUESTION_MAX);
   if (!words) throw new Error("text is missing: the question for the owner, plain and short");
   const opts = [...new Set((Array.isArray(options) ? options : []).map((o) => clean(squash(String(o ?? "")), OPTION_MAX)).filter(Boolean))];
   if (opts.length < QUESTION_OPTIONS.min || opts.length > QUESTION_OPTIONS.max)
     throw new Error(`options: give ${QUESTION_OPTIONS.min} to ${QUESTION_OPTIONS.max} short choices (the owner can always type their own answer too); got ${opts.length}`);
   const n = nextNumber(b);
-  const q = { id: `Q-${n}`, by: "lead", text: words, options: opts, asked_at: at2 };
+  const q = { id: `Q-${n}`, by: "lead", text: words, options: opts, asked_at: at3 };
   return [{ ...b, questions: trimmed([...b.questions ?? [], q]), next_question: n + 1 }, q];
 }
 var findQuestion = (b, id) => (b.questions ?? []).find((q) => q.id === normQid(id));
-function answerQuestion(b, id, answer, by, at2) {
+function answerQuestion(b, id, answer, by, at3) {
   const q = findQuestion(b, id);
   if (!q) throw new Error(`${normQid(id) || "that question"} is not on the board (see question with action list)`);
   if (!isOpenQuestion(q)) return [b, { q, closed: false }];
   const words = clean(String(answer ?? ""), 2e3);
   if (!words) throw new Error("answer is missing: the owner's answer, in their words or the option they picked");
-  const done = { ...q, answer: words, answered_at: at2, answered_by: by };
+  const done = { ...q, answer: words, answered_at: at3, answered_by: by };
   return [{ ...b, questions: trimmed((b.questions ?? []).map((x) => x.id === q.id ? done : x)) }, { q: done, closed: true }];
 }
-function dropQuestion(b, id, at2, note2 = "") {
+function dropQuestion(b, id, at3, note2 = "") {
   const q = findQuestion(b, id);
   if (!q) throw new Error(`${normQid(id) || "that question"} is not on the board (see question with action list)`);
   if (!isOpenQuestion(q)) return [b, { q, closed: false }];
-  const done = note2 ? { ...q, dropped: true, answered_at: at2, drop_note: note2 } : { ...q, dropped: true, answered_at: at2 };
+  const done = note2 ? { ...q, dropped: true, answered_at: at3, drop_note: note2 } : { ...q, dropped: true, answered_at: at3 };
   return [{ ...b, questions: trimmed((b.questions ?? []).map((x) => x.id === q.id ? done : x)) }, { q: done, closed: true }];
 }
 var questionLine = (q) => `${q.id} ${q.text}${q.options?.length ? ` (${q.options.join(" | ")})` : ""}`;
@@ -52116,9 +52116,9 @@ var idNumber = (id) => Number(/^T-(\d+)$/.exec(id)?.[1] ?? Number.MAX_SAFE_INTEG
 var isFinished = (t) => FINISHED.includes(t?.status);
 function asChecking(c) {
   if (!c || typeof c !== "object") return void 0;
-  const { step, at: at2, place: place3 } = c;
-  if (!CHECK_STEPS.includes(step) || typeof at2 !== "string" || !at2) return void 0;
-  return step === "queue" && Number.isInteger(place3) && place3 > 0 ? { step, at: at2, place: place3 } : { step, at: at2 };
+  const { step, at: at3, place: place3 } = c;
+  if (!CHECK_STEPS.includes(step) || typeof at3 !== "string" || !at3) return void 0;
+  return step === "queue" && Number.isInteger(place3) && place3 > 0 ? { step, at: at3, place: place3 } : { step, at: at3 };
 }
 var blockerFiles = (b) => [...b.dirty, ...b.untracked, ...b.ignored];
 var strings = (v) => Array.isArray(v) && v.every((x) => typeof x === "string");
@@ -52136,7 +52136,7 @@ var waitsForFiles = (t) => {
 };
 var DATA_DIR = dataDir();
 var LOCK_STALE_MS = 3e4;
-var lockText = (session, at2, holder) => JSON.stringify(holder ? { session, at: at2, pid: holder.pid, started: holder.started } : { session, at: at2 }) + "\n";
+var lockText = (session, at3, holder) => JSON.stringify(holder ? { session, at: at3, pid: holder.pid, started: holder.started } : { session, at: at3 }) + "\n";
 function parseLock(text2) {
   const l = parseStamp(text2, "at", true);
   if (!l) return null;
@@ -52149,9 +52149,9 @@ function lockHolder(text2) {
 }
 function isLockStale(text2, nowMs, fileMs, maxAgeMs = LOCK_STALE_MS, holderAlive2) {
   if (holderAlive2 === false) return true;
-  const at2 = parseLock(text2)?.at ?? fileMs;
-  if (at2 === void 0 || !Number.isFinite(at2)) return true;
-  return nowMs - at2 > maxAgeMs || at2 - nowMs > maxAgeMs;
+  const at3 = parseLock(text2)?.at ?? fileMs;
+  if (at3 === void 0 || !Number.isFinite(at3)) return true;
+  return nowMs - at3 > maxAgeMs || at3 - nowMs > maxAgeMs;
 }
 var DEFAULT_TEST_MINUTES = 10;
 var testMinutesOf = (b) => typeof b?.test_minutes === "number" && Number.isFinite(b.test_minutes) && b.test_minutes >= 1 ? Math.round(b.test_minutes) : DEFAULT_TEST_MINUTES;
@@ -52326,14 +52326,14 @@ function readBoardValue(raw) {
     board.next_question = Math.max(isNum(raw.next_question) && Number.isInteger(raw.next_question) && raw.next_question >= 1 ? raw.next_question : 1, top2 + 1);
   }
   let skipped = 0;
-  const seen = /* @__PURE__ */ new Set();
+  const seen2 = /* @__PURE__ */ new Set();
   for (const t of raw.tasks ?? []) {
     const c = cleanTask(t, fixed2);
-    if (!c || seen.has(c.id)) {
+    if (!c || seen2.has(c.id)) {
       skipped++;
       continue;
     }
-    seen.add(c.id);
+    seen2.add(c.id);
     board.tasks.push(c);
   }
   const top = Math.max(0, ...[...board.tasks.map((t) => t.id), ...board.archived_done ?? []].map((id) => Number(/^T-(\d+)$/.exec(id)?.[1] ?? 0)));
@@ -52622,8 +52622,8 @@ function toArchive(b, nowMs) {
   const keep = waitedOn(b);
   return b.tasks.filter((t) => {
     if (!isFinished(t) || keep.has(t.id)) return false;
-    const at2 = Date.parse(t.updated_at || t.created_at || "");
-    return Number.isFinite(at2) && at2 < cut2;
+    const at3 = Date.parse(t.updated_at || t.created_at || "");
+    return Number.isFinite(at3) && at3 < cut2;
   });
 }
 function addToArchive(a, tasks) {
@@ -52788,19 +52788,19 @@ function parseLead(text2) {
   const handTo = str3(raw.handTo);
   const handFrom = str3(raw.handFrom);
   const handAt = num5(raw.handAt);
-  const since = num5(raw.since);
+  const since2 = num5(raw.since);
   const active = num5(raw.active);
-  return { ...l, ...handTo ? { handTo, ...handAt !== void 0 ? { handAt } : {} } : {}, ...handFrom ? { handFrom } : {}, ...since !== void 0 ? { since } : {}, ...active !== void 0 ? { active } : {} };
+  return { ...l, ...handTo ? { handTo, ...handAt !== void 0 ? { handAt } : {} } : {}, ...handFrom ? { handFrom } : {}, ...since2 !== void 0 ? { since: since2 } : {}, ...active !== void 0 ? { active } : {} };
 }
 var driverTimes = (l) => ({ ...l?.since !== void 0 ? { since: l.since } : {}, ...l?.active !== void 0 ? { active: l.active } : {} });
 var carriedText = (l, to, nowMs) => leadText(to, nowMs, { ...driverTimes(l), ...l?.handTo ? { handTo: l.handTo, ...l.handAt !== void 0 ? { handAt: l.handAt } : {} } : {} });
 function beatText(before, me, nowMs, activeAt) {
   const l = parseLead(before);
   const mine = l?.session === me && !l.handFrom ? l : null;
-  const since = mine?.since ?? nowMs;
+  const since2 = mine?.since ?? nowMs;
   const kept = l?.session === me ? l.active : void 0;
   const act = [kept, activeAt ?? void 0].filter((x) => typeof x === "number").reduce((a, x) => a === void 0 || x > a ? x : a, void 0);
-  return leadText(me, nowMs, { since, ...act !== void 0 ? { active: act } : {} });
+  return leadText(me, nowMs, { since: since2, ...act !== void 0 ? { active: act } : {} });
 }
 function isFresh(heartbeat, nowMs, staleMs = LEAD_STALE_MS) {
   return nowMs - heartbeat <= staleMs && heartbeat - nowMs <= staleMs;
@@ -52824,8 +52824,8 @@ function driveAsk(text2, me, nowMs, staleMs = LEAD_STALE_MS) {
 function handRequest(text2, me, nowMs) {
   const l = parseLead(text2);
   if (!l) return leadText(me, nowMs);
-  const at2 = l.handTo === me && l.handAt !== void 0 ? l.handAt : nowMs;
-  return leadText(l.session, l.heartbeat, { ...driverTimes(l), handTo: me, handAt: at2 });
+  const at3 = l.handTo === me && l.handAt !== void 0 ? l.handAt : nowMs;
+  return leadText(l.session, l.heartbeat, { ...driverTimes(l), handTo: me, handAt: at3 });
 }
 function noHandRequest(text2) {
   const l = parseLead(text2);
@@ -52858,14 +52858,14 @@ var finishLimitMs = (tests, testMinutes = DEFAULT_TEST_MINUTES) => Math.max(1, t
 var ranOverNote = (min) => `its checking and merging ran over ${min} min and was stopped`;
 function finishingNow(t, nowMs, staleMs = FINISH_STALE_MS) {
   if (t.status !== "doing" || typeof t.live?.checking?.at !== "string") return false;
-  const at2 = Date.parse(t.live.checking.at);
-  return Number.isFinite(at2) && isFresh(at2, nowMs, staleMs);
+  const at3 = Date.parse(t.live.checking.at);
+  return Number.isFinite(at3) && isFresh(at3, nowMs, staleMs);
 }
 function checkStepNow(t, nowMs, staleMs = FINISH_STALE_MS) {
   const c = t.live?.checking;
   if (!c || !CHECKED_STATUSES.includes(t.status)) return "";
-  const at2 = Date.parse(c.at);
-  return Number.isFinite(at2) && isFresh(at2, nowMs, staleMs) ? c.step : "";
+  const at3 = Date.parse(c.at);
+  return Number.isFinite(at3) && isFresh(at3, nowMs, staleMs) ? c.step : "";
 }
 var shownStatus = (t, nowMs) => taskPhase(t, nowMs).shown;
 function handedBack(t) {
@@ -52912,10 +52912,10 @@ function backToTodo(t, note2, now3, stoppedAt = now3) {
   const { live: _l, ...rest } = t;
   return { ...rest, status: "todo", note: note2, updated_at: now3, ...t.status === "doing" ? { history: withHistory(t.history, now3, stoppedEntry(t, note2)), ...laterEnd(endedBy(t, stoppedAt, ...stopEnd(note2)), stoppedAt) } : {} };
 }
-function laterEnd(p, at2) {
+function laterEnd(p, at3) {
   const last = p.runs?.at(-1);
-  if (!p.runs || !last?.ended || !(Date.parse(at2) > Date.parse(last.ended))) return p;
-  return { runs: [...p.runs.slice(0, -1), { ...last, ended: at2 }] };
+  if (!p.runs || !last?.ended || !(Date.parse(at3) > Date.parse(last.ended))) return p;
+  return { runs: [...p.runs.slice(0, -1), { ...last, ended: at3 }] };
 }
 function lastAlive(t, leadBefore, now3) {
   const nowMs = Date.parse(now3);
@@ -53088,13 +53088,13 @@ function evidenceText(o, h) {
     return `${ownerLine}${off ? " (the quoted request is not word for word in it)" : ""}`;
   }
   if (o.by === "scout") {
-    const at2 = o.scout ? h.scouts[o.scout] : void 0;
-    return at2 ? `scout ${o.scout} report at ${utcTime(at2)}` : `no report from scout ${o.scout ?? "?"} reached the lead in this session`;
+    const at3 = o.scout ? h.scouts[o.scout] : void 0;
+    return at3 ? `scout ${o.scout} report at ${utcTime(at3)}` : `no report from scout ${o.scout ?? "?"} reached the lead in this session`;
   }
   if (o.by === "worker") {
     const id = o.task ? normId(o.task) : "";
-    const at2 = id ? h.workers[id] : void 0;
-    return at2 ? `${id} worker report at ${utcTime(at2)}` : `no worker report from ${id || "?"} reached the lead in this session`;
+    const at3 = id ? h.workers[id] : void 0;
+    return at3 ? `${id} worker report at ${utcTime(at3)}` : `no worker report from ${id || "?"} reached the lead in this session`;
   }
   const parts = [ownerLine, h.last ? `last report: ${h.last.what} at ${utcTime(h.last.at)}` : ""].filter(Boolean);
   return parts.length ? parts.join("; ") : "nothing from the owner, a scout or a worker was seen in this session";
@@ -53291,8 +53291,8 @@ function parseOvertimeAnswer(answer) {
   if (/\b(stop|end\s+it|fail\s+it)\b/.test(a)) return void 0;
   a = a.replace(/[.,!?]+$/, "");
   const starts2 = [0, ...[...a.matchAll(/[,;:!?+]|\.\s/g)].map((m) => m[0] === "+" ? m.index : m.index + m[0].length)];
-  for (const at2 of starts2) {
-    const add = amountOf(a.slice(at2).trim());
+  for (const at3 of starts2) {
+    const add = amountOf(a.slice(at3).trim());
     if (add !== void 0) return { add };
   }
   return void 0;
@@ -53757,11 +53757,11 @@ function testTail(output, n = TEST_OUTPUT_CHARS) {
       kept.push(b);
       continue;
     }
-    const short2 = b.split("\n").filter((l) => FILE_LINE.test(l) || l.startsWith("(fail)")).map((l) => l.length > 300 ? l.slice(0, 299) + "\u2026" : l).join("\n");
-    if (shortShown < FAIL_LINES_SHOWN && shortUsed + short2.length <= FAIL_LINES_CHARS) {
+    const short3 = b.split("\n").filter((l) => FILE_LINE.test(l) || l.startsWith("(fail)")).map((l) => l.length > 300 ? l.slice(0, 299) + "\u2026" : l).join("\n");
+    if (shortShown < FAIL_LINES_SHOWN && shortUsed + short3.length <= FAIL_LINES_CHARS) {
       shortShown++;
-      shortUsed += short2.length;
-      kept.push(short2);
+      shortUsed += short3.length;
+      kept.push(short3);
     } else left++;
   }
   if (left) kept.push(moreFailingLine(left));
@@ -54328,15 +54328,15 @@ function parseCommand(command, args, current = "auto", name = DEFAULT_NAME) {
       const verb = w1;
       if (!TASK_VERBS.includes(verb)) return use(taskUsage(name));
       const rest = s.replace(/^\S+\s+\S+\s*/, "").trim();
-      const at2 = { kind: "task-do", id: normId(id), verb };
-      if (verb === "drop") return rest ? { ...at2, reason: rest } : at2;
-      if (verb === "run") return words.length === 2 ? at2 : words.length === 3 && words[2].toLowerCase() === "anyway" ? { ...at2, anyway: true } : use(`/${name}-task ${at2.id} run [anyway]`);
-      if (verb === "role") return words.length === 3 ? { ...at2, role: words[2] } : use(`/${name}-task ${at2.id} role <name>`);
+      const at3 = { kind: "task-do", id: normId(id), verb };
+      if (verb === "drop") return rest ? { ...at3, reason: rest } : at3;
+      if (verb === "run") return words.length === 2 ? at3 : words.length === 3 && words[2].toLowerCase() === "anyway" ? { ...at3, anyway: true } : use(`/${name}-task ${at3.id} run [anyway]`);
+      if (verb === "role") return words.length === 3 ? { ...at3, role: words[2] } : use(`/${name}-task ${at3.id} role <name>`);
       if (verb === "review") {
         const on = (words[2] ?? "").toLowerCase();
-        return words.length === 3 && (on === "on" || on === "off") ? { ...at2, on: on === "on" } : use(`/${name}-task ${at2.id} review on|off`);
+        return words.length === 3 && (on === "on" || on === "off") ? { ...at3, on: on === "on" } : use(`/${name}-task ${at3.id} review on|off`);
       }
-      return words.length === 2 ? at2 : use(taskUsage(name));
+      return words.length === 2 ? at3 : use(taskUsage(name));
     }
     case "approve":
       return isId(id) && words.length === 1 ? { kind: "approve", id: normId(id) } : use(`/${name}-approve T-5`);
@@ -54513,10 +54513,10 @@ function leadScoutNameError(name) {
 }
 var SCOUT_LIST_REPORT_LINES = 3;
 var fromNow = (iso, nowMs) => {
-  const at2 = Date.parse(iso ?? "");
-  if (!Number.isFinite(at2)) return "";
-  if (at2 > nowMs) return `in ${fmtDuration(at2 - nowMs)}`;
-  return nowMs - at2 < 1e3 ? "now" : `${fmtDuration(nowMs - at2)} ago`;
+  const at3 = Date.parse(iso ?? "");
+  if (!Number.isFinite(at3)) return "";
+  if (at3 > nowMs) return `in ${fmtDuration(at3 - nowMs)}`;
+  return nowMs - at3 < 1e3 ? "now" : `${fmtDuration(nowMs - at3)} ago`;
 };
 function leadScoutText(s, nowMs, full = false, runs = []) {
   const parts = [everyText(s.every_minutes), s.paused ? "paused" : "not paused", s.running ? "running now" : "not running"];
@@ -54599,12 +54599,12 @@ function scoutWhyNot(s, o, name = DEFAULT_NAME) {
 }
 var SCOUT_RETRY_MS = 5e3;
 function countFindings(report) {
-  const seen = /* @__PURE__ */ new Set();
+  const seen2 = /* @__PURE__ */ new Set();
   for (const line of String(report ?? "").split("\n")) {
     const m = /^(?:#{1,6}\s*)?(?:\*\*|__)?(?:finding\s*)?(\d{1,2})[.):]\s/i.exec(line);
-    if (m) seen.add(m[1]);
+    if (m) seen2.add(m[1]);
   }
-  return seen.size;
+  return seen2.size;
 }
 var scoutFile = (scout, name = DEFAULT_NAME) => `${namesFor(name).scouts}/${scout}.md`;
 var SCOUT_FILE_NAME = /^(?!\.\.?$)[A-Za-z0-9._-]{1,64}$/;
@@ -54632,11 +54632,11 @@ var isNothing = (answer) => {
 };
 var SCOUT_CLOSED_SHOWN = 20;
 function recentClosed(tasks, n = SCOUT_CLOSED_SHOWN) {
-  const at2 = (t) => {
+  const at3 = (t) => {
     const v = Date.parse(t.updated_at ?? t.created_at ?? "");
     return Number.isFinite(v) ? v : -Infinity;
   };
-  return tasks.filter(isFinished).sort((a, b) => at2(b) - at2(a)).slice(0, Math.max(0, Math.floor(Number.isFinite(n) ? n : SCOUT_CLOSED_SHOWN))).map((t) => `${t.id} ${t.title} (${t.status})`);
+  return tasks.filter(isFinished).sort((a, b) => at3(b) - at3(a)).slice(0, Math.max(0, Math.floor(Number.isFinite(n) ? n : SCOUT_CLOSED_SHOWN))).map((t) => `${t.id} ${t.title} (${t.status})`);
 }
 function scoutToolLines(name, o = {}) {
   const may = o.web === false ? "- You may read files and run shell commands that only look." : "- You may read files, run shell commands that only look, and search or fetch pages on the web.";
@@ -54649,7 +54649,7 @@ function scoutPrompt(o) {
   const closed = Array.isArray(o.closed) ? o.closed : [];
   const report = typeof o.lastReport === "string" && !isNothing(o.lastReport) ? o.lastReport.trim() : "";
   const runAt = typeof o.lastRun === "string" && Number.isFinite(Date.parse(o.lastRun)) ? o.lastRun : "";
-  const since = runAt ? `You last ran at ${runAt}. Start with what changed since then, since new code is where new bugs are:
+  const since2 = runAt ? `You last ran at ${runAt}. Start with what changed since then, since new code is where new bugs are:
   git log --since=${runAt} --stat` : "This is your first run (or the time of your last run is not known). Look at the whole project, starting with the most recent changes (git log --stat -n 20).";
   return `You are the ${name} scout "${o.scout}". The project is in ${o.root}.${o.projects?.length ? ` That folder is not a repo itself: it holds several projects, each its own git repo, in these folders: ${o.projects.map((p) => `${o.root.replace(/\/+$/, "")}/${p}`).join(", ")}. Look in each (run git commands inside a project folder), and for a suggested task name its project (the folder name) and give its files relative to that repo.` : ""} Your job, from your scout file:
 
@@ -54665,7 +54665,7 @@ Your last report (don't repeat it unless it is still true and still not on the b
 ${report || "(none)"}
 
 Since when to look:
-${since}
+${since2}
 ${o.guide ? o.guide : ""}
 What makes a good finding:
 - Check before you report. Read the code around it. Reproduce it if you can: run the tests, run a command that only looks, or try the input. Check that it isn't already handled somewhere else or already on the board.
@@ -54681,13 +54681,21 @@ ${lines.may}
 ${lines.board}
 - End with a short plain report of your findings. If there is nothing worth reporting, answer exactly: NOTHING`;
 }
+var LEAD_REPORT_CHARS = 3e3;
+var reportPart = (text2) => {
+  const t = (text2 ?? "").trim();
+  return t.length > LEAD_REPORT_CHARS ? `${t.slice(0, LEAD_REPORT_CHARS - 1)}\u2026 (cut)` : t;
+};
 function scoutLeadMessage(scout, answer, paused = false) {
   if (isNothing(answer)) return null;
   const n = countFindings(answer);
   const found = n ? `found ${n} thing${n > 1 ? "s" : ""}` : "found something";
   const note2 = paused ? `
 The owner has paused "${scout}": it doesn't run on its timer until the owner resumes it (run now still runs it once).` : "";
-  return `Scout "${scout}" ${found} (its report is the scout's own message to you). Add tasks for anything worth doing, tell the owner what matters, or ignore it.${note2}`;
+  return `Scout "${scout}" ${found}. Its report:
+${reportPart(answer)}
+
+Add tasks for anything worth doing, tell the owner what matters, or ignore it.${note2}`;
 }
 var OUTCOMES = ["found", "nothing", "stopped", "error", "refusal", "not started"];
 var SCOUT_RUNS_KEPT = 50;
@@ -54771,12 +54779,12 @@ function linkScoutRunTask(runs, id, scout, boardTasks) {
   return runs.map((r, j) => j === i ? { ...r, tasks: byNumber([...had, id]) } : r);
 }
 function linkScoutRunTaskAt(runs, id, made) {
-  const at2 = Date.parse(made);
-  if (!Number.isFinite(at2)) return null;
+  const at3 = Date.parse(made);
+  if (!Number.isFinite(at3)) return null;
   let best = -1;
   for (let i = 0; i < runs.length; i++) {
     const end2 = Date.parse(runs[i].ended);
-    if (reported(runs[i]) && Number.isFinite(end2) && end2 <= at2 && (best < 0 || end2 >= Date.parse(runs[best].ended))) best = i;
+    if (reported(runs[i]) && Number.isFinite(end2) && end2 <= at3 && (best < 0 || end2 >= Date.parse(runs[best].ended))) best = i;
   }
   const tasks = best < 0 ? void 0 : runs[best].tasks;
   if (!tasks || tasks.includes(id)) return null;
@@ -54807,17 +54815,17 @@ var FENCE = /^\s*(?:```|~~~)/;
 function splitLearned(answer) {
   const text2 = String(answer ?? "").replace(/\r\n?/g, "\n");
   const all = text2.split("\n");
-  let at2 = -1;
+  let at3 = -1;
   let fenced = false;
   for (let i2 = 0; i2 < all.length; i2++) {
     if (FENCE.test(all[i2])) fenced = !fenced;
-    else if (!fenced && HEADING_MARK.test(all[i2])) at2 = i2;
+    else if (!fenced && HEADING_MARK.test(all[i2])) at3 = i2;
   }
-  if (at2 < 0) return { body: String(answer ?? ""), lines: [] };
+  if (at3 < 0) return { body: String(answer ?? ""), lines: [] };
   const lines = [];
-  const first = (HEADING.exec(all[at2])?.[1] ?? "").trim();
+  const first = (HEADING.exec(all[at3])?.[1] ?? "").trim();
   if (first) lines.push(first);
-  let i = at2 + 1;
+  let i = at3 + 1;
   if (!first) while (i < all.length && !all[i].trim() && i + 1 < all.length && (BULLET.test(all[i + 1]) || !all[i + 1].trim())) i++;
   while (i < all.length) {
     const l = all[i];
@@ -54831,7 +54839,7 @@ function splitLearned(answer) {
     lines.push(l.trim());
     i++;
   }
-  const before = all.slice(0, at2).join("\n").trimEnd();
+  const before = all.slice(0, at3).join("\n").trimEnd();
   const after = all.slice(i).join("\n").trim();
   const body = after ? before ? `${before}
 
@@ -54978,9 +54986,9 @@ function orgMemReplace(guide, which, by, date, topic) {
 }
 function setLine(text2, n, line) {
   const raw = text2.split("\n");
-  let seen = 0;
-  const at2 = raw.findIndex((l) => l.trim() && ++seen === n);
-  if (at2 >= 0) raw[at2] = line;
+  let seen2 = 0;
+  const at3 = raw.findIndex((l) => l.trim() && ++seen2 === n);
+  if (at3 >= 0) raw[at3] = line;
   return raw.join("\n");
 }
 function orgMemSetTopic(guide, which, topic, from, date = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10)) {
@@ -55069,9 +55077,9 @@ function deleteOrgMemNote(guide, n, expect, key) {
   const note2 = orgMemNotes(text2).find((x) => x.n === n);
   if (!note2 || expect !== void 0 && note2.text !== expect || key !== void 0 && orgMemNoteKey(note2.text) !== key.toLowerCase()) return { text: text2, removed: null };
   const raw = text2.split("\n");
-  let seen = 0;
-  const at2 = raw.findIndex((l) => l.trim() && ++seen === n);
-  raw.splice(at2, 1);
+  let seen2 = 0;
+  const at3 = raw.findIndex((l) => l.trim() && ++seen2 === n);
+  raw.splice(at3, 1);
   return { text: raw.join("\n"), removed: note2 };
 }
 var orgMemNoteHead = (x) => `#${x.n} \xB7 ${x.date || "written by hand"}`;
@@ -55354,9 +55362,9 @@ function endedEarlyNote(id, sentence) {
 }
 function saidBefore(t, detail) {
   for (const { text: line } of [...t.history ?? []].reverse()) {
-    const at2 = line.lastIndexOf(" \u2192 ");
-    if (at2 < 0 || !detail.test(line.slice(at2 + 3))) continue;
-    const said = line.slice(0, at2).replace(/^try \S+(?: \(role [^)]*\))?:\s*/, "").trim();
+    const at3 = line.lastIndexOf(" \u2192 ");
+    if (at3 < 0 || !detail.test(line.slice(at3 + 3))) continue;
+    const said = line.slice(0, at3).replace(/^try \S+(?: \(role [^)]*\))?:\s*/, "").trim();
     return said === "(no summary)" ? "" : said;
   }
   return "";
@@ -55366,7 +55374,7 @@ var FILE_UNKNOWN = /^…|^\d+ tests? failed:$/;
 function failures(output) {
   const lines = output.split("\n").map((l) => l.trim());
   const found = [];
-  const seen = /* @__PURE__ */ new Set();
+  const seen2 = /* @__PURE__ */ new Set();
   const names2 = /* @__PURE__ */ new Set();
   let file = "";
   for (let i = 0; i < lines.length; i++) {
@@ -55377,8 +55385,8 @@ function failures(output) {
     const name = l.replace(/\s*\[[\d.]+\s*m?s\]$/, "");
     const key = `${file}
 ${name}`;
-    if (seen.has(key) || !file && names2.has(name)) continue;
-    seen.add(key);
+    if (seen2.has(key) || !file && names2.has(name)) continue;
+    seen2.add(key);
     names2.add(name);
     found.push({ at: i, name });
   }
@@ -55555,7 +55563,7 @@ function stuck(b) {
 }
 function loops(b) {
   const open = new Map(b.tasks.filter((t) => !isFinished(t)).map((t) => [t.id, t]));
-  const seen = /* @__PURE__ */ new Set();
+  const seen2 = /* @__PURE__ */ new Set();
   const out = [];
   const state = /* @__PURE__ */ new Map();
   const path2 = [];
@@ -55569,8 +55577,8 @@ function loops(b) {
         const low = ring.reduce((m, x, i) => num(x) < num(ring[m]) ? i : m, 0);
         const cycle = [...ring.slice(low), ...ring.slice(0, low)];
         const k = cycle.join(">");
-        if (!seen.has(k)) {
-          seen.add(k);
+        if (!seen2.has(k)) {
+          seen2.add(k);
           const shown = [...cycle, cycle[0]].join(" after ");
           out.push(finding(b, "loop", cycle, `${shown}: these tasks wait on each other in a loop \u2014 none of them will ever start`, "take one link out of the loop (change its after)"));
         }
@@ -55605,10 +55613,10 @@ function starving(b, nowMs) {
     if (t.after.some((a) => !find(b, a) && !(b.archived_done ?? []).includes(a))) continue;
     if (!blockers.every((d) => num(d.id) > num(t.id))) continue;
     const changes = afterChanges(t);
-    const since = blockers.length ? todoSince(t) : readyAt(b, t);
-    const newer = b.tasks.filter((x) => num(x.id) > num(t.id) && started(x) && (x.priority ?? 0) >= (t.priority ?? 0) && !(startedAt(x) < since)).length;
-    if (!blockers.length && (nowMs - since < CHECK_MS || next.has(t.id))) continue;
-    const age = nowMs - since;
+    const since2 = blockers.length ? todoSince(t) : readyAt(b, t);
+    const newer = b.tasks.filter((x) => num(x.id) > num(t.id) && started(x) && (x.priority ?? 0) >= (t.priority ?? 0) && !(startedAt(x) < since2)).length;
+    if (!blockers.length && (nowMs - since2 < CHECK_MS || next.has(t.id))) continue;
+    const age = nowMs - since2;
     const why2 = changes >= STARVE_AFTER_CHANGES ? `its after list was changed ${changes} times` : age > STARVE_MS && newer >= STARVE_NEWER ? `it has waited ${Math.floor(age / 36e5)}+ hours while ${newer} newer tasks already started` : "";
     if (!why2) continue;
     const on = blockers.length ? `waits only on newer tasks (${blockers.map((d) => d.id).join(", ")})` : "could start but has not";
@@ -55628,11 +55636,11 @@ function serial(b) {
       hasPrev.add(t.id);
     }
   }
-  const longest = (id, seen) => {
+  const longest = (id, seen2) => {
     let best = [];
     for (const n of next.get(id) ?? []) {
-      if (seen.has(n)) continue;
-      const p = longest(n, /* @__PURE__ */ new Set([...seen, n]));
+      if (seen2.has(n)) continue;
+      const p = longest(n, /* @__PURE__ */ new Set([...seen2, n]));
       if (p.length > best.length) best = p;
     }
     return [id, ...best];
@@ -55737,7 +55745,7 @@ var STEP_NOTE = {
   merging: "merging"
 };
 var PREP_NOTE = STEP_NOTE.prep;
-function statusCell(t, nowMs, since) {
+function statusCell(t, nowMs, since2) {
   const p = taskPhase(t, nowMs);
   const step = stageStep(p.stage);
   if (step) return STEP_WORD[step];
@@ -55745,28 +55753,28 @@ function statusCell(t, nowMs, since) {
   if (t.status === "doing") {
     const last = t.runs?.[t.runs.length - 1];
     if (last && !last.ended) return fmtDuration(runMs(last, nowMs));
-    const at2 = typeof since === "number" ? since : Date.parse(since ?? "");
-    return Number.isFinite(at2) ? fmtDuration(Math.max(0, nowMs - at2)) : "";
+    const at3 = typeof since2 === "number" ? since2 : Date.parse(since2 ?? "");
+    return Number.isFinite(at3) ? fmtDuration(Math.max(0, nowMs - at3)) : "";
   }
   if (t.status === "review" && isInvestigation(t)) return ANSWER_CELL;
   return { review: "review", waiting: "waiting", failed: "failed", paused: "paused" }[t.status] ?? "";
 }
 var rowDuration = (ms3) => fmtDuration(ms3).replace(/h 0?(\d+)m$/, (_, m) => m === "0" ? "h" : `h${m}m`);
-function rowTime(t, nowMs, since) {
+function rowTime(t, nowMs, since2) {
   if (shownStatus(t, nowMs) !== "doing") return "";
   const runs = t.runs ?? [];
   const last = runs[runs.length - 1];
-  const at2 = typeof since === "number" ? since : Date.parse(since ?? "");
-  const open = (!last || last.ended) && Number.isFinite(at2) && !checkStepNow(t, nowMs);
+  const at3 = typeof since2 === "number" ? since2 : Date.parse(since2 ?? "");
+  const open = (!last || last.ended) && Number.isFinite(at3) && !checkStepNow(t, nowMs);
   if (!runs.length && !open) return "";
-  return rowDuration(sumRuns(runs, nowMs).ms + (open ? Math.max(0, nowMs - at2) : 0));
+  return rowDuration(sumRuns(runs, nowMs).ms + (open ? Math.max(0, nowMs - at3) : 0));
 }
-function rowCell(t, nowMs, since, form = "total") {
+function rowCell(t, nowMs, since2, form = "total") {
   const p = taskPhase(t, nowMs);
-  if (p.shown !== p.state) return form === "none" ? "" : rowTime(t, nowMs, since);
-  const cell2 = statusCell(t, nowMs, since);
+  if (p.shown !== p.state) return form === "none" ? "" : rowTime(t, nowMs, since2);
+  const cell2 = statusCell(t, nowMs, since2);
   if (p.state !== "doing" || !cell2 && p.stage !== "queue" || cell2 === MORE_TIME_CELL) return cell2;
-  return form === "none" ? "" : rowTime(t, nowMs, since);
+  return form === "none" ? "" : rowTime(t, nowMs, since2);
 }
 var ANSWER_CELL = "answer";
 var projectTag = (t) => typeof t.project === "string" && t.project.trim() ? `[${t.project.trim()}]` : "";
@@ -55784,8 +55792,8 @@ function sinceOf(when3, nowMs, offsetMin) {
   const ago2 = /^(\d+)(m|h|d|w)$/.exec(when3);
   if (ago2) return nowMs - Number(ago2[1]) * { m: 6e4, h: 36e5, d: 864e5, w: 7 * 864e5 }[ago2[2]];
   if (/^\d{4}-\d{2}-\d{2}$/.test(when3)) {
-    const at2 = Date.parse(`${when3}T00:00:00Z`);
-    return Number.isFinite(at2) ? at2 - offsetMin * 6e4 : void 0;
+    const at3 = Date.parse(`${when3}T00:00:00Z`);
+    return Number.isFinite(at3) ? at3 - offsetMin * 6e4 : void 0;
   }
   return void 0;
 }
@@ -55807,9 +55815,9 @@ function parseSearch(query, nowMs = Date.now(), offsetMin = localOffset(nowMs), 
       if (/^\d+$/.test(value) && Number(value) > 0) q.pick = { by: key === "last" ? "newest" : "order", n: Number(value) };
       else q.words.push(w);
     } else if (key === "since") {
-      const at2 = sinceOf(value, nowMs, offsetMin);
-      if (at2 === void 0) q.words.push(w);
-      else q.sinceMs = Math.max(q.sinceMs ?? -Infinity, at2);
+      const at3 = sinceOf(value, nowMs, offsetMin);
+      if (at3 === void 0) q.words.push(w);
+      else q.sinceMs = Math.max(q.sinceMs ?? -Infinity, at3);
     } else if (key === "status") {
       const bad = list2.filter((s) => s !== "open" && !BOARD_STATUSES.includes(s));
       if (bad.length) {
@@ -55838,16 +55846,16 @@ function dependencyHits(tasks, q, archivedDone = []) {
   const byId2 = new Map(tasks.map((t) => [t.id, t]));
   const afterOf = (id) => (byId2.get(id)?.after ?? []).map((a) => searchId(a.toLowerCase()) ?? a);
   const reach = (id, through) => {
-    const seen = /* @__PURE__ */ new Set();
+    const seen2 = /* @__PURE__ */ new Set();
     const walk = (x) => {
       for (const a of afterOf(x)) {
-        if (a === id || seen.has(a)) continue;
-        seen.add(a);
+        if (a === id || seen2.has(a)) continue;
+        seen2.add(a);
         if (through(byId2.get(a))) walk(a);
       }
     };
     walk(id);
-    return seen;
+    return seen2;
   };
   const holding = (id) => new Set([...reach(id, (t) => !!t && t.status !== "done")].filter((a) => !archived.has(a)));
   let hits = new Set(tasks.map((t) => t.id));
@@ -56006,9 +56014,9 @@ var num3 = (v) => typeof v === "number" && Number.isFinite(v) ? v : void 0;
 function driverFacts(l) {
   const heartbeat = num3(l?.heartbeat);
   if (heartbeat === void 0) return void 0;
-  const since = num3(l?.since);
+  const since2 = num3(l?.since);
   const active = num3(l?.active);
-  return { heartbeat, ...since !== void 0 ? { since } : {}, ...active !== void 0 ? { active } : {} };
+  return { heartbeat, ...since2 !== void 0 ? { since: since2 } : {}, ...active !== void 0 ? { active } : {} };
 }
 function driverWhen(d, nowMs, withStart = true) {
   if (!d) return "";
@@ -56025,14 +56033,14 @@ function followForms(name, d, nowMs, idle = false) {
     return brackets(parts.join(", "));
   };
   const long = (f) => [{ text: `this window follows${f}; ` }, drive, { text: " to drive from here" }];
-  const short2 = (f) => [{ text: `this window follows${f} \xB7 ` }, drive];
+  const short3 = (f) => [{ text: `this window follows${f} \xB7 ` }, drive];
   const shorter = (f) => [{ text: `follows${f} \xB7 ` }, drive];
-  return uniqueForms([long(facts(true)), long(facts(false)), short2(facts(false)), shorter(facts(false)), short2(idle ? brackets("idle?") : "")]);
+  return uniqueForms([long(facts(true)), long(facts(false)), short3(facts(false)), shorter(facts(false)), short3(idle ? brackets("idle?") : "")]);
 }
 var formText = (f) => f.map((p) => p.text).join("");
 function uniqueForms(forms) {
-  const seen = /* @__PURE__ */ new Set();
-  return forms.filter((f) => !seen.has(formText(f)) && (seen.add(formText(f)), true));
+  const seen2 = /* @__PURE__ */ new Set();
+  return forms.filter((f) => !seen2.has(formText(f)) && (seen2.add(formText(f)), true));
 }
 function fitForm(forms, width = Infinity, before = "") {
   return forms.find((f) => before.length + formText(f).length <= width) ?? forms[forms.length - 1];
@@ -56190,8 +56198,8 @@ function inRange(t, r, nowMs) {
     const n = idNum2(t.id);
     return Number.isFinite(n) && n >= r.from && n <= r.to;
   }
-  const at2 = Date.parse(t.updated_at || t.created_at || "");
-  return Number.isFinite(at2) && at2 >= nowMs - r.days * 864e5;
+  const at3 = Date.parse(t.updated_at || t.created_at || "");
+  return Number.isFinite(at3) && at3 >= nowMs - r.days * 864e5;
 }
 function mean(xs) {
   return xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : void 0;
@@ -56297,16 +56305,16 @@ function taskStages(t, doneAt, clip) {
   };
   const firstBacklog = t.history.find((e) => e.kind === "moved-backlog");
   let cur = firstBacklog && !firstBacklog.backlog ? "backlog" : "free";
-  let since = made;
+  let since2 = made;
   let inRun = false;
   let pending2 = null;
-  const close = (at2) => {
-    const b = Math.min(at2, end2);
-    if (cur === "free" && depsDone > since) {
-      add("blocked", since, Math.min(b, depsDone));
-      add("free", Math.max(since, depsDone), b);
-    } else add(cur, since, b);
-    since = Math.max(since, b);
+  const close = (at3) => {
+    const b = Math.min(at3, end2);
+    if (cur === "free" && depsDone > since2) {
+      add("blocked", since2, Math.min(b, depsDone));
+      add("free", Math.max(since2, depsDone), b);
+    } else add(cur, since2, b);
+    since2 = Math.max(since2, b);
   };
   let idleNow = false;
   for (const p of points) {
@@ -56405,8 +56413,8 @@ function parseStatsArgs(args) {
 function unlinkedCount(mine, runs) {
   if (!runs.length) return void 0;
   const linked = new Set(runs.flatMap((r) => r.tasks ?? []));
-  const since = Date.parse((runs.find((r) => r.tasks) ?? runs[0]).ended ?? "");
-  return mine.filter((t) => !linked.has(t.id) && !(Number.isFinite(since) && Date.parse(t.created_at || "") < since)).length;
+  const since2 = Date.parse((runs.find((r) => r.tasks) ?? runs[0]).ended ?? "");
+  return mine.filter((t) => !linked.has(t.id) && !(Number.isFinite(since2) && Date.parse(t.created_at || "") < since2)).length;
 }
 var okEnd = (r) => !r.ended_by || r.ended_by === "restarted" || r.ended_by === "asked" || isAnsweredRun(r) || /^(merged|ready for review|waiting for your files)\b/.test(r.ended_note ?? "") || r.ended_by === "stopped" && onPurposeStop(r.ended_note);
 function failedTryFigures(tasks, fromMs = -Infinity) {
@@ -56501,16 +56509,16 @@ function statsData(input) {
   };
   const scouts = [...scoutGroups.map(([s, st]) => ({ ...group(s, s, st), results: countResults(st, scoutTok(s)), ...unlinked(s, st) })), ...idle.map((s) => ({ key: s, label: s, n: 0, results: countResults([], scoutTok(s)), idle: true }))];
   const days = /* @__PURE__ */ new Map();
-  const at2 = (d) => days.get(d) ?? (days.set(d, { done: 0, ms: 0, tokens: 0 }), days.get(d));
+  const at3 = (d) => days.get(d) ?? (days.set(d, { done: 0, ms: 0, tokens: 0 }), days.get(d));
   for (const t of finished) {
     const d = dayOf(Date.parse(t.updated_at || ""), off);
-    if (d) at2(d).done++;
+    if (d) at3(d).done++;
   }
   for (const r of runs) {
     const d = dayOf(Date.parse(r.started), off);
     if (!d) continue;
-    at2(d).ms += runMs(r, nowMs);
-    at2(d).tokens += tokenCount(tryTokens(r));
+    at3(d).ms += runMs(r, nowMs);
+    at3(d).tokens += tokenCount(tryTokens(r));
   }
   const failing = failedTryFigures(whole, counting === "inside" ? winFrom : -Infinity);
   const doneAt = new Map(everyTask.map((t) => [t.id, doneAtMs(t)]));
@@ -57068,15 +57076,15 @@ function finishedAt(t) {
     return xs.length ? Math.max(...xs) : void 0;
   };
   if (isInvestigation(t) || !marks.some((h) => h.kind === "merged")) return void 0;
-  const at2 = latest("merged") ?? lastEnd;
-  return at2 !== void 0 ? { atMs: at2, word: "merged" } : void 0;
+  const at3 = latest("merged") ?? lastEnd;
+  return at3 !== void 0 ? { atMs: at3, word: "merged" } : void 0;
 }
 function liveFinishedLanes(view, nowMs) {
   const usual = usualTokens(view.tasks);
   const retries = view.auto_retries ?? DEFAULT_AUTO_RETRIES;
   return view.tasks.filter((t) => t.status === "done").map((t) => ({ t, done: finishedAt(t) })).filter((x) => !!x.done && nowMs - x.done.atMs < LIVE_FINISHED_MS && x.done.atMs - nowMs < LIVE_FINISHED_MS).sort((a, b) => b.done.atMs - a.done.atMs || num(b.t.id) - num(a.t.id)).slice(0, LIVE_FINISHED_MAX).map(({ t, done }) => {
     const stations = laneStations(t, view.checker === true, needsReview(view, t));
-    const at2 = stations.length - 1;
+    const at3 = stations.length - 1;
     const tryNo2 = Math.max(1, Number(t.attempts) || 1);
     const auto = Number(t.test_tries ?? 0) || 0;
     const total = tokenCount(sumTokens((t.runs ?? []).map(tryTokens)));
@@ -57085,8 +57093,8 @@ function liveFinishedLanes(view, nowMs) {
       title: rowTitle(t),
       kind: kindOf(t),
       stations,
-      station: stations[at2],
-      at: at2,
+      station: stations[at3],
+      at: at3,
       stage: "merge",
       tryNo: tryNo2,
       tries: Math.max(tryNo2, tryNo2 - auto + retries),
@@ -57112,8 +57120,8 @@ function liveHeader(view, lanes) {
 }
 function scoutsRunning(scouts) {
   return (Array.isArray(scouts) ? scouts : []).flatMap((s) => {
-    const since = Date.parse(s?.last_run ?? "");
-    return s?.running && s.started && Number.isFinite(since) ? [{ name: s.name, since }] : [];
+    const since2 = Date.parse(s?.last_run ?? "");
+    return s?.running && s.started && Number.isFinite(since2) ? [{ name: s.name, since: since2 }] : [];
   }).sort((x, y) => x.since - y.since);
 }
 function scoutNext(scouts) {
@@ -57121,8 +57129,8 @@ function scoutNext(scouts) {
   for (const s of Array.isArray(scouts) ? scouts : []) {
     if (!s || s.paused || s.running) continue;
     if (s.every_minutes !== void 0 && !(Number.isFinite(s.every_minutes) && s.every_minutes >= 1)) continue;
-    const at2 = Date.parse(s.next_run ?? "");
-    if (Number.isFinite(at2) && (!best || at2 < best.at)) best = { name: s.name, at: at2 };
+    const at3 = Date.parse(s.next_run ?? "");
+    if (Number.isFinite(at3) && (!best || at3 < best.at)) best = { name: s.name, at: at3 };
   }
   return best;
 }
@@ -57219,57 +57227,46 @@ var LABELS = [
 var MAX_GAP = 8;
 var MIN_GAP = 2;
 var TITLE_W = 12;
-var TITLE_MAX = 40;
-var RIGHT_W = 6;
-var laneWidth = (idW, titleW, k, gap, sep4, rightW = 0) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep4 + k + (k - 1) * gap + (rightW ? sep4 + rightW : gap >= 4 ? 3 : 0);
+var laneWidth = (idW, titleW, k, gap, sep4) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep4 + k + (k - 1) * gap;
 function liveLayout(lanes, stations, width) {
   const idW = Math.max(4, ...lanes.map((l) => textWidth(l.id)));
   const k = stations.length;
   const longest = Math.max(3, ...lanes.map((l) => textWidth(l.title)));
-  const make = (titleW, gap, sep4, rightW = right) => {
+  const make = (titleW, gap, sep4) => {
     const set = LABELS.find((s) => stations.slice(0, -1).every((st) => textWidth(s[st]) <= gap)) ?? LABELS[LABELS.length - 1];
-    return { width, idW, titleW, gap, labels: stations.map((s) => set[s]), rightW, sep: sep4, stations: [...stations] };
+    return { width, idW, titleW, gap, labels: stations.map((s) => set[s]), sep: sep4, stations: [...stations] };
   };
   const base = Math.min(TITLE_W, longest);
-  const right = lanes.some((l) => l.done) ? RIGHT_W : 0;
-  const wide = Math.max(right, ...lanes.map((l) => l.done ? textWidth(`${l.done.word} 10m ago`) : 0));
-  if (wide > right)
-    for (let gap = MAX_GAP; gap >= MIN_GAP; gap--) {
-      if (laneWidth(idW, base, k, gap, 2, wide) <= width) {
-        const room = width - laneWidth(idW, base, k, gap, 2, wide);
-        return make(gap === MAX_GAP ? Math.min(TITLE_MAX, longest, base + room) : base, gap, 2, wide);
-      }
-    }
-  for (let gap = MAX_GAP; gap >= MIN_GAP; gap--) {
-    if (laneWidth(idW, base, k, gap, 2, RIGHT_W) <= width) {
-      const room = width - laneWidth(idW, base, k, gap, 2, right);
-      return make(Math.min(TITLE_MAX, longest, base + room), gap, 2);
-    }
-  }
-  for (let titleW = base - 1; titleW >= 3; titleW--) if (laneWidth(idW, titleW, k, MIN_GAP, 2, right) <= width) return make(titleW, MIN_GAP, 2);
-  if (laneWidth(idW, 0, k, MIN_GAP, 2, right) <= width) return make(0, MIN_GAP, 2);
-  if (laneWidth(idW, 0, k, 1, 2, right) <= width) return make(0, 1, 2);
-  if (laneWidth(idW, 0, k, 1, 1, right) <= width) return make(0, 1, 1);
+  const fill = (gap, sep4) => Math.max(0, width - laneWidth(idW, 0, k, gap, sep4) - 1);
+  for (let gap = MAX_GAP; gap >= MIN_GAP; gap--) if (laneWidth(idW, base, k, gap, 2) <= width) return make(fill(gap, 2), gap, 2);
+  for (let titleW = base - 1; titleW >= 3; titleW--) if (laneWidth(idW, titleW, k, MIN_GAP, 2) <= width) return make(fill(MIN_GAP, 2), MIN_GAP, 2);
+  if (laneWidth(idW, 0, k, MIN_GAP, 2) <= width) return make(0, MIN_GAP, 2);
+  if (laneWidth(idW, 0, k, 1, 2) <= width) return make(0, 1, 2);
+  if (laneWidth(idW, 0, k, 1, 1) <= width) return make(0, 1, 1);
   return make(0, 0, 1);
 }
 var nameWidth = (l) => l.idW + (l.titleW ? 1 + l.titleW : 0);
 function liveLabelSegs(l) {
   const lead = " ".repeat(LIVE_RUN_MARK.length + nameWidth(l) + l.sep);
-  const text2 = lead + l.labels.map((s, i) => i < l.labels.length - 1 ? padWidth(s, l.gap + 1) : s).join("");
+  const init = l.labels.slice(0, -1).map((s) => padWidth(s, l.gap + 1)).join("");
+  const prev = l.labels.length > 1 ? textWidth(l.labels[l.labels.length - 2]) : 0;
+  let last = l.labels[l.labels.length - 1] ?? "";
+  const mark = textWidth(lead + init);
+  let at3 = mark;
+  if (mark + textWidth(last) > l.width && textWidth(last) > 1) {
+    at3 = Math.max(mark - l.gap + prev, Math.min(mark, l.width - textWidth(last)));
+    if (at3 + textWidth(last) > l.width) {
+      last = last.slice(0, 1);
+      at3 = mark;
+    }
+  }
+  const text2 = lead + init.slice(0, Math.max(0, at3 - textWidth(lead))) + last;
   return text2.split(LIVE_AGENT_MARK).flatMap((x, i) => [...i ? [{ text: LIVE_AGENT_MARK, tone: "mark" }] : [], ...x ? [{ text: x, tone: "dim" }] : []]);
 }
 var LANE_WARN_TIMES = 2;
 function laneTimes(x) {
   const r = Math.round(x * 10) / 10;
   return { text: r < 0.1 ? "<0.1" : r.toFixed(1).replace(/\.0$/, ""), warn: r >= LANE_WARN_TIMES };
-}
-function laneRight(lane, nowMs, room = Infinity) {
-  if (lane.done) {
-    const time = rowDuration(Math.max(0, nowMs - lane.done.atMs));
-    return [`${lane.done.word} ${time} ago`, `${time} ago`].find((x) => textWidth(x) <= room) ?? time;
-  }
-  if (lane.station === "queue" && lane.place) return `#${lane.place}`;
-  return lane.sinceMs !== void 0 ? rowDuration(Math.max(0, nowMs - lane.sinceMs)) : "";
 }
 var segs = (...xs) => xs.filter((x) => !!x && !!x.text);
 var segText = (xs) => xs.map((x) => x.text).join("");
@@ -57294,7 +57291,7 @@ function laneLines(lane, l, o) {
     else track.push(k < lane.at ? { text: "\u25CF", tone: "passed" } : k === lane.at ? done ? { text: LIVE_DONE_MARK, tone: "passed" } : { text: liveBlink(o.frame, o.steady), tone: "current" } : { text: "\u25CB", tone: "future" });
   });
   const name = segs({ text: done ? `${LIVE_DONE_MARK} ` : LIVE_RUN_MARK, tone: done ? "dim" : "run" }, { text: padWidth(lane.id, l.idW), tone: "run" }, l.titleW > 0 && { text: ` ${padWidth(cutTitle(lane.title, l.titleW), l.titleW)}`, tone: done ? "dim" : "text" });
-  const first = [...name, { text: sep4, tone: "text" }, ...track, ...done && l.rightW ? [{ text: sep4 + laneRight(lane, o.nowMs, l.rightW).padStart(l.rightW), tone: "dim" }] : []];
+  const first = [...name, { text: sep4, tone: "text" }, ...track];
   const back = lane.sentBack > 0 && { text: `\u2315 \xD7 ${lane.sentBack}`, tone: "dim" };
   const fits = (xs) => textWidth(segText(xs)) <= l.width;
   const times = lane.tokens !== void 0 && lane.usual ? lane.tokens / lane.usual : void 0;
@@ -57305,13 +57302,16 @@ function laneLines(lane, l, o) {
   const agents = [lane.workerTokens && `worker ${fmtTokens(lane.workerTokens)}`, lane.checkerTokens && `checker ${fmtTokens(lane.checkerTokens)}`].filter((x) => !!x);
   const split = agents.length ? [{ text: agents.join(" \xB7 "), tone: "dim" }] : [];
   const size = lane.size ? [{ text: sizeText(lane.size, false), tone: "dim" }] : [];
-  const line = (level, withSize = false) => {
-    const lead = { text: `  try ${lane.tryNo}/${lane.tries}`, tone: "dim" };
+  const doneAge = lane.done && !o.noTime ? rowDuration(Math.max(0, o.nowMs - lane.done.atMs)) : "";
+  const doneNote = (short3 = false) => doneAge ? `${short3 ? "" : `${lane.done.word} `}${doneAge} ago \xB7 ` : "";
+  const line = (level, withSize = false, short3 = false) => {
+    const lead = { text: `  ${doneNote(short3)}try ${lane.tryNo}/${lane.tries}`, tone: "dim" };
     const parts = [level >= 1 ? time : [], level >= 2 ? tokens(level >= 3) : [], level >= 4 ? split : [], back ? [back] : [], withSize ? size : []].filter((x) => x.length);
     return segs(lead, ...parts.flatMap((x, i) => [{ text: " \xB7 ", tone: "dim" }, ...x]));
   };
   const withKind = (xs) => [...xs, { text: `  ${lane.kind}`, tone: "dim" }];
   const tries = [...size.length ? [o.noKind ? line(4, true) : withKind(line(4, true))] : [], ...[4, 3, 2, 1, 0].flatMap((n) => o.noKind ? [line(n)] : [withKind(line(n)), line(n)])];
+  tries.push(line(0, false, false), line(0, false, true));
   tries.push(segs({ text: `  try ${lane.tryNo}/${lane.tries}`, tone: "dim" }));
   const second = tries.find(fits) ?? tries[tries.length - 1];
   return [first, done ? second.map((x) => x.tone === "text" && !x.text.trim() ? x : { ...x, tone: "dim" }) : second];
@@ -57326,10 +57326,10 @@ function liveTrains(view, nowMs, lanes = liveLanes(view, nowMs)) {
   const open = new Map(todo.map((t) => [t.id, openAfter(board, t)]));
   const parent = /* @__PURE__ */ new Map();
   const under = (id, through) => {
-    const seen = /* @__PURE__ */ new Set();
-    for (let x = id; x && !seen.has(x); x = parent.get(x)) {
+    const seen2 = /* @__PURE__ */ new Set();
+    for (let x = id; x && !seen2.has(x); x = parent.get(x)) {
       if (x === through) return true;
-      seen.add(x);
+      seen2.add(x);
     }
     return false;
   };
@@ -57420,9 +57420,9 @@ function todayCost(tasks, nowMs, offsetMin = localOffset(nowMs)) {
   let usd = 0;
   for (const t of tasks) {
     for (const r of t.runs ?? []) {
-      const at2 = ms(r.ended ?? r.started);
+      const at3 = ms(r.ended ?? r.started);
       const cost = tryCost(r);
-      if (typeof cost === "number" && Number.isFinite(cost) && at2 !== void 0 && dayOf(at2, offsetMin) === today) usd += cost;
+      if (typeof cost === "number" && Number.isFinite(cost) && at3 !== void 0 && dayOf(at3, offsetMin) === today) usd += cost;
     }
   }
   return usd;
@@ -57454,9 +57454,9 @@ function todayMore(tasks, team, nowMs, offsetMin = localOffset(nowMs)) {
   const today = dayOf(nowMs, offsetMin);
   const shifted = nowMs + offsetMin * 6e4;
   const dayStart = nowMs - (shifted % 864e5 + 864e5) % 864e5;
-  const hourOf = (at2) => Math.floor((at2 - dayStart) / HOUR);
-  const isToday = (at2) => at2 !== void 0 && dayOf(at2, offsetMin) === today;
-  const hours = Array.from({ length: 24 }, () => 0);
+  const hourOf = (at3) => Math.floor((at3 - dayStart) / HOUR);
+  const isToday = (at3) => at3 !== void 0 && dayOf(at3, offsetMin) === today;
+  const hours2 = Array.from({ length: 24 }, () => 0);
   let workers2 = 0;
   let checkers = 0;
   let workMs = 0;
@@ -57474,17 +57474,17 @@ function todayMore(tasks, team, nowMs, offsetMin = localOffset(nowMs)) {
         const to = Math.min(end2 ?? nowMs, nowMs);
         if (to > from) workMs += to - from - gapsOf(r).reduce((n2, g) => n2 + Math.max(0, Math.min(g.to, to) - Math.max(g.from, from)), 0);
       }
-      const at2 = end2 ?? start;
-      if (!tryTokens(r) || !isToday(at2)) continue;
+      const at3 = end2 ?? start;
+      if (!tryTokens(r) || !isToday(at3)) continue;
       const all = tokenCount(tryTokens(r));
       const chkTok = checkerTokensOf(r);
       const chk = Math.min(all, chkTok ? tokenCount(chkTok) : 0);
       workers2 += all - chk;
       checkers += chk;
-      const h = hourOf(at2);
-      if (h >= 0 && h < 24) hours[h] += all;
+      const h = hourOf(at3);
+      if (h >= 0 && h < 24) hours2[h] += all;
     }
-    checkerBack += sentBackOf(t, (at2) => isToday(ms(at2))).checker;
+    checkerBack += sentBackOf(t, (at3) => isToday(ms(at3))).checker;
     const mergedAt = marksOf(t).filter((h) => h.kind === "merged").map((h) => ms(h.at)).filter(isToday);
     if (!mergedAt.length) continue;
     const f = taskFigures(t);
@@ -57498,11 +57498,11 @@ function todayMore(tasks, team, nowMs, offsetMin = localOffset(nowMs)) {
   }
   const mine = team && typeof team === "object" && team.day === today ? team : void 0;
   const n = (x) => typeof x === "number" && Number.isFinite(x) && x > 0 ? x : 0;
-  for (const [h, x] of (Array.isArray(mine?.hours) ? mine.hours : []).entries()) if (h < 24) hours[h] += n(x);
+  for (const [h, x] of (Array.isArray(mine?.hours) ? mine.hours : []).entries()) if (h < 24) hours2[h] += n(x);
   const counts = { workers: workers2, checkers, scouts: n(mine?.scouts), lead: n(mine?.lead) };
   const who = TODAY_WHO.flatMap((w) => counts[w] > 0 ? [{ who: w, tokens: counts[w] }] : []);
   const now3 = Math.min(23, Math.max(0, hourOf(nowMs)));
-  const firstHour = hours.findIndex((n2) => n2 > 0);
+  const firstHour = hours2.findIndex((n2) => n2 > 0);
   const perTask = { ...tok.length ? { tokens: median(tok) } : {}, ...work.length ? { workMs: median(work) } : {}, ...toMerge.length ? { mergeMs: median(toMerge) } : {} };
   const usd = mine?.usd;
   return {
@@ -57511,7 +57511,7 @@ function todayMore(tasks, team, nowMs, offsetMin = localOffset(nowMs)) {
     ...n(usd) ? { usd: n(usd) } : {},
     who,
     ...typeof mine?.lead === "number" || typeof mine?.scouts === "number" ? { teamKnown: true } : {},
-    hours: firstHour < 0 || firstHour > now3 ? [] : hours.slice(0, now3 + 1),
+    hours: firstHour < 0 || firstHour > now3 ? [] : hours2.slice(0, now3 + 1),
     ...tries.length ? { firstTry: 100 * tries.filter((n2) => n2 === 1).length / tries.length, avgTries: tries.reduce((a, b) => a + b, 0) / tries.length } : {},
     ...checkerBack ? { sentBack: checkerBack } : {}
   };
@@ -57539,9 +57539,9 @@ function todayBar(who, n = TODAY_BAR) {
     }
   return who.flatMap((w, i) => cells[i] > 0 ? [{ text: "\u2588".repeat(cells[i]), tone: w.who }] : []);
 }
-function sparkline(hours) {
-  const max = Math.max(0, ...hours);
-  return hours.map((n) => n > 0 && max > 0 ? SPARK[Math.min(SPARK.length - 1, Math.max(0, Math.ceil(n / max * SPARK.length) - 1))] : " ").join("");
+function sparkline(hours2) {
+  const max = Math.max(0, ...hours2);
+  return hours2.map((n) => n > 0 && max > 0 ? SPARK[Math.min(SPARK.length - 1, Math.max(0, Math.ceil(n / max * SPARK.length) - 1))] : " ").join("");
 }
 var hh = (h) => String(h).padStart(2, "0");
 var SPARK_FUTURE = "\xB7";
@@ -57549,15 +57549,15 @@ var SPARK_EDGE_L = "\u2595";
 var SPARK_EDGE_R = "\u258F";
 var SPARK_FLOOR = "\u2581";
 var sparkCells = (per) => Math.ceil(24 / Math.max(1, Math.min(24, Math.floor(per))));
-function squeezeHours(hours, per) {
+function squeezeHours(hours2, per) {
   const g = Math.max(1, Math.floor(per));
   const out = [];
-  for (let i = 0; i < hours.length; i += g) out.push(hours.slice(i, i + g).reduce((s, n) => s + n, 0));
+  for (let i = 0; i < hours2.length; i += g) out.push(hours2.slice(i, i + g).reduce((s, n) => s + n, 0));
   return out;
 }
-function sparkSegs(hours, per) {
+function sparkSegs(hours2, per) {
   const g = Math.max(1, Math.min(24, Math.floor(per)));
-  const cells = squeezeHours(hours, g);
+  const cells = squeezeHours(hours2, g);
   const text2 = sparkline(cells);
   const cur = cells.length - 1;
   const out = [{ text: SPARK_EDGE_L, tone: "dim" }];
@@ -57648,7 +57648,7 @@ function pastDays(tasks, nowMs, days, offsetMin = localOffset(nowMs)) {
   const shifted = nowMs + offsetMin * 6e4;
   const to = nowMs - (shifted % 864e5 + 864e5) % 864e5;
   const from = to - Math.max(0, Math.floor(days)) * 864e5;
-  const inside3 = (at2) => at2 !== void 0 && at2 >= from && at2 < to;
+  const inside3 = (at3) => at3 !== void 0 && at3 >= from && at3 < to;
   let merged = 0;
   let tokens = 0;
   let workMs = 0;
@@ -57948,7 +57948,7 @@ function singFrames() {
   const notes = [[[3, "\u266A"]], [[2, "\u266A"]], [[1, "\u266A"], [3, "\u266B"]], [[0, "\u266A"], [2, "\u266B"]], [[1, "\u266B"]], [[0, "\u266B"]]];
   return notes.map(
     (ns) => restFrame().map((row2, r) => {
-      const n = ns.find(([at2]) => at2 === r);
+      const n = ns.find(([at3]) => at3 === r);
       return n ? row2.slice(0, NOTE_COLUMN) + n[1] + row2.slice(NOTE_COLUMN + 1) : row2;
     })
   );
@@ -57982,7 +57982,7 @@ function pickMove(before, after, isNothing2) {
 
 // ../../hooks/core/chat-text.ts
 var CHAT_MAX = 3500;
-var TITLE_MAX2 = 70;
+var TITLE_MAX = 70;
 var PART_MAX = 600;
 function plain(s) {
   return s.replace(/\S*\.symcc\/\S*/g, "a saved file").replace(/[𝄞♟◆◇‖⧗⊛✎⌕⇢⏵⏸✧⌀⏱Σ•●○◉◎─━│┃┌┐└┘├┤┬┴┼▍▕▏█▁▂▃▄▅▆▇]/gu, "").replace(/\s+/g, " ").trim();
@@ -58037,7 +58037,7 @@ function askChoices(t, a) {
 }
 function taskLines(t, all, nowMs, running = false) {
   const detail = running ? runningState(t, nowMs) : "";
-  const head = `${t.id} ${running ? "running" : stateWord2(t, all)}: ${detail ? `${detail}: ` : ""}${cut(rowTitle(t), TITLE_MAX2)}`;
+  const head = `${t.id} ${running ? "running" : stateWord2(t, all)}: ${detail ? `${detail}: ` : ""}${cut(rowTitle(t), TITLE_MAX)}`;
   const out = [head];
   if (needsYou(t, nowMs) && (t.status === "waiting" || asksMoreTime(t))) {
     const a = taskAsks(t);
@@ -58529,8 +58529,8 @@ var BUILT = "a git command built by the shell";
 var BUILT_AT = /* @__PURE__ */ new WeakMap();
 var sliceWords = (words, a, b = words.length) => {
   const part = words.slice(a, b);
-  const at2 = BUILT_AT.get(words);
-  if (at2) BUILT_AT.set(part, new Set([...at2].filter((k) => k >= a && k <= b).map((k) => k - a)));
+  const at3 = BUILT_AT.get(words);
+  if (at3) BUILT_AT.set(part, new Set([...at3].filter((k) => k >= a && k <= b).map((k) => k - a)));
   return part;
 };
 var isVar = (s, p) => /[A-Za-z_0-9{@*#?$!-]/.test(s[p + 1] ?? "");
@@ -58653,17 +58653,17 @@ function splitCommands(s, out, budget) {
   };
   function list2(nested) {
     let cmd = [];
-    let at2 = /* @__PURE__ */ new Set();
+    let at3 = /* @__PURE__ */ new Set();
     let depth = 0;
     let target = false;
     let docEnd;
     const end2 = () => {
       if (cmd.length) {
-        if (at2.size) BUILT_AT.set(cmd, at2);
+        if (at3.size) BUILT_AT.set(cmd, at3);
         out.push(cmd);
       }
       cmd = [];
-      at2 = /* @__PURE__ */ new Set();
+      at3 = /* @__PURE__ */ new Set();
       target = false;
     };
     while (p < s.length) {
@@ -58706,7 +58706,7 @@ function splitCommands(s, out, budget) {
         }
         if (target) target = false;
         else {
-          if (built2) at2.add(cmd.length);
+          if (built2) at3.add(cmd.length);
           if (!(had && v === "")) cmd.push(v);
         }
       }
@@ -58797,9 +58797,9 @@ function checkCommand(words, who, budget, findExec) {
         budget.left -= rest.length + 1;
         if (budget.left < 0) throw new Error(TOO_COMPLEX);
         const first = parts[0] ?? [];
-        const at2 = [...BUILT_AT.get(first) ?? [], ...[...BUILT_AT.get(words) ?? []].filter((k) => k >= i).map((k) => k - i + first.length)];
+        const at3 = [...BUILT_AT.get(first) ?? [], ...[...BUILT_AT.get(words) ?? []].filter((k) => k >= i).map((k) => k - i + first.length)];
         words = [...first, ...rest];
-        if (at2.length) BUILT_AT.set(words, new Set(at2));
+        if (at3.length) BUILT_AT.set(words, new Set(at3));
         i = 0;
       }
     }
@@ -58812,12 +58812,12 @@ function gitCall(words, i, who) {
   let sub;
   let j = i + 1;
   if (n === "git") {
-    const at2 = BUILT_AT.get(words);
+    const at3 = BUILT_AT.get(words);
     for (; words[j]?.startsWith("-"); j++) {
-      if (at2?.has(j)) return BUILT;
+      if (at3?.has(j)) return BUILT;
       if (!GIT_OPTION_OK.has(words[j])) return `git ${words[j].split("=")[0]}`;
     }
-    if (at2?.has(j)) return BUILT;
+    if (at3?.has(j)) return BUILT;
     sub = words[j++]?.toLowerCase();
   } else if (n.startsWith("git-") && GIT_ALL.includes(n.slice(4))) sub = n.slice(4);
   if (!sub || !/^[a-z][a-z0-9-]*$/.test(sub)) return void 0;
@@ -58965,8 +58965,12 @@ var startS = () => ({
   gitInstall: "",
   /** T-1136: the workspace text while the folder (no repo, or no commit yet) holds repos of its own; '' otherwise */
   gitWorkspace: "",
+  /** T-1173: when the last digest was sent to the lead (ms); 0 = none yet (the first tick sets it, so a restart sends none at once) */
+  lastDigest: 0,
   /** the git state the lead was last told about, so it is told once, not every check */
   toldGit: "ok",
+  /** T-1178: the no-project note last told to the lead (a workspace board) */
+  toldLoose: "",
   /** set while setupGit runs, so a second press waits */
   settingUp: false,
   /** set at the end of session.start: until then pump starts no work (the worker type may not be registered yet) */
@@ -59364,14 +59368,14 @@ function withAsk2(t) {
   const liveQ = isObj(t.live) && "question" in t.live;
   if (!["question", "options", "asked_files", "question_lead", "options_lead"].some((k) => has(t, k)) && !(liveQ && has(t.live, "question"))) return null;
   const { question, options, asked_files, question_lead, options_lead, ...out } = t;
-  const at2 = typeof t.updated_at === "string" ? t.updated_at : "";
+  const at3 = typeof t.updated_at === "string" ? t.updated_at : "";
   const text2 = typeof question === "string" ? question : "";
   const files = strs2(asked_files);
   const opts = strs2(options);
   const lead = typeof question_lead === "string" ? question_lead.trim() : "";
   const lopts = strs2(options_lead);
   if (!isObj(t.ask) && t.status === "waiting" && (text2 || files.length)) {
-    out.ask = { by: oldAskBy(text2, files, opts, t.history), text: text2, asked_at: at2, ...opts.length ? { options: opts } : {}, ...files.length ? { files } : {}, ...lead ? { lead: { text: lead, ...lopts.length ? { options: lopts } : {} } } : {} };
+    out.ask = { by: oldAskBy(text2, files, opts, t.history), text: text2, asked_at: at3, ...opts.length ? { options: opts } : {}, ...files.length ? { files } : {}, ...lead ? { lead: { text: lead, ...lopts.length ? { options: lopts } : {} } } : {} };
   } else if (!isObj(t.ask) && t.status === "doing" && lead && isObj(t.live) && typeof t.live.time_ask === "string") {
     out.ask = { by: "symcc", text: "more time?", asked_at: t.live.time_ask, lead: { text: lead } };
   }
@@ -59380,7 +59384,7 @@ function withAsk2(t) {
     const live = { ...rest };
     if (isObj(q) && typeof q.question === "string" && t.status === "doing") {
       const qo = strs2(q.options);
-      live.ask = { by: "worker", text: q.question, asked_at: at2, ...qo.length ? { options: qo } : {} };
+      live.ask = { by: "worker", text: q.question, asked_at: at3, ...qo.length ? { options: qo } : {} };
     }
     if (Object.keys(live).length) out.live = live;
     else delete out.live;
@@ -59513,8 +59517,8 @@ function oldHistoryEntry(line, t = {}) {
   const kind = guessHistoryKind(line);
   const n = tryParts(line)?.[1];
   const run2 = n ? t.runs?.[n - 1] : void 0;
-  const at2 = run2 ? run2.ended ?? run2.started : kind === "created" ? t.created_at : void 0;
-  return { ...typeof at2 === "string" && at2 ? { at: at2 } : {}, kind, text: line, ...oldHistoryFacts({ kind, text: line }) };
+  const at3 = run2 ? run2.ended ?? run2.started : kind === "created" ? t.created_at : void 0;
+  return { ...typeof at3 === "string" && at3 ? { at: at3 } : {}, kind, text: line, ...oldHistoryFacts({ kind, text: line }) };
 }
 function migrateHistory(t) {
   const h = t.history;
@@ -60549,9 +60553,9 @@ async function scoutFinished(host, agentId, answer, end2 = false, tokens) {
   await load(host).then((b) => publish(host, b)).catch(() => void 0);
   const msg = scoutLeadMessage(name, answer, st?.paused === true);
   if (msg) {
-    const at2 = now();
-    heard.scouts[name] = at2;
-    heard.last = { what: `scout ${name} report`, at: at2 };
+    const at3 = now();
+    heard.scouts[name] = at3;
+    heard.last = { what: `scout ${name} report`, at: at3 };
     tellLead(host, msg);
   }
 }
@@ -60564,13 +60568,13 @@ var SCOUT_SPREAD_MS = 3e4;
 var PAUSED_RECHECK_MS = 6e4;
 function nextRunFrom(lastRun, everyMinutes, soon) {
   const last = Date.parse(lastRun ?? "");
-  const at2 = Number.isFinite(last) ? last + everyMinutes * 6e4 : NaN;
-  return Number.isFinite(at2) && at2 > Date.now() ? at2 : soon();
+  const at3 = Number.isFinite(last) ? last + everyMinutes * 6e4 : NaN;
+  return Number.isFinite(at3) && at3 > Date.now() ? at3 : soon();
 }
 function armScout(host, s, st) {
   const armedFor = st.next_run;
-  const at2 = Date.parse(armedFor ?? "");
-  const wait = Number.isFinite(at2) ? Math.max(0, at2 - Date.now()) : s.every_minutes * 6e4;
+  const at3 = Date.parse(armedFor ?? "");
+  const wait = Number.isFinite(at3) ? Math.max(0, at3 - Date.now()) : s.every_minutes * 6e4;
   timers.push(
     host.clock.after(wait, () => {
       if (scoutState.get(s.name) !== st) return;
@@ -60833,8 +60837,8 @@ async function lastMigratedMs(host, nowMs) {
     const named = backupTimeMs(f.name);
     if (!Number.isFinite(named) || nowMs - named >= CAME_BACK_MS) continue;
     const mark = jsonOf(await host.fs.read(`${dir}/${f.name}/${MIGRATED_FILE}`).catch(() => null));
-    const at2 = typeof mark?.at === "string" ? Date.parse(mark.at) : NaN;
-    if (Number.isFinite(at2) && mark?.version === S.version && at2 > best) best = at2;
+    const at3 = typeof mark?.at === "string" ? Date.parse(mark.at) : NaN;
+    if (Number.isFinite(at3) && mark?.version === S.version && at3 > best) best = at3;
   }
   return best;
 }
@@ -61003,10 +61007,10 @@ function savedPhase(t, nowMs) {
   return taskPhase(t, Number.isFinite(marked) ? marked : nowMs);
 }
 function phaseEvents(before, after, nowMs) {
-  const at2 = new Date(nowMs).toISOString();
+  const at3 = new Date(nowMs).toISOString();
   const t = after ?? before;
   if (!t) return [];
-  const base = { task: t.id, at: at2, try: Number(t.attempts) || 0 };
+  const base = { task: t.id, at: at3, try: Number(t.attempts) || 0 };
   if (!before) return [{ ...base, kind: "created", from: null, to: after.status }];
   if (!after) return [{ ...base, kind: "removed", from: before.status, to: null }];
   const a = savedPhase(before, nowMs);
@@ -61045,7 +61049,7 @@ function withStageHistory(b, events) {
     ...b,
     tasks: b.tasks.map((t) => {
       const adds = lines.get(t.id);
-      return adds ? { ...t, history: adds.reduce((h, [at2, add]) => withHistory(h, at2, add), t.history) } : t;
+      return adds ? { ...t, history: adds.reduce((h, [at3, add]) => withHistory(h, at3, add), t.history) } : t;
     })
   };
 }
@@ -61074,8 +61078,8 @@ async function mainRoot(host, dir) {
     return await isWorkerFolder(host, clean3, main2) ? main2 : clean3;
   }
   const mark = `/${S.N.worktrees}/`;
-  const at2 = clean3.indexOf(mark);
-  return at2 > 0 ? clean3.slice(0, at2) : clean3;
+  const at3 = clean3.indexOf(mark);
+  return at3 > 0 ? clean3.slice(0, at3) : clean3;
 }
 async function realOf(host, p) {
   const real2 = await Promise.resolve().then(() => host.fs.stat(p, { resolve: true })).then((st) => st.realPath, () => void 0);
@@ -61097,16 +61101,16 @@ async function boardAbove(host, dir) {
   const clean3 = normalPath(dir);
   const slashed = clean3.replace(/\\/g, "/");
   const mark = `/${S.N.worktrees}/`;
-  let at2 = slashed.indexOf(mark);
-  while (at2 > 0) {
-    const id = slashed.slice(at2 + mark.length).split("/")[0];
-    const top = clean3.slice(0, at2);
+  let at3 = slashed.indexOf(mark);
+  while (at3 > 0) {
+    const id = slashed.slice(at3 + mark.length).split("/")[0];
+    const top = clean3.slice(0, at3);
     if (id) {
       const sep4 = clean3.includes("\\") && !clean3.includes("/") ? "\\" : "/";
       const has2 = await host.fs.exists(`${top}${sep4}${S.N.boardFile.split("/").join(sep4)}`).catch(() => false);
       if (has2) return top;
     }
-    at2 = slashed.indexOf(mark, at2 + 1);
+    at3 = slashed.indexOf(mark, at3 + 1);
   }
   return "";
 }
@@ -61238,9 +61242,9 @@ async function boardMtime(host) {
   const st = await host.fs.stat(path(S.N.boardFile)).catch(() => null);
   return st ? st.mtimeMs : null;
 }
-async function noteMtime(host, seen = false) {
+async function noteMtime(host, seen2 = false) {
   S.readMtime = await boardMtime(host).catch(() => null);
-  if (seen) S.boardMtime = S.readMtime;
+  if (seen2) S.boardMtime = S.readMtime;
 }
 async function load(host) {
   await noteMtime(host);
@@ -61407,17 +61411,17 @@ async function saveBoard(host, b) {
   const want = /* @__PURE__ */ new Map();
   for (const [rel, all] of parts) {
     const file = partsPath(rel);
-    const seen = partsSeen.get(file)?.tasks ?? {};
+    const seen2 = partsSeen.get(file)?.tasks ?? {};
     const gone = missingParts.has(rel);
-    const tasks = Object.fromEntries(Object.entries(all).filter(([id]) => !gone || !stubbed.has(id) || id in seen));
+    const tasks = Object.fromEntries(Object.entries(all).filter(([id]) => !gone || !stubbed.has(id) || id in seen2));
     if (Object.keys(tasks).length) want.set(file, tasks);
   }
   if (want.size) await ensurePartsDir(host);
   const first = /* @__PURE__ */ new Map();
   for (const [file, tasks] of want) {
-    const seen = partsSeen.get(file);
-    const text2 = partsText({ ...seen?.tasks ?? {}, ...tasks });
-    if (text2 !== seen?.text) await safeWriteIn(host, file, text2, `the board's ${fileName(file)}`);
+    const seen2 = partsSeen.get(file);
+    const text2 = partsText({ ...seen2?.tasks ?? {}, ...tasks });
+    if (text2 !== seen2?.text) await safeWriteIn(host, file, text2, `the board's ${fileName(file)}`);
     first.set(file, text2);
   }
   await safeWrite(host, path(S.N.boardFile), JSON.stringify(slim, null, 2) + "\n", "the board");
@@ -61768,16 +61772,16 @@ async function staleOf($, others) {
   if (!others.length) return out;
   const b = await load($).catch(() => null);
   const mineNow = new Set(local.filter((m) => !m.gone).map((m) => m.entry.task));
-  const at2 = Date.now();
+  const at3 = Date.now();
   for (const e of others) {
     const cur = b ? find(b, e.task) : void 0;
-    if (mineNow.has(e.task) || lineEntryStale(e, at2, mergeLineStaleMs(testMinutesOf(b ?? {})))) out.add(e.key);
-    else if (b && (!cur || !checkStepNow(cur, at2))) out.add(e.key);
+    if (mineNow.has(e.task) || lineEntryStale(e, at3, mergeLineStaleMs(testMinutesOf(b ?? {})))) out.add(e.key);
+    else if (b && (!cur || !checkStepNow(cur, at3))) out.add(e.key);
   }
   return out;
 }
-function join($, task) {
-  const entry = { task, key: `${S.me || "unknown"}:${++count}:${Math.random().toString(36).slice(2, 8)}`, session: S.me || "unknown", joined: now(), at: Date.now() };
+function join($, task, repo) {
+  const entry = { task, repo, key: `${S.me || "unknown"}:${++count}:${Math.random().toString(36).slice(2, 8)}`, session: S.me || "unknown", joined: now(), at: Date.now() };
   const me = { entry, gone: false };
   local.push(me);
   const joined = editLine($, (line) => {
@@ -61791,16 +61795,16 @@ async function leave($, me) {
   if (me.gone) return;
   me.gone = true;
   departed.add(me.entry.key);
-  const at2 = local.indexOf(me);
-  if (at2 >= 0) local.splice(at2, 1);
+  const at3 = local.indexOf(me);
+  if (at3 >= 0) local.splice(at3, 1);
   signal();
   if (await editLine($, (line) => line.filter((e) => e.key !== me.entry.key))) departed.delete(me.entry.key);
 }
 async function redate($) {
-  const at2 = Date.now();
+  const at3 = Date.now();
   const keys = liveKeys();
-  for (const m of local) m.entry = { ...m.entry, at: at2 };
-  await editLine($, (line) => line.map((e) => keys.has(e.key) ? { ...e, at: at2 } : e));
+  for (const m of local) m.entry = { ...m.entry, at: at3 };
+  await editLine($, (line) => line.map((e) => keys.has(e.key) ? { ...e, at: at3 } : e));
 }
 async function place2($, me) {
   const keys = liveKeys();
@@ -61812,8 +61816,8 @@ async function place2($, me) {
     line = await editLine($, (l) => l.some((e) => e.key === me.entry.key) ? l : [...l, me.entry]) ?? line;
     if (!line.some((e) => e.key === me.entry.key)) line = [...line, ...missing(line)];
   }
-  const at2 = Math.max(0, line.findIndex((e) => e.key === me.entry.key));
-  const ahead = line.slice(0, at2);
+  const at3 = Math.max(0, line.findIndex((e) => e.key === me.entry.key));
+  const ahead = line.slice(0, at3).filter((e) => (e.repo ?? "") === (me.entry.repo ?? ""));
   return { ahead: ahead.length, others: ahead.filter((e) => !keys.has(e.key)).length };
 }
 async function markLine($, t, mark, stopped2) {
@@ -61826,7 +61830,7 @@ async function markLine($, t, mark, stopped2) {
   }).catch(() => void 0);
 }
 async function inMergeLine($, task, run2, o = {}) {
-  const { me, joined } = join($, task);
+  const { me, joined } = join($, task, o.repo && o.repo !== S.root ? o.repo : "");
   void o.release?.then(() => leave($, me), () => leave($, me));
   let shown = 0;
   let before;
@@ -61979,9 +61983,9 @@ function parsePassedTrees(text2) {
 }
 var sameCommands = (a, b) => a.length === b.length && a.every((c, i) => c === b[i]);
 var treePassed = (list2, tree, commands) => isTreeId(tree) && list2.some((e) => e.tree === tree && sameCommands(e.commands, commands));
-function addPassedTree(list2, tree, commands, at2) {
+function addPassedTree(list2, tree, commands, at3) {
   const rest = list2.filter((e) => !(e.tree === tree && sameCommands(e.commands, commands)));
-  return [...rest, { tree, commands: [...commands], at: at2 }].slice(-PASSED_TREES_MAX);
+  return [...rest, { tree, commands: [...commands], at: at3 }].slice(-PASSED_TREES_MAX);
 }
 var passedTreesText = (list2) => JSON.stringify({ passed: list2 }) + "\n";
 var testsSkippedText = (tree) => `tests: this exact code already passed (tree ${tree.slice(0, 7)}); not run again`;
@@ -62003,12 +62007,12 @@ async function ownerEdits($, t, dir) {
   const st = await git($, ["status", "--porcelain", "-z", "--untracked-files=all"], dir);
   if (st.exitCode !== 0) throw new Error(`git status: ${(st.stderr || st.stdout).trim().slice(0, 300)}`);
   const files = parseStatusZ(st.stdout).filter((e) => !leftOutKind(e)).map((e) => e.path);
-  const seen = reviewedCommit(t);
-  if (seen) {
+  const seen2 = reviewedCommit(t);
+  if (seen2) {
     const head = (await git($, ["rev-parse", "-q", "--verify", "HEAD"], dir)).stdout.trim();
-    if (head && head !== seen) {
-      const d = await git($, ["diff", "--name-only", "--no-renames", "-z", `${seen}..${head}`], dir);
-      files.push(...d.exitCode === 0 ? d.stdout.split("\0").filter(Boolean) : [`(commits after ${shortSha(seen)})`]);
+    if (head && head !== seen2) {
+      const d = await git($, ["diff", "--name-only", "--no-renames", "-z", `${seen2}..${head}`], dir);
+      files.push(...d.exitCode === 0 ? d.stdout.split("\0").filter(Boolean) : [`(commits after ${shortSha(seen2)})`]);
     }
   }
   const skip = S.N.dir;
@@ -62133,6 +62137,7 @@ async function checkAndMerge($, t, dir, b, mode = "finish", made = [], stop = ()
   const turn = () => inMergeLine($, t.id, (refresh) => upToDateTestMove($, t, dir, repo, b, mode, made, stopped2, retest, target, head, changed, refresh, noVerdict, prose), {
     t,
     stopped: stopped2,
+    repo,
     ...release ? { release } : {},
     ...limit ? { limit } : {}
   });
@@ -62814,6 +62819,12 @@ var FD_SOUNDS = "/usr/share/sounds/freedesktop/stereo";
 var MAC_SETS = { 1: ["Glass", "Ping"], 2: ["Hero", "Pop"], 3: ["Submarine", "Funk"] };
 var FD_SETS = { 1: ["complete", "bell"], 2: ["message-new-instant", "dialog-warning"], 3: ["service-login", "window-attention"] };
 var WIN_SETS = { 1: ["Asterisk", "Exclamation"], 2: ["tada.wav", "chord.wav"], 3: ["chimes.wav", "notify.wav"] };
+var MUTE_VAR = "SYMCC_MUTE";
+async function muted(host) {
+  const read = host.env;
+  const v = await read(MUTE_VAR).catch(() => void 0);
+  return !!v && v !== "0";
+}
 function run(host, argv) {
   return host.run(argv, { timeoutMs: 5e3 }).catch(() => null);
 }
@@ -62932,7 +62943,7 @@ function queueSay(host, b, item) {
 }
 async function playsFor(host, wanted, items) {
   const text2 = spokenLine(items);
-  if (!text2) return [];
+  if (!text2 || await muted(host)) return [];
   const p = await players(host);
   const can = await playable(host);
   const n = notifyOf({ notify: wanted ?? void 0 }, can);
@@ -62966,7 +62977,7 @@ async function sayNext(host) {
   if (sayQueue.length) void sayNext(host);
 }
 async function playSample(host, set) {
-  if (!SOUND_SETS.includes(set)) return null;
+  if (!SOUND_SETS.includes(set) || await muted(host)) return null;
   try {
     for (const make of (await players(host)).sound) {
       const c = make("", false, set);
@@ -63201,8 +63212,8 @@ function card2(t, all, nowMs, opts = {}) {
   const sha = opts.commit ? taskCommits(t).find((c) => c.merged) : void 0;
   const commit = sha ? `<div class="meta">merged <code>${escapeHtml(shortSha(sha.sha))}</code></div>` : "";
   const todo = (t.details ?? "").trim();
-  const short2 = todo.length > TODO_MAX ? `${todo.slice(0, TODO_MAX).trimEnd()}\u2026` : todo;
-  return `<div class="task s-${escapeHtml(t.status)}"><div class="head"><span class="mark">${escapeHtml(statusMark(t))}</span>${escapeHtml(t.id)} ${escapeHtml(t.title)}</div><div class="meta">${escapeHtml(meta2)}</div>${ask}${why2}${commit}${short2 ? `<div class="todo">${escapeHtml(short2)}</div>` : ""}</div>`;
+  const short3 = todo.length > TODO_MAX ? `${todo.slice(0, TODO_MAX).trimEnd()}\u2026` : todo;
+  return `<div class="task s-${escapeHtml(t.status)}"><div class="head"><span class="mark">${escapeHtml(statusMark(t))}</span>${escapeHtml(t.id)} ${escapeHtml(t.title)}</div><div class="meta">${escapeHtml(meta2)}</div>${ask}${why2}${commit}${short3 ? `<div class="todo">${escapeHtml(short3)}</div>` : ""}</div>`;
 }
 var section2 = (title, cards) => cards.length ? `<h2>${escapeHtml(title)} (${cards.length})</h2>${cards.join("")}` : "";
 function boardHtml(view, project, nowMs, offsetMin = localOffset(nowMs)) {
@@ -63426,10 +63437,10 @@ ${dry.stderr}`).length : 0;
   for (const repo of repos) {
     const wl = await git(host, ["worktree", "list", "--porcelain"], repo).catch(() => null);
     const outAt = /* @__PURE__ */ new Map();
-    let at2 = "";
+    let at3 = "";
     for (const l of (wl?.exitCode === 0 ? wl.stdout : "").split("\n").map((x) => x.trim())) {
-      if (l.startsWith("worktree ")) at2 = l.slice("worktree ".length);
-      else if (l.startsWith("branch refs/heads/")) outAt.set(l.slice("branch refs/heads/".length), at2);
+      if (l.startsWith("worktree ")) at3 = l.slice("worktree ".length);
+      else if (l.startsWith("branch refs/heads/")) outAt.set(l.slice("branch refs/heads/".length), at3);
     }
     const offered = new Set(trees.map((f) => f.id));
     const refs = await git(host, ["for-each-ref", "--format=%(refname:short) %(objectname)", `refs/heads/${S.N.branch("")}`], repo).catch(() => null);
@@ -63505,8 +63516,8 @@ ${dry.stderr}`).length : 0;
     for (const t of b.tasks) {
       if (t.status !== "doing" || t.id === mergingId || inUse(t.id, t, agents)) continue;
       const run2 = t.runs?.at(-1);
-      const since = run2?.started ? activeFrom(run2, Date.parse(run2.started)) : Date.parse(t.updated_at);
-      const min = Number.isFinite(since) ? Math.round((nowMs - since) / 6e4) : NaN;
+      const since2 = run2?.started ? activeFrom(run2, Date.parse(run2.started)) : Date.parse(t.updated_at);
+      const min = Number.isFinite(since2) ? Math.round((nowMs - since2) / 6e4) : NaN;
       if (!(min >= DOCTOR_STUCK_MIN)) continue;
       listed.push({ kind: "board", fixable: false, text: `${t.id} is running but has no live worker (for ${min} min): /${S.N.name}-task ${t.id} retry${driver ? "" : `, or /${S.N.name}-drive so the regular check takes it back`}` });
     }
@@ -63808,12 +63819,12 @@ function ownerAddedMinutes(history, attempt) {
 }
 var ASKED_MORE = /^ran \d+ min, over its time limit; asked the owner for more time$/;
 var TIME_IS_UP = /^time is up \(.*\); the worker was told to write down what it has and hand back$/;
-function ownerTimeState(history, attempt, at2) {
+function ownerTimeState(history, attempt, at3) {
   let ask;
   for (const h of history ?? []) {
     if (h.try !== attempt) continue;
     const body = h.text.slice(h.text.indexOf(": ") + 2);
-    if (h.kind === "out-of-time" && TIME_IS_UP.test(body)) return { wrap_up: at2 };
+    if (h.kind === "out-of-time" && TIME_IS_UP.test(body)) return { wrap_up: at3 };
     if (h.kind === "out-of-time" && ASKED_MORE.test(body)) ask = h.at;
     else if (h.kind === "step" && OWNER_ADDED.test(body)) ask = void 0;
   }
@@ -64074,7 +64085,7 @@ function liveStatusText(view, notes, nowMs, name = DEFAULT_NAME, width = 80, off
     for (const l of lanes) {
       const [first, second] = laneLines(l, layout, { nowMs, frame: 0, steady: true });
       out.push((LIVE_INDENT + segText(first) + (l.done ? "" : tryText(l.tryNo))).trimEnd());
-      if (!l.done) under(second);
+      under(second);
       for (const r of trainRows(trains.lanes[l.id] ?? [], inner)) under(r.segs);
     }
   }
@@ -64433,13 +64444,13 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Pick the task type by the result wanted: project files to merge \u2192 change (or bug, feature, refactor, docs); an answer to read \u2192 investigation; anything else, including work outside the project or "don't merge" / "just make it on my Desktop" \u2192 errand. Never use a plain background agent for work the board can do as an errand.
 - Turn what the owner wants into tasks with ${S.N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes. Every change task's details say how the change will be tested, e.g. "Done when: tests show \u2026" (the test that will check it). A change task whose commit edits code but no test file is flagged before merging (setting tests_with_changes: ask, the default, merges it and tells you "T-5 changed code but no test", so follow up with a test task or ask the owner; review makes it wait for the owner's review; off does nothing). Test files: in a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder (or a folder ending .Test/.Tests), or with test/spec/e2e/cy as a name part split by . _ or - (a.test.ts, a-test.ts, a.cy.ts), or a name ending in Test/Tests (FooTest.java); latest.ts and run-tests.sh are not tests. Docs: .md/.mdx, README/CHANGELOG/LICENSE names, images/video/audio/fonts, non-code files under docs/ (not docs/build.ts or Notice.tsx). A docs-only change is never flagged.
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly (when those words are a short reply like "yes", quote \u201C<the owner's earlier ask, trimmed>\u201D \u2192 lead: \u201C<your question, short>\u201D \u2192 \u201C<the reply>\u201D); for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
-- On a workspace board (the board folder holds several repos, each in its own folder, and is no repo itself), give every change task its project: the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A task that needs no repo (an answer to read, an errand) needs no project.
+- On a workspace board (the board folder holds several repos, each in its own folder, and is no repo itself), give every task its project (change, investigation or errand): the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A task with no project can't start on a workspace board yet, even an investigation or an errand: give it the project folder it works in (or the nearest one).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - Workers can't read the board or ${S.N.dir}/ (no board tool, and their folder is their own copy). To hand a worker an earlier task's answer, give its task from_task (that task's latest report is copied into the worker's folder and its prompt names it), or name the report file (${S.N.dir}/reports/T-n-try-N.md, or T-n-try-*.md for the latest), or paste the key facts into the details.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
 - Keeping the board in order (triage): older tasks go first unless the owner says a task is urgent; bugs and safety fixes go before features. Use priority for urgency: lower runs first; every task starts at 0; give urgent work -1, -2\u2026, later work 1, 2\u2026 (a whole number from -20 to 19; ties go to the older task). Use it, not only after. Chain tasks with after only when they really share files; tasks with different files should run side by side. Never leave a task waiting forever. When a new task shares files with an older task that is still waiting, the new one goes behind it (the new one gets after: the older one), not the other way round.
 - ${S.N.name} runs a board health check after each change and every two minutes. When it finds something new you get one "Triage needed" board update: a task waiting on a dropped, failed or missing task, tasks waiting on each other in a loop, an older task that keeps getting pushed back, a chain of tasks that share no files, or a task waiting on the owner for over an hour. Fix it with the triage rules above (${S.N.name} change after / priority, retry, drop), or ask the owner if it is their call. Each problem is told once, and again only after its tasks change.
-- Workers start by themselves on ready tasks, each in its own copy of the code. When a change task finishes, its change is tested and, if it passes, merged (investigations and errands are not merged). Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). A worker's or scout's own report reaches you as its message (the agent's hand-back); the board update then gives only the outcome (merged, ready for review, failed) and doesn't repeat it.
+- Workers start by themselves on ready tasks, each in its own copy of the code. When a change task finishes, its change is tested and, if it passes, merged (investigations and errands are not merged). Each task merges into the branch you were on when it was made (the branch checked out in the project then; its worker's copy starts from it). If that branch is gone when it starts or merges, the task waits for the owner with a question; ${S.N.name} change merge_into moves a task to another existing branch. You then get a "[${S.N.name}] Board update" message: decide what's next (retry with ${S.N.name} change / ${S.N.name} retry, split, ${S.N.name} ask the owner, or ${S.N.name} drop). Agents' own reports do not reach you as messages (${S.N.name} mutes them): you get board updates (the outcome; an answered investigation's, an errand's and a scout's update carry the report), "Meanwhile" lines, and now and then a short digest of what is stuck or repeating. Read any task's report with ${S.N.name} board task T-n.
 - The owner's own actions on the board (approve, reject, drop, move to todo, stash, mode and settings changes, answers to a task) and merges they approved don't send you a message: they come as "Meanwhile" lines (also quiet retries, reload restarts and plain merges): at the top of the next board update, or beside the owner's next message if that comes first. They need no reply; just take them into account. Only the owner setting up git, or allowing or refusing a task's files on the board, wakes you at once with a board update.
 ${popup() ? `- Ask every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") with ${popup()} (2 to 4 short options). ${S.N.name} puts each such question on the board by itself as a Q-n, so don't also add a ${S.N.name} question for it. Whichever the owner answers first closes the other: a board answer comes back as the pop-up's answer, and a pop-up answer closes the Q-n (the tool result says so). If the owner closes the pop-up without answering, the Q-n stays on the board, and a later board answer wakes you with a board update saying "The owner answered your question Q-3 (\u2026): <answer>. \u2026 Act on it." (already closed: act on it and don't ask again). Only for a question with 5 or 6 options, first add it with ${S.N.name} question (action add), then ask it with ${popup()} with the same question text and the first 3 options plus "the rest on the board": the pop-up is tied to that Q-n. Drop a question that no longer matters (${S.N.name} question action drop). A question about one task stays ${S.N.name} ask.
 - Questions the owner can also answer on the board (a review, an answered investigation, a worker's question or file request, more time) you ask in the chat with ${popup()}, with the same options (where a line here says numbered plain chat text, use ${popup()} with those options), with the question's header set to exactly the task id (T-5; an id only mentioned in the question text doesn't tie it). ${S.N.name} ties that pop-up to the task's own board question (no Q-n is added): whichever the owner answers first closes the other. A board answer comes back as the pop-up's answer; a pop-up answer is put into the task for you (an answer, more time, Allow or Don't allow, Approve, Done, Keep as a note), and the tool result says what was done and what is left for you (e.g. a reject's reason: then ${S.N.name} reject yourself). ${popup()} takes at most 4 options per question: when a question has more, show the first 3 plus "the rest on the board" (or the owner types one under Other); when the owner picks "the rest on the board", the board question stays open and a board update brings their answer. Don't stack two questions under the same numbers: ask one at a time.` : `- Put every question for the owner that isn't about one task (a settings choice, "add a scout?", "raise the version?") on the board with ${S.N.name} question (action add, with 2 to 6 short options), and ask it briefly in the chat too, with the options as numbered plain chat text, plus "${answerTail()}". Never leave a question only in the chat: chat questions scroll away and get forgotten. If the owner answers in the chat, close it with ${S.N.name} question action answer (id and their words); a board answer wakes you at once with a board update saying "The owner answered your question Q-3 (\u2026): <answer>. \u2026 Act on it.", already closed: act on it and don't ask again. Drop a question that no longer matters (action drop). A question about one task stays ${S.N.name} ask.
@@ -64999,6 +65010,7 @@ async function runNowTool($, id, anyway) {
   const b = await load($);
   const waits = runNowWaits(b, t);
   if (waits.length && !anyway) return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`;
+  if (S.gitState === "ok" && S.gitRoot === "no-repo" && !isProjectName(t.project ?? "")) return `${noProjectText({ ...b, tasks: [t] })}; nothing started`;
   if (S.gitState === "no-git" || !await taskGitReady($, b, t)) return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : "here"} yet`;
   const busy = workers.size + starting.size;
   const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : void 0;
@@ -65137,10 +65149,10 @@ function boardAnswered(id, answer, tell = () => {
 }
 
 // ../../hooks/app/workers.ts
-var WORKER_PROMPT = (t, b, dir, role, guide = "", learned = "", commits = [], since = null) => {
+var WORKER_PROMPT = (t, b, dir, role, guide = "", learned = "", commits = [], since2 = null) => {
   const kind = isInvestigation(t) ? "investigation" : "change";
   const values = { ...kind === "investigation" ? investigationValues(t, dir) : changeValues(t, b, dir), learned };
-  return fillPrompt(kind, { ...values, role: roleSection(role, values, t), org_mem: guide }, t, b, commits, since);
+  return fillPrompt(kind, { ...values, role: roleSection(role, values, t), org_mem: guide }, t, b, commits, since2);
 };
 async function changedSince2(host, t, dir, nowMs = Date.now()) {
   if (!mayBeStale(t, nowMs)) return null;
@@ -65246,14 +65258,14 @@ async function queueWorker(host, id) {
     const t = await change(host, (x) => {
       const cur = find(x, id);
       if (!mayStart(cur, agents.map(agentState), S.N.name)) return [x, null];
-      const at2 = now();
-      const goOn = cur.attempts > 0 ? goOnRun(cur.runs, at2) : null;
+      const at3 = now();
+      const goOn = cur.attempts > 0 ? goOnRun(cur.runs, at3) : null;
       const attempts = goOn ? cur.attempts : cur.attempts + 1;
-      const upToDate = merged ? { history: withHistory(cur.history, at2, tryEntry({ ...cur, attempts }, "stage", `brought up to date with ${intoOf(cur)} (${plural(merged, "commit")})`)) } : {};
+      const upToDate = merged ? { history: withHistory(cur.history, at3, tryEntry({ ...cur, attempts }, "stage", `brought up to date with ${intoOf(cur)} (${plural(merged, "commit")})`)) } : {};
       const clash = why2 === "clash" && !cur.merge_main ? { merge_main: true } : {};
       const added = goOn ? ownerAddedMinutes(cur.history, attempts) : 0;
-      const time = goOn ? ownerTimeState(cur.history, attempts, at2) : {};
-      const y = patchTask(x, id, { status: "doing", live: { session: S.me, phase: "claimed", ...added > 0 ? { extra_minutes: added } : {}, ...time }, attempts, branch, note: claimNote(host), runs: addCommits(goOn ?? startRun(cur.runs, at2, !!cur.merge_main || why2 === "clash"), commit ? [commit] : []), ...upToDate, ...clash }, at2);
+      const time = goOn ? ownerTimeState(cur.history, attempts, at3) : {};
+      const y = patchTask(x, id, { status: "doing", live: { session: S.me, phase: "claimed", ...added > 0 ? { extra_minutes: added } : {}, ...time }, attempts, branch, note: claimNote(host), runs: addCommits(goOn ?? startRun(cur.runs, at3, !!cur.merge_main || why2 === "clash"), commit ? [commit] : []), ...upToDate, ...clash }, at3);
       return [y, find(y, id)];
     });
     if (!t) return null;
@@ -65308,11 +65320,11 @@ async function workerStarted(host, id, before, dir, branch, spawn3, claimed) {
   await change(host, (x) => {
     const cur2 = find(x, id);
     if (cur2?.status !== "doing") return x;
-    const at2 = now();
+    const at3 = now();
     const again = restartsOf(cur2.runs?.at(-1)).at(-1);
     const entry = again && !workerIdOf(cur2) ? workerRestartedEntry(cur2, again.why) : workerStartedEntry(cur2, !!cur2.runs?.at(-1)?.merge_main, workerName(S.N.name, id));
-    const line = cur2.attempts === claimed ? { history: withHistory(cur2.history, at2, entry) } : {};
-    return patchTask(x, id, { runs: withWorkerStart(cur2.runs, agentId, at2), ...cur2.live?.phase === "claimed" ? { note: "worker on it", live: { phase: "worker" } } : {}, ...line }, at2);
+    const line = cur2.attempts === claimed ? { history: withHistory(cur2.history, at3, entry) } : {};
+    return patchTask(x, id, { runs: withWorkerStart(cur2.runs, agentId, at3), ...cur2.live?.phase === "claimed" ? { note: "worker on it", live: { phase: "worker" } } : {}, ...line }, at3);
   });
   const cur = find(await load(host), id);
   if (cur?.status === "doing" && cur.attempts === claimed && cur.live?.wrap_up) await host.agents.send(agentId, WRAP_UP_TEXT).catch(() => void 0);
@@ -65372,9 +65384,9 @@ async function workerFinishedNow(host, agentId, answer, end2, tokens, cost) {
   if (!w) return;
   workers.delete(agentId);
   if (finishing.has(w.task)) return;
-  const at2 = now();
-  heard.workers[w.task] = at2;
-  heard.last = { what: `${w.task} worker report`, at: at2 };
+  const at3 = now();
+  heard.workers[w.task] = at3;
+  heard.last = { what: `${w.task} worker report`, at: at3 };
   finishing.add(w.task);
   let tryNo2;
   let limitMs = finishLimitMs(0);
@@ -65537,28 +65549,28 @@ async function landIfMerged(host, t, merged, made, kind, status) {
 }
 async function landedLate(host, t, sha, made, kind, status) {
   const fits = (cur) => cur.attempts === t.attempts && (kind === "approve" ? cur.status === status : [status, "todo", "failed"].includes(cur.status));
-  const short2 = shortSha(sha);
+  const short3 = shortSha(sha);
   const into = intoOf(t);
   const r = await change(host, (x) => {
     const cur = find(x, t.id);
     if (!cur || !fits(cur)) return [x, { done: false, cur }];
     const next = mergedDone({ ...cur, runs: addCommits(cur.runs, [...made, sha]) }, sha, "left as given up", now());
-    const line = `${tryLabel(cur)}: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short2}), so it is done`;
+    const line = `${tryLabel(cur)}: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short3}), so it is done`;
     return [putTask(x, { ...next, history: withHistory(cur.history, now(), ["merged", line, { try: cur.attempts }]) }), { done: true, cur }];
   }).catch((e) => {
-    tellLead(host, `${t.id} "${t.title}": its given-up checking and merging ended late and its work was merged into ${into} (${short2}), but the board could not be updated (${e.message.slice(0, 200)}).`);
+    tellLead(host, `${t.id} "${t.title}": its given-up checking and merging ended late and its work was merged into ${into} (${short3}), but the board could not be updated (${e.message.slice(0, 200)}).`);
     return null;
   });
   if (!r) return;
   if (r.done) {
-    tellLead(host, `\u2713 ${t.id} "${t.title}" is done after all: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short2}).`);
+    tellLead(host, `\u2713 ${t.id} "${t.title}" is done after all: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short3}).`);
     if (await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false)) await deleteMergedBranch(host, taskBranch(t), into, repoOf(t)).catch(() => false);
     void pump(host);
     return;
   }
   if (r.cur?.status === "done" && r.cur.merged) return;
   const now_ = r.cur ? `it is now ${r.cur.status}${r.cur.attempts !== t.attempts ? `, on try ${r.cur.attempts}` : ""}` : "it is no longer on the board";
-  tellLead(host, `${t.id} "${t.title}": its checking and merging (${tryLabel(t)}) was given up as stuck, but it ended late and its work was merged into ${into} (${short2}) after all. The task moved on meanwhile (${now_}), so I left it as it is: decide whether it is done (then drop the new try) or still needs work.`);
+  tellLead(host, `${t.id} "${t.title}": its checking and merging (${tryLabel(t)}) was given up as stuck, but it ended late and its work was merged into ${into} (${short3}) after all. The task moved on meanwhile (${now_}), so I left it as it is: decide whether it is done (then drop the new try) or still needs work.`);
 }
 function everyMs(host, ms3, f) {
   try {
@@ -65575,8 +65587,8 @@ async function markFinishingNow(host, id, tryNo2, on) {
   await change(host, (x) => {
     const t = find(x, id);
     if (t?.status !== "doing" || t.attempts !== tryNo2 || !on && !hasMark(t)) return x;
-    const at2 = now();
-    return patchTask(x, id, { live: { checking: on ? { ...t.live?.checking ?? { step: "prep" }, at: at2 } : void 0 } }, t.updated_at);
+    const at3 = now();
+    return patchTask(x, id, { live: { checking: on ? { ...t.live?.checking ?? { step: "prep" }, at: at3 } : void 0 } }, t.updated_at);
   });
 }
 var hasMark = (t) => !!t?.live?.checking;
@@ -65986,10 +65998,10 @@ async function unsayProblems(host, t, report) {
     const cur = find(x, t.id);
     if (!cur || cur.attempts !== t.attempts) return x;
     const said = checkerLine(tryLabel(cur), { ok: false, report });
-    const at2 = cur.history.map((h) => h.text).lastIndexOf(said);
-    if (at2 < 0) return x;
+    const at3 = cur.history.map((h) => h.text).lastIndexOf(said);
+    if (at3 < 0) return x;
     const history = [...cur.history];
-    history[at2] = historyEntry("checker", checkerLine(tryLabel(cur), null, STOPPED_AGAIN), cur.history[at2].at ?? now(), { try: cur.attempts, agent: checkerName(S.N.name, t.id) });
+    history[at3] = historyEntry("checker", checkerLine(tryLabel(cur), null, STOPPED_AGAIN), cur.history[at3].at ?? now(), { try: cur.attempts, agent: checkerName(S.N.name, t.id) });
     return patchTask(x, t.id, { history }, now());
   }).catch(() => void 0);
 }
@@ -66003,10 +66015,16 @@ async function answered(host, t, answer, summary, limit, agentId) {
   if (await writeIfSame(host, t, (cur) => ({ status: "review", note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: void 0, test_output: void 0, time_ask: void 0, wrap_up: void 0, history: withHistory(cur.history, now(), tryEntry(t, "answered", `answered${late ? ` (time ran out after ${limit} min)` : ""}: ${cutLine(summary, 300)}`, { agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), late ? "timed out" : "finished", late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: "", answered: true })) }))) return;
   if (errand) {
     await endInvestigation(host, t, false, agentId);
-    tellLead(host, `${t.id} "${t.title}" (errand) is done${late ? ` (its time of ${limit} minutes ran out, so this is what it had)` : ""}; nothing was merged. Its report is on the task (${S.N.name} board task ${t.id}). Tell the owner what it did.`);
+    tellLead(host, `${t.id} "${t.title}" (errand) is done${late ? ` (its time of ${limit} minutes ran out, so this is what it had)` : ""}; nothing was merged. Its report (full: ${S.N.name} board task ${t.id}):
+${reportPart(text2)}
+
+Tell the owner what it did.`);
     return;
   }
-  tellLead(host, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ""} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`);
+  tellLead(host, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ""} and waits for the owner to read it (nothing was committed, tested or merged). Its answer (full: ${S.N.name} board task ${t.id}):
+${reportPart(text2)}
+
+Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`);
 }
 async function doneAfterMerge(host, t, sha) {
   const done = await change(host, (x) => {
@@ -66337,9 +66355,9 @@ ${r.testOutput}`);
 }
 var onPurpose = /* @__PURE__ */ new Map();
 function ageOnPurpose(b) {
-  for (const [id, seen] of [...onPurpose]) {
-    if (find(b, id)?.status !== "doing" || seen >= 1) onPurpose.delete(id);
-    else onPurpose.set(id, seen + 1);
+  for (const [id, seen2] of [...onPurpose]) {
+    if (find(b, id)?.status !== "doing" || seen2 >= 1) onPurpose.delete(id);
+    else onPurpose.set(id, seen2 + 1);
   }
 }
 var seenEnded = /* @__PURE__ */ new Set();
@@ -66366,16 +66384,16 @@ function sameTry(cur, was, agentId) {
   return cur.status === "doing" && workerIdOf(cur) === workerIdOf(was) && (agentId === void 0 || (workerIdOf(cur) ?? agentId) === agentId) && (cur.runs?.length ?? 0) === (was.runs?.length ?? 0) && cur.runs?.[cur.runs.length - 1]?.started === was.runs?.[was.runs.length - 1]?.started;
 }
 var queuedNeverStarted = (t) => t.status === "doing" && t.live?.phase === "claimed" && !handedBack(t) && !starting.has(t.id) && !queuedWorkers.has(t.id);
-function unclaimed(t, at2) {
+function unclaimed(t, at3) {
   const { live: _l, runs: _r, ...rest } = t;
   const back = undoGoOn(t.runs);
-  if (back) return { ...rest, status: "todo", note: "", updated_at: at2, runs: back };
+  if (back) return { ...rest, status: "todo", note: "", updated_at: at3, runs: back };
   const last = t.runs?.at(-1);
   const runs = last && !last.ended ? t.runs.slice(0, -1) : t.runs;
-  return { ...rest, status: "todo", note: "", attempts: Math.max(0, t.attempts - 1), updated_at: at2, ...runs?.length ? { runs } : {} };
+  return { ...rest, status: "todo", note: "", attempts: Math.max(0, t.attempts - 1), updated_at: at3, ...runs?.length ? { runs } : {} };
 }
-function unclaimQueued(b, me, live, at2, keep = []) {
-  return { ...b, tasks: b.tasks.map((t) => queuedNeverStarted(t) && ownedHere(t, me, live) && !keep.includes(t.id) ? unclaimed(t, at2) : t) };
+function unclaimQueued(b, me, live, at3, keep = []) {
+  return { ...b, tasks: b.tasks.map((t) => queuedNeverStarted(t) && ownedHere(t, me, live) && !keep.includes(t.id) ? unclaimed(t, at3) : t) };
 }
 async function sendBackIdle(host, agents) {
   const mine = new Set([...workers.values()].map((w) => w.task));
@@ -66583,7 +66601,7 @@ async function installStepOf($) {
   return gitInstallStep(f);
 }
 var isOpenTask = (t) => !isFinished(t) && t.status !== "backlog";
-var openProjects = (b) => [...new Set(b.tasks.filter((t) => !isFinished(t)).map((t) => t.project).filter((p) => !!p && isProjectName(p)))].sort();
+var openProjects = (b) => [...new Set(b.tasks.filter((t) => isOpenTask(t)).map((t) => t.project).filter((p) => !!p && isProjectName(p)))].sort();
 var gitStateOfTask = (t) => {
   const repo = repoOf(t);
   return repo === S.root ? S.gitRoot : S.repoGit.get(repo) ?? "ok";
@@ -66632,8 +66650,7 @@ async function gitReady($, b, repo = S.root) {
   const real2 = await probeGit($);
   S.gitRoot = real2;
   const board = b ?? await load($);
-  const loose2 = board.tasks.some((t) => isOpenTask(t) && !(t.project && isProjectName(t.project)));
-  const s = real2 === "no-repo" && !loose2 && (await projectNames($).catch(() => [])).length ? "ok" : real2;
+  const s = real2 === "no-repo" && (await projectNames($).catch(() => [])).length ? "ok" : real2;
   if (s === "no-git" && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => "");
   if (s !== "no-git") S.gitInstall = "";
   const ws = (s === "no-repo" || s === "no-commits") && await holdsRepos($) ? workspaceText() : "";
@@ -66641,6 +66658,11 @@ async function gitReady($, b, repo = S.root) {
     S.gitState = s;
     S.gitWorkspace = ws;
     await publish($, b ?? await load($));
+  }
+  const loose2 = noProjectText(board);
+  if (S.driving && loose2 !== S.toldLoose) {
+    S.toldLoose = loose2;
+    if (loose2) tellLead($, loose2);
   }
   if (s === "ok") {
     if (S.toldGit !== "ok" && S.driving && !S.settingUp) tellLead($, gitFoundText());
@@ -66650,6 +66672,13 @@ async function gitReady($, b, repo = S.root) {
     tellLead($, s === "no-git" ? noGitText(S.N.name, S.gitInstall) : ws ? ws : setupAskText(s, S.N.name));
   }
   return s === "ok";
+}
+function noProjectText(b) {
+  if (S.gitState !== "ok" || S.gitRoot !== "no-repo") return "";
+  const ids = b.tasks.filter((t) => isOpenTask(t) && !isProjectName(t.project ?? "")).map((t) => t.id);
+  if (!ids.length) return "";
+  const many = ids.length > 1;
+  return `${ids.join(", ")} ${many ? "have" : "has"} no project, so ${many ? "they can't" : "it can't"} start on a board over several repos; give ${many ? "each" : "it"} a project (${S.N.name} change project)`;
 }
 var workspaceText = () => `This looks like a workspace of several repos; ${S.N.name} can't run a board over several repos yet. Open ${S.W.app} in one repo instead.`;
 async function holdsRepos($) {
@@ -66954,7 +66983,7 @@ async function cleanupMerged($, b) {
     if ((await git($, ["worktree", "remove", dir], repoOf(t))).exitCode === 0) dirs++;
   }
   const repoTasks = (repo) => b.tasks.filter((t) => repoOf(t) === repo);
-  const rootNeeded = S.gitRoot === "ok" || b.tasks.some((t) => isOpenTask(t) && repoOf(t) === S.root);
+  const rootNeeded = S.gitRoot === "ok";
   const repos = [...new Set(b.tasks.map((t) => repoOf(t)))].filter((r) => r !== S.root || rootNeeded);
   if (!repos.includes(S.root) && rootNeeded) repos.push(S.root);
   for (const repo of repos) await git($, ["worktree", "prune"], repo);
@@ -67146,8 +67175,8 @@ async function readTaskBranch(host, t, into, nowMs, status) {
     const oldest = commits[commits.length - 1];
     const base = oldest ? oldest.parents[0] : (await run2(["merge-base", into, branch]))?.trim();
     if (base && /^[0-9a-f]{7,64}$/.test(base)) {
-      const at2 = shaTimes(await run2(["log", "-1", "--format=%H %ct", base, "--"]) ?? "")[0];
-      if (at2) fork = at2;
+      const at3 = shaTimes(await run2(["log", "-1", "--format=%H %ct", base, "--"]) ?? "")[0];
+      if (at3) fork = at3;
     }
   }
   let main2;
@@ -67163,9 +67192,9 @@ async function readTaskBranch(host, t, into, nowMs, status) {
     main2 = [...shaTimes(after), ...shaTimes(between)];
     tip = shaTimes(head)[0] ?? main2[0] ?? fork;
   } else {
-    const since = fork ? await run2(["log", `-${TASK_BRANCH_MAIN}`, "--format=%H %ct", `${fork.sha}..${into}`, "--"]) : await run2(["log", "-1", "--format=%H %ct", into, "--"]);
-    if (since === null) return null;
-    main2 = shaTimes(since);
+    const since2 = fork ? await run2(["log", `-${TASK_BRANCH_MAIN}`, "--format=%H %ct", `${fork.sha}..${into}`, "--"]) : await run2(["log", "-1", "--format=%H %ct", into, "--"]);
+    if (since2 === null) return null;
+    main2 = shaTimes(since2);
     tip = main2[0] ?? fork;
   }
   if (!tip) return null;
@@ -67525,10 +67554,10 @@ async function readTodayTeam(host, scouts, nowMs) {
   const off = localOffset(nowMs);
   const day = dayOf(nowMs, off);
   const dayStart = nowMs - ((nowMs + off * 6e4) % 864e5 + 864e5) % 864e5;
-  const hours = Array.from({ length: 24 }, () => 0);
-  const at2 = (ms3, n) => {
+  const hours2 = Array.from({ length: 24 }, () => 0);
+  const at3 = (ms3, n) => {
     const h = Math.floor((ms3 - dayStart) / 36e5);
-    if (h >= 0 && h < 24 && n > 0) hours[h] += n;
+    if (h >= 0 && h < 24 && n > 0) hours2[h] += n;
   };
   const out = { day };
   if (host.features.leadUsage) {
@@ -67539,7 +67568,7 @@ async function readTodayTeam(host, scouts, nowMs) {
         if (dayOf(c.atMs, off) === day) {
           const n = tokenCount(c.tokens);
           lead += n;
-          at2(c.atMs, n);
+          at3(c.atMs, n);
         }
       out.lead = lead;
     }
@@ -67557,7 +67586,7 @@ async function readTodayTeam(host, scouts, nowMs) {
       if (r.tokens) {
         const n = tokenCount(r.tokens);
         scoutTok += n;
-        at2(end2, n);
+        at3(end2, n);
       }
     }
   }
@@ -67565,7 +67594,7 @@ async function readTodayTeam(host, scouts, nowMs) {
   if (scoutMs) out.scout_ms = scoutMs;
   const usd = (await host.session.usage().catch(() => null))?.cost?.usd;
   if (typeof usd === "number" && Number.isFinite(usd) && usd > 0) out.usd = usd;
-  if (hours.some((n) => n > 0)) out.hours = hours;
+  if (hours2.some((n) => n > 0)) out.hours = hours2;
   return out.lead === void 0 && out.scouts === void 0 && out.scout_ms === void 0 && out.usd === void 0 ? void 0 : out;
 }
 async function branchLine(host, b, own) {
@@ -67588,7 +67617,7 @@ async function publishView(host, b) {
   const branch = await branchLine(host, b, own);
   const size_note = [...sizeNotes.values()].join("; ");
   const projectNote = projectNotes(openProjects(b));
-  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, size_note].filter(Boolean).join("; ");
+  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, noProjectText(b), size_note].filter(Boolean).join("; ");
   const can = await playable(host);
   const branches = branchFacts(host, b, own || "main").facts;
   const team = todayTeam(host, [...scoutState.keys()]).team;
@@ -67600,7 +67629,7 @@ async function publishView(host, b) {
   const size_now = [...sizeNotes.values()].join("; ");
   if (size_now !== size_note) {
     for (const x of /* @__PURE__ */ new Set([v, fit.view])) {
-      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, size_now].filter(Boolean).join("; ");
+      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, noProjectText(b), size_now].filter(Boolean).join("; ");
       if (size_now) x.size_note = size_now;
       else delete x.size_note;
     }
@@ -67842,6 +67871,71 @@ async function isDamSession(host) {
   return harness && isDamChatExe(await host.env(DAM_EXE_ENV).catch(() => void 0));
 }
 
+// ../../hooks/core/digest.ts
+var DIGEST_EVERY_MS = 2 * 36e5;
+var DIGEST_STUCK_MS = 3 * 36e5;
+var ENDED = ["done", "dropped"];
+var at2 = (s) => s ? Date.parse(s) : NaN;
+var since = (s, sinceMs) => at2(s) > sinceMs;
+var short = (t) => `${t.id} "${t.title.length > 50 ? `${t.title.slice(0, 49)}\u2026` : t.title}"`;
+var hours = (ms3) => `${Math.max(1, Math.round(ms3 / 36e5))}h`;
+function digestText(tasks, sinceMs, nowMs, seen2 = /* @__PURE__ */ new Map()) {
+  const lines = [];
+  const shown = /* @__PURE__ */ new Map();
+  const open = tasks.filter((t) => !ENDED.includes(t.status));
+  const key = (t) => `${t.status}:${t.attempts}`;
+  const fresh = (t) => !shown.has(t.id) && seen2.get(t.id) !== key(t);
+  const list2 = (items, what) => {
+    const head = items.slice(0, 3);
+    head.forEach((t) => shown.set(t.id, key(t)));
+    return head.map(what).join(", ") + (items.length > 3 ? ` and ${items.length - 3} more` : "");
+  };
+  const running = (t) => t.status === "doing" || t.status === "review";
+  const tries = open.filter((t) => t.status !== "backlog" && Number(t.attempts) >= 3 && (running(t) || fresh(t)));
+  if (tries.length) lines.push(`On try 3 or more: ${list2(tries, (t) => `${short(t)} (try ${t.attempts})`)}.`);
+  const testFails = (t) => (t.history ?? []).filter((h) => h.kind === "failed" && h.reason === "tests");
+  const testTasks = tasks.filter((t) => testFails(t).some((h) => since(h.at, sinceMs)));
+  const testy = open.some((t) => testTasks.includes(t) && testFails(t).length >= 2);
+  const testNew = testTasks.filter(fresh);
+  if ((testy || testTasks.length >= 2) && testNew.length) {
+    const n = testTasks.length;
+    lines.push(`Tests failed since the last digest in ${n} task${n > 1 ? "s" : ""}: ${list2(testNew, (t) => `${short(t)} (${testFails(t).length}x)`)}.`);
+  }
+  const back = tasks.reduce((n, t) => n + (t.history ?? []).filter((h) => h.kind === "checker-problems" && since(h.at, sinceMs)).length, 0);
+  if (back >= 2) {
+    const merged = tasks.filter((t) => t.status === "done" && t.merged && since(t.updated_at, sinceMs));
+    const first = merged.filter((t) => (t.history ?? []).every((h) => h.kind !== "checker-problems") && Number(t.attempts) <= 1).length;
+    lines.push(`The checker sent work back ${back} times since the last digest${merged.length ? `; ${first} of ${merged.length} merged tasks passed on the first try` : ""}.`);
+  }
+  const old = (t) => nowMs - at2(t.updated_at) > DIGEST_STUCK_MS;
+  const idle = open.filter((t) => t.status === "todo" && !(t.after ?? []).length && old(t) && fresh(t));
+  if (idle.length) lines.push(`Waiting to start for a long time: ${list2(idle, (t) => `${short(t)} (${hours(nowMs - at2(t.updated_at))})`)}.`);
+  const owner2 = open.filter((t) => t.status === "waiting" && old(t) && fresh(t));
+  if (owner2.length) lines.push(`Waiting on the owner for a long time: ${list2(owner2, (t) => `${short(t)} (${hours(nowMs - at2(t.updated_at))})`)}.`);
+  shown.forEach((v, k) => seen2.set(k, v));
+  return lines.length ? `Digest (what is stuck or repeating; agent reports are muted, read one with board task T-n):
+${lines.map((l) => `- ${l}`).join("\n")}` : null;
+}
+
+// ../../hooks/app/digest.ts
+var seen = /* @__PURE__ */ new Map();
+async function digestTick(host, nowMs = Date.now()) {
+  if (!S.enabledNow || !S.driving || S.fresh || S.guardOnly) return false;
+  if (!S.lastDigest) {
+    S.lastDigest = nowMs;
+    seen.clear();
+    return false;
+  }
+  if (nowMs - S.lastDigest < DIGEST_EVERY_MS) return false;
+  const b = await load(host).catch(() => null);
+  if (!b) return false;
+  const text2 = digestText(b.tasks, S.lastDigest, nowMs, seen);
+  if (!text2) return false;
+  S.lastDigest = nowMs;
+  tellLead(host, text2);
+  return true;
+}
+
 // ../../hooks/app/session-start.ts
 var starts = 0;
 function sessionStarting() {
@@ -67851,6 +67945,7 @@ function watchdogTick(host) {
   if (S.guardOnly) return;
   if (!S.fresh && !allGitReady() && S.gitState !== "no-git") void recheckGit(host).catch(() => void 0);
   void check(host).catch(() => void 0);
+  void digestTick(host).catch(() => void 0);
 }
 function leadBeat(host) {
   if (S.fresh || S.guardOnly) return;
@@ -68270,9 +68365,9 @@ async function toolCall(host, tool, agentId, input) {
   const on = agentId && !isOwnAgent(agentId) && await findRoot(host) ? await agentOnBoard(host, agentId) : void 0;
   if (on?.kind === "ended") return refuse(stoppedText(), "stopped", { role: "agent", task: on.task });
   if (agentId && (scoutRuns.has(agentId) || checkerRuns.has(agentId) || on?.kind === "checker")) {
-    const short2 = tool === toolName(ASK_TOOL) ? ASK_TOOL : toolNames().find((t) => tool === toolName(t));
+    const short3 = tool === toolName(ASK_TOOL) ? ASK_TOOL : toolNames().find((t) => tool === toolName(t));
     const scout = scoutRuns.get(agentId);
-    const why2 = short2 ? scoutToolRefusal(short2, S.N.name, input, scout !== void 0 ? "scout" : "checker") : null;
+    const why2 = short3 ? scoutToolRefusal(short3, S.N.name, input, scout !== void 0 ? "scout" : "checker") : null;
     const task = checkerRuns.get(agentId)?.task ?? (on?.kind === "checker" ? on.task : void 0);
     if (why2) return refuse(why2, "tools", scout !== void 0 ? { role: "scout", scout } : { role: "checker", ...task ? { task } : {} });
   } else if (agentId) {
@@ -68764,8 +68859,8 @@ var CHECKER_SHOWN_CHARS = 12e3;
 function panelHistory(t, nowMs) {
   return t.history.slice(-HISTORY_SHOWN).reverse().map((h) => {
     const e = historyEvent(h);
-    const at2 = historyTime(e.at, nowMs);
-    return { mark: e.mark, tone: e.tone, said: e.said, ...at2 ? { at: at2 } : {}, ...e.by ? { by: e.by } : {}, ...e.label ? { label: e.label } : {}, ...e.result ? { result: e.result } : {} };
+    const at3 = historyTime(e.at, nowMs);
+    return { mark: e.mark, tone: e.tone, said: e.said, ...at3 ? { at: at3 } : {}, ...e.by ? { by: e.by } : {}, ...e.label ? { label: e.label } : {}, ...e.result ? { result: e.result } : {} };
   });
 }
 var checkerOf = (t) => checkerReportOf(t, taskReports(t).at(-1)?.try ?? t.attempts);
@@ -68808,11 +68903,11 @@ function newsOf(tasks, nowMs) {
   for (const t of tasks) {
     const lines = t.history?.length ? t.history : (viewMarks(t) ?? []).map((m) => ({ kind: m.kind, at: m.at, text: m.reason ?? "" }));
     lines.forEach((h, i) => {
-      const at2 = ms2(h.at);
-      if (at2 === void 0 || at2 < from || !NEWS_KINDS.has(h.kind)) return;
+      const at3 = ms2(h.at);
+      if (at3 === void 0 || at3 < from || !NEWS_KINDS.has(h.kind)) return;
       const tone = isHistoryKind(h.kind) ? HISTORY_KINDS[h.kind] : "other";
       const why2 = typeof h.result === "string" ? h.result.replace(/`[^`]{60,}`/g, "`\u2026`") : void 0;
-      out.push({ key: `${t.id}:${i}:${h.kind}`, task: t.id, title: t.title, tone: tone === "good" ? "good" : tone === "bad" ? "bad" : "other", kind: h.kind, text: h.text, atMs: at2, ...why2 ? { why: why2 } : {} });
+      out.push({ key: `${t.id}:${i}:${h.kind}`, task: t.id, title: t.title, tone: tone === "good" ? "good" : tone === "bad" ? "bad" : "other", kind: h.kind, text: h.text, atMs: at3, ...why2 ? { why: why2 } : {} });
     });
   }
   return out.sort((a, b) => a.atMs - b.atMs).slice(-NEWS_MAX);
@@ -68931,7 +69026,7 @@ function argWords(args) {
   const json = JSON.stringify(a);
   return json === "{}" ? "" : json;
 }
-var short = (s, n) => s.length > n ? `${s.slice(0, n - 1)}\u2026` : s;
+var short2 = (s, n) => s.length > n ? `${s.slice(0, n - 1)}\u2026` : s;
 var LEAD_AGENT = "lead";
 var sessionPath = (dir, agent) => `${dir}/sessions/${agent.replace(/[^\w.-]/g, "_")}.jsonl`;
 function pushStep(list2, s) {
@@ -68969,18 +69064,18 @@ function sessionMarkdown(title, steps) {
   const lines = [`# ${title}`, ""];
   if (!steps.length) lines.push("No steps were saved for this agent.");
   for (const s of steps) {
-    const at2 = `\`${clock(s.atMs)}\``;
-    if (s.kind === "text") lines.push(`${at2} **said**`, "", s.text, "");
-    else if (s.kind === "thinking") lines.push(`${at2} *thought*`, "", ...s.text.split("\n").map((l) => `> ${l}`), "");
-    else if (s.kind === "tool") lines.push(`${at2} **${s.tool}**${s.status === "error" ? " (failed)" : s.status === "running" ? " (still running)" : ""}`, "", "```", s.text || "(no arguments)", "```", "");
-    else lines.push(`${at2} *${s.text}*`, "");
+    const at3 = `\`${clock(s.atMs)}\``;
+    if (s.kind === "text") lines.push(`${at3} **said**`, "", s.text, "");
+    else if (s.kind === "thinking") lines.push(`${at3} *thought*`, "", ...s.text.split("\n").map((l) => `> ${l}`), "");
+    else if (s.kind === "tool") lines.push(`${at3} **${s.tool}**${s.status === "error" ? " (failed)" : s.status === "running" ? " (still running)" : ""}`, "", "```", s.text || "(no arguments)", "```", "");
+    else lines.push(`${at3} *${s.text}*`, "");
   }
   return lines.join("\n");
 }
 function turnSteps(steps, sinceMs = 0) {
-  let at2 = steps.length - 1;
-  while (at2 >= 0 && !(steps[at2].kind === "status" && steps[at2].text === "running") && steps[at2].atMs >= sinceMs) at2--;
-  return steps.slice(at2 + 1);
+  let at3 = steps.length - 1;
+  while (at3 >= 0 && !(steps[at3].kind === "status" && steps[at3].text === "running") && steps[at3].atMs >= sinceMs) at3--;
+  return steps.slice(at3 + 1);
 }
 
 // skills.ts
@@ -69021,10 +69116,10 @@ async function skillsIn(dir, scope) {
 }
 async function listSkills(root, home) {
   const dirs = [...SKILL_DIRS.map((d) => ({ dir: join2(root, d), scope: "project" })), ...home && home !== root ? SKILL_DIRS.map((d) => ({ dir: join2(home, d), scope: "user" })) : []];
-  const seen = /* @__PURE__ */ new Set();
+  const seen2 = /* @__PURE__ */ new Set();
   const out = [];
   for (const list2 of await Promise.all(dirs.map((d) => skillsIn(d.dir, d.scope))))
-    for (const s of list2.sort((a, b) => a.name.localeCompare(b.name))) if (!seen.has(s.name)) seen.add(s.name), out.push(s);
+    for (const s of list2.sort((a, b) => a.name.localeCompare(b.name))) if (!seen2.has(s.name)) seen2.add(s.name), out.push(s);
   return out;
 }
 var skillMessage = (s, rest) => `Use the skill "${s.name}": read ${s.path} and follow it. Other skills it names are beside it (${join2(s.path, "..", "..")}/<name>/SKILL.md).${rest ? `
@@ -69064,8 +69159,8 @@ function parseNumstat2(text2) {
 }
 function parseLog(text2) {
   return text2.split("\n").filter(Boolean).map((l) => {
-    const [sha = "", at2 = "", ...subject] = l.split("");
-    return { sha, atMs: Number(at2) * 1e3 || 0, subject: subject.join("") };
+    const [sha = "", at3 = "", ...subject] = l.split("");
+    return { sha, atMs: Number(at3) * 1e3 || 0, subject: subject.join("") };
   });
 }
 var real = (p) => realpath2(p).catch(() => p);
@@ -69117,10 +69212,10 @@ function projectWorktrees($, root, tasks, home) {
     const entries = parseWorktreeList(listed.stdout).filter((e) => !e.bare);
     const facts = await Promise.all(
       entries.map(async (e) => {
-        const at2 = await real(e.path);
-        const kind = at2 === main2 ? "main" : inside2(own, at2) ? "task" : "other";
-        const id = kind === "task" ? relative(own, at2).split(sep)[0] : void 0;
-        const where = kind === "main" ? basename(root) : kind === "task" ? `${S.N.worktrees}/${id}` : whereOf(at2, main2);
+        const at3 = await real(e.path);
+        const kind = at3 === main2 ? "main" : inside2(own, at3) ? "task" : "other";
+        const id = kind === "task" ? relative(own, at3).split(sep)[0] : void 0;
+        const where = kind === "main" ? basename(root) : kind === "task" ? `${S.N.worktrees}/${id}` : whereOf(at3, main2);
         return factsOf($, e, kind, id ? byId2.get(id) : void 0, id, where, home() || "main");
       })
     );
@@ -69442,14 +69537,14 @@ function untar(tar) {
   const words = (b) => new TextDecoder().decode(b).replace(/\0[\s\S]*$/, "");
   const files = [];
   let long;
-  for (let at2 = 0; at2 + 512 <= tar.length; ) {
-    if (tar[at2] === 0) break;
-    const name = words(tar.subarray(at2, at2 + 100));
-    const size = parseInt(words(tar.subarray(at2 + 124, at2 + 136)).trim() || "0", 8);
-    const type = String.fromCharCode(tar[at2 + 156] || 48);
-    const prefix = words(tar.subarray(at2 + 345, at2 + 500));
-    const data = tar.subarray(at2 + 512, at2 + 512 + size);
-    at2 += 512 + Math.ceil(size / 512) * 512;
+  for (let at3 = 0; at3 + 512 <= tar.length; ) {
+    if (tar[at3] === 0) break;
+    const name = words(tar.subarray(at3, at3 + 100));
+    const size = parseInt(words(tar.subarray(at3 + 124, at3 + 136)).trim() || "0", 8);
+    const type = String.fromCharCode(tar[at3 + 156] || 48);
+    const prefix = words(tar.subarray(at3 + 345, at3 + 500));
+    const data = tar.subarray(at3 + 512, at3 + 512 + size);
+    at3 += 512 + Math.ceil(size / 512) * 512;
     if (type === "x") long = /(?:^|\n)\d+ path=([^\n]*)\n/.exec(new TextDecoder().decode(data))?.[1] ?? long;
     else if (type === "L") long = words(data);
     else if (type !== "g") {
@@ -69571,8 +69666,8 @@ function stepOf(m) {
   if (m.type === "thinking") return typeof m.text === "string" && m.text ? { kind: "thinking", text: m.text } : void 0;
   if (m.type === "tool_call") {
     const status = m.status === "error" ? "error" : m.status === "completed" ? "completed" : "running";
-    const result = status === "error" && m.result !== void 0 ? ` \u2192 ${short(typeof m.result === "string" ? m.result : JSON.stringify(m.result), 300)}` : "";
-    return { kind: "tool", tool: String(m.name ?? "tool"), callId: String(m.call_id ?? ""), status, text: short(argWords(m.args), 400) + result };
+    const result = status === "error" && m.result !== void 0 ? ` \u2192 ${short2(typeof m.result === "string" ? m.result : JSON.stringify(m.result), 300)}` : "";
+    return { kind: "tool", tool: String(m.name ?? "tool"), callId: String(m.call_id ?? ""), status, text: short2(argWords(m.args), 400) + result };
   }
   if (m.type === "status" && typeof m.status === "string") return { kind: "status", text: [m.status.toLowerCase(), typeof m.message === "string" ? m.message : ""].filter(Boolean).join(": ") };
   return void 0;
@@ -69763,14 +69858,14 @@ function copilotAgent(session, model, turn) {
           const t = text(d.content);
           if (t && !streamed.has(text(d.reasoningId))) step({ kind: "thinking", text: t });
         } else if (e.type === "tool.execution_start") {
-          const call = { tool: text(d.toolName) || "tool", args: short(argWords(d.arguments), 400) };
+          const call = { tool: text(d.toolName) || "tool", args: short2(argWords(d.arguments), 400) };
           tools.set(text(d.toolCallId), call);
           step({ kind: "tool", tool: call.tool, callId: text(d.toolCallId), status: "running", text: call.args });
         } else if (e.type === "tool.execution_complete") {
           const call = tools.get(text(d.toolCallId)) ?? { tool: "tool", args: "" };
           const failed2 = d.success === false;
           const why2 = failed2 ? text(d.error?.message) : "";
-          step({ kind: "tool", tool: call.tool, callId: text(d.toolCallId), status: failed2 ? "error" : "completed", text: call.args + (why2 ? ` \u2192 ${short(why2, 300)}` : "") });
+          step({ kind: "tool", tool: call.tool, callId: text(d.toolCallId), status: failed2 ? "error" : "completed", text: call.args + (why2 ? ` \u2192 ${short2(why2, 300)}` : "") });
         } else if (e.type === "session.error") {
           error = text(d.message) || "Copilot failed";
           step({ kind: "status", text: `error: ${error}` });
