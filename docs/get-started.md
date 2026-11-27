@@ -10,7 +10,14 @@ You need Claude Code (built and tested with **2.1.319**; the plugin API is early
 claude plugin install symcc --marketplace kourgeorge/symcc
 ```
 
-Other ways (try it from a clone, two steps, update, uninstall) and fixes for common problems are in the [reference](reference.md#install-other-ways-and-fixes). symcc also runs in OpenCode, Copilot CLI, and VS Code or Cursor: see [Clients](clients.md).
+Other ways (try it from a clone, two steps, update, uninstall) and fixes for common problems are in the [reference](reference.md#install-other-ways-and-fixes).
+
+Using another program? Each has its own steps in [Clients](clients.md#install):
+
+- [Claude Code in VS Code](clients.md#install-in-claude-code-in-vs-code): the same command, then use the Claude Code extension's panel. No symcc extension needed.
+- [OpenCode](clients.md#install-in-opencode)
+- [Copilot CLI](clients.md#install-in-copilot-cli)
+- [The symcc extension for VS Code or Cursor](clients.md#install-the-symcc-extension-in-vs-code-or-cursor), for Cursor's or GitHub Copilot's agents. It is not in the Marketplace yet; the page shows how to build and install it.
 
 ## The first board
 

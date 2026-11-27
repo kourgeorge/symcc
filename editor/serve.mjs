@@ -51338,7 +51338,9 @@ ${quote(request)}` : ""].filter(Boolean).join("\n\n");
       const merge = c.kind === "change" && t?.merge_main ? `First, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (commit the merge yourself, or leave it for symcc to commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.` : "";
       const work = c.kind === "change" && c.commits?.length ? `Your earlier tries' work is already here: it is committed on your branch, and your folder shows it. Their commits:
 ${c.commits.map((l) => `- ${l}`).join("\n")}` : "";
-      return [fixed(c, "where"), merge, work].filter(Boolean).join("\n\n");
+      const proj = t?.project;
+      const project = proj ? `The task's project is ${proj}: your folder is a copy of that repo, and the task's files are relative to it (\`README.md\`, not \`${proj}/README.md\`).` : "";
+      return [fixed(c, "where"), project, merge, work].filter(Boolean).join("\n\n");
     }
   },
   {
@@ -52054,6 +52056,19 @@ function questionsText(b, recent = 5) {
 }
 
 // ../../hooks/core/board-file.ts
+var isProjectName = (p) => typeof p === "string" && /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(p) && p !== ".." && p.length <= 200;
+var projectOf = (b, t) => {
+  const p = t?.project;
+  return isProjectName(p) && b.projects && Object.prototype.hasOwnProperty.call(b.projects, p) ? b.projects[p] : void 0;
+};
+var testCommandsOf = (b, t) => {
+  const own = projectOf(b, t)?.test_commands;
+  return own?.length ? own : b.test_commands;
+};
+var docsTestCommandsOf = (b, t) => {
+  const own = projectOf(b, t)?.docs_test_commands;
+  return own?.length ? own : b.docs_test_commands ?? [];
+};
 var SOUND_SETS = [1, 2, 3];
 var isSoundSet = (x) => SOUND_SETS.includes(x);
 var NOTIFY_CHOICES = ["voice", "sound 1", "sound 2", "sound 3", "off"];
@@ -52140,7 +52155,7 @@ function isLockStale(text2, nowMs, fileMs, maxAgeMs = LOCK_STALE_MS, holderAlive
 }
 var DEFAULT_TEST_MINUTES = 10;
 var testMinutesOf = (b) => typeof b?.test_minutes === "number" && Number.isFinite(b.test_minutes) && b.test_minutes >= 1 ? Math.round(b.test_minutes) : DEFAULT_TEST_MINUTES;
-var mergeTestCount = (b) => Math.max(b.test_commands.length, b.docs_test_commands?.length ?? 0);
+var mergeTestCount = (b, t) => Math.max(testCommandsOf(b, t).length, docsTestCommandsOf(b, t).length);
 var MERGE_LINE_FILE = "merge-line.json";
 var mergeLineStaleMs = (testMinutes) => 2 * testMinutes * 6e4;
 var MERGE_LINE_STALE_MS = mergeLineStaleMs(DEFAULT_TEST_MINUTES);
@@ -52190,7 +52205,7 @@ var SETTING_OK = {
   scout_findings: (v) => isScoutFindings(v),
   tests_with_changes: (v) => isTestsWithChanges(v),
   checker: (v) => typeof v === "boolean",
-  projects: (v) => isObj(v) && Object.values(v).every((p) => isObj(p) && (p.test_commands === void 0 || Array.isArray(p.test_commands) && p.test_commands.every((c) => typeof c === "string")))
+  projects: (v) => isObj(v) && Object.values(v).every((p) => isObj(p) && [p.test_commands, p.docs_test_commands].every((l) => l === void 0 || Array.isArray(l) && l.every((c) => typeof c === "string")))
 };
 function cleanArchived(v) {
   if (!isObj(v)) return void 0;
@@ -52243,7 +52258,7 @@ function cleanTask(t, fixed2 = []) {
     if (ask) x.ask = ask;
     else delete x.ask;
   }
-  if ("project" in x && !(typeof x.project === "string" && x.project.trim())) delete x.project;
+  if ("project" in x && !isProjectName(x.project)) delete x.project;
   if ("merge_into" in x && !(typeof x.merge_into === "string" && x.merge_into.trim())) delete x.merge_into;
   if ("kind" in x) {
     if (kindOf(x) === DEFAULT_KIND) delete x.kind;
@@ -53087,6 +53102,11 @@ function evidenceText(o, h) {
 
 // ../../hooks/core/task.ts
 var DETAILS_MAX = 8e3;
+function detailsTooLong(length) {
+  if (length <= DETAILS_MAX) return null;
+  const n = (x) => x.toLocaleString("en-US");
+  return `Nothing changed: the details would be ${n(length)} characters; the limit is ${n(DETAILS_MAX)}. Shorten it, or put the long text in a file and name the file in the details.`;
+}
 var knownDep = (b, id) => !!find(b, id) || (b.archived_done ?? []).includes(id);
 var cleanRole = (r) => {
   const s = clean(r, 64);
@@ -54024,7 +54044,7 @@ function leadSettingsText(b, can, root = "") {
       }),
       ...g.items.some(isSettingPage) ? ["roles and task types: use the roles and kinds tools (the owner sees roles and task types as pages in the Settings view)", "org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board's Live tab, and may delete them there)"] : []
     ]),
-    ...Object.entries(b.projects ?? {}).filter(([, v]) => v?.test_commands?.length).map(([name, v]) => `project ${name}: test_commands: ${testCommandsText(v.test_commands ?? [])} (stored for now, not used yet)`)
+    ...Object.entries(b.projects ?? {}).filter(([, v]) => v?.test_commands?.length).map(([name, v]) => `project ${name}: test_commands: ${testCommandsText(v.test_commands ?? [])}`)
   ].join("\n");
 }
 function newestFirst(x, y) {
@@ -54631,7 +54651,7 @@ function scoutPrompt(o) {
   const runAt = typeof o.lastRun === "string" && Number.isFinite(Date.parse(o.lastRun)) ? o.lastRun : "";
   const since = runAt ? `You last ran at ${runAt}. Start with what changed since then, since new code is where new bugs are:
   git log --since=${runAt} --stat` : "This is your first run (or the time of your last run is not known). Look at the whole project, starting with the most recent changes (git log --stat -n 20).";
-  return `You are the ${name} scout "${o.scout}". The project is in ${o.root}. Your job, from your scout file:
+  return `You are the ${name} scout "${o.scout}". The project is in ${o.root}.${o.projects?.length ? ` That folder is not a repo itself: it holds several projects, each its own git repo, in these folders: ${o.projects.map((p) => `${o.root.replace(/\/+$/, "")}/${p}`).join(", ")}. Look in each (run git commands inside a project folder), and for a suggested task name its project (the folder name) and give its files relative to that repo.` : ""} Your job, from your scout file:
 
 ${o.instructions.trim()}
 
@@ -57570,7 +57590,7 @@ function todayMoreLines(m, width) {
   const line3 = (keep) => {
     const out = [];
     const p = perParts.slice(0, keep);
-    if (p.length) out.push({ text: "avg ", tone: "dim" }, { text: p.map((x, i) => i ? x : `${x}/task`).join(" \xB7 "), tone: "text" });
+    if (p.length) out.push({ text: "median ", tone: "dim" }, { text: p.map((x, i) => i ? x : `${x}/task`).join(" \xB7 "), tone: "text" });
     const rest = keep > perParts.length ? extras3.slice(0, keep - perParts.length) : [];
     rest.forEach((x, i) => out.push({ text: out.length ? i && !x.startsWith("\u2315") ? " \xB7 " : "   " : "", tone: i && !x.startsWith("\u2315") ? "dim" : "text" }, { text: x, tone: "dim" }));
     return out;
@@ -58937,6 +58957,10 @@ var startS = () => ({
   settingsOpen: [],
   /** what the last git check found (see probeGit); work starts only when 'ok' */
   gitState: "ok",
+  /** T-1154: what the last check found in the board folder's own repo (gitState is 'ok' for a workspace board with projects but no .git of its own) */
+  gitRoot: "ok",
+  /** T-1154: what the last check found in each project's repo (folder -> state); a project not looked at yet is not in it */
+  repoGit: /* @__PURE__ */ new Map(),
   /** the install step for this machine while git is missing (see installStepOf) */
   gitInstall: "",
   /** T-1136: the workspace text while the folder (no repo, or no commit yet) holds repos of its own; '' otherwise */
@@ -60335,7 +60359,7 @@ async function queueScout(host, s, misses = 0, byHand = false) {
   st.running = true;
   await publish(host, b);
   const open = b.tasks.filter((t) => OPEN.includes(t.status) || t.status === "backlog").map((t) => `${t.id} ${t.title}${t.status === "backlog" ? " (backlog)" : ""}`);
-  const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await orgMemText(host) });
+  const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await orgMemText(host), projects: await projectNames(host).catch(() => []) });
   if (!await drivesHere(host)) {
     st.running = false;
     await load(host).then((x) => publish(host, x)).catch(() => void 0);
@@ -61969,7 +61993,7 @@ function gitDiff($, target, t, opts, file = "") {
   let p = changesCache.get(key);
   if (!p) {
     if (changesCache.size > 50) changesCache.clear();
-    p = gitOk($, ["diff", "--no-color", "--no-ext-diff", "--no-renames", ...opts, diffRange(target, t), ...file ? ["--", file] : []]);
+    p = gitOk($, ["diff", "--no-color", "--no-ext-diff", "--no-renames", ...opts, diffRange(target, t), ...file ? ["--", file] : []], repoOf(t));
     changesCache.set(key, p);
     p.catch(() => changesCache.delete(key));
   }
@@ -62033,6 +62057,7 @@ async function checkAndMerge($, t, dir, b, mode = "finish", made = [], stop = ()
     return why2 ? taskWasResult(why2) : void 0;
   };
   const target = intoOf(t);
+  const repo = repoOf(t);
   await markStep($, t, "prep", stopped2);
   const onBranch = await backOnBranch($, dir, taskBranch(t));
   if (onBranch) return { ok: false, reason: "other", detail: onBranch };
@@ -62057,22 +62082,22 @@ async function checkAndMerge($, t, dir, b, mode = "finish", made = [], stop = ()
   let committed = await commitTry($, t, dir, made);
   if (!committed && own.length && made.length === before) committed = await commitTry($, t, dir, made, void 0, true);
   if (committed) return { ok: false, reason: "other", detail: `symcc could not commit the work: ${committed}` };
-  if (!await branchExists($, target)) return goneResult(target);
-  const main2 = await gitOk($, ["rev-parse", `refs/heads/${target}`]);
+  if (!await branchExists($, target, repo)) return goneResult(target);
+  const main2 = await gitOk($, ["rev-parse", `refs/heads/${target}`], repo);
   let head = await gitOk($, ["rev-parse", "HEAD"], dir);
-  const base = (await git($, ["merge-base", main2, head])).stdout.trim() || main2;
-  let changed = await changedSince($, base, head);
-  const inHistory = secretFiles(await touchedSince($, base, head, true));
-  const inBranch2 = secretFiles(await changedSince($, base, head, true));
+  const base = (await git($, ["merge-base", main2, head], repo)).stdout.trim() || main2;
+  let changed = await changedSince($, repo, base, head);
+  const inHistory = secretFiles(await touchedSince($, repo, base, head, true));
+  const inBranch2 = secretFiles(await changedSince($, repo, base, head, true));
   if (inHistory.length || inBranch2.length) {
     const why2 = await dropFromBranch($, t, dir, base, inBranch2, made);
     if (why2) return { ok: false, reason: "other", detail: `symcc could not take files that look like secrets out of the task's branch (${nameList([.../* @__PURE__ */ new Set([...inHistory, ...inBranch2])].sort())}): ${why2}` };
     head = await gitOk($, ["rev-parse", "HEAD"], dir);
-    changed = await changedSince($, base, head);
+    changed = await changedSince($, repo, base, head);
     left.push(...inBranch2);
   }
   const secrets = [...new Set(left)].sort();
-  const size0 = await sizeOf($, base, head);
+  const size0 = await sizeOf($, base, head, repo);
   const withSecrets = async (r2) => {
     if (size0 && !r2.size) r2 = { ...r2, size: size0 };
     if (!secrets.length) return r2;
@@ -62080,14 +62105,14 @@ async function checkAndMerge($, t, dir, b, mode = "finish", made = [], stop = ()
     return { ...r2, secrets, detail: `${r2.detail}; ${secretsLeftText(secrets, where)}` };
   };
   if (!changed.length) {
-    if (await onTarget($, t.id, head, target)) return withSecrets({ ok: true, merged: head, earlier: true, detail: `already merged into ${target} (${shortSha(head)}) by an earlier try; nothing new to merge` });
+    if (await onTarget($, repo, t.id, head, target)) return withSecrets({ ok: true, merged: head, earlier: true, detail: `already merged into ${target} (${shortSha(head)}) by an earlier try; nothing new to merge` });
     if (secrets.length) {
       const ask = onlySecretsQuestion(t.id, secrets);
       return { ok: false, secrets, ask, detail: `not merged: ${secretsLeftText(secrets)}, and the task changed nothing else` };
     }
     return { ok: false, reason: "nochange", detail: "the worker made no change" };
   }
-  const touched = [.../* @__PURE__ */ new Set([...changed, ...await touchedSince($, base, head)])];
+  const touched = [.../* @__PURE__ */ new Set([...changed, ...await touchedSince($, repo, base, head)])];
   const bad = outOfScope(touched, t.files, S.N.dir);
   if (bad.length) {
     if (mode !== "finish") return withSecrets({ ok: false, reason: "scope", detail: outOfScopeText(bad, t.files) });
@@ -62105,7 +62130,7 @@ async function checkAndMerge($, t, dir, b, mode = "finish", made = [], stop = ()
   const pre = first ? await first(changed) : void 0;
   if (pre && "result" in pre) return withSecrets(pre.result);
   const noVerdict = pre?.noVerdict;
-  const turn = () => inMergeLine($, t.id, (refresh) => upToDateTestMove($, t, dir, b, mode, made, stopped2, retest, target, head, changed, refresh, noVerdict, prose), {
+  const turn = () => inMergeLine($, t.id, (refresh) => upToDateTestMove($, t, dir, repo, b, mode, made, stopped2, retest, target, head, changed, refresh, noVerdict, prose), {
     t,
     stopped: stopped2,
     ...release ? { release } : {},
@@ -62142,13 +62167,13 @@ async function keepLeftOut($, id, dir, files) {
   if (!moved.length) return gone;
   return moved.length === files.length ? `moved to ${rel}/, since the task's folder is removed after the merge` : `only ${moved.join(", ")} moved to ${rel}/; the rest was ${gone}`;
 }
-async function changedSince($, base, head, noDeleted = false) {
-  const d = await git($, ["diff", "--name-only", "--no-renames", ...noDeleted ? ["--diff-filter=d"] : [], "-z", `${base}..${head}`]);
+async function changedSince($, cwd, base, head, noDeleted = false) {
+  const d = await git($, ["diff", "--name-only", "--no-renames", ...noDeleted ? ["--diff-filter=d"] : [], "-z", `${base}..${head}`], cwd);
   if (d.exitCode !== 0) throw new Error(`git diff --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`);
   return d.stdout.split("\0").filter(Boolean);
 }
-async function touchedSince($, base, head, noDeleted = false) {
-  const d = await git($, ["log", "--cc", "--format=", "--name-only", "--no-renames", ...noDeleted ? ["--diff-filter=d"] : [], "-z", `${base}..${head}`]);
+async function touchedSince($, cwd, base, head, noDeleted = false) {
+  const d = await git($, ["log", "--cc", "--format=", "--name-only", "--no-renames", ...noDeleted ? ["--diff-filter=d"] : [], "-z", `${base}..${head}`], cwd);
   if (d.exitCode !== 0) throw new Error(`git log --name-only: ${(d.stderr || d.stdout).trim().slice(0, 300)}`);
   return [...new Set(d.stdout.split("\0").map((f) => f.replace(/^\n+/, "")).filter(Boolean))];
 }
@@ -62166,7 +62191,7 @@ async function dropFromBranch($, t, dir, base, files, made) {
 }
 async function undoOutOfScope($, t, dir, base, bad, made) {
   const head = (await git($, ["rev-parse", "HEAD"], dir)).stdout.trim();
-  const net = new Set(head ? await changedSince($, base, head).catch(() => bad) : bad);
+  const net = new Set(head ? await changedSince($, dir, base, head).catch(() => bad) : bad);
   const back = bad.filter((f) => net.has(f));
   const r = await git($, ["reset", "-q", "--soft", base], dir);
   if (r.exitCode !== 0) return `. Could not undo them on the task's branch: ${gitFailText(r)}`;
@@ -62243,15 +62268,15 @@ async function markStep($, t, step, stopped2) {
     return patchTask(x, t.id, { live: { checking: { step, at: now() }, ...cur.status === "doing" ? { phase } : {} } }, cur.updated_at);
   }).catch(() => void 0);
 }
-async function upToDateTestMove($, t, dir, b, mode, made, stopped2, retest, target, head, changed, refresh, noVerdict, prose = false) {
+async function upToDateTestMove($, t, dir, repo, b, mode, made, stopped2, retest, target, head, changed, refresh, noVerdict, prose = false) {
   const early = stopped2();
   if (early) return early;
-  if (!await branchExists($, target)) return goneResult(target);
-  const main2 = await gitOk($, ["rev-parse", `refs/heads/${target}`]);
+  if (!await branchExists($, target, repo)) return goneResult(target);
+  const main2 = await gitOk($, ["rev-parse", `refs/heads/${target}`], repo);
   const tip = await gitOk($, ["rev-parse", "HEAD"], dir);
   let candidate = tip;
   await markStep($, t, "testing", stopped2);
-  if ((await git($, ["merge-base", "--is-ancestor", main2, tip])).exitCode !== 0) {
+  if ((await git($, ["merge-base", "--is-ancestor", main2, tip], repo)).exitCode !== 0) {
     const m = await timed($, `${t.id} catch up`, () => git($, [...asSymcc(), "merge", "--no-edit", "--no-verify", "-m", commitMessage(t, { name: S.N.name, subject: `${t.id}: bring up to date with ${target}`, ...t.done ? { done: t.done } : {} }), main2], dir));
     if (m.exitCode !== 0) {
       await git($, ["merge", "--abort"], dir);
@@ -62264,10 +62289,11 @@ ${m.stderr}`)) return { ok: false, reason: "clash", detail: `conflicts with the 
   }
   let testsRun = mode === "finish" || candidate !== head || retest;
   const proseOnly = prose && docsOnly(changed);
-  const docsCmds = proseOnly ? b.docs_test_commands ?? [] : [];
+  const testCmds = testCommandsOf(b, t);
+  const docsCmds = proseOnly ? docsTestCommandsOf(b, t) : [];
   const docsRun = docsCmds.length > 0;
-  const cmds = docsRun ? docsCmds : b.test_commands;
-  const proseSkip = proseOnly && !docsRun && b.test_commands.length > 0;
+  const cmds = docsRun ? docsCmds : testCmds;
+  const proseSkip = proseOnly && !docsRun && testCmds.length > 0;
   if (proseSkip) testsRun = false;
   const tree = testsRun && cmds.length ? await testedTree($, candidate, dir) : "";
   const skipped = !!tree && treePassed(await readPassedTrees($), tree, cmds);
@@ -62302,52 +62328,53 @@ ${r.stderr}`) };
   }
   const passed = proseSkip ? `; ${PROSE_TESTS_SKIPPED}` : skipped ? `; ${testsSkippedText(tree)}` : docsRun ? `; ${PROSE_DOCS_CHECKS}` : "; tests passed";
   const flag = testsWithChangesOf(b);
-  const size = await sizeOf($, main2, candidate);
+  const size = await sizeOf($, main2, candidate, repo);
   const untested = mode !== "approve" && flag !== "off" && !isInvestigation(t) && untestedChange(changed) ? untestedText(t.id) : "";
   const flagged = untested ? { untested } : {};
   if (noVerdict) return { ok: true, review: true, noVerdict, ...size ? { size } : {}, ...flagged, detail: `checks passed, but ${noVerdict}; ready for review, nothing merged yet` };
   if (mode === "finish" && (needsReview(b, t) || untested && flag === "review")) return { ok: true, review: true, ...size ? { size } : {}, ...flagged, detail: `checks passed${cmds.length || proseSkip ? passed : "; no test command set"}; ready for review, nothing merged yet${untested ? ` (${untested})` : ""}` };
   const s = stopped2();
   if (s) return s;
-  if (!await branchExists($, target)) return goneResult(target);
+  if (!await branchExists($, target, repo)) return goneResult(target);
   await markStep($, t, "merging", stopped2);
-  const current = (await git($, ["symbolic-ref", "--short", "-q", "HEAD"])).stdout.trim();
-  const moved = await timed($, `${t.id} merge`, () => moveTarget((args) => git($, args), { target, id: t.id, from: main2, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === "approve" ? "approve" : "retry" }));
-  if (!moved.ok && !await branchExists($, target)) return goneResult(target);
+  const current = (await git($, ["symbolic-ref", "--short", "-q", "HEAD"], repo)).stdout.trim();
+  const moved = await timed($, `${t.id} merge`, () => moveTarget((args) => git($, args, repo), { target, id: t.id, from: main2, to: candidate, checkedOut: current === target, note: `${S.N.name} ${t.id}`, skipDir: S.N.dir, action: mode === "approve" ? "approve" : "retry" }));
+  if (!moved.ok && !await branchExists($, target, repo)) return goneResult(target);
   if (!moved.ok) return { ok: false, detail: moved.detail, ...moved.reason ? { reason: moved.reason } : {}, ...moved.blocked ? { blocked: moved.blocked } : {}, ...moved.detail === movedText(target) ? { moved: true } : {} };
   const tests = !cmds.length && !proseSkip ? "; no test command set" : skipped || testsRun || proseSkip ? passed : "";
   let notes = [];
   if (researchNotes(changed).length) {
-    const n = await git($, ["diff", "--name-only", "--no-renames", "-z", "--diff-filter=AM", main2, candidate]);
+    const n = await git($, ["diff", "--name-only", "--no-renames", "-z", "--diff-filter=AM", main2, candidate], repo);
     notes = researchNotes(n.exitCode === 0 ? n.stdout.split("\0").filter(Boolean) : changed);
   }
   return { ok: true, merged: candidate, ...size ? { size } : {}, ...notes.length ? { notes } : {}, ...flagged, detail: `merged into ${target} (${shortSha(candidate)})${mode === "approve" ? "; approved by the owner" : ""}${tests}` };
 }
-async function sizeOf($, from, to) {
-  const r = await git($, ["diff", "--shortstat", "--no-renames", from, to]).catch(() => null);
+async function sizeOf($, from, to, cwd = S.root) {
+  const r = await git($, ["diff", "--shortstat", "--no-renames", from, to], cwd).catch(() => null);
   return r && r.exitCode === 0 ? parseShortstat(String(r.stdout ?? "")) : void 0;
 }
 async function mergedBefore($, t, merged) {
+  const repo = repoOf(t);
   const saved = new Set((t.runs ?? []).flatMap((r) => Array.isArray(r?.commits) ? r.commits : []));
   const own = (sha, msg) => saved.has(sha) || isTaskCommit(msg, t.id, S.N.name);
-  const p = await git($, ["rev-list", "--parents", "-n", "1", merged]).catch(() => null);
+  const p = await git($, ["rev-list", "--parents", "-n", "1", merged], repo).catch(() => null);
   if (!p || p.exitCode !== 0) {
-    const c = await git($, ["cat-file", "-e", `${merged}^{commit}`]).catch(() => null);
+    const c = await git($, ["cat-file", "-e", `${merged}^{commit}`], repo).catch(() => null);
     return c && (c.exitCode === 1 || c.exitCode === 128) ? "" : null;
   }
   const [, first, second] = String(p.stdout ?? "").trim().split(/\s+/);
   if (!first) return "";
   if (second) {
-    const m = await git($, ["log", "-n", "1", "--format=%B", merged]).catch(() => null);
+    const m = await git($, ["log", "-n", "1", "--format=%B", merged], repo).catch(() => null);
     if (!m || m.exitCode !== 0) return null;
     if (isTaskCommit(String(m.stdout ?? ""), t.id, S.N.name)) return second;
     if (saved.has(merged)) {
-      const f = await git($, ["log", "-n", "1", "--format=%B", first]).catch(() => null);
+      const f = await git($, ["log", "-n", "1", "--format=%B", first], repo).catch(() => null);
       if (f && f.exitCode === 0 && own(first, String(f.stdout ?? ""))) return second;
     }
     return first;
   }
-  const log = await git($, ["log", "--first-parent", "-n", "200", "--format=%H%x1f%P%x1f%B%x1e", merged]).catch(() => null);
+  const log = await git($, ["log", "--first-parent", "-n", "200", "--format=%H%x1f%P%x1f%B%x1e", merged], repo).catch(() => null);
   if (!log || log.exitCode !== 0) return first;
   for (const entry of String(log.stdout ?? "").split("")) {
     const [sha, parents, msg] = entry.trim().split("");
@@ -62366,7 +62393,7 @@ async function mergedChanges($, t) {
   if (mergedMemo.has(key)) return mergedMemo.get(key);
   const before = await mergedBefore($, t, merged);
   if (before === null) return null;
-  const r = before ? await git($, ["diff", "--numstat", "--no-renames", before, merged]).catch(() => null) : null;
+  const r = before ? await git($, ["diff", "--numstat", "--no-renames", before, merged], repoOf(t)).catch(() => null) : null;
   const files = r && r.exitCode === 0 ? parseNumstat(String(r.stdout ?? "")) : [];
   const got = files.length ? { files, error: "", merged, before } : null;
   if (!before || r?.exitCode === 0) mergedMemo.set(key, got);
@@ -62376,7 +62403,7 @@ var DIFF_GONE = "diff not available";
 async function mergedDiff($, t, file = "") {
   const c = await mergedChanges($, t).catch(() => null);
   if (!c) return DIFF_GONE;
-  const r = await git($, ["diff", "--no-color", "--no-ext-diff", "--no-renames", c.before, c.merged, ...file ? ["--", file] : []]).catch(() => null);
+  const r = await git($, ["diff", "--no-color", "--no-ext-diff", "--no-renames", c.before, c.merged, ...file ? ["--", file] : []], repoOf(t)).catch(() => null);
   return r && r.exitCode === 0 ? String(r.stdout ?? "") : DIFF_GONE;
 }
 async function testedTree($, commit, dir) {
@@ -62391,16 +62418,17 @@ async function recordPassedTree($, tree, commands) {
   const list2 = addPassedTree(await readPassedTrees($), tree, commands, Date.now());
   await safeWrite($, path(`${S.N.dir}/${PASSED_TREES_FILE}`), passedTreesText(list2), "the passed trees").catch(() => void 0);
 }
-async function onTarget($, id, sha, target, tryNo2) {
+async function onTarget($, cwd, id, sha, target, tryNo2) {
   if (!sha) return false;
-  const msg = await git($, ["log", "-1", "--format=%B", sha]);
+  const msg = await git($, ["log", "-1", "--format=%B", sha], cwd);
   if (msg.exitCode !== 0 || !isTaskCommit(msg.stdout, id, S.N.name, tryNo2)) return false;
-  return (await git($, ["merge-base", "--is-ancestor", sha, `refs/heads/${target}`])).exitCode === 0;
+  return (await git($, ["merge-base", "--is-ancestor", sha, `refs/heads/${target}`], cwd)).exitCode === 0;
 }
 async function alreadyMerged($, t) {
   if (!(t.attempts > 0)) return null;
-  const tip = (await git($, ["rev-parse", "-q", "--verify", `refs/heads/${taskBranch(t)}`])).stdout.trim();
-  return tip && await onTarget($, t.id, tip, intoOf(t), t.attempts) ? tip : null;
+  const repo = repoOf(t);
+  const tip = (await git($, ["rev-parse", "-q", "--verify", `refs/heads/${taskBranch(t)}`], repo)).stdout.trim();
+  return tip && await onTarget($, repo, t.id, tip, intoOf(t), t.attempts) ? tip : null;
 }
 async function recordCommits($, id, made, merged, size) {
   if (!made.length && !merged && !size) return;
@@ -62461,7 +62489,7 @@ var changeValues = (t, b, dir) => ({
   // the host's words for its file tools (see HostWords), so the prompt names no host's tools itself
   file_tools: S.W.fileTools,
   files: `Files you may change: ${filesBody(t.files)}`,
-  test_command: workerTestText(S.N.name, b.test_commands)
+  test_command: workerTestText(S.N.name, testCommandsOf(b, t))
 });
 
 // ../../hooks/app/debrief.ts
@@ -62549,7 +62577,7 @@ async function runChecker($, t, b, dir, stop = () => void 0, tryLater) {
     const d = await git($, ["diff", "--no-color", "--no-ext-diff", "--no-renames", `refs/heads/${into}...HEAD`], dir).catch(() => null);
     const n = await git($, ["diff", "--name-only", "--no-renames", "-z", `refs/heads/${into}...HEAD`], dir).catch(() => null);
     const changed = n && n.exitCode === 0 ? n.stdout.split("\0").filter(Boolean) : [];
-    const tests = checkerTestsText(S.N.name, b.test_commands);
+    const tests = checkerTestsText(S.N.name, testCommandsOf(b, t));
     const facts = { ...changeValues(t, b, dir), test_command: tests };
     const prompt = checkerPrompt({ name: S.N.name, task_id: t.id, title: t.title, branch: taskBranch(t), folder: dir, details: t.details, into, role: roleSection(role, facts, t), kind_name: t.kind ?? "change", diff: checkerDiff(d && d.exitCode === 0 ? d.stdout : ""), changed_files: checkerChangedFiles(changed), tests, org_mem: await orgMemText($), learned: learnedAsk($) }, t);
     const early = stop();
@@ -63204,10 +63232,13 @@ async function mergeRuns(host, b) {
   if (t) return { id: t.id };
   const mine = [...finishing, ...approving][0];
   if (mine) return { id: mine };
-  const m = await git(host, ["rev-parse", "-q", "--verify", "MERGE_HEAD"]).catch(() => null);
-  if (m?.exitCode === 0 && m.stdout.trim()) return {};
+  for (const repo of await repoList(host)) {
+    const m = await git(host, ["rev-parse", "-q", "--verify", "MERGE_HEAD"], repo).catch(() => null);
+    if (m?.exitCode === 0 && m.stdout.trim()) return {};
+  }
   return null;
 }
+var repoList = async (host) => [S.root, ...(await projectNames(host).catch(() => [])).map((p) => `${S.root}/${p}`)];
 var agentsNow = (host) => host.agents.list().then((a) => a.map(agentState), () => null);
 function inUse(id, t, agents) {
   if ([...workers.values()].some((w) => w.task === id) || starting.has(id) || finishing.has(id) || approving.has(id)) return true;
@@ -63218,13 +63249,13 @@ async function changedFiles2(host, dir) {
   const st = await git(host, ["status", "--porcelain", "--untracked-files=all"], dir).catch(() => null);
   return st?.exitCode === 0 ? st.stdout.split("\n").filter((l) => l.trim()).length : null;
 }
-async function headKept(host, dir, into) {
+async function headKept(host, dir, into, repo = S.root) {
   const h = await git(host, ["rev-parse", "-q", "--verify", "HEAD"], dir).catch(() => null);
   const head = h?.exitCode === 0 ? h.stdout.trim() : "";
   if (!/^[0-9a-f]{7,64}$/i.test(head)) return false;
-  const anc = await git(host, ["merge-base", "--is-ancestor", head, `refs/heads/${into}`]).catch(() => null);
+  const anc = await git(host, ["merge-base", "--is-ancestor", head, `refs/heads/${into}`], repo).catch(() => null);
   if (anc?.exitCode === 0) return true;
-  const on = await git(host, ["branch", "--contains", head, "--format=%(refname:short)"]).catch(() => null);
+  const on = await git(host, ["branch", "--contains", head, "--format=%(refname:short)"], repo).catch(() => null);
   return on?.exitCode === 0 && !!on.stdout.trim();
 }
 async function leadCheck(host, listed) {
@@ -63344,7 +63375,7 @@ async function findAll(host, b, mergingId) {
       keptDirs.set(wt, "has uncommitted changes");
       continue;
     }
-    if (!await headKept(host, wt, into)) {
+    if (!await headKept(host, wt, into, repoOf(t))) {
       listed.push({ kind: "worktree", fixable: false, bytes, text: `folder ${shown(wt)}/ (${why2}) holds commits on no branch, kept` });
       keptDirs.set(wt, "holds commits on no branch");
       continue;
@@ -63362,98 +63393,110 @@ async function findAll(host, b, mergingId) {
         if (nt && !isFinished(nt)) return `${id} is ${nt.status} now`;
         if (inUse(id, nt, await agentsNow(host))) return "an agent may still use it";
         if (!(lose && nt?.status === "dropped") && await changedFiles2(host, wt) !== 0) return "it has uncommitted changes now";
-        if (!await headKept(host, wt, into)) return "it holds commits on no branch now";
-        const r = await git(host, ["worktree", "remove", ...lose ? ["--force"] : [], wt]);
+        if (!await headKept(host, wt, into, repoOf(t))) return "it holds commits on no branch now";
+        const r = await git(host, ["worktree", "remove", ...lose ? ["--force"] : [], wt], repoOf(t));
         return r.exitCode === 0 ? "" : `git worktree remove: ${(r.stderr || r.stdout).trim().slice(0, 150)}`;
       }
     });
   }
-  const dry = await git(host, ["worktree", "prune", "--dry-run", "-v"]).catch(() => null);
-  const stale = dry && dry.exitCode === 0 ? pruneLines(`${dry.stdout}
-${dry.stderr}`) : [];
-  if (stale.length)
+  const repos = await repoList(host);
+  const staleIn = [];
+  let stale = 0;
+  for (const repo of repos) {
+    const dry = await git(host, ["worktree", "prune", "--dry-run", "-v"], repo).catch(() => null);
+    const n = dry && dry.exitCode === 0 ? pruneLines(`${dry.stdout}
+${dry.stderr}`).length : 0;
+    if (n) staleIn.push(repo);
+    stale += n;
+  }
+  if (stale)
     prunes.push({
       kind: "prune",
       fixable: true,
       id: PRUNE_ID,
-      text: `${stale.length} git worktree ${stale.length === 1 ? "entry" : "entries"} whose folder is gone (git worktree prune)`,
+      text: `${stale} git worktree ${stale === 1 ? "entry" : "entries"} whose folder is gone (git worktree prune)`,
       fix: async () => {
-        const r = await git(host, ["worktree", "prune"]);
-        return r.exitCode === 0 ? "" : `git worktree prune: ${(r.stderr || r.stdout).trim().slice(0, 150)}`;
+        for (const repo of staleIn) {
+          const r = await git(host, ["worktree", "prune"], repo);
+          if (r.exitCode !== 0) return `git worktree prune: ${(r.stderr || r.stdout).trim().slice(0, 150)}`;
+        }
+        return "";
       }
     });
-  const wl = await git(host, ["worktree", "list", "--porcelain"]).catch(() => null);
-  const outAt = /* @__PURE__ */ new Map();
-  let at2 = "";
-  for (const l of (wl?.exitCode === 0 ? wl.stdout : "").split("\n").map((x) => x.trim())) {
-    if (l.startsWith("worktree ")) at2 = l.slice("worktree ".length);
-    else if (l.startsWith("branch refs/heads/")) outAt.set(l.slice("branch refs/heads/".length), at2);
-  }
-  const offered = new Set(trees.map((f) => f.id));
-  const refs = await git(host, ["for-each-ref", "--format=%(refname:short) %(objectname)", `refs/heads/${S.N.branch("")}`]).catch(() => null);
-  const rows = (refs?.exitCode === 0 ? refs.stdout : "").split("\n").map((l) => l.trim().split(/\s+/)).filter((r) => r.length === 2);
-  for (const [br, sha] of rows.sort((x, y) => x[0].localeCompare(y[0], void 0, { numeric: true }))) {
-    const id = br.slice(S.N.branch("").length);
-    const t = taskOf(id);
-    if (id === mergingId) {
-      listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is being merged), left alone` });
-      continue;
+  for (const repo of repos) {
+    const wl = await git(host, ["worktree", "list", "--porcelain"], repo).catch(() => null);
+    const outAt = /* @__PURE__ */ new Map();
+    let at2 = "";
+    for (const l of (wl?.exitCode === 0 ? wl.stdout : "").split("\n").map((x) => x.trim())) {
+      if (l.startsWith("worktree ")) at2 = l.slice("worktree ".length);
+      else if (l.startsWith("branch refs/heads/")) outAt.set(l.slice("branch refs/heads/".length), at2);
     }
-    if (!t || !isFinished(t)) continue;
-    if (inUse(id, t, agents)) {
-      listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}): an agent may still use it, kept` });
-      continue;
-    }
-    const into = intoOf(t);
-    const anc = await git(host, ["merge-base", "--is-ancestor", sha, `refs/heads/${into}`]).catch(() => null);
-    if (anc?.exitCode === 0) {
-      const folder2 = outAt.get(br);
-      if (wl?.exitCode !== 0 || folder2 !== void 0 && !(folder2 === `${wtRoot}/${id}` && offered.has(folderId(id)))) {
-        const why2 = wl?.exitCode !== 0 ? "git could not tell where it is checked out" : keptDirs.get(folder2) === "has uncommitted changes" ? "checked out in a folder with uncommitted changes" : `checked out in ${shown(folder2)}/`;
-        listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into}): kept: ${why2}` });
+    const offered = new Set(trees.map((f) => f.id));
+    const refs = await git(host, ["for-each-ref", "--format=%(refname:short) %(objectname)", `refs/heads/${S.N.branch("")}`], repo).catch(() => null);
+    const rows = (refs?.exitCode === 0 ? refs.stdout : "").split("\n").map((l) => l.trim().split(/\s+/)).filter((r) => r.length === 2);
+    for (const [br, sha] of rows.sort((x, y) => x[0].localeCompare(y[0], void 0, { numeric: true }))) {
+      const id = br.slice(S.N.branch("").length);
+      const t = taskOf(id);
+      if (id === mergingId) {
+        listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is being merged), left alone` });
         continue;
       }
-      const after2 = folder2 !== void 0 ? ` (goes after its folder, ${folderId(id)})` : "";
+      if (!t || !isFinished(t) || repoOf(t) !== repo) continue;
+      if (inUse(id, t, agents)) {
+        listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}): an agent may still use it, kept` });
+        continue;
+      }
+      const into = intoOf(t);
+      const anc = await git(host, ["merge-base", "--is-ancestor", sha, `refs/heads/${into}`], repo).catch(() => null);
+      if (anc?.exitCode === 0) {
+        const folder2 = outAt.get(br);
+        if (wl?.exitCode !== 0 || folder2 !== void 0 && !(folder2 === `${wtRoot}/${id}` && offered.has(folderId(id)))) {
+          const why2 = wl?.exitCode !== 0 ? "git could not tell where it is checked out" : keptDirs.get(folder2) === "has uncommitted changes" ? "checked out in a folder with uncommitted changes" : `checked out in ${shown(folder2)}/`;
+          listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into}): kept: ${why2}` });
+          continue;
+        }
+        const after2 = folder2 !== void 0 ? ` (goes after its folder, ${folderId(id)})` : "";
+        branches.push({
+          kind: "branch",
+          fixable: true,
+          id: branchId(id),
+          text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into})${after2}`,
+          fix: async () => await deleteMergedBranch(host, br, into, repo) ? "" : `it is no longer all in ${into}, or it is still checked out in a folder${after2 ? ` (clean up ${folderId(id)} too)` : ""}`
+        });
+        continue;
+      }
+      const n = anc?.exitCode === 1 ? await git(host, ["rev-list", "--count", `refs/heads/${into}..${sha}`], repo).catch(() => null) : null;
+      const count3 = n?.exitCode === 0 ? Number(n.stdout.trim()) : NaN;
+      const lost = Number.isFinite(count3) && count3 > 0 ? ` (${plural(count3, "commit")} not in ${into})` : "";
+      if (t.status !== "dropped") {
+        listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}) holds unmerged work${lost}; never deleted by the doctor` });
+        continue;
+      }
+      const folder = outAt.get(br);
+      if (wl?.exitCode !== 0 || folder !== void 0 && !(folder === `${wtRoot}/${id}` && offered.has(folderId(id)))) {
+        const why2 = wl?.exitCode !== 0 ? "git could not tell where it is checked out" : `checked out in ${shown(folder)}/`;
+        listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is dropped) holds unmerged work${lost}; kept: ${why2}` });
+        continue;
+      }
+      const after = folder !== void 0 ? ` (goes after its folder, ${folderId(id)})` : "";
       branches.push({
         kind: "branch",
         fixable: true,
         id: branchId(id),
-        text: `branch ${br} (${id} is ${t.status}; all of it is already in ${into})${after2}`,
-        fix: async () => await deleteMergedBranch(host, br, into) ? "" : `it is no longer all in ${into}, or it is still checked out in a folder${after2 ? ` (clean up ${folderId(id)} too)` : ""}`
+        text: `branch ${br} (${id} is dropped): deletes ${count3 > 0 ? plural(count3, "commit") : "commits"} not in ${into}${after}`,
+        fix: async () => {
+          const nb = await load(host).catch(() => null);
+          if (!nb) return "the board can't be read now";
+          const nt = nb.tasks.find((x) => x.id === id) ?? taskOf(id);
+          if (nt?.status !== "dropped") return `${id} is not dropped now`;
+          if (inUse(id, nt, await agentsNow(host))) return "an agent may still use it";
+          const cur = await git(host, ["rev-parse", "--verify", "-q", `refs/heads/${br}`], repo).catch(() => null);
+          if (cur?.exitCode !== 0 || cur.stdout.trim() !== sha) return "it changed since the list";
+          const r = await git(host, ["branch", "-D", br], repo);
+          return r.exitCode === 0 ? "" : `git branch -D: ${(r.stderr || r.stdout).trim().slice(0, 150)}${after ? ` (clean up ${folderId(id)} too)` : ""}`;
+        }
       });
-      continue;
     }
-    const n = anc?.exitCode === 1 ? await git(host, ["rev-list", "--count", `refs/heads/${into}..${sha}`]).catch(() => null) : null;
-    const count3 = n?.exitCode === 0 ? Number(n.stdout.trim()) : NaN;
-    const lost = Number.isFinite(count3) && count3 > 0 ? ` (${plural(count3, "commit")} not in ${into})` : "";
-    if (t.status !== "dropped") {
-      listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}) holds unmerged work${lost}; never deleted by the doctor` });
-      continue;
-    }
-    const folder = outAt.get(br);
-    if (wl?.exitCode !== 0 || folder !== void 0 && !(folder === `${wtRoot}/${id}` && offered.has(folderId(id)))) {
-      const why2 = wl?.exitCode !== 0 ? "git could not tell where it is checked out" : `checked out in ${shown(folder)}/`;
-      listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is dropped) holds unmerged work${lost}; kept: ${why2}` });
-      continue;
-    }
-    const after = folder !== void 0 ? ` (goes after its folder, ${folderId(id)})` : "";
-    branches.push({
-      kind: "branch",
-      fixable: true,
-      id: branchId(id),
-      text: `branch ${br} (${id} is dropped): deletes ${count3 > 0 ? plural(count3, "commit") : "commits"} not in ${into}${after}`,
-      fix: async () => {
-        const nb = await load(host).catch(() => null);
-        if (!nb) return "the board can't be read now";
-        const nt = nb.tasks.find((x) => x.id === id) ?? taskOf(id);
-        if (nt?.status !== "dropped") return `${id} is not dropped now`;
-        if (inUse(id, nt, await agentsNow(host))) return "an agent may still use it";
-        const cur = await git(host, ["rev-parse", "--verify", "-q", `refs/heads/${br}`]).catch(() => null);
-        if (cur?.exitCode !== 0 || cur.stdout.trim() !== sha) return "it changed since the list";
-        const r = await git(host, ["branch", "-D", br]);
-        return r.exitCode === 0 ? "" : `git branch -D: ${(r.stderr || r.stdout).trim().slice(0, 150)}${after ? ` (clean up ${folderId(id)} too)` : ""}`;
-      }
-    });
   }
   const nowMs = Date.now();
   const leadText2 = await leadCheck(host, listed);
@@ -63505,7 +63548,7 @@ async function resetPane($, which, task = "") {
 async function openPane($, o = {}) {
   if (!$.features.panel) return { isPlaced: false };
   const go = async () => {
-    if (!S.fresh && S.gitState !== "ok" && S.gitState !== "no-git") await recheckGit($).catch(() => void 0);
+    if (!S.fresh && !allGitReady() && S.gitState !== "no-git") await recheckGit($).catch(() => void 0);
     await resetPane($, o.tab, o.task);
     return $.ui.open(paneArgs(o.focus !== false));
   };
@@ -63810,8 +63853,8 @@ async function moveStage($, id, word2) {
   if (stage !== "work" && t.status === "doing" && !checkingNow(t.id) && t.live?.phase !== "checker") throw new Error(`${t.id}'s worker is still running; move it to work, or wait until it hands back`);
   if (stage !== "work") {
     if (isInvestigation(t)) throw new Error(`${t.id} is an investigation: it has no work to check, test or review`);
-    if (!await branchExists($, taskBranch(t))) throw new Error(`${t.id} has no branch yet (no worker has made work for it); move it to work instead`);
-    if (!await gitReady($)) throw new Error(`${t.id} can't be moved to ${stage} now: ${gitNote(S.gitState)}`);
+    if (!await branchExists($, taskBranch(t), repoOf(t))) throw new Error(`${t.id} has no branch yet (no worker has made work for it); move it to work instead`);
+    if (!await taskGitReady($, await load($), t)) throw new Error(`${t.id} can't be moved to ${stage} now: ${gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`);
   }
   const why2 = `moved to ${stage} by the lead`;
   let said = false;
@@ -63859,8 +63902,8 @@ async function moveStage($, id, word2) {
 
 // ../../hooks/app/merged.ts
 var OWN_COMMITS_MAX = 50;
-async function ownCommits($, id, tip) {
-  const r = await git($, ["log", `-n${OWN_COMMITS_MAX}`, "--format=%H%x1f%B%x1e", "-F", `--grep=${trailerPrefix(S.N.name)}-Task: ${id}`, tip]);
+async function ownCommits($, cwd, id, tip) {
+  const r = await git($, ["log", `-n${OWN_COMMITS_MAX}`, "--format=%H%x1f%B%x1e", "-F", `--grep=${trailerPrefix(S.N.name)}-Task: ${id}`, tip], cwd);
   if (r.exitCode !== 0) return [];
   const out = [];
   for (const rec of r.stdout.split("")) {
@@ -63869,43 +63912,44 @@ async function ownCommits($, id, tip) {
   }
   return out.reverse();
 }
-var inBranch = async ($, a, b) => (await git($, ["merge-base", "--is-ancestor", a, b])).exitCode === 0;
-async function mergeCommitOf($, tip, into) {
-  const r = await git($, ["rev-list", "--ancestry-path", "--topo-order", "--reverse", "--parents", `${tip}..refs/heads/${into}`]);
+var inBranch = async ($, cwd, a, b) => (await git($, ["merge-base", "--is-ancestor", a, b], cwd)).exitCode === 0;
+async function mergeCommitOf($, cwd, tip, into) {
+  const r = await git($, ["rev-list", "--ancestry-path", "--topo-order", "--reverse", "--parents", `${tip}..refs/heads/${into}`], cwd);
   const first = r.exitCode === 0 ? (r.stdout.split("\n")[0] ?? "").trim().split(/\s+/) : [];
   return first.length > 2 && isSha(first[0]) && first[1] !== tip && first.slice(2).includes(tip) ? first[0] : tip;
 }
 async function findMerged($, t) {
   const into = intoOf(t);
   const branch = taskBranch(t);
-  if (!await branchExists($, into)) throw new Error(`${t.id} merges into ${into}, but that branch is gone, so there is nothing to check its work against`);
+  const repo = repoOf(t);
+  if (!await branchExists($, into, repo)) throw new Error(`${t.id} merges into ${into}, but that branch is gone, so there is nothing to check its work against`);
   const recorded = taskCommits(t).map((c) => c.sha);
-  const hasBranch = await branchExists($, branch);
+  const hasBranch = await branchExists($, branch, repo);
   if (!hasBranch) {
     const last = recorded[0];
     if (!last) throw new Error(`${t.id} has no branch ${branch} and no recorded commits, so there is no work to find in ${into}`);
-    if (!await inBranch($, last, `refs/heads/${into}`)) throw new Error(`${t.id}'s last commit ${shortSha(last)} isn't in ${into} yet (its branch ${branch} is gone)`);
-    return { sha: await mergeCommitOf($, last, into), commits: [...recorded].reverse() };
+    if (!await inBranch($, repo, last, `refs/heads/${into}`)) throw new Error(`${t.id}'s last commit ${shortSha(last)} isn't in ${into} yet (its branch ${branch} is gone)`);
+    return { sha: await mergeCommitOf($, repo, last, into), commits: [...recorded].reverse() };
   }
-  const tip = (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${branch}`])).stdout.trim();
+  const tip = (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${branch}`], repo)).stdout.trim();
   if (!isSha(tip)) throw new Error(`git could not read ${t.id}'s branch ${branch}`);
-  const own = await ownCommits($, t.id, tip);
+  const own = await ownCommits($, repo, t.id, tip);
   if (!own.length && !recorded.length) throw new Error(`${t.id}'s branch ${branch} has no commits of its own, so there is no work to find in ${into}`);
   if (!own.length) {
     const last = recorded[0];
-    if (!await inBranch($, last, `refs/heads/${into}`)) throw new Error(`${t.id}'s last commit ${shortSha(last)} isn't in ${into} yet (its branch ${branch} has no commits of its own)`);
-    return { sha: await mergeCommitOf($, last, into), commits: [...recorded].reverse() };
+    if (!await inBranch($, repo, last, `refs/heads/${into}`)) throw new Error(`${t.id}'s last commit ${shortSha(last)} isn't in ${into} yet (its branch ${branch} has no commits of its own)`);
+    return { sha: await mergeCommitOf($, repo, last, into), commits: [...recorded].reverse() };
   }
-  if (await inBranch($, tip, `refs/heads/${into}`)) return { sha: await mergeCommitOf($, tip, into), commits: own };
-  const ch = await git($, ["cherry", `refs/heads/${into}`, `refs/heads/${branch}`]);
+  if (await inBranch($, repo, tip, `refs/heads/${into}`)) return { sha: await mergeCommitOf($, repo, tip, into), commits: own };
+  const ch = await git($, ["cherry", `refs/heads/${into}`, `refs/heads/${branch}`], repo);
   if (ch.exitCode !== 0) throw new Error(`git could not compare ${t.id}'s branch ${branch} with ${into}: ${(ch.stderr || ch.stdout).trim().slice(0, 200)}`);
   const lines = ch.stdout.split("\n").map((l) => l.trim()).filter(Boolean);
   const missing = lines.filter((l) => l.startsWith("+")).length;
   if (missing || !lines.length) throw new Error(notMergedText(t.id, missing || 1, into));
-  const eq = await git($, ["log", "--left-only", "--cherry-mark", "--no-merges", "--format=%m%H", `refs/heads/${into}...refs/heads/${branch}`]);
+  const eq = await git($, ["log", "--left-only", "--cherry-mark", "--no-merges", "--format=%m%H", `refs/heads/${into}...refs/heads/${branch}`], repo);
   const same2 = eq.exitCode === 0 ? eq.stdout.split("\n").map((l) => l.trim()).find((l) => l.startsWith("=")) : void 0;
   const sha = same2?.slice(1);
-  const head = (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${into}`])).stdout.trim();
+  const head = (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${into}`], repo)).stdout.trim();
   return { sha: sha && isSha(sha) ? sha : head, commits: own, rebased: true };
 }
 async function markMerged($, id, by) {
@@ -63917,7 +63961,7 @@ async function markMerged($, id, by) {
   if (isInvestigation(t)) throw new Error(`${t.id} is an investigation: it has nothing to merge`);
   if (mergingNow(t.id)) throw new Error(MERGING_TEXT(t.id));
   if (checkingNow(t.id)) throw new Error(`${CHECKING_TEXT(t.id)}; try again when that ends`);
-  if (!await gitReady($, b)) throw new Error(`${t.id} was not marked as merged: ${gitNote(S.gitState)}`);
+  if (!await taskGitReady($, b, t)) throw new Error(`${t.id} was not marked as merged: ${gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`);
   const found = await findMerged($, t);
   const into = intoOf(t);
   const wasDoing = t.status === "doing";
@@ -63936,9 +63980,9 @@ async function markMerged($, id, by) {
     else if (!await removeWorktree($, t.id, dir).catch(() => false)) kept = "; its folder is still in use, so it was kept for now";
   }
   const branch = taskBranch(t);
-  if (!kept && await branchExists($, branch)) {
+  if (!kept && await branchExists($, branch, repoOf(t))) {
     if (found.rebased) kept = `; its branch ${branch} was kept (its commits are in ${into} as equal changes, not as they are); delete it by hand when you like`;
-    else if (!await deleteMergedBranch($, branch, into).catch(() => false)) kept = `; its branch ${branch} was kept (it could not be deleted now)`;
+    else if (!await deleteMergedBranch($, branch, into, repoOf(t)).catch(() => false)) kept = `; its branch ${branch} was kept (it could not be deleted now)`;
   }
   void pump($);
   return `${t.id} done: its work is already in ${into} (${shortSha(found.sha)}), merged outside the board; nothing was merged or tested${wasDoing ? "; its worker was stopped" : ""}${kept}`;
@@ -64389,6 +64433,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Pick the task type by the result wanted: project files to merge \u2192 change (or bug, feature, refactor, docs); an answer to read \u2192 investigation; anything else, including work outside the project or "don't merge" / "just make it on my Desktop" \u2192 errand. Never use a plain background agent for work the board can do as an errand.
 - Turn what the owner wants into tasks with ${S.N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes. Every change task's details say how the change will be tested, e.g. "Done when: tests show \u2026" (the test that will check it). A change task whose commit edits code but no test file is flagged before merging (setting tests_with_changes: ask, the default, merges it and tells you "T-5 changed code but no test", so follow up with a test task or ask the owner; review makes it wait for the owner's review; off does nothing). Test files: in a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder (or a folder ending .Test/.Tests), or with test/spec/e2e/cy as a name part split by . _ or - (a.test.ts, a-test.ts, a.cy.ts), or a name ending in Test/Tests (FooTest.java); latest.ts and run-tests.sh are not tests. Docs: .md/.mdx, README/CHANGELOG/LICENSE names, images/video/audio/fonts, non-code files under docs/ (not docs/build.ts or Notice.tsx). A docs-only change is never flagged.
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly (when those words are a short reply like "yes", quote \u201C<the owner's earlier ask, trimmed>\u201D \u2192 lead: \u201C<your question, short>\u201D \u2192 \u201C<the reply>\u201D); for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
+- On a workspace board (the board folder holds several repos, each in its own folder, and is no repo itself), give every change task its project: the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A task that needs no repo (an answer to read, an errand) needs no project.
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - Workers can't read the board or ${S.N.dir}/ (no board tool, and their folder is their own copy). To hand a worker an earlier task's answer, give its task from_task (that task's latest report is copied into the worker's folder and its prompt names it), or name the report file (${S.N.dir}/reports/T-n-try-N.md, or T-n-try-*.md for the latest), or paste the key facts into the details.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
@@ -64412,6 +64457,7 @@ ${popup() ? `- Ask every question for the owner that isn't about one task (a set
 - A worker that needs the owner to decide something calls its own question tool, ${toolName("ask_owner")} (maybe with options, which the board shows as buttons), and stops; that tool is for workers only: you never call it (to make a task wait with your own question, use ${S.N.name} ask). The task then waits for the owner (NEEDS YOU) with that question, and with notify on the owner hears "symcc: T-5 needs you" (the project's name first) (or a chime). You are told too. Answer it yourself only if the owner already clearly said the answer: then ${S.N.name} change the task with answer: that answer, and tell the owner what you answered. Otherwise always ask the owner in the chat, plain and short; if there are options, offer them as numbered plain chat text, plus "${answerTail()}". Put their chat answer into the task with ${S.N.name} change and answer: their words. If they answer on the board first (a "Meanwhile" line), don't ask again. If ${S.N.name} change says the task was already answered, tell the owner their board answer was used.
 - A worker whose run ended on an API error (retries used up, the context limit) or a refusal fails its try with that reason, and nothing is checked or merged; its work stays in its folder and branch, so ${S.N.name} retry continues from there. But when ${S.N.name} itself stopped that worker (a reload, a takeover, driving moved to another session), the try does not fail: a new worker goes on with the same try. What a worker writes in its hand-back is only its report: symcc never reads a question or a file request out of it.
 - A worker that runs past its time limit (max_minutes, plus any time the owner added) is not stopped: it keeps working, its task stays doing with the note "over time; asked the owner", and you are told "T-5 has run 45 min. Give it more time?" with the options +30 min | +60 min | Stop it (the owner hears "needs you" too, and the board shows them as buttons). Ask the owner in the chat, offering those choices as numbered plain chat text, plus "${answerTail()}"; put their pick into the task with ${S.N.name} change and answer: "+30 min", "+60 min" (any "+N min" works) or "Stop it". More time moves that task's limit later and the worker goes on. Stop it (or no answer by the limit plus max_minutes again) tells the worker to write down what it has and hand back; a few minutes later it is stopped and the task fails, with its work kept in its folder, branch and report, so a retry continues from there.
+- Details are limited to 8,000 characters; add and change refuse longer text (never cut it). Put long pasted material (a draft, a log) in a file and name the file in the details.
 - To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its history; a running task restarts). A change to a running task's details, title or files (add_details too) restarts its try, so put a note in the same change as an answer instead of sending it a moment later. After a checker send-back (or any other retry, not a task's first try), add your note within a minute of the retry starting: a retry under a minute old starts again with the note on the same try number (no lost try); later, the note restarts it as a new try. Changing only its priority or after-list keeps it running (saved for its next try). details rewrites the whole text, so use it only for a full rewrite, never both at once.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
 - If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
@@ -64503,7 +64549,7 @@ var TOOLS = () => [
   {
     name: "settings",
     description: 'Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line, under the same category headings as the Settings view (Work, Checks before merging, Workers, Scouts, Board and alerts; notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), docs_test_commands (shell commands, same shape and limit as test_commands, default none: run instead of test_commands when a task of a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test), test_minutes (how many minutes each test command may run before merging, a whole number 1-120, default 10; a test command past it fails like a failing test: a new worker try starts with the output, using one of the auto_retries; anything else is refused), max_parallel (workers at once), max_minutes (a worker running longer makes symcc ask the owner for more time: +N min or Stop it), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify ("voice", "sound 1", "sound 2", "sound 3" or "off": what plays when a task is merged or a question from a worker waits for the owner: "voice" says "symcc: T-3 done" / "symcc: T-5 needs you" out loud (the project name first), "sound N" a short chime from sound set N, each set with its own "done" and "needs you" chime so the owner can tell which project chimed (on macOS 1: Glass / Ping, 2: Hero / Pop, 3: Submarine / Funk); only the session driving the board plays; default sound 2 where this machine can play sounds, else voice where it can only speak, else off; a choice this machine cannot play is refused with the reason; there is no sound_set setting), scout_findings ("auto", the default: you decide, and a scout finding you add goes to todo and runs; "backlog": every task added with origin_by scout goes to the backlog, whatever you ask, and starts only when the owner moves it to todo), tests_with_changes ("ask", the default: a change task whose commit edits code but no test file still merges and you are told "T-3 changed code but no test"; "review": such a task waits for the owner to review it instead of merging; "off": not checked; docs-only changes are never flagged), checker ("off", the default, or "on": after the prep step and before a change task joins the merge queue (its tests run once in the queue, after the checker), a fresh checker agent tries to break it; OK goes on as usual, a list of problems sends the task back to its worker with the report, using one of its auto_retries (no test run for that try); after 2 send-backs the task waits for the owner with Merge as is / Keep fixing / Drop instead of a new try; investigations and docs-only changes skip it), mode ("paused": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; "review": work runs and every finished task that passes waits for the owner to approve or reject it; "auto", the default: work runs and finished work that passes merges on its own; going from paused to review or auto starts work again, and going from review to auto does not merge tasks already in review).',
-    inputSchema: { type: "object", properties: { project: { type: "string", description: "A project folder name: with test_commands, sets that project's own test commands (stored for now, not used yet); nothing else is set per project." }, test_commands: { type: "array", items: { type: "string" } }, docs_test_commands: { type: "array", items: { type: "string" }, description: "Run instead of test_commands when a prose-only role (code: false) changed only prose; [] for none (such a change then runs no test)." }, test_minutes: { type: "number", description: "Minutes each test command may run before merging: a whole number 1-120 (default 10)." }, max_parallel: { type: "number" }, max_minutes: { type: "number" }, auto_retries: { type: "number" }, archive_days: { type: "number", description: "Done and dropped tasks older than this many days move to archive.json; 0 = never." }, open_on_start: { type: "boolean" }, notify: { type: "string", enum: ["voice", "sound 1", "sound 2", "sound 3", "off"] }, scout_findings: { type: "string", enum: ["auto", "backlog"], description: "auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog." }, tests_with_changes: { type: "string", enum: ["off", "ask", "review"], description: "A change task that edits code but no test file: ask (default) merges and tells you; review waits for the owner; off does nothing." }, checker: { type: "string", enum: ["off", "on"], description: "on: a fresh checker tries to break each change before it joins the merge queue, where its tests run; off (default): no checker." }, mode: { type: "string", enum: ["paused", "review", "auto"] } } }
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "A project folder name: with test_commands, sets that project's own test commands (a task of that project merges with them instead of the board's); nothing else is set per project." }, test_commands: { type: "array", items: { type: "string" } }, docs_test_commands: { type: "array", items: { type: "string" }, description: "Run instead of test_commands when a prose-only role (code: false) changed only prose; [] for none (such a change then runs no test)." }, test_minutes: { type: "number", description: "Minutes each test command may run before merging: a whole number 1-120 (default 10)." }, max_parallel: { type: "number" }, max_minutes: { type: "number" }, auto_retries: { type: "number" }, archive_days: { type: "number", description: "Done and dropped tasks older than this many days move to archive.json; 0 = never." }, open_on_start: { type: "boolean" }, notify: { type: "string", enum: ["voice", "sound 1", "sound 2", "sound 3", "off"] }, scout_findings: { type: "string", enum: ["auto", "backlog"], description: "auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog." }, tests_with_changes: { type: "string", enum: ["off", "ask", "review"], description: "A change task that edits code but no test file: ask (default) merges and tells you; review waits for the owner; off does nothing." }, checker: { type: "string", enum: ["off", "on"], description: "on: a fresh checker tries to break each change before it joins the merge queue, where its tests run; off (default): no checker." }, mode: { type: "string", enum: ["paused", "review", "auto"] } } }
   },
   {
     name: "doctor",
@@ -64596,6 +64642,7 @@ async function kindIn($, a) {
 }
 async function projectIn($, a) {
   if (a.project === void 0 || a.project === null) return void 0;
+  if (typeof a.project !== "string") throw new Error("Nothing changed: project must be a project folder name (text)");
   const name = str(a.project)?.trim() ?? "";
   if (!name) return "";
   const refusal = projectRefusal(name, await projectNames($));
@@ -64657,12 +64704,14 @@ async function runTool($, name, a) {
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)) : void 0;
       const kind = await kindIn($, a);
       const project = await projectIn($, a);
+      const tooLong = detailsTooLong(clean(str(a.details) ?? "", Infinity).length);
+      if (tooLong) throw new Error(tooLong);
       if (!str(a.why)?.trim()) throw new Error("why is missing: say in one line why this task exists (and fill origin_by, plus request, scout or from_task)");
       const known = await knownScouts($);
       const scout = scoutNameOf(a.scout, S.N.name, known);
       if (scout && !await isKnownScout($, scout)) throw new Error(unknownScoutText(scout, known));
       const said = { by: a.origin_by, scout: scout || a.scout, task: a.from_task, how: a.how, request: a.request, why: a.why };
-      const merge_into = await homeBranch($);
+      const merge_into = await homeBranch($, repoOf(project ? { project } : void 0));
       let forced = false;
       const own = scout && a.origin_by === "scout" ? await scoutFindingsFor($, scout) : void 0;
       let reviewMode = false;
@@ -64715,10 +64764,14 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
       if (str(a.answer)?.trim() && t.status !== "waiting") return alreadyAnsweredText(t, a);
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)) : void 0;
       const project = await projectIn($, a);
+      const projectMoves = project !== void 0 && project !== (t.project ?? "");
+      if (projectMoves && (await $.fs.exists(`${worktreeDir(t.id)}/.git`) || await branchExists($, taskBranch(t), repoOf(t)))) {
+        throw new Error(`Nothing changed: ${t.id} already has a copy in ${t.project || "the board folder"}; drop and re-add it, or finish it first`);
+      }
       const kind = await kindIn($, a) ?? (role && role !== t.role && isInvestigation(kindFor(void 0, role)) ? kindFor(void 0, role) : void 0);
       let into = str(a.merge_into)?.trim();
-      if (a.merge_into !== void 0 && !(into && await branchExists($, into))) {
-        const some = (await branchList($)).slice(0, 8);
+      if (a.merge_into !== void 0 && !(into && await branchExists($, into, repoOf({ project: project ?? t.project })))) {
+        const some = (await branchList($, repoOf({ project: project ?? t.project }))).slice(0, 8);
         throw new Error(`Nothing changed: '${into ?? String(a.merge_into)}' is not a branch in this project. merge_into must be an existing branch${some.length ? `, e.g. ${some.join(", ")}` : ""}.`);
       }
       const both = detailsBothRefusal(a);
@@ -64731,8 +64784,15 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
       const scratchGone = switching && !isInvestigation(kind) ? () => resetScratch($, t.id) : async () => void 0;
       const note2 = str(a.add_details)?.trim();
       const noted = note2 ? addDetailsText(t.details, note2, dayOf(Date.now(), localOffset())) : void 0;
+      const answerIn = str(a.answer)?.trim();
+      const answered2 = answerIn ? `${(noted ?? (str(a.details) || t.details)).trimEnd()}
+
+Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answerIn}` : void 0;
+      const tooLong = detailsTooLong(clean(answered2 ?? noted ?? str(a.details) ?? "", Infinity).length);
+      if (tooLong) throw new Error(tooLong);
       const noteHistory = (x) => note2 ? { history: withHistory((find(x, t.id) ?? t).history, now(), ["note", noteAddedLine(note2)]) } : {};
       const gone = parseGoneBranch(t.status === "waiting" ? t.ask?.text ?? null : null);
+      if (projectMoves && a.merge_into === void 0 && !isInvestigation(t)) into = await homeBranch($, repoOf(project ? { project } : void 0));
       if (!into && gone && saysMergeInstead(str(a.answer) ?? "", gone.instead)) into = gone.instead;
       const fields = () => {
         const p = {};
@@ -64939,7 +64999,7 @@ async function runNowTool($, id, anyway) {
   const b = await load($);
   const waits = runNowWaits(b, t);
   if (waits.length && !anyway) return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`;
-  if (S.gitState === "no-git" || !await gitReady($, b)) return `${t.id} didn't start: git isn't set up here yet`;
+  if (S.gitState === "no-git" || !await taskGitReady($, b, t)) return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : "here"} yet`;
   const busy = workers.size + starting.size;
   const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : void 0;
   const paused = modeOf(b) === "paused";
@@ -65136,11 +65196,14 @@ async function pump(host) {
   if (!ready(b).length) return;
   if (S.gitState === "no-git") return;
   if (!await gitReady(host, b)) return;
+  const repoOk = /* @__PURE__ */ new Map();
   const failed2 = (id) => (err) => startFailed(host, id, err);
   const queued = [];
   for (const t of ready(b)) {
     if (workers.size + starting.size >= b.max_parallel) break;
     if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some((w) => w.task === t.id)) continue;
+    const repo = repoOf(t);
+    if (repo === S.root ? S.gitRoot !== "ok" : !(repoOk.get(repo) ?? (repoOk.set(repo, await gitReady(host, b, repo)), repoOk.get(repo)))) continue;
     const q = await queueWorker(host, t.id).catch(async (err) => (await failed2(t.id)(err), null));
     if (q) queued.push(q.started.catch(failed2(t.id)));
   }
@@ -65172,6 +65235,7 @@ async function queueWorker(host, id) {
     const b = await load(host);
     const t0 = find(b, id);
     if (!mayStart(t0, agents.map(agentState), S.N.name)) return null;
+    if (repoOf(t0) === S.root ? S.gitRoot !== "ok" : !await taskGitReady(host, b, t0)) return null;
     if (await mergedBeforeStart(host, t0)) return null;
     if (await waitIfBranchGone(host, b, t0, "start")) return null;
     const tryNo2 = t0.attempts > 0 && goOnRun(t0.runs, now()) ? t0.attempts : t0.attempts + 1;
@@ -65267,8 +65331,8 @@ async function mergedBeforeStart(host, t) {
 }
 async function waitIfBranchGone(host, b, t, when3) {
   const into = intoOf(t);
-  if (await branchExists(host, into)) return false;
-  const instead = await homeBranch(host);
+  if (await branchExists(host, into, repoOf(t))) return false;
+  const instead = await homeBranch(host, repoOf(t));
   const question = goneBranchQuestion(into, instead);
   const options = goneBranchOptions(into, instead);
   const asked = await change(host, (x) => {
@@ -65329,7 +65393,7 @@ async function workerFinishedNow(host, agentId, answer, end2, tokens, cost) {
         const runs = t.runs?.length ? withAgentUsed(t.runs, "worker", agentId, ended, { tokens, ...cost !== void 0 ? { cost } : {} }) : t.runs;
         return [putTask(x, backToTodo({ ...t, ...runs ? { runs } : {} }, SYMCC_STOPPED_NOTE, ended)), null];
       }
-      limitMs = finishLimitMs(mergeTestCount(x), testMinutesOf(x));
+      limitMs = finishLimitMs(mergeTestCount(x, t), testMinutesOf(x));
       return [patchTask(x, w.task, { live: { checking: { step: "prep", at: ended }, phase: void 0, time_ask: void 0 }, history: withHistory(t.history, ended, workerHandedBackEntry(t, workerName(S.N.name, t.id))), ...t.runs?.length ? { runs: endRun(withAgentUsed(t.runs, "worker", agentId, ended, { tokens, ...cost !== void 0 ? { cost } : {} }), ended) } : {} }, ended), t.attempts];
     });
   } catch {
@@ -65488,7 +65552,7 @@ async function landedLate(host, t, sha, made, kind, status) {
   if (!r) return;
   if (r.done) {
     tellLead(host, `\u2713 ${t.id} "${t.title}" is done after all: its checking and merging was given up as stuck, but it ended late and its work was merged into ${into} (${short2}).`);
-    if (await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false)) await deleteMergedBranch(host, taskBranch(t), into).catch(() => false);
+    if (await removeWorktree(host, t.id, worktreeDir(t.id)).catch(() => false)) await deleteMergedBranch(host, taskBranch(t), into, repoOf(t)).catch(() => false);
     void pump(host);
     return;
   }
@@ -65640,12 +65704,12 @@ async function changedMeanwhile(host, t, b, r, line, worktree, agentId) {
   }
   if (off) {
     sayDone(host, b, t.id);
-    if (await removeWorktree(host, t.id, worktree, agentId, true).catch(() => false)) await deleteMergedBranch(host, taskBranch(t), intoOf(t));
+    if (await removeWorktree(host, t.id, worktree, agentId, true).catch(() => false)) await deleteMergedBranch(host, taskBranch(t), intoOf(t), repoOf(t));
     tellLead(host, `\u2713 ${t.id} "${t.title}" is merged: ${off} too late, after the merge had already happened, so it is done.`);
     return;
   }
   sayDone(host, b, t.id);
-  if (await removeWorktree(host, t.id, worktree, agentId, true).catch(() => false)) await deleteMergedBranch(host, taskBranch(t), intoOf(t));
+  if (await removeWorktree(host, t.id, worktree, agentId, true).catch(() => false)) await deleteMergedBranch(host, taskBranch(t), intoOf(t), repoOf(t));
   tellLead(host, `\u2713 ${t.id} "${t.title}" is merged: it was ${was} too late, after the merge had already happened, so it is done.`);
 }
 function endFailure(end2) {
@@ -65814,7 +65878,7 @@ async function checkAgain(host, t0, moved = false) {
     if (!go) await endFinishing(host, id, tryNo2);
   }
   const { b, t, dir } = go;
-  await finishUnderLimit(host, id, tryNo2, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, true, gaveUp, over, limit, moved));
+  await finishUnderLimit(host, id, tryNo2, finishLimitMs(mergeTestCount(b, t), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, true, gaveUp, over, limit, moved));
 }
 async function folderGone(host, t0, note2, tell) {
   const head = await git(host, ["rev-parse", "-q", "--verify", "HEAD"], worktreeDir(t0.id)).catch(() => null);
@@ -65857,7 +65921,7 @@ async function mergeAgain(host, t0) {
     if (!go) await endFinishing(host, id, tryNo2);
   }
   const { b, t, dir } = go;
-  await finishUnderLimit(host, id, tryNo2, finishLimitMs(mergeTestCount(b), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, false, gaveUp, over, limit));
+  await finishUnderLimit(host, id, tryNo2, finishLimitMs(mergeTestCount(b, t), testMinutesOf(b)), (gaveUp, over, limit) => checkerStepAgain(host, t, b, dir, false, gaveUp, over, limit));
 }
 async function reportSummary(host, t) {
   const rel = t.runs?.at(-1)?.report;
@@ -65977,21 +66041,22 @@ async function retryFileWaits(host) {
   const b = await load(host);
   if (modeOf(b) === "paused") return;
   const waiting2 = b.tasks.filter((t) => waitsForFiles(t) && !checkingNow(t.id));
-  let current = null;
-  let status = null;
+  const current = /* @__PURE__ */ new Map();
+  const status = /* @__PURE__ */ new Map();
   for (const t of waiting2) {
-    current ??= (await git(host, ["symbolic-ref", "--short", "-q", "HEAD"])).stdout.trim();
-    if (current === intoOf(t)) {
-      if (status === null) {
-        const st = await git(host, ["status", "--porcelain", "-z", "--untracked-files=all", "--ignored=matching"]);
+    const repo = repoOf(t);
+    if (!current.has(repo)) current.set(repo, (await git(host, ["symbolic-ref", "--short", "-q", "HEAD"], repo)).stdout.trim());
+    if (current.get(repo) === intoOf(t)) {
+      if (!status.has(repo)) {
+        const st = await git(host, ["status", "--porcelain", "-z", "--untracked-files=all", "--ignored=matching"], repo);
         if (st.exitCode !== 0) return;
-        status = st.stdout;
+        status.set(repo, st.stdout);
       }
-      if (stillBlocks(status, blockerFiles(asBlockers(t.live?.merge_wait)), S.N.dir)) continue;
+      if (stillBlocks(status.get(repo), blockerFiles(asBlockers(t.live?.merge_wait)), S.N.dir)) continue;
     }
     await mergeWaiting(host, t.id).catch(() => void 0);
-    current = null;
-    status = null;
+    current.delete(repo);
+    status.delete(repo);
   }
 }
 var CHECKER_RESULT = "the checker found problems";
@@ -66056,7 +66121,7 @@ async function settle(host, t, b, r, summary, worktree, agentId, approved = fals
   const done = resultEntry(t, resultKind(r), cutLine(summary, 300), r.checker ? CHECKER_RESULT : detail, facts);
   if (!await write((cur) => ({ status: r.ok ? "done" : "failed", note: detail.slice(0, 300), merge_main: void 0, failed_on: r.conflict ? "clash" : void 0, test_output: r.testOutput, history: withHistory(cur.history, now(), done), ...r.ok && r.notes?.length ? { research_notes: r.notes } : {}, ...r.ok && cur.status === "waiting" && cur.attempts === t.attempts && cur.runs?.length ? { runs: withEnd(cur.runs, "finished", "merged", true) } : {} }))) return;
   if (r.ok) sayDone(host, b, t.id);
-  if (r.ok && await removeWorktree(host, t.id, worktree, agentId, true)) await deleteMergedBranch(host, taskBranch(t), intoOf(t));
+  if (r.ok && await removeWorktree(host, t.id, worktree, agentId, true)) await deleteMergedBranch(host, taskBranch(t), intoOf(t), repoOf(t));
   const triesText = `${tries} of ${retries} automatic ${retries === 1 ? "try" : "tries"} used`;
   const gaveUp = r.testOutput !== void 0 && !r.checker ? `
 It already had ${tries} automatic ${tries === 1 ? "retry" : "retries"}. The last test run: ${gaveUpTestsText(r.testOutput)}` : "";
@@ -66104,7 +66169,7 @@ async function fullAnswer(host, t) {
 var everyReport = (t, latest) => [.../* @__PURE__ */ new Set([...taskReports(t).sort((a, b) => a.try - b.try).map((r) => r.file), ...latest ? [latest] : []])];
 async function endInvestigation(host, t, keepNote, handBackFrom) {
   const full = keepNote ? await fullAnswer(host, t) : { text: "" };
-  const merge_into = keepNote ? await homeBranch(host) : void 0;
+  const merge_into = keepNote ? await homeBranch(host, repoOf(t)) : void 0;
   const notes = keepNote ? (await Promise.resolve().then(() => host.fs.list(path("docs/research"))).catch(() => [])).map((f) => `docs/research/${f.name}`) : [];
   const added = await change(host, (x) => {
     if (!keepNote) return [investigationDone(x, t.id, now()), void 0];
@@ -66117,7 +66182,7 @@ async function endInvestigation(host, t, keepNote, handBackFrom) {
   const keep = commits !== 0;
   const what = commits === null ? `git could not tell whether it has commits ${intoOf(t)} doesn't have` : `it has ${plural(commits, "commit")} from an earlier change try that ${intoOf(t)} doesn't have`;
   const kept = keep ? ` Its branch ${branch} was kept: ${what}. Delete it by hand once that work is not needed.` : "";
-  if (await removeWorktree(host, t.id, worktreeDir(t.id), handBackFrom, handBackFrom !== void 0).catch(() => false) && !keep) await git(host, ["branch", "-D", branch]);
+  if (await removeWorktree(host, t.id, worktreeDir(t.id), handBackFrom, handBackFrom !== void 0).catch(() => false) && !keep) await git(host, ["branch", "-D", branch], repoOf(t));
   if (kept) tellLead(host, `${t.id} "${t.title}" is done.${kept}`);
   void pump(host);
   outcomes.set(t.id, "done");
@@ -66135,10 +66200,10 @@ async function mergeWaiting(host, id) {
 async function mergeFinished(host, b, t, kind, force = false) {
   const stays = kind === "approve" ? "stays in review" : "keeps waiting";
   if (approving.has(t.id)) return `${t.id} is already being merged`;
-  if (!await gitReady(host, b)) return `${t.id} ${stays}: ${gitNote(S.gitState)}`;
+  if (!await taskGitReady(host, b, t)) return `${t.id} ${stays}: ${gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`;
   if (await waitIfBranchGone(host, b, t, "merge")) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`;
   approving.add(t.id);
-  const limitMs = finishLimitMs(mergeTestCount(b), testMinutesOf(b));
+  const limitMs = finishLimitMs(mergeTestCount(b, t), testMinutesOf(b));
   const beat = everyMs(host, FINISH_BEAT_MS, () => void markChecking(host, t.id, t.status, t.attempts).catch(() => void 0));
   try {
     const how = await withLimit(host, limitMs, (gaveUp, over, limit) => mergeWork(host, t, b, kind, gaveUp, over, limit, force));
@@ -66442,31 +66507,38 @@ async function gitOk($, args, cwd = S.root, timeoutMs = 12e4) {
   if (r.exitCode !== 0) throw new Error(`git ${args.join(" ")}: ${(r.stderr || r.stdout).trim().slice(0, 300)}`);
   return r.stdout.trim();
 }
-async function currentBranch($) {
+var repoOf = (t) => {
+  const p = t?.project;
+  if (p === void 0 || p === null || p === "") return S.root;
+  if (!isProjectName(p)) throw new Error(`'${String(p).slice(0, 80)}' is not a project folder name`);
+  return `${S.root}/${p}`;
+};
+async function currentBranch($, cwd = S.root) {
   if (!S.root) return "";
-  return (await git($, ["symbolic-ref", "--short", "-q", "HEAD"]).catch(() => null))?.stdout.trim() ?? "";
+  return (await git($, ["symbolic-ref", "--short", "-q", "HEAD"], cwd).catch(() => null))?.stdout.trim() ?? "";
 }
-async function branchList($) {
-  const r = await git($, ["for-each-ref", "--format=%(refname:short)", "refs/heads"]).catch(() => null);
+async function branchList($, cwd = S.root) {
+  const r = await git($, ["for-each-ref", "--format=%(refname:short)", "refs/heads"], cwd).catch(() => null);
   return (r?.stdout ?? "").split("\n").map((x) => x.trim()).filter(Boolean);
 }
-async function branchExists($, name) {
+async function branchExists($, name, cwd = S.root) {
   if (!name || name.startsWith("-")) return false;
-  return (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${name}`]).catch(() => null))?.exitCode === 0;
+  return (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${name}`], cwd).catch(() => null))?.exitCode === 0;
 }
-async function homeBranch($) {
+async function homeBranch($, cwd = S.root) {
   if (!S.root) return "main";
-  const cur = await currentBranch($);
+  const cur = await currentBranch($, cwd);
   if (cur) return startBranch(cur, "", []);
-  const origin = (await git($, ["symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"]).catch(() => null))?.stdout.trim() ?? "";
-  return startBranch("", origin, await branchList($));
+  const origin = (await git($, ["symbolic-ref", "--short", "-q", "refs/remotes/origin/HEAD"], cwd).catch(() => null))?.stdout.trim() ?? "";
+  return startBranch("", origin, await branchList($, cwd));
 }
 var macToolsMissing = (out) => /xcrun: error: invalid active developer path|No developer tools were found|requires the command line developer tools/i.test(out);
-async function probeGit($) {
+async function probeGit($, repo = S.root) {
   if (!S.root) return "ok";
+  const last = repo === S.root ? S.gitRoot : S.repoGit.get(repo) ?? "ok";
   const run2 = async (args) => {
     try {
-      const r = await git($, args, S.root, 15e3);
+      const r = await git($, args, repo, 15e3);
       return r.exitCode === 124 ? null : r;
     } catch {
       return null;
@@ -66475,7 +66547,7 @@ async function probeGit($) {
   let v = null;
   let missing = false;
   try {
-    v = await git($, ["--version"], S.root, 15e3);
+    v = await git($, ["--version"], repo, 15e3);
     missing = v.exitCode === 127 || v.exitCode !== 0 && v.exitCode !== 124 && macToolsMissing(`${v.stderr}
 ${v.stdout}`);
     if (v.exitCode === 124) v = null;
@@ -66484,15 +66556,15 @@ ${v.stdout}`);
     missing = /ENOENT|not found|no such file/i.test(msg) && !/time(d)? ?out/i.test(msg);
   }
   if (missing) return gitStateOf({ hasGit: false, inside: false, hasHead: false });
-  if (!v || v.exitCode !== 0) return S.gitState;
+  if (!v || v.exitCode !== 0) return last;
   const hasGit = true;
   const [inRepo, up] = hasGit ? await Promise.all([run2(["rev-parse", "--is-inside-work-tree"]), run2(["rev-parse", "--show-cdup"])]) : [null, null];
-  if (hasGit && (!inRepo || !up)) return S.gitState;
+  if (hasGit && (!inRepo || !up)) return last;
   const inside3 = hasGit && inRepo?.stdout.trim() === "true" && !up?.stdout.trim();
   let hasHead = false;
   if (inside3) {
     const h = await run2(["rev-parse", "--verify", "-q", "HEAD"]);
-    if (!h) return S.gitState;
+    if (!h) return last;
     hasHead = h.exitCode === 0;
   }
   return gitStateOf({ hasGit, inside: inside3, hasHead });
@@ -66510,14 +66582,58 @@ async function installStepOf($) {
   }
   return gitInstallStep(f);
 }
-async function recheckGit($) {
-  const was = S.gitState;
-  const ok = await gitReady($);
-  if (ok && was !== "ok") void pump($).catch(() => void 0);
-  return ok ? "git is ready: this folder is a git repo with commits" : gitNotice(S.gitState, S.gitInstall, S.N.name);
+var isOpenTask = (t) => !isFinished(t) && t.status !== "backlog";
+var openProjects = (b) => [...new Set(b.tasks.filter((t) => !isFinished(t)).map((t) => t.project).filter((p) => !!p && isProjectName(p)))].sort();
+var gitStateOfTask = (t) => {
+  const repo = repoOf(t);
+  return repo === S.root ? S.gitRoot : S.repoGit.get(repo) ?? "ok";
+};
+var projectNotes = (names2) => [...S.repoGit].map(([r, s]) => [r.slice(S.root.length + 1), s]).filter(([p, s]) => s !== "ok" && (!names2 || names2.includes(p))).map(([p, s]) => `${p}: ${s === "no-git" ? "git is not installed" : s === "no-repo" ? "no git repo" : "no commits yet"}`).join("; ");
+var allGitReady = () => S.gitState === "ok" && [...S.repoGit.values()].every((s) => s === "ok");
+async function taskGitReady($, b, t) {
+  const repo = repoOf(t);
+  if (repo === S.root) {
+    await gitReady($, b);
+    return S.gitRoot === "ok";
+  }
+  if (S.gitState === "no-git") return false;
+  return gitReady($, b, repo);
 }
-async function gitReady($, b) {
-  const s = await probeGit($);
+function forgetClosedRepos(b) {
+  const open = new Set(b.tasks.filter((t) => isOpenTask(t)).map((t) => t.project).filter((p) => !!p && isProjectName(p)).map((p) => `${S.root}/${p}`));
+  for (const r of [...S.repoGit.keys()]) if (!open.has(r)) S.repoGit.delete(r);
+}
+async function checkProjects($, b) {
+  forgetClosedRepos(b);
+  if (S.gitState === "no-git") return;
+  for (const p of openProjects(b)) await gitReady($, b, `${S.root}/${p}`).catch(() => false);
+}
+async function recheckGit($) {
+  forgetClosedRepos(await load($));
+  const was = allGitReady();
+  const ok = await gitReady($);
+  const b = await load($);
+  await checkProjects($, b);
+  const bad = [...S.repoGit].filter(([, s]) => s !== "ok");
+  if (ok && !was && !bad.length) void pump($).catch(() => void 0);
+  if (!ok) return gitNotice(S.gitState, S.gitInstall, S.N.name);
+  if (bad.length) return projectNotes();
+  return "git is ready: this folder is a git repo with commits";
+}
+async function gitReady($, b, repo = S.root) {
+  if (repo !== S.root) {
+    const s2 = await probeGit($, repo);
+    if (s2 !== (S.repoGit.get(repo) ?? "ok")) {
+      S.repoGit.set(repo, s2);
+      await publish($, b ?? await load($));
+    } else if (!S.repoGit.has(repo)) S.repoGit.set(repo, s2);
+    return s2 === "ok";
+  }
+  const real2 = await probeGit($);
+  S.gitRoot = real2;
+  const board = b ?? await load($);
+  const loose2 = board.tasks.some((t) => isOpenTask(t) && !(t.project && isProjectName(t.project)));
+  const s = real2 === "no-repo" && !loose2 && (await projectNames($).catch(() => [])).length ? "ok" : real2;
   if (s === "no-git" && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => "");
   if (s !== "no-git") S.gitInstall = "";
   const ws = (s === "no-repo" || s === "no-commits") && await holdsRepos($) ? workspaceText() : "";
@@ -66548,7 +66664,7 @@ async function projectNames($) {
   if (await $.fs.exists(`${S.root}/.git`)) return [];
   const dirs = (await $.fs.list(S.root).catch(() => [])).filter((e) => e.kind === "dir" && !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== S.N.dir).map((e) => e.name);
   const found = [];
-  for (const d of dirs) if (await $.fs.exists(`${S.root}/${d}/.git`)) found.push(d);
+  for (const d of dirs) if (isProjectName(d) && await $.fs.exists(`${S.root}/${d}/.git`)) found.push(d);
   return found.sort();
 }
 var projectRefusal = (name, names2) => names2.includes(name) ? "" : names2.length ? `'${name}' is not a project here. The project folders are: ${names2.join(", ")}.` : `'${name}' is not a project: this board has no project folders (a project is a folder below the board folder with its own .git).`;
@@ -66589,6 +66705,7 @@ async function setupGit($, who) {
     await change($, (b) => ({ ...b, tasks: b.tasks.map((t) => isFinished(t) ? t : { ...t, merge_into: branch }) }));
     S.toldGit = "ok";
     S.gitState = "ok";
+    S.gitRoot = "ok";
     await publish($, await load($));
     const out = setupDoneText({ init, branch, files, left, gitignore: old === null ? "made" : text2 === old ? "kept" : "added", name: S.N.name });
     if (who !== "the lead") tellLead($, ownerSetGitText(branch, await gitOk($, ["rev-parse", "--short", "HEAD"], top).catch(() => ""), out));
@@ -66638,18 +66755,19 @@ var taskBranch = (t) => t.branch ?? S.N.branch(t.id);
 async function prepareWorktree($, t, target, catchUp = false) {
   const dir = worktreeDir(t.id);
   const branch = taskBranch(t);
+  const repo = repoOf(t);
   let made = false;
   if (!await $.fs.exists(`${dir}/.git`)) {
-    await git($, ["worktree", "prune"]);
-    const has2 = (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${branch}`])).exitCode === 0;
-    if (has2) await gitOk($, ["worktree", "add", dir, branch]);
+    await git($, ["worktree", "prune"], repo);
+    const has2 = (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${branch}`], repo)).exitCode === 0;
+    if (has2) await gitOk($, ["worktree", "add", dir, branch], repo);
     else {
-      await gitOk($, ["worktree", "add", "-b", branch, dir, target]);
+      await gitOk($, ["worktree", "add", "-b", branch, dir, target], repo);
       made = true;
     }
   }
   const kept = catchUp && !made ? await catchUpBranch($, dir, branch, target, t).catch(() => ({ behind: 0 })) : { behind: 0 };
-  await copyTypes($, dir).catch(() => false);
+  await copyTypes($, dir, repo).catch(() => false);
   await prepareScratch($, dir).catch(() => false);
   return { dir, branch, ...kept };
 }
@@ -66727,8 +66845,8 @@ async function clearScratch($, dir) {
   return (await $.run(["mkdir", "-p", to], { cwd: dir })).exitCode === 0;
 }
 var TYPES_DIR = ".claude-plugin/types";
-async function copyTypes($, dir) {
-  const from = `${S.root}/${TYPES_DIR}`;
+async function copyTypes($, dir, repo = S.root) {
+  const from = `${repo}/${TYPES_DIR}`;
   const to = `${dir}/${TYPES_DIR}`;
   if (!await $.fs.exists(from)) return false;
   if ((await git($, ["check-ignore", "-q", "--", `${TYPES_DIR}/tsconfig.json`], dir)).exitCode !== 0) return false;
@@ -66774,8 +66892,9 @@ async function copyReports($, t, dir) {
 async function taskWork($, t) {
   const branch = taskBranch(t);
   let commits = 0;
-  if (await branchExists($, branch)) {
-    const r = await git($, ["rev-list", "--count", `refs/heads/${intoOf(t)}..refs/heads/${branch}`]).catch(() => null);
+  const repo = repoOf(t);
+  if (await branchExists($, branch, repo)) {
+    const r = await git($, ["rev-list", "--count", `refs/heads/${intoOf(t)}..refs/heads/${branch}`], repo).catch(() => null);
     const n = r && r.exitCode === 0 ? Number(r.stdout.trim() || "0") : NaN;
     commits = Number.isFinite(n) ? n : null;
   }
@@ -66799,19 +66918,20 @@ async function removeWorktree($, taskId, dir, except, ownCheck = false) {
   if (!agents) return false;
   const t = find(await load($), taskId);
   if (liveWorkersFor({ id: taskId, runs: t?.runs }, agents.map(agentState), S.N.name).some((a) => a.id !== except)) return false;
-  await git($, ["worktree", "remove", "--force", dir]);
-  await git($, ["worktree", "prune"]);
+  const repo = repoOf(t);
+  await git($, ["worktree", "remove", "--force", dir], repo);
+  await git($, ["worktree", "prune"], repo);
   return true;
 }
-async function deleteMergedBranch($, branch, into) {
+async function deleteMergedBranch($, branch, into, repo = S.root) {
   const ref = `refs/heads/${branch}`;
-  const tip = await git($, ["rev-parse", "--verify", "-q", ref]);
+  const tip = await git($, ["rev-parse", "--verify", "-q", ref], repo);
   const sha = tip.stdout.trim();
   if (tip.exitCode !== 0 || !/^[0-9a-f]{7,64}$/i.test(sha)) return false;
-  if ((await git($, ["merge-base", "--is-ancestor", sha, `refs/heads/${into}`])).exitCode !== 0) return false;
-  const list2 = await git($, ["worktree", "list", "--porcelain"]);
+  if ((await git($, ["merge-base", "--is-ancestor", sha, `refs/heads/${into}`], repo)).exitCode !== 0) return false;
+  const list2 = await git($, ["worktree", "list", "--porcelain"], repo);
   if (list2.exitCode !== 0 || list2.stdout.split("\n").some((l) => l.trim() === `branch ${ref}`)) return false;
-  return (await git($, ["update-ref", "-d", ref, sha])).exitCode === 0;
+  return (await git($, ["update-ref", "-d", ref, sha], repo)).exitCode === 0;
 }
 async function cleanupMerged($, b) {
   const agents = await agentsNow2($);
@@ -66831,15 +66951,22 @@ async function cleanupMerged($, b) {
       keptDirty.add(id);
       continue;
     }
-    if ((await git($, ["worktree", "remove", dir])).exitCode === 0) dirs++;
+    if ((await git($, ["worktree", "remove", dir], repoOf(t))).exitCode === 0) dirs++;
   }
-  await git($, ["worktree", "prune"]);
+  const repoTasks = (repo) => b.tasks.filter((t) => repoOf(t) === repo);
+  const rootNeeded = S.gitRoot === "ok" || b.tasks.some((t) => isOpenTask(t) && repoOf(t) === S.root);
+  const repos = [...new Set(b.tasks.map((t) => repoOf(t)))].filter((r) => r !== S.root || rootNeeded);
+  if (!repos.includes(S.root) && rootNeeded) repos.push(S.root);
+  for (const repo of repos) await git($, ["worktree", "prune"], repo);
   let branches = 0;
-  for (const into of [...new Set(b.tasks.filter((t) => t.status === "done").map(intoOf))]) {
-    const merged = await git($, ["branch", "--merged", into, "--format=%(refname:short)"]);
-    if (merged.exitCode !== 0) continue;
-    const done = b.tasks.filter((t) => intoOf(t) === into);
-    for (const br of branchesToDelete(done, merged.stdout.split("\n"), S.N.branch(""))) if (await deleteMergedBranch($, br, into)) branches++;
+  for (const repo of repos) {
+    const here = repoTasks(repo);
+    for (const into of [...new Set(here.filter((t) => t.status === "done").map(intoOf))]) {
+      const merged = await git($, ["branch", "--merged", into, "--format=%(refname:short)"], repo);
+      if (merged.exitCode !== 0) continue;
+      const done = here.filter((t) => intoOf(t) === into);
+      for (const br of branchesToDelete(done, merged.stdout.split("\n"), S.N.branch(""))) if (await deleteMergedBranch($, br, into, repo)) branches++;
+    }
   }
   const text2 = S.toldCleanup ? "" : cleanupText(branches, dirs);
   if (text2) {
@@ -66958,14 +67085,16 @@ var taskCache = /* @__PURE__ */ new Map();
 var taskRunning = /* @__PURE__ */ new Map();
 var mainTips = /* @__PURE__ */ new Map();
 var tips = { at: -Infinity, running: void 0 };
+var tipKey = (repo, into) => `${repo}
+${into}`;
 function readTips(host, intos, nowMs) {
   if (tips.running) return tips.running;
   if (!intos.length || nowMs - tips.at < BRANCH_CACHE_MS) return void 0;
   tips.at = nowMs;
   tips.running = Promise.all(
-    intos.map(async (into) => {
-      const r = safe(into) ? await git(host, ["rev-parse", `refs/heads/${into}`], S.root, GIT_MS).catch(() => null) : null;
-      mainTips.set(into, r && r.exitCode === 0 ? String(r.stdout ?? "").trim() : "");
+    intos.map(async ({ repo, into }) => {
+      const r = safe(into) ? await git(host, ["rev-parse", `refs/heads/${into}`], repo, GIT_MS).catch(() => null) : null;
+      mainTips.set(tipKey(repo, into), r && r.exitCode === 0 ? String(r.stdout ?? "").trim() : "");
     })
   ).then(() => void 0).finally(() => {
     tips.running = void 0;
@@ -66986,7 +67115,8 @@ var MAIN_AFTER_MERGE = 3;
 var shaTimes = (stdout) => stdout.split("\n").map((l) => l.trim().split(/\s+/)).filter((p) => /^[0-9a-f]{7,64}$/.test(p[0] ?? "") && /^\d+$/.test(p[1] ?? "")).map((p) => ({ sha: p[0], at: Number(p[1]) * 1e3 }));
 async function readTaskBranch(host, t, into, nowMs, status) {
   if (!safe(into)) return null;
-  const run2 = (args) => git(host, args, S.root, GIT_MS).then((r) => r.exitCode === 0 ? String(r.stdout ?? "") : (status && (status.failed = true), null), () => (status && (status.failed = true), null));
+  const repo = repoOf(t);
+  const run2 = (args) => git(host, args, repo, GIT_MS).then((r) => r.exitCode === 0 ? String(r.stdout ?? "") : (status && (status.failed = true), null), () => (status && (status.failed = true), null));
   const branch = typeof t.branch === "string" ? t.branch : "";
   const merged = t.status === "done" && isSha(t.merged) ? t.merged : "";
   let commits = [];
@@ -67057,9 +67187,9 @@ async function readTaskBranch(host, t, into, nowMs, status) {
 }
 var hasTaskBranch = (t) => t.status === "done" ? isSha(t.merged) : typeof t.branch === "string" && safe(t.branch);
 function taskBranchFacts(host, t, into, nowMs = Date.now(), onRead) {
-  if (S.gitState !== "ok" || !S.root || !hasTaskBranch(t)) return { facts: void 0 };
+  if (S.gitState !== "ok" || !S.root || !hasTaskBranch(t) || gitStateOfTask(t) !== "ok") return { facts: void 0 };
   const finished = isFinished(t);
-  const key = [into, t.status, t.branch ?? "", t.merged ?? "", t.attempts, finished ? mainTips.get(into) ?? "" : ""].join(" ");
+  const key = [into, t.status, t.branch ?? "", t.merged ?? "", t.attempts, finished ? mainTips.get(tipKey(repoOf(t), into)) ?? "" : ""].join(" ");
   const got = taskCache.get(t.id);
   const facts = got?.key === key ? got.facts ?? void 0 : void 0;
   const waiting2 = taskRunning.get(t.id);
@@ -67110,7 +67240,7 @@ function taskBranchesView(host, b, nowMs = Date.now()) {
       if (got.facts) facts[t.id] = got.facts;
     }
   }
-  const tipsRead = S.gitState === "ok" && S.root ? readTips(host, [...new Set(finished.map((t) => intoOf(t)))], nowMs) : void 0;
+  const tipsRead = S.gitState === "ok" && S.root ? readTips(host, [...new Map(finished.map((t) => [tipKey(repoOf(t), intoOf(t)), { repo: repoOf(t), into: intoOf(t) }])).values()], nowMs) : void 0;
   const done = (async () => {
     if (tipsRead) await tipsRead;
     for (const t of finished) read(t);
@@ -67438,27 +67568,39 @@ async function readTodayTeam(host, scouts, nowMs) {
   if (hours.some((n) => n > 0)) out.hours = hours;
   return out.lead === void 0 && out.scouts === void 0 && out.scout_ms === void 0 && out.usd === void 0 ? void 0 : out;
 }
+async function branchLine(host, b, own) {
+  const parts = own ? [own] : [];
+  for (const p of openProjects(b)) {
+    const repo = `${S.root}/${p}`;
+    if (S.repoGit.get(repo) && S.repoGit.get(repo) !== "ok") continue;
+    const br = await homeBranch(host, repo).catch(() => "");
+    if (br) parts.push(`${p}: ${br}`);
+  }
+  return parts.join(" \xB7 ");
+}
 function publish(host, b) {
   return timed(host, "publish", () => publishView(host, b));
 }
 async function publishView(host, b) {
   S.boardMtime = S.readMtime;
   const working = [...workers.values()].map((w) => ({ task: w.task, since: w.since }));
-  const branch = S.gitState === "ok" ? await homeBranch(host) : "";
+  const own = S.gitState === "ok" && S.gitRoot === "ok" ? await homeBranch(host) : "";
+  const branch = await branchLine(host, b, own);
   const size_note = [...sizeNotes.values()].join("; ");
-  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), size_note].filter(Boolean).join("; ");
+  const projectNote = projectNotes(openProjects(b));
+  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, size_note].filter(Boolean).join("; ");
   const can = await playable(host);
-  const branches = branchFacts(host, b, branch || "main").facts;
+  const branches = branchFacts(host, b, own || "main").facts;
   const team = todayTeam(host, [...scoutState.keys()]).team;
   const task_branches = taskBranchesView(host, b).facts;
-  const v = { tasks: b.tasks, working, scouts: [...scoutState.values()].map((s) => s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s), mode: modeOf(b), test_commands: b.test_commands, ...b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}, home_branch: branch, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...b.archived ? { archived: b.archived } : {}, ...b.archived_done?.length ? { archived_done: b.archived_done } : {}, open_on_start: openOnStart(b), notify_now: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...!S.driving && S.driver ? { driver: S.driver } : {}, ...S.offHere ? { off_here: "off" } : S.fresh ? { off_here: "new" } : {}, driving: S.driving, branch_note, ...size_note ? { size_note } : {}, git_state: S.gitState, ...S.gitInstall ? { git_install: S.gitInstall } : {}, ...S.gitWorkspace ? { git_workspace: S.gitWorkspace } : {}, plan_mode: inPlan(S.plan), ...branches ? { branches } : {}, ...team ? { today_team: team } : {}, ...Object.keys(task_branches).length ? { task_branches } : {}, ...openQuestions(b).length ? { questions: openQuestions(b) } : {} };
+  const v = { tasks: b.tasks, working, scouts: [...scoutState.values()].map((s) => s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s), mode: modeOf(b), test_commands: b.test_commands, ...b.projects && Object.keys(b.projects).length ? { projects: b.projects } : {}, ...b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}, home_branch: own, ...branch !== own ? { branch_line: branch } : {}, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...b.archived ? { archived: b.archived } : {}, ...b.archived_done?.length ? { archived_done: b.archived_done } : {}, open_on_start: openOnStart(b), notify_now: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...!S.driving && S.driver ? { driver: S.driver } : {}, ...S.offHere ? { off_here: "off" } : S.fresh ? { off_here: "new" } : {}, driving: S.driving, branch_note, ...size_note ? { size_note } : {}, git_state: S.gitState, ...S.gitInstall ? { git_install: S.gitInstall } : {}, ...S.gitWorkspace ? { git_workspace: S.gitWorkspace } : {}, plan_mode: inPlan(S.plan), ...branches ? { branches } : {}, ...team ? { today_team: team } : {}, ...Object.keys(task_branches).length ? { task_branches } : {}, ...openQuestions(b).length ? { questions: openQuestions(b) } : {} };
   const fit = fitView(host, v);
   if (fit.note) sizeNotes.set("the board view", fit.note);
   else sizeNotes.delete("the board view");
   const size_now = [...sizeNotes.values()].join("; ");
   if (size_now !== size_note) {
     for (const x of /* @__PURE__ */ new Set([v, fit.view])) {
-      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), size_now].filter(Boolean).join("; ");
+      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, size_now].filter(Boolean).join("; ");
       if (size_now) x.size_note = size_now;
       else delete x.size_note;
     }
@@ -67470,8 +67612,8 @@ async function publishView(host, b) {
   showStatus(host, () => onHere(b) ? statusLine(facts, S.driving, { plan: inPlan(S.plan), nowMs: Date.now(), width: statusRoom(S.N.name), ...!S.driving && S.driver ? { driver: S.driver } : {} }) : offStatusLine(S.N.name, false, S.offHere ? "off" : S.fresh ? "new" : false));
 }
 async function statusView(host, b) {
-  const branch = S.gitState === "ok" ? await homeBranch(host) : "";
-  const branches = branchFacts(host, b, branch || "main").facts;
+  const own = S.gitState === "ok" && S.gitRoot === "ok" ? await homeBranch(host) : "";
+  const branches = branchFacts(host, b, own || "main").facts;
   const team = todayTeam(host, [...scoutState.keys()]).team;
   const scouts = [...scoutState.values()].map((s) => s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s);
   const questions = openQuestions(b);
@@ -67707,7 +67849,7 @@ function sessionStarting() {
 }
 function watchdogTick(host) {
   if (S.guardOnly) return;
-  if (!S.fresh && S.gitState !== "ok" && S.gitState !== "no-git") void recheckGit(host).catch(() => void 0);
+  if (!S.fresh && !allGitReady() && S.gitState !== "no-git") void recheckGit(host).catch(() => void 0);
   void check(host).catch(() => void 0);
 }
 function leadBeat(host) {
@@ -67774,6 +67916,7 @@ async function startSteps(host, o) {
   const b = o.unreadable === "skip" ? await load(host).catch(() => null) : await load(host);
   if (!b) return null;
   await gitReady(host, b).catch(() => void 0);
+  await checkProjects(host, b).catch(() => void 0);
   await publish(host, b);
   if (await o.openIf(b)) await openPane(host, { tab: "live", focus: false, quiet: true });
   return b;
