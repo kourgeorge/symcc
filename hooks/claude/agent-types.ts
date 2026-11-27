@@ -22,7 +22,7 @@ export function claudeNames(raw: string = DEFAULT_NAME) {
 }
 
 /** The tools every worker has. */
-export const BASE_WORKER_TOOLS: readonly string[] = ['Read', 'Edit', 'Write', 'Glob', 'Grep', 'Bash']
+export const BASE_WORKER_TOOLS: readonly string[] = ['Read', 'Edit', 'Write', 'Bash']
 
 /** Claude Code's tools for each of symcc's role tool words: a role with `tools: web` gets WebSearch and WebFetch. */
 export const ROLE_TOOL_MAP: Readonly<Record<string, readonly string[]>> = { web: ['WebSearch', 'WebFetch'] }
@@ -34,7 +34,7 @@ export const EXTRA_TOOLS: readonly string[] = ROLE_TOOL_WORDS.flatMap(w => ROLE_
 export const claudeRoleTools = (words: readonly string[] | undefined): string[] => [...new Set((words ?? []).flatMap(w => ROLE_TOOL_MAP[w] ?? []))]
 
 /** The tools a scout has: it reads and runs commands, and may search and read the web, but never edits. */
-export const SCOUT_TOOLS: readonly string[] = ['Read', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch']
+export const SCOUT_TOOLS: readonly string[] = ['Read', 'Bash', 'WebSearch', 'WebFetch']
 
 /**
  * Every tool the scout agent type gets: SCOUT_TOOLS, then symcc's read-only board tools (mcp__<name>__board,

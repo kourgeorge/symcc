@@ -152,9 +152,9 @@ test, a trap, where something is).
 - **Finished workers in Claude Code's agent list.** After a task is done, its worker stays in the list below the prompt for a while, showing its last step (for example "◯ symcc-T-94 Splitting status strip test…"). It isn't running or using tokens; Claude Code clears it by itself later, and plugins can't remove or relabel it. The board shows the real state of each task.
 - **What workers and scouts can use.** Workers may change git only in their own folder and on their own branch
   (see [A worker's git](tasks.md#a-workers-git)): never push, other branches, worktree, config, tags or the stash. They use
-  Read, Edit, Write, Glob, Grep and Bash, with edits accepted automatically, inside your
+  Read, Edit, Write and Bash, with edits accepted automatically, inside your
   normal Claude Code permission settings. Scouts can't edit or write files: they use Read,
-  Glob, Grep, Bash, WebSearch and WebFetch, and their shell commands follow the same rules.
+  Bash, WebSearch and WebFetch, and their shell commands follow the same rules.
 - **A dropped task never runs on its own.** There is no delete; a dropped task stays on
   the list (until it is archived), and nothing automatic (retries after failed tests, a finishing check) starts
   it again. To bring it back on purpose, press `r` (Retry) on its page or ask the lead to

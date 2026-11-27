@@ -37,7 +37,9 @@ export function scoutToolRefusal(tool: string, name: string = DEFAULT_NAME, inpu
 /** `every_minutes` 0 means "only on demand" (never on the timer). A bad value in the file also gives 0, with
  *  `warning` saying so and `bad_every` holding the value as written. */
 /** `summary` is the optional one-line subheader shown on the scout's page (front matter `summary:`). */
-export type ScoutDef = { name: string; every_minutes: number; model?: string; summary?: string; findings?: ScoutFindings; prompt: string; warning?: string; bad_every?: string }
+export type ScoutDef = { name: string; every_minutes: number; model?: string; summary?: string; findings?: ScoutFindings; prompt: string; warning?: string; bad_every?: string
+  /** T-1200: front matter `projects: api, web`: the board's projects this scout looks at (none named: every project) */
+  projects?: string[] }
 
 /** The scout's own findings choice (front matter `findings:` auto or backlog; anything else or nothing: the board's scout_findings decides). */
 export const scoutFindingsChoice = (v: unknown): ScoutFindings | undefined => (isScoutFindings(typeof v === 'string' ? v.trim().toLowerCase() : v) ? ((v as string).trim().toLowerCase() as ScoutFindings) : undefined)
@@ -72,6 +74,24 @@ export const badEveryWarning = (value: string): string => `every_minutes "${valu
 /** True when a scout runs only on demand ("run now" or /<name>-scout), never on its timer. */
 export const onDemand = (s: { every_minutes: number }): boolean => !(Number.isFinite(s.every_minutes) && s.every_minutes >= 1)
 
+/** T-1200: the project names of a scout's `projects:` line ("api, web"), in order, each once. */
+export const scoutProjectNames = (v: unknown): string[] => [...new Set((typeof v === 'string' ? v : '').split(/[\s,]+/).filter(Boolean))]
+
+/** T-1200: why scout projects `names` can't be used with the board's project table `table` ('' when they can). */
+export function scoutProjectsError(names: readonly string[], table: Readonly<Record<string, string>>): string {
+  const bad = names.filter(n => !Object.prototype.hasOwnProperty.call(table, n))
+  if (!bad.length) return ''
+  const have = Object.keys(table).sort()
+  return `unknown project ${bad.map(n => `"${n}"`).join(', ')}: the board's projects are ${have.length ? have.join(', ') : '(none: this board has no projects)'}`
+}
+
+/** T-1200: the projects a scout looks at: the ones it names, else every project of the table (name -> path). */
+export function scoutProjectTable(names: readonly string[] | undefined, table: Readonly<Record<string, string>>): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const n of names?.length ? names : Object.keys(table)) if (Object.prototype.hasOwnProperty.call(table, n)) out[n] = table[n]!
+  return out
+}
+
 export function parseScout(name: string, text: string): ScoutDef | null {
   const fm = splitFrontMatter(text)
   const meta: Record<string, string> = {}
@@ -82,10 +102,12 @@ export function parseScout(name: string, text: string): ScoutDef | null {
   const prompt = fm.body.trim()
   if (!prompt) return null
   const raw = (meta.every_minutes ?? '').trim()
-  const base: Pick<ScoutDef, 'name' | 'model' | 'summary' | 'findings' | 'prompt'> = { name: meta.name || name, model: meta.model || undefined, prompt }
+  const base: Pick<ScoutDef, 'name' | 'model' | 'summary' | 'findings' | 'prompt' | 'projects'> = { name: meta.name || name, model: meta.model || undefined, prompt }
   if (meta.summary?.trim()) base.summary = meta.summary.trim()
   const findings = scoutFindingsChoice(meta.findings)
   if (findings) base.findings = findings
+  const projects = scoutProjectNames(meta.projects)
+  if (projects.length) base.projects = projects
   // missing: every hour; a whole number (0 = only on demand); anything else: only on demand, with a warning
   if (!raw) return { ...base, every_minutes: 60 }
   const every = everyMinutesOf(raw)
@@ -99,12 +121,14 @@ export function parseScout(name: string, text: string): ScoutDef | null {
  * as it was, except every_minutes, model and summary (dropped when empty). A `summary` left out of `set`
  * (undefined) keeps the file's summary line as it was.
  */
-export function scoutText(old: string | null, set: { every_minutes: number; model?: string; summary?: string; findings?: ScoutFindings | '' }, body: string): string {
+export function scoutText(old: string | null, set: { every_minutes: number; model?: string; summary?: string; findings?: ScoutFindings | ''; projects?: string[] }, body: string): string {
   const lines: string[] = []
   let everyDone = false
   let modelDone = false
   let summaryDone = set.summary === undefined
   let findingsDone = set.findings === undefined
+  let projectsDone = set.projects === undefined
+  const projects = (set.projects ?? []).join(', ')
   const model = (set.model ?? '').trim()
   const summary = (set.summary ?? '').replace(/\s+/g, ' ').trim()
   for (const line of (old ? splitFrontMatter(old).lines : null) ?? []) {
@@ -118,6 +142,9 @@ export function scoutText(old: string | null, set: { every_minutes: number; mode
     } else if (key === 'findings' && set.findings !== undefined) {
       if (!findingsDone && set.findings) lines.push(`findings: ${set.findings}`)
       findingsDone = true
+    } else if (key === 'projects' && set.projects !== undefined) {
+      if (!projectsDone && projects) lines.push(`projects: ${projects}`)
+      projectsDone = true
     } else if (key === 'summary' && set.summary !== undefined) {
       if (!summaryDone && summary) lines.push(`summary: ${summary}`)
       summaryDone = true
@@ -127,6 +154,7 @@ export function scoutText(old: string | null, set: { every_minutes: number; mode
   if (!modelDone && model) lines.push(`model: ${model}`)
   if (!summaryDone && summary) lines.push(`summary: ${summary}`)
   if (!findingsDone && set.findings) lines.push(`findings: ${set.findings}`)
+  if (!projectsDone && projects) lines.push(`projects: ${projects}`)
   return `---\n${lines.join('\n')}\n---\n\n${body.trim()}\n`
 }
 
@@ -180,12 +208,13 @@ const fromNow = (iso: string | null | undefined, nowMs: number): string => {
 /** A scout for the lead's scouts tool: name, how often, paused, running, next run, last run, and its last report
  *  (the first SCOUT_LIST_REPORT_LINES lines, or all of it with `full`, which also shows its model and prompt).
  *  With `full`, `runs` (newest first, each with the tasks made from it) adds its recent runs, one line each. */
-export function leadScoutText(s: SymccScout, nowMs: number, full = false, runs: { run: ScoutRunRecord; tasks: string[] }[] = []): string {
+export function leadScoutText(s: SymccScout & { projects?: string[] }, nowMs: number, full = false, runs: { run: ScoutRunRecord; tasks: string[] }[] = []): string {
   const parts = [everyText(s.every_minutes), s.paused ? 'paused' : 'not paused', s.running ? 'running now' : 'not running']
   const next = onDemand(s) ? 'only when run' : s.paused ? 'none while paused' : fromNow(s.next_run, nowMs) || 'not planned'
   parts.push(`next run: ${next}`, `last run: ${fromNow(s.last_run, nowMs) || 'never'}`)
   if (s.model) parts.push(`model: ${s.model}`)
   parts.push(`findings: ${s.findings ? `${s.findings} (own choice)` : 'default (the board setting)'}`)
+  if (s.projects?.length) parts.push(`projects: ${s.projects.join(', ')}`)
   const lines = [`${s.name}: ${parts.join(' · ')}`]
   if (s.warning) lines.push(`  warning: ${s.warning}`)
   const report = String(s.last_report ?? '').trim()
@@ -535,7 +564,7 @@ export function scoutPrompt(o: {
   const since = runAt
     ? `You last ran at ${runAt}. Start with what changed since then, since new code is where new bugs are:\n  git log --since=${runAt} --stat`
     : 'This is your first run (or the time of your last run is not known). Look at the whole project, starting with the most recent changes (git log --stat -n 20).'
-  return `You are the ${name} scout "${o.scout}". The project is in ${o.root}.${Object.keys(o.projects ?? {}).length ? ` The board's projects, each its own git repo (name: path), are: ${Object.entries(o.projects ?? {}).map(([n, p]) => `${n}: ${p}`).join(', ')}. Look in each (run git commands inside a project folder), and for a suggested task name its project (the project name) and give its files relative to that repo.` : ''} Your job, from your scout file:
+  return `You are the ${name} scout "${o.scout}". The project is in ${o.root}.${Object.keys(o.projects ?? {}).length ? ` The board's projects, each its own git repo (name: path), are: ${Object.entries(o.projects ?? {}).map(([n, p]) => `${n}: ${p}`).join(', ')}. Look in each (run git commands inside a project folder). Read each project's own rules first: Read its CLAUDE.md and AGENTS.md by full path (<path>/CLAUDE.md) if they exist, as they are not loaded on their own. For a suggested task name its project (the project name) and give its files relative to that repo.` : ''} Your job, from your scout file:
 
 ${o.instructions.trim()}
 
