@@ -2,6 +2,25 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here. Before a release, rerun `bun scripts/site-stats.ts` and commit `docs/data/symcc-stats.json`: it feeds the "Built with symcc" numbers on the website.
 
+## 0.5.49 (2026-11-27)
+
+### Added
+- One board over several repos now works end to end: on a board in a folder of repos, each task's worker copy is made from its own project's repo, and the merge and tests run in that repo with that project's test commands.
+- Git readiness, the task page's branch facts and cleanup are checked per project, and only open, real tasks count.
+- The lead's prompts, the scouts and the docs know the projects.
+- The website has a "What's new" page: a timeline built from this changelog.
+- A new blog post: "From vibe coding to real software engineering".
+
+### Changed
+- Task page: the owner's question box sits at the top, right under the title.
+- The VS Code extension folder `hosts/cursor` is now `hosts/vscode`.
+- Live TODAY says "median" where the per-task numbers are medians, not "avg".
+- The README is short: what symcc is, how to install, your first task, and links to the docs.
+
+### Fixed
+- A note added to a task's details past the size limit is refused instead of being cut silently; an owner's answer that would go over the limit is refused too.
+- The OpenCode role page has its Placeholders section again.
+
 ## 0.5.48 (2026-11-27)
 
 ### Added
