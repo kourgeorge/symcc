@@ -227,6 +227,21 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
 /** T-1182: whether this is a workspace board (the board folder is no repo, projects below it), as the last check found. */
 export const workspaceNow = (): boolean => S.gitState === 'ok' && S.gitRoot === 'no-repo'
 
+/** T-1194: the small file symcc writes in a plain folder it made; only a folder with it (and no .git) may be deleted. */
+export const PLAIN_MARKER = '.symcc-plain'
+/** T-1194: whether `dir` is a plain folder symcc made (no .git, marker there). */
+export const madeAsPlain = async ($: Host, dir: string): Promise<boolean> => !(await $.fs.exists(`${dir}/.git`)) && (await $.fs.exists(`${dir}/${PLAIN_MARKER}`))
+/** T-1194: why a folder with no .git and no marker is left as it is. */
+export const unmarkedText = (id: string): string => `${id}'s folder has no .git and wasn't made as a plain folder; left as it is`
+/** T-1194: removes a plain folder only when it has the marker; else tells so (once) and returns false. */
+async function removePlain($: Host, id: string, dir: string): Promise<boolean> {
+  if (!(await $.fs.exists(dir))) return true
+  if (await madeAsPlain($, dir)) return (await $.run(['rm', '-rf', dir])).exitCode === 0
+  if (!keptDirty.has(`plain:${id}`)) tellLead($, `Note: ${unmarkedText(id)}.`)
+  keptDirty.add(`plain:${id}`)
+  return false
+}
+
 /** T-1182: a task that runs in a plain folder (no git copy, no branch): an investigation or errand with no project on a workspace board. */
 export const plainTask = (t: object | null | undefined): boolean => workspaceNow() && !(t as { project?: string } | null | undefined)?.project && isInvestigation(t as { kind?: unknown })
 
@@ -396,14 +411,19 @@ export async function prepareWorktree($: Host, t: SymccTask, target: string, cat
   const repo = repoOf(t)
   // T-1182: no project on a workspace board: a plain folder, no git copy and no branch
   if (plainTask(t)) {
+    if ((await $.fs.exists(dir)) && !(await $.fs.exists(`${dir}/.git`)) && !(await $.fs.exists(`${dir}/${PLAIN_MARKER}`))) throw new Error(unmarkedText(t.id))
     if ((await $.run(['mkdir', '-p', dir])).exitCode !== 0) throw new Error(`could not make the folder ${dir}`)
+    if (!(await $.fs.exists(`${dir}/${PLAIN_MARKER}`))) await $.fs.write(`${dir}/${PLAIN_MARKER}`, 'made by symcc as a plain folder (no git copy); safe to delete with the task\n')
     const plain: { dir: string; branch: string } & CatchUp = { dir, branch, behind: 0 }
     return plain
   }
   let made = false
   if (!(await $.fs.exists(`${dir}/.git`))) {
     // T-1182: a leftover plain folder (from a try with no project) is only scratch
-    if (await $.fs.exists(dir)) await $.run(['rm', '-rf', dir])
+    if (await $.fs.exists(dir)) {
+      if (!(await madeAsPlain($, dir))) throw new Error(unmarkedText(t.id))
+      await $.run(['rm', '-rf', dir])
+    }
     await git($, ['worktree', 'prune'], repo)
     const has = (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`], repo)).exitCode === 0
     if (has) await gitOk($, ['worktree', 'add', dir, branch], repo)
@@ -651,7 +671,7 @@ export async function removeWorktree($: Host, taskId: string, dir: string, excep
   if (liveWorkersFor({ id: taskId, runs: t?.runs }, agents.map(agentState), S.N.name).some(a => a.id !== except)) return false
   const repo = repoOf(t)
   // T-1182: a plain folder (no project on a workspace board) is only a folder
-  if (plainTask(t) || (await $.fs.exists(dir) && !(await $.fs.exists(`${dir}/.git`)))) return (await $.run(['rm', '-rf', dir])).exitCode === 0
+  if (plainTask(t) || (await $.fs.exists(dir) && !(await $.fs.exists(`${dir}/.git`)))) return removePlain($, taskId, dir)
   await git($, ['worktree', 'remove', '--force', dir], repo)
   await git($, ['worktree', 'prune'], repo)
   return true
@@ -691,6 +711,10 @@ export async function cleanupMerged($: Host, b: Board) {
     if (!isFinished(t) || busy.has(t.id) || starting.has(t.id) || finishing.has(t.id) || approving.has(t.id)) continue
     if (!(await $.fs.exists(worktreeDir(t.id))) || (await $.fs.exists(`${worktreeDir(t.id)}/.git`))) continue
     if (liveWorkersFor({ id: t.id, runs: t.runs }, agents.map(agentState), S.N.name).length) continue
+    if (!(await madeAsPlain($, worktreeDir(t.id)))) {
+      await removePlain($, t.id, worktreeDir(t.id))
+      continue
+    }
     if ((await $.run(['rm', '-rf', worktreeDir(t.id)])).exitCode === 0) dirs++
   }
   for (const id of worktreesToRemove(b.tasks, existing)) {

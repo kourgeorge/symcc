@@ -817,8 +817,6 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         const needs = changeNeedsProject(await projectNames($).catch(() => [] as string[]))
         if (needs) throw new Error(`Nothing changed: ${needs}`)
       }
-      // T-1182: a plain folder (no project) holds only scratch; a task given a project starts clean in a git copy
-      if (projectMoves && project && plainTask(t) && (await $.fs.exists(worktreeDir(t.id)))) await removeWorktree($, t.id, worktreeDir(t.id))
       // Another branch to merge into: given, or the owner said yes to "branch x is gone: merge into main instead?".
       let into = str(a.merge_into)?.trim()
       if (a.merge_into !== undefined && !(into && (await branchExists($, into, repoOf({ project: project ?? t.project }))))) {
@@ -846,6 +844,9 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const answered = answerIn ? `${(noted ?? (str(a.details) || t.details)).trimEnd()}\n\nOwner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ''}: ${answerIn}` : undefined
       const tooLong = detailsTooLong(clean(answered ?? noted ?? str(a.details) ?? '', Infinity).length)
       if (tooLong) throw new Error(tooLong)
+      // T-1182/T-1194: a plain folder (no project) holds only scratch; a task given a project starts clean in a git copy.
+      // Only after every refusal above; removeWorktree deletes it only when symcc made it as a plain folder (marker).
+      if (projectMoves && project && plainTask(t) && (await $.fs.exists(worktreeDir(t.id)))) await removeWorktree($, t.id, worktreeDir(t.id))
       const noteHistory = (x: Board): Partial<SymccTask> => (note ? { history: withHistory((find(x, t.id) ?? t).history, now(), ['note', noteAddedLine(note)]) } : {})
       const gone = parseGoneBranch(t.status === 'waiting' ? (t.ask?.text ?? null) : null)
       if (projectMoves && a.merge_into === undefined && !isInvestigation(t)) into = await homeBranch($, repoOf(project ? { project } : undefined))

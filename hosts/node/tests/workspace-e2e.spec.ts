@@ -165,3 +165,57 @@ test('T-1182: an investigation given a project after its plain try: keep as a no
     for (const f of ['args', 'prompt', 'cwd']) await rm(`${log}.${f}`, { recursive: true, force: true })
   }
 }, 300_000)
+
+test('T-1194: only a plain folder symcc marked is deleted; a folder with no .git and no marker is left as it is', async () => {
+  const board = await realpath(await mkdtemp('/tmp/symcc-node-wsm-'))
+  const log = `${board}.fake`
+  const git = (cwd: string, ...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd })
+  try {
+    for (const name of ['client', 'server']) {
+      const d = `${board}/${name}`
+      await mkdir(d, { recursive: true })
+      await git(d, 'init', '-q', '-b', 'main')
+      await writeFile(`${d}/${name}.txt`, name)
+      await writeFile(`${d}/.gitignore`, '.scratch/\n')
+      await git(d, 'add', '.')
+      await git(d, 'commit', '-qm', 'init')
+    }
+    const cli = (...args: string[]) => runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, ...args], { cwd: board, env: { FAKE_LOG: log }, timeoutMs: 120_000 })
+    const add = (input: Record<string, unknown>) => cli('tool', 'add', JSON.stringify({ details: 'Do it', why: 'test', origin_by: 'owner', request: 'test', ...input }))
+    const status = async (id: string) => (JSON.parse(await readFile(`${board}/.symcc/board.json`, 'utf8')) as { tasks: { id: string; status: string }[] }).tasks.find(t => t.id === id)?.status
+    await cli('cmd', 'symcc-init')
+    await cli('tool', 'settings', JSON.stringify({ project: 'client', test_commands: ['test -f hello.txt'] }))
+    for (const title of ['Look one', 'Look two']) expect((await add({ title, kind: 'investigation' })).stdout).toContain('added T-')
+    await cli('tick')
+    expect(await status('T-1')).toBe('review')
+    expect(await status('T-2')).toBe('review')
+    const dir = (n: number) => `${board}/.symcc/worktrees/T-${n}`
+    // the marker is there in a folder symcc made
+    expect(await isThere(`${dir(1)}/.symcc-plain`)).toBe(true)
+    // a refused change deletes nothing
+    const refused = await cli('tool', 'change', JSON.stringify({ task: 'T-2', project: 'client', merge_into: 'no-such-branch' }))
+    expect(`${refused.stdout}${refused.stderr}`).toContain('Nothing changed')
+    expect(await isThere(`${dir(2)}/.symcc-plain`)).toBe(true)
+    // a folder with no marker (and no .git) and a file in it
+    for (const n of [1, 2]) {
+      await rm(`${dir(n)}/.symcc-plain`, { recursive: true, force: true })
+      await writeFile(`${dir(n)}/mine.txt`, 'work')
+    }
+    // end: removeWorktree and cleanupMerged leave it
+    await cli('tool', 'approve', JSON.stringify({ task: 'T-1' }))
+    await cli('tick')
+    expect(await isThere(`${dir(1)}/mine.txt`)).toBe(true)
+    // change project: the folder stays; the next try fails with the reason instead of deleting
+    await cli('tool', 'change', JSON.stringify({ task: 'T-2', project: 'client' }))
+    expect(await isThere(`${dir(2)}/mine.txt`)).toBe(true)
+    await cli('tool', 'reject', JSON.stringify({ task: 'T-2', reason: 'look deeper' }))
+    await cli('tick')
+    expect(await isThere(`${dir(2)}/mine.txt`)).toBe(true)
+    expect(await isThere(`${dir(2)}/.git`)).toBe(false)
+    const board2 = await readFile(`${board}/.symcc/board.json`, 'utf8')
+    expect(board2).toContain("wasn't made as a plain folder")
+  } finally {
+    await rm(board, { recursive: true, force: true })
+    for (const f of ['args', 'prompt', 'cwd']) await rm(`${log}.${f}`, { recursive: true, force: true })
+  }
+}, 300_000)
