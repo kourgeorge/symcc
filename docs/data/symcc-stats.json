@@ -3,23 +3,23 @@
   "to": "2026-11-27",
   "days": 19,
   "tasks": {
-    "done": 1016,
-    "dropped": 59,
-    "answered": 50,
+    "done": 1026,
+    "dropped": 60,
+    "answered": 51,
     "errands": 3,
-    "total": 1177
+    "total": 1190
   },
   "tries": {
-    "total": 2331,
-    "firstTry": 538,
-    "changeTasksWithData": 1009,
+    "total": 2350,
+    "firstTry": 543,
+    "changeTasksWithData": 1019,
     "firstTryRate": 53.3
   },
   "endedHow": [
     {
       "key": "merged-on-its-own",
       "label": "merged on its own",
-      "n": 936
+      "n": 946
     },
     {
       "key": "approved-by-you",
@@ -34,7 +34,7 @@
     {
       "key": "answered-investigation-",
       "label": "answered (investigation)",
-      "n": 50
+      "n": 51
     },
     {
       "key": "errand-done",
@@ -51,7 +51,7 @@
     {
       "key": "checker",
       "label": "sent back by checker",
-      "n": 585
+      "n": 590
     },
     {
       "key": "changed",
@@ -66,7 +66,7 @@
     {
       "key": "tests",
       "label": "tests failed",
-      "n": 88
+      "n": 89
     },
     {
       "key": "scope",
@@ -94,93 +94,93 @@
       "n": 36
     }
   ],
-  "workMs": 896433459,
+  "workMs": 902340831,
   "tokens": {
     "workers": {
-      "all": 2511455230,
-      "billed": 544180177
+      "all": 2529917007,
+      "billed": 548691349
     },
     "lead": {
-      "all": 3619064714,
-      "billed": 521580606
+      "all": 3643742302,
+      "billed": 525004817
     },
     "scouts": {
-      "all": 318693887,
-      "billed": 86014591
+      "all": 320215983,
+      "billed": 86416939
     },
     "total": {
-      "all": 6449213831,
-      "billed": 1151775374
+      "all": 6493875292,
+      "billed": 1160113105
     }
   },
   "perDone": {
-    "medianMs": 437025,
-    "avgMs": 794899,
-    "medianTokens": 1186444,
-    "avgTokens": 3056851,
-    "medianBilled": 270875,
-    "avgBilled": 666458
+    "medianMs": 434837,
+    "avgMs": 790747,
+    "medianTokens": 1164258,
+    "avgTokens": 3030915,
+    "medianBilled": 266847,
+    "avgBilled": 661728
   },
   "stages": [
     {
       "stage": "free",
       "label": "waiting to start",
-      "avgMs": 743483
+      "avgMs": 727524
     },
     {
       "stage": "blocked",
       "label": "waiting on tasks",
-      "avgMs": 2216427
+      "avgMs": 2188048
     },
     {
       "stage": "backlog",
       "label": "in the backlog",
-      "avgMs": 1990985
+      "avgMs": 1947227
     },
     {
       "stage": "work",
       "label": "work",
-      "avgMs": 849380
+      "avgMs": 838884
     },
     {
       "stage": "prep",
       "label": "prep",
-      "avgMs": 29996
+      "avgMs": 29493
     },
     {
       "stage": "check",
       "label": "check",
-      "avgMs": 372130
+      "avgMs": 367260
     },
     {
       "stage": "queue",
       "label": "merge queue",
-      "avgMs": 140833
+      "avgMs": 150654
     },
     {
       "stage": "tests",
       "label": "tests",
-      "avgMs": 324983
+      "avgMs": 332718
     },
     {
       "stage": "merge",
       "label": "merge",
-      "avgMs": 3256
+      "avgMs": 3232
     },
     {
       "stage": "owner",
       "label": "waiting for you",
-      "avgMs": 84586
+      "avgMs": 83446
     }
   ],
   "roles": [
     {
       "role": "general",
-      "n": 814
+      "n": 824
     },
     {
       "role": "docs",
-      "n": 106
+      "n": 107
     },
     {
       "role": "refactor",
@@ -188,14 +188,14 @@
     },
     {
       "role": "researcher",
-      "n": 63
-    },
-    {
-      "role": "security",
-      "n": 56
+      "n": 64
     },
     {
       "role": "tester",
+      "n": 57
+    },
+    {
+      "role": "security",
       "n": 56
     },
     {
@@ -207,17 +207,17 @@
     {
       "key": "owner",
       "label": "the owner",
-      "n": 632
+      "n": 640
     },
     {
       "key": "scout",
       "label": "scouts",
-      "n": 301
+      "n": 303
     },
     {
       "key": "worker",
       "label": "workers",
-      "n": 123
+      "n": 126
     },
     {
       "key": "lead",
@@ -228,19 +228,19 @@
   "scouts": [
     {
       "name": "gaps-bot",
-      "found": 89,
-      "merged": 86,
+      "found": 90,
+      "merged": 87,
       "dropped": 3,
       "open": 0,
       "tokens": 116197339
     },
     {
       "name": "test-gaps",
-      "found": 51,
-      "merged": 50,
+      "found": 52,
+      "merged": 51,
       "dropped": 1,
       "open": 0,
-      "tokens": 44557650
+      "tokens": 45033299
     },
     {
       "name": "board-review",
@@ -248,7 +248,7 @@
       "merged": 37,
       "dropped": 2,
       "open": 0,
-      "tokens": 35074935
+      "tokens": 35560029
     },
     {
       "name": "recent-changes",
@@ -256,7 +256,7 @@
       "merged": 35,
       "dropped": 0,
       "open": 0,
-      "tokens": 58212122
+      "tokens": 58773475
     },
     {
       "name": "simplify",
@@ -406,7 +406,7 @@
     },
     {
       "day": "2026-11-27",
-      "done": 29
+      "done": 39
     }
   ]
 }
