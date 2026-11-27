@@ -1,6 +1,6 @@
 import type { SymccScout, SymccTask, SymccTokens } from '../../types'
 import { type ScoutFindings } from '../board'
-import { type ScoutDef, scoutFindingsChoice, nextFindings, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, lastRunOf, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
+import { type ScoutDef, scoutFindingsChoice, nextFindings, parseScout, modeOf, symccOn, OPEN, scoutPrompt, recentClosed, scoutAgentName, scoutDescription, parseScoutMemory, lastRunOf, scoutMemoryText, scoutPausedText, everyText, SCOUT_REPORT_CHARS, scoutLeadMessage, scoutWhyNot, scoutFile, scoutNameError, scoutDraftError, scoutText, scoutProjectNames, scoutProjectsError, scoutProjectTable, everyMinutesOf, onDemand, onNotReady, SCOUT_RETRY_MS, inPlan, addScoutRun, keepScoutUsage, leadScoutNameError, leadScoutText, leadScoutsText, safeScoutFile, SCOUT_FILE_NAME, SCOUT_FILE_NAME_RULE, scoutFileNameError, type ScoutRunRecord, parseScoutRuns, scoutRunsText, addScoutRunRecord, scoutRunsFile, scoutRunReportFile, isScoutRunReport, scoutRunOutcome, scoutRunTasks, linkScoutRunTask, countFindings, reportText, parseScoutUsage, scoutResultsLine, renameScoutOrigins, linkScoutRunTaskAt, type Board } from '../board'
 import { publish, refreshStatus, drivesHere } from './lead'
 import { S, onHere, scoutState, scoutRuns, heard, timers, updateScoutOpen, stopped, movedAgents, movedRefused, DRIVING_MOVED } from './state'
 import { type FileTouch, type Host, type HostAgentStarted, notReadyYet } from '../host'
@@ -261,12 +261,15 @@ async function queueScout(host: Host, s: ScoutDef, misses = 0, byHand = false): 
   const b = await load(host)
   const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(b), on: onHere(b), plan: inPlan(S.plan) }, S.N.name)
   if (why) return why
+  // T-1200: a scout that names a project the board doesn't have is not run
+  const badProject = scoutProjectsError(s.projects ?? [], S.projects)
+  if (badProject) return `scout ${s.name} didn't start: ${badProject}`
   const lastRun = st.last_run
   const lastReport = st.last_report
   st.running = true
   await publish(host, b)
   const open = b.tasks.filter(t => OPEN.includes(t.status) || t.status === 'backlog').map(t => `${t.id} ${t.title}${t.status === 'backlog' ? ' (backlog)' : ''}`)
-  const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await orgMemText(host), projects: S.projects })
+  const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await orgMemText(host), projects: scoutProjectTable(s.projects, S.projects) })
   // T-759: driving may have moved to another session while the prompt was made (a hand-over stops the scouts first,
   // and a start queued after that would never be stopped): a session that no longer drives starts no scout run
   if (!(await drivesHere(host))) {
@@ -602,7 +605,7 @@ export async function scheduleScouts(host: Host) {
     // after a restart a scout's last run and report come from its newest run (T-808)
     const old: Pick<SymccScout, 'last_run' | 'running' | 'last_report' | 'paused'> | undefined = known ?? { ...(await lastFromRuns(host, s.name)), running: false, ...(saved[s.name]?.paused ? { paused: true } : {}) }
     const timed = !onDemand(s)
-    const st: SymccScout = { name: s.name, every_minutes: s.every_minutes, last_run: old?.last_run ?? null, running: old?.running ?? false, prompt: s.prompt }
+    const st: SymccScout & { projects?: string[] } = { name: s.name, every_minutes: s.every_minutes, last_run: old?.last_run ?? null, running: old?.running ?? false, prompt: s.prompt }
     if (timed) {
       const keep = known && known.every_minutes === s.every_minutes && Number.isFinite(Date.parse(known.next_run ?? '')) ? known.next_run : undefined
       st.next_run = keep ?? new Date(nextRunFrom(st.last_run, s.every_minutes, soon)).toISOString()
@@ -610,6 +613,7 @@ export async function scheduleScouts(host: Host) {
     if (s.model) st.model = s.model
     if (s.summary) st.summary = s.summary
     if (s.findings) st.findings = s.findings
+    if (s.projects?.length) st.projects = s.projects
     if (s.warning) st.warning = s.warning
     if (old?.last_report !== undefined) st.last_report = old.last_report
     if (old?.paused) st.paused = true
@@ -707,7 +711,7 @@ export async function saveScout(host: Host) {
 }
 
 /** What the lead's scouts tool gets: action (list by default), name, every_minutes, model, prompt. */
-export type LeadScoutInput = { action?: unknown; name?: unknown; every_minutes?: unknown; model?: unknown; findings?: unknown; prompt?: unknown }
+export type LeadScoutInput = { action?: unknown; name?: unknown; every_minutes?: unknown; model?: unknown; findings?: unknown; projects?: unknown; prompt?: unknown }
 
 /** A findings choice as typed: auto or backlog; empty or "default" means none (follow the board setting). */
 const findingsOf = (v: string): ScoutFindings | '' => scoutFindingsChoice(v) ?? ''
@@ -786,12 +790,19 @@ export async function leadScouts(host: Host, a: LeadScoutInput): Promise<string>
   const model = typeof a.model === 'string' ? a.model.trim() : (def?.model ?? '')
   if (a.findings !== undefined && a.findings !== null && !/^(auto|backlog|default|)$/i.test(String(a.findings).trim())) return 'findings must be auto, backlog or default (default: follow the board setting)'
   const findings: ScoutFindings | '' = a.findings === undefined || a.findings === null ? (def?.findings ?? '') : findingsOf(String(a.findings))
+  // T-1200: projects as a list or a text ("api, web"); empty or "none" clears; every name must be in the project table
+  const given = a.projects === undefined || a.projects === null ? undefined : scoutProjectNames(Array.isArray(a.projects) ? a.projects.join(' ') : String(a.projects)).filter(n => n.toLowerCase() !== 'none')
+  const projects = given ?? def?.projects ?? []
+  if (given?.length) {
+    const bad = scoutProjectsError(given, S.projects)
+    if (bad) return `projects refused: ${bad}`
+  }
   await host.run(['mkdir', '-p', path(S.N.scouts)])
-  await host.fs.write(path(file), scoutText(old, { every_minutes: every, model, findings }, prompt))
+  await host.fs.write(path(file), scoutText(old, { every_minutes: every, model, findings, projects }, prompt))
   await scheduleScouts(host)
   await publish(host, await load(host))
   host.ui.refresh()
-  return `${action === 'add' ? 'added' : 'saved'} scout ${name} (${file}): runs ${everyText(every)}${model ? `, model ${model}` : ''}${findings ? `, findings → ${findings}` : ''}`
+  return `${action === 'add' ? 'added' : 'saved'} scout ${name} (${file}): runs ${everyText(every)}${model ? `, model ${model}` : ''}${findings ? `, findings → ${findings}` : ''}${projects.length ? `, projects ${projects.join(', ')}` : ''}`
 }
 
 /** Leaves the edit mode (and the new scout name box) without saving. */

@@ -866,7 +866,7 @@ skills: [code-review]
   so a role file means the same in every host. Today there is one word: `tools: web` (search
   and read the web). A file that asks for anything else is skipped with a note. Each host turns
   the word into its own tools: in Claude Code, `web` is WebSearch and WebFetch, on top of Read,
-  Edit, Write, Glob, Grep and Bash, and the task starts as the `symcc:worker-web` worker type;
+  Edit, Write and Bash, and the task starts as the `symcc:worker-web` worker type;
   other roles keep the usual tools.
 - `code: false` makes a role prose only, for work that is writing, not code. For a change
   task with such a role:
