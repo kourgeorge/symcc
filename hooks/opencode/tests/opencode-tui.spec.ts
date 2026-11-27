@@ -3544,7 +3544,7 @@ test('T-771: the OpenCode Live tab keeps up to 3 just-merged lanes (dim, ✓ at 
     // T-1177: the track ends at the right edge, no "ago" on the first line; "merged 3m ago" starts the second
     if (w === 120) {
       expect(texts[at]!).toMatch(/●━+●━+●━+●━+✓$/)
-      expect(texts[at]!.length).toBe(w)
+      expect(texts[at]!.length).toBe(w - 3)
       expect(texts[at + 1]!).toMatch(/^ +merged 3m ago · try 1\//)
     }
     const lane = d.lines[at]!

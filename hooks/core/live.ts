@@ -659,9 +659,11 @@ const LABELS: Record<LiveStation, string>[] = [
 const MAX_GAP = 8
 const MIN_GAP = 2
 const TITLE_W = 12
+/** T-1193: blank columns after the track's last mark, so the last name ("done") starts over its mark and ends at the edge. */
+export const LIVE_TAIL = 3
 
-/** A lane's first line width with these columns (T-1177: no right column, the last mark is at the right edge). */
-const laneWidth = (idW: number, titleW: number, k: number, gap: number, sep: number) => LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap
+/** A lane's first line width with these columns (T-1193: the width includes the LIVE_TAIL blank columns after the last mark). */
+const laneWidth = (idW: number, titleW: number, k: number, gap: number, sep: number, tail = LIVE_TAIL) => tail + LIVE_RUN_MARK.length + idW + (titleW ? 1 + titleW : 0) + sep + k + (k - 1) * gap
 
 /**
  * The layout of `lanes` at `width` columns: gaps of 8 and a 12-column title (wider, up to the longest title, when the
@@ -684,8 +686,9 @@ export function liveLayout(lanes: readonly (Pick<LiveLane, 'id' | 'title'> & Par
   if (laneWidth(idW, 0, k, MIN_GAP, 2) <= width) return make(0, MIN_GAP, 2)
   // T-846: with many shared columns even that is too wide: the spacing between columns shrinks first (gap 1, then the
   // spaces around the stations, then gap 0), only then the labels (the one-letter set picks itself)
-  if (laneWidth(idW, 0, k, 1, 2) <= width) return make(0, 1, 2)
-  if (laneWidth(idW, 0, k, 1, 1) <= width) return make(0, 1, 1)
+  // (the blank tail goes only now, after the title is at its minimum)
+  if (laneWidth(idW, 0, k, 1, 2, 0) <= width) return make(0, 1, 2)
+  if (laneWidth(idW, 0, k, 1, 1, 0) <= width) return make(0, 1, 1)
   return make(0, 0, 1)
 }
 
@@ -699,21 +702,8 @@ export function liveLabelLine(l: LiveLayout): string {
 /** T-760: liveLabelLine in pieces: the names dim, each LIVE_AGENT_MARK in the 'mark' tone (the accent color). */
 export function liveLabelSegs(l: LiveLayout): LiveSeg[] {
   const lead = ' '.repeat(LIVE_RUN_MARK.length + nameWidth(l) + l.sep)
-  // T-1177: the track ends at the right edge, so the last name ("done") can't hang past its mark: it ends at the edge
-  // instead (starting over the dashes before its mark), but never touches the name before it
   const init = l.labels.slice(0, -1).map(s => padWidth(s, l.gap + 1)).join('')
-  const prev = l.labels.length > 1 ? textWidth(l.labels[l.labels.length - 2]!) : 0
-  let last = l.labels[l.labels.length - 1] ?? ''
-  const mark = textWidth(lead + init)
-  let at = mark
-  if (mark + textWidth(last) > l.width && textWidth(last) > 1) {
-    at = Math.max(mark - l.gap + prev, Math.min(mark, l.width - textWidth(last)))
-    if (at + textWidth(last) > l.width) {
-      last = last.slice(0, 1)
-      at = mark
-    }
-  }
-  const text = lead + init.slice(0, Math.max(0, at - textWidth(lead))) + last
+  const text = lead + init + (l.labels[l.labels.length - 1] ?? '')
   return text.split(LIVE_AGENT_MARK).flatMap((x, i): LiveSeg[] => [...(i ? [{ text: LIVE_AGENT_MARK, tone: 'mark' as const }] : []), ...(x ? [{ text: x, tone: 'dim' as const }] : [])])
 }
 
