@@ -7,7 +7,7 @@ import { runCommand, PLUGIN_ROOT } from '../host'
 import { openSession, closeSession, leadTool } from '../session'
 import { claudeRunner } from '../../../hooks/process/claude-runner'
 import { nodeProcessSystem } from '../system'
-import { prepareWorktree, gitReady, taskGitReady } from '../../../hooks/app/git'
+import { prepareWorktree, gitReady, taskGitReady, recheckGit, allGitReady, cleanupMerged } from '../../../hooks/app/git'
 import { changedFiles } from '../../../hooks/app/review'
 import { readTaskBranch } from '../../../hooks/app/branches'
 import { change, load, now } from '../../../hooks/app/store'
@@ -90,6 +90,59 @@ test('T-1154: readiness, Changes, Branch facts and the doctor look at each task\
       // a project that is not text is refused, not turned into "no project"
       expect(await msg(leadTool(s, 'change', { task: 'T-4', project: 5 as never }))).toContain('project must be a project folder name (text)')
       expect((find(await load(s.host), 'T-4') as { project?: string }).project).toBe('client')
+    } finally {
+      await closeSession(s).catch(() => undefined)
+    }
+  } finally {
+    await rm(board, { recursive: true, force: true })
+  }
+}, 180_000)
+
+// T-1165: only open tasks count: a dropped task's broken repo is forgotten, a backlog task without a project holds nothing
+// back, and housekeeping never runs git in a board folder that is not its own repo.
+test('T-1165: workspace git checks count only open, real tasks and never touch the board folder', async () => {
+  const board = await realpath(await mkdtemp('/tmp/symcc-node-wsc-'))
+  const git = (cwd: string, ...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd })
+  try {
+    await mkdir(`${board}/client`, { recursive: true })
+    await git(`${board}/client`, 'init', '-q', '-b', 'main')
+    await writeFile(`${board}/client/c.txt`, 'c')
+    await git(`${board}/client`, 'add', '.')
+    await git(`${board}/client`, 'commit', '-qm', 'init')
+    await mkdir(`${board}/empty`, { recursive: true })
+    await git(`${board}/empty`, 'init', '-q', '-b', 'main')
+    const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
+    await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1165' })
+    try {
+      const add = (title: string, project?: string) => leadTool(s, 'add', { title, details: 'Do it', files: ['x.txt'], ...(project ? { project } : {}), why: 'test', origin_by: 'owner', request: 'test' })
+      expect(await add('Client work', 'client')).toContain('T-1')
+      expect(await add('Empty work', 'empty')).toContain('T-2')
+      expect(await add('Scout idea')).toContain('T-3')
+      await change(s.host, b => patchTask(b, 'T-3', { status: 'backlog' }, now()))
+
+      // (b) a backlog task without a project does not make the workspace board "no-repo"
+      await gitReady(s.host)
+      expect(S.gitState).toBe('ok')
+      expect(S.gitWorkspace).toBe('')
+
+      // (a) the broken repo counts while its task is open, and is forgotten after the task is dropped
+      await recheckGit(s.host)
+      expect(allGitReady()).toBe(false)
+      await change(s.host, b => patchTask(b, 'T-2', { status: 'dropped' }, now()))
+      const calls: string[] = []
+      const host = s.host as { run: (cmd: string[], o?: { cwd?: string }) => Promise<unknown> }
+      const run = host.run.bind(s.host)
+      host.run = (cmd, o) => { calls.push(`${o?.cwd ?? ''} ${cmd.join(' ')}`); return run(cmd, o) }
+      expect(await recheckGit(s.host)).toContain('git is ready')
+      expect(allGitReady()).toBe(true)
+      expect(calls.filter(c => c.includes('/empty'))).toEqual([])
+
+      // (c) housekeeping runs no git in the board folder
+      calls.length = 0
+      await cleanupMerged(s.host, await load(s.host))
+      expect(calls.filter(c => c.startsWith(`${board} `))).toEqual([])
+      host.run = run
     } finally {
       await closeSession(s).catch(() => undefined)
     }
