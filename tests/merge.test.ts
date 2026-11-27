@@ -5529,6 +5529,8 @@ for (const mode of ['auto', 'review'] as const)
     // its folder stays until the task ends
     expect(w.calls).not.toContain(`root: git worktree remove --force ${WT}`)
     expect(leadQueue.join('\n')).toContain('T-1 "Do it" is answered and waits for the owner to read it')
+    // T-1173: reports are muted, so the board update carries the answer
+    expect(leadQueue.join('\n')).toContain('The cache is never cleared: src/cache.ts has no expiry.')
   })
 
 for (const mode of ['auto', 'review'] as const)

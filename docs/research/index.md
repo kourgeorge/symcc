@@ -11,6 +11,7 @@ Answers from symcc investigation tasks, kept as notes. Some are about ideas that
 - [DAM Slack probe: a checklist to run once](dam-slack-probe.md): running symcc under DAM, where each agent lives in its own small VM and you talk to it in Slack.
 - [Research: why the stored board view is about 3x bigger than view.json](find-why-the-stored-board-view-is-about-3x-bigger-than-view.md): why the Claude Code panel's stored view was 3 times the size of OpenCode's view file.
 - [Probe: can a starter agent or a self-answered turn start agents with all hooks?](probe-can-a-starter-agent-or-a-self-answered-turn-start-agen.md): two ways to start agents with all of symcc's hooks without a model request from the lead.
+- [Probe: can finished agents' reports skip waking the lead?](probe-can-finished-agents-reports-skip-waking-the-lead.md): agent reports cost about 40% of the lead's tokens; a prompt.submit drop mutes them.
 - [Can symcc start agents (workers, checkers, scouts) without waking the lead each time?](can-symcc-start-agents-workers-checkers-scouts-without-wakin.md): ways to start agents without a lead turn.
 - [Which of symcc's saved data is redundant or messy, and how to clean it up](which-of-symcc-s-saved-data-is-redundant-or-messy-and-how-to.md): a review of the files in the data folder and a clean-up plan.
 - [Design: standalone symcc (engine + agent runners + TUI)](standalone-app.md): growing a standalone symcc out of the Node host step by step, not as a rewrite.

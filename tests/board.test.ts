@@ -777,14 +777,14 @@ test('recent closed tasks: done and dropped only, newest first, capped', () => {
   expect(r[0]).toBe('T-29 title T-29 (done)')
 })
 
-test('scout lead message: the outcome only (the report came as the hand-back); NOTHING gives none', () => {
+test('scout lead message: carries the report (reports are muted); NOTHING gives none', () => {
   const report = 'line one\nline two\n- a\n- b\n- c\n- d'
   const m = scoutLeadMessage('deps', `  ${report}  `)!
   expect(m).toContain('Scout "deps" found something')
-  expect(m).not.toContain('line one')
+  expect(m).toContain('line one')
   expect(m).toContain('Add tasks for anything worth doing')
   expect(scoutLeadMessage('deps', '1. bug A\n2. bug B')).toContain('Scout "deps" found 2 things')
-  expect(scoutLeadMessage('deps', '1. bug A')).toContain('found 1 thing ')
+  expect(scoutLeadMessage('deps', '1. bug A')).toContain('found 1 thing.')
   expect(scoutLeadMessage('deps', 'NOTHING')).toBeNull()
   expect(scoutLeadMessage('deps', ' NOTHING \n')).toBeNull()
   expect(scoutLeadMessage('deps', '')).toBeNull()

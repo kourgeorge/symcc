@@ -25,6 +25,7 @@ import { debriefing, learnedAsk, startDebrief } from './debrief'
 import { orgMemText, keepSuggestions } from './org-mem'
 import { cleanLeftoverTmp, stopOrphans, timedOut, askOvertime, wrapUp, ownerAddedMinutes, ownerTimeState } from './cleanup'
 import { plural } from '../core/text'
+import { reportPart } from '../core/scouts'
 
 // ---------------- workers ----------------
 
@@ -1365,10 +1366,10 @@ async function answered(host: Host, t: SymccTask, answer: string, summary: strin
   if (await writeIfSame(host, t, cur => ({ status: 'review', note: late ? ANSWERED_LATE_NOTE : ANSWERED_NOTE, answer: kept, merge_main: undefined, test_output: undefined, time_ask: undefined, wrap_up: undefined, history: withHistory(cur.history, now(), tryEntry(t, 'answered', `answered${late ? ` (time ran out after ${limit} min)` : ''}: ${cutLine(summary, 300)}`, { agent: workerName(S.N.name, t.id) })), ...endedBy(cur, now(), late ? 'timed out' : 'finished', late ? `${ANSWERED}; ran over ${limit} min` : finishedNote({ ok: true, detail: '', answered: true })) }))) return
   if (errand) {
     await endInvestigation(host, t, false, agentId)
-    tellLead(host, `${t.id} "${t.title}" (errand) is done${late ? ` (its time of ${limit} minutes ran out, so this is what it had)` : ''}; nothing was merged. Its report is on the task (${S.N.name} board task ${t.id}). Tell the owner what it did.`)
+    tellLead(host, `${t.id} "${t.title}" (errand) is done${late ? ` (its time of ${limit} minutes ran out, so this is what it had)` : ''}; nothing was merged. Its report (full: ${S.N.name} board task ${t.id}):\n${reportPart(text)}\n\nTell the owner what it did.`)
     return
   }
-  tellLead(host, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). The answer is on the task (${S.N.name} board task ${t.id}, with the full report). Tell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`)
+  tellLead(host, `${t.id} "${t.title}" is answered${late ? ` (its time of ${limit} minutes ran out, so this is its answer so far)` : ''} and waits for the owner to read it (nothing was committed, tested or merged). Its answer (full: ${S.N.name} board task ${t.id}):\n${reportPart(text)}\n\nTell the owner it is ready to read. Then, on the owner's word: ${S.N.name} approve ${t.id} is Done (it ends, nothing merged); ${S.N.name} approve ${t.id} with keep_note: true is Keep as a note (also adds a docs task that writes the answer to docs/research/); ${S.N.name} reject ${t.id} with their follow-up question is Ask more (a fresh try).`)
 }
 
 /**
@@ -1454,7 +1455,7 @@ const resultKind = (r: CheckResult): HistoryKind => (r.blocked || r.ask || r.rev
  * What happens to task `t` after its work was checked (`r`): back to "todo" for a new try after
  * a conflict or failing tests (while it has tries left), "review" when it waits for the owner,
  * else "done" (merged) or "failed". `summary` is what the worker (or the owner, on approve) said.
- * The lead is told only the outcome: the worker's own report already reached it as the agent's hand-back.
+ * The lead is told the outcome; the worker's own report is muted (T-1173), so it reads it with board task T-n.
  * A merge the owner approved (`approved`) wakes nobody: it waits as a "Meanwhile" line.
  */
 export async function settle(host: Host, t: SymccTask, b: Board, r: CheckResult, summary: string, worktree: string, agentId?: string, approved = false, mergedBy?: 'approved', mergeBy?: 'you' | 'lead' | 'symcc') {
