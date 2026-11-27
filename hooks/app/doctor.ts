@@ -12,7 +12,8 @@ import { load, path } from './store'
 import { readLeadText } from './lead'
 import { readArchiveFile } from './archive'
 import { git, deleteMergedBranch, repoOf, projectGone } from './git'
-import { oldDataFound, oldRowsText, migrateData } from './migrate-data'
+import { oldDataFound, oldRowsText, migrateData, boardDataVersion } from './migrate-data'
+import { DATA_VERSION } from '../core/board-file'
 import { plural } from '../core/text'
 
 /** A found item with its fix (fixable ones): answers '' when done, else why it was not done. */
@@ -127,6 +128,10 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
     }
     data.push(item)
   }
+  // T-1202: the board's data shape number next to the one this symcc knows (listed when they differ)
+  const fileShape = await boardDataVersion(host)
+  if (fileShape !== null && fileShape !== DATA_VERSION)
+    data.push({ kind: 'data', fixable: false, text: `the board's data shape is ${fileShape}, this symcc knows ${DATA_VERSION}${fileShape > DATA_VERSION ? ': it is newer, update symcc (claude plugin update symcc@symcc) and reload' : ' (older data is moved on the next start or save)'}` })
   const isBackup = (e: { kind: string; name: string }) => (e.kind === 'file' || e.kind === 'dir') && e.name.includes(BACKUP_MARK)
   const ids = backupIds(top.filter(isBackup).map(e => e.name))
   for (const f of oldBackups(top.filter(e => e.kind === 'file' || isBackup(e)))) {

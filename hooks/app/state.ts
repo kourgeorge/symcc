@@ -132,6 +132,8 @@ export const startS = () => ({
   chat: '',
   /** set by guardStart: this copy runs in a worker's folder and only guards tool calls (no lead, no timers, no board writes) */
   guardOnly: false,
+  /** T-1202: the data shape number found in board.json when it is higher than this symcc's DATA_VERSION (0: none); the board is read-only here and nothing starts */
+  newerData: 0,
   /** board.json's mtime (ms) of the state this session last drew (publish) or saved; null = not known yet. A session that
    *  does not drive reloads and redraws the board on its heartbeat when the file's mtime differs from this (T-429).
    *  A plain load does not set it, so reading the board just after another session wrote it still redraws (T-431) */
