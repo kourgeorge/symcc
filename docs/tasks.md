@@ -62,7 +62,7 @@ catches up with the target branch, runs the tests (skipped when this exact code 
 and then merges (or stops in `review` when you want to approve first). Any failure on the way
 (a clash, failing tests, out of time) is one normal failed try and uses one of the `auto_retries`.
 A hand commit is different: when you commit to the branch yourself during a worker's merge, the
-same branch goes back into the queue to catch up, test and merge again (history: "try 2: main
+same branch goes back into the queue to catch up, test and merge again (timeline: "try 2: main
 moved by hand; testing again"), at most 2 times per try; only a third move fails the try. The checker runs before the queue, side by side with other checkers,
 and never runs the project's tests. The tests run once per try, in the task's turn.
 
@@ -95,7 +95,7 @@ its page (offered for a failed, waiting, paused or dropped task), or ask the lea
 review. symcc checks it with git first: every commit on the task's branch must already be
 in the branch it merges into (merged, fast-forwarded, or rebased as the same changes). If
 not, it refuses with the reason ("T-5's branch has 2 commits that aren't in main yet").
-When the check passes, the task becomes `done` with the history line "merged outside the
+When the check passes, the task becomes `done` with the timeline line "merged outside the
 board (abc12345); marked done by the owner" (or "by the lead"), its commits are recorded,
 its folder and branch are cleaned up like after a normal merge, and the tasks waiting on it
 can start. Nothing is merged and no test runs: the work is already in. Stats count it under
@@ -123,7 +123,7 @@ OpenCode). In the chat: `/symcc-task T-5 run`, or tell the lead "run T-5 now" (i
 - **In plan mode** (Claude Code): nothing starts, so Run now doesn't either. The task stays in
   to do; run it when plan mode ends.
 
-Its history says `try 1: started now by the owner` (with what it skipped), so the health check
+Its timeline says `try 1: started now by the owner` (with what it skipped), so the health check
 does not report older tasks as "pushed back" because of it. Everything after the start is as
 always: the checker, the tests, the merge, and in approve merge mode it still waits for your
 review.
@@ -153,13 +153,13 @@ changed is kept.
 **Answering a waiting task on the board.** Open the task (Enter on it under NEEDS YOU):
 
 - **A file request** (the worker's edits outside its list were refused) shows three buttons, also on the number keys:
-  **1 Allow** adds the files to the task and sends it back to work in one step (its history
+  **1 Allow** adds the files to the task and sends it back to work in one step (its timeline
   says "the owner allowed files: + a, + b"; the lead hears of it later, it is not woken up).
   **2 Don't allow** keeps the task waiting with the note "files not allowed" and tells the
   lead at once, so it drops the task or narrows the plan. **3 Answer…** opens a text box.
 - **A question with choices.** A worker may give 2 to 6 choices with its question.
   Each choice is a button with its number key, plus **Answer…**
-  for your own words. Picking one is your answer (history: the owner answered: “b”) and
+  for your own words. Picking one is your answer (timeline: the owner answered: “b”) and
   sends the task back to work.
 - **Any other question** has a text box: type the answer and press Enter.
 
@@ -179,7 +179,7 @@ board with its `question` tool, with 2 to 6 short choices, and asks it briefly i
   any is open. With `notify` on you hear "needs you"
   once per question.
 - Answer on the board and the question closes and leaves the list (it stays in the file as
-  history). The lead gets a board update right away (like a finished task), with a block like
+  timeline). The lead gets a board update right away (like a finished task), with a block like
   "The owner answered your question Q-3 (…): Yes. … Act on it.". Answer in the chat instead and the lead closes it with your words. The
   lead can also drop a question that no longer matters.
 
@@ -246,7 +246,7 @@ happens, never the words in its hand-back:
 - it handed back with no report while one of its own background commands (for example a test
   run it sent to the background) was still running → the task fails ("the worker ended its
   turn before its work finished"), and nothing is checked or merged. If it did write a report,
-  symcc stops those commands instead (the history says "stopped N command(s) still running at
+  symcc stops those commands instead (the timeline says "stopped N command(s) still running at
   hand-back") and goes on to the steps below as usual. Another agent's command still running
   doesn't count; when symcc can't tell whose a command is, the worker only gets a warning if
   its hand-back says work is still going;
@@ -369,7 +369,7 @@ work on purpose.
 A restart symcc does itself is not a new try. When the app is reopened, the plugin reloads, another
 session takes over driving the board, or an old worker ends with no report, the new worker goes on
 with the same try: the try number stays, no retry is used, and it does not count as a failed try in
-`/symcc-stats` (a task whose restarted round merges is still "right first try"). Its history says
+`/symcc-stats` (a task whose restarted round merges is still "right first try"). Its timeline says
 "try 2: worker restarted after the app was reopened". The try's time runs from its first start to
 its end, across the restarts, and its tokens add up over all its workers. A hand-over is a little
 different: when driving moves to another session, the try is not counted again, but its time starts
@@ -390,8 +390,8 @@ and goes back to `todo` (its folder and branch are kept); when they are used up 
 | Tests failed | The failing tests in the note | The end of the failing output |
 | Tests ran out of time | A note that the tests ran out of time after so many minutes, to raise `test_minutes` if they are just slow | The output so far |
 | The turn ran over its limit | "ran over 15 min and was stopped; nothing was merged" | A fresh try on the kept folder |
-| The branch moved by hand during the turn | "try N: main moved by hand; testing again" in the history | Nothing at first: the same branch is tested and merged again, at most 2 times per try; a third move gives "main moved during the merge (someone committed to it by hand), so nothing was merged" and a fresh try |
-| A reload cut off the tests or the merge | "try N: tests cut off by a reload; testing again" in the history | Nothing: the same branch is tested and merged again, at most 2 times per try (not a new try) |
+| The branch moved by hand during the turn | "try N: main moved by hand; testing again" in the timeline | Nothing at first: the same branch is tested and merged again, at most 2 times per try; a third move gives "main moved during the merge (someone committed to it by hand), so nothing was merged" and a fresh try |
+| A reload cut off the tests or the merge | "try N: tests cut off by a reload; testing again" in the timeline | Nothing: the same branch is tested and merged again, at most 2 times per try (not a new try) |
 | Your files are in the way of the merge | The task waits (`waiting`) with the file names | Nothing: it merges by itself once they are clear |
 
 An approve that fails (failing tests, out of time, ran over, branch moved) is not a try: the task
@@ -496,7 +496,7 @@ something to say, the lead also gets a short digest: tasks on try 3 or more, tes
 What you do yourself on the board (approve, reject, drop, move to todo, stash, mode and
 settings changes, answering a task) and merges you approved don't wake the lead. They are
 kept as short lines ("The owner approved T-5: …"), like quiet retries, reload restarts and plain merges, and put under "Meanwhile" at the
-top of the next board update (at most 10, then "+N more"). They are still in each task's history.
+top of the next board update (at most 10, then "+N more"). They are still in each task's timeline.
 
 ### How the lead talks to you
 
@@ -621,7 +621,7 @@ The `checker` role (Settings → Roles → checker) is only the checker's checkl
 it can't be turned on or off and is never a task's role. Its page says so and shows whether the
 `checker` setting is on; the lead's `roles on checker` is refused for the same reason.
 
-The checker's verdict is written in the task's history.
+The checker's verdict is written in the task's timeline.
 
 ## Approval before merge
 
@@ -646,7 +646,7 @@ The lead tells you "T-5 is ready for review". The task's branch (`symcc/T-5`) an
   always: brings the task up to date with your branch, checks the files, runs the tests
   again if it had to bring in new changes, and retries clashes. Then the task is `done`.
 - **Reject** with a reason ("reject T-5: the button should be blue", tool `symcc reject`):
-  nothing is merged; the task goes back to `todo` with your reason in its history, and a
+  nothing is merged; the task goes back to `todo` with your reason in its timeline, and a
   fresh worker redoes it with that reason in front of it.
 
 So there are three ways to change a task in review before it is merged:
@@ -655,11 +655,11 @@ So there are three ways to change a task in review before it is merged:
 2. **Ask the lead to change the task** ("T-5: also update the README"): the lead changes
    what the task asks for, and it goes back to work. For a small addition the lead uses
    `change` with `add_details`: the note is added at the end of the details as
-   `Note (lead, <date>): ...`, the old text stays, and the task's history gets a line
+   `Note (lead, <date>): ...`, the old text stays, and the task's timeline gets a line
    `the lead added a note: "..."`. `details` rewrites the whole text; giving both at once
    is refused.
 3. **Edit the files yourself** in its folder, `.symcc/worktrees/T-5`, then approve. Your
-   edits are committed as part of the task (same commit message) and its history gets a
+   edits are committed as part of the task (same commit message) and its timeline gets a
    line like `owner edited files before approving: a.ts, b.md`. The tests always run
    again when you edited something. If they fail, nothing is merged: the task stays in
    review with the test output, so you can fix the files and approve again.
@@ -877,9 +877,9 @@ skills: [code-review]
     other prompt files count as code. So a prose-only role can never merge code.
   - **Tests:** the `test_commands` do not run. If the `docs_test_commands` setting has
     commands (for example a docs link check like `sh tests/build-site.sh`), those run instead,
-    and a failing one fails the try like a failing test; the task's history says
+    and a failing one fails the try like a failing test; the task's timeline says
     `docs checks only: only prose changed`. With no `docs_test_commands` (the default) no test
-    runs, and the history says `tests skipped: only prose changed`. A normal role's docs-only
+    runs, and the timeline says `tests skipped: only prose changed`. A normal role's docs-only
     change still runs the `test_commands`. (The checker already skips a change that is only
     prose, for every role.)
   - **Prompt:** its worker is told to check its facts and links instead of running tests (in

@@ -667,7 +667,7 @@ words as bold headings with the same spacing):
 Every task records who made it, why, and the words that started it.
 
 Open the board with `/symcc`, or one task with `/symcc-task T-3`. The `from:` line says, for
-example, `from: owner — “add a search command…”` or `from: scout bugs`. The history lists each try.
+example, `from: owner — “add a search command…”` or `from: scout bugs`. The timeline lists each try.
 
 Every merge commit starts with the task ID. So `git log --grep "T-3"` finds the work for a
 task, and the ID on a commit takes you back to the task and your request.
@@ -726,7 +726,7 @@ Two things listen today:
 
 - **The activity log**, `.symcc/events.jsonl`: every event as one JSON line, the last 5,000
   kept.
-- **The history**: each step a try goes into (prep, checker, queue, test, merge) gets a
+- **The timeline**: each step a try goes into (prep, checker, queue, test, merge) gets a
   line with its time, such as "try 1: checker started" or "try 1: waits in the merge queue
   (place 2)", so the task page shows the whole path. The outcome lines (checker OK, merged,
   failed, ...) are written as before. These stage lines are left out of the "Earlier tries"
