@@ -144,7 +144,7 @@ This is the list in `hooks/engine.ts`, by the file each name comes from (paths a
 
 **`hooks/app/questions`**: `answerOnBoard`, `boardAnswered`, `popupCall`
 
-**`hooks/app/review`**: `changedFiles`, `folderDiff`
+**`hooks/app/review`**: `changedFiles`, `folderDiff`, `mergedChanges`, `mergedDiff`, `DIFF_GONE`
 
 **`hooks/app/roles`**: `changeRole`, `loadRoles`, `newRoleFile`, `roleDraftOf`, `roleLists`, `roleView`, `saveRoleDraft`
 
@@ -164,7 +164,7 @@ This is the list in `hooks/engine.ts`, by the file each name comes from (paths a
 
 **`hooks/app/workers`**: `agentOnBoard`, `mergeOutcome`, `mergingNow`, `pump`, `type TurnEnd`
 
-**`hooks/board`**: `actionButtonLabel`, `ALL_CLEAR`, `ALWAYS_ON_KINDS`, `answerChoices`, `answeredLeadLine`, `answerText`, `archivedNote`, `archivedOf`, `BACKLOG_SHOWN`, `backlogMoreLabel`, `BAD_EVERY_STATE`, `bandBrand`, `bandLeads`, `bandNote`, `bandWhere`, `bannerCounts`, `bannerLines`, `bannerRule`, `type BannerTone`, `type BoardTask`, `boxHint`, `canMarkMerged`, `canPickRole`, `cantPlayNotify`, `checkerOn`, `copyToast`, `crossBranchNotes`, `cutDiff`, `DEFAULT_ROLE`, `type DetailRow`, `detailRows`, `DIFF_COLOR`, `DIFF_LINES`, `type DiffFile`, `diffKeys`, `diffKinds`, `emptyBoard`, `everyMinutesOf`, `everyText`, `failAsks`, `failNext`, `fileWaitText`, `findKind`, `findRole`, `fitRow`, `fmtDuration`, `fmtRun`, `fmtTotal`, `foldedRow`, `folderName`, `footerRule`, `groupLabel`, `groupSummaryParts`, `hintLines`, `intoOf`, `isAnswered`, `isCheckerRole`, `isInvestigation`, `isNothing`, `isScoutRunReport`, `isSettingPage`, `type KeyHint`, `type KindDef`, `kindMark`, `kindNameError`, `kindsKeys`, `kindTag`, `listKeys`, `localOffset`, `mergeKinds`, `mergeRoles`, `MODE_MEANING`, `MODE_NAME`, `modeButton`, `modeLabel`, `modeOf`, `needsYou`, `newestFirst`, `nextMode`, `offStatusParts`, `originOf`, `originSegs`, `type OwnerQuestion`, `ownersTurn`, `packRows`, `panelSections`, `parseScoutRuns`, `parseSettingValue`, `pickHint`, `planBandText`, `promptsOfRole`, `questionsForYou`, `questionsLabel`, `ROLE_PLACEHOLDERS`, `ROLE_PROMPTS`, `ROLE_SLOT`, `roleChoices`, `type RoleDef`, `roleEditKeys`, `roleKeys`, `roleMark`, `roleNameError`, `roleOf`, `rolePromptKeys`, `type RolePromptKind`, `rolesKeys`, `roleTag`, `rowCell`, `rowEndText`, `rowExtra`, `rowMark`, `rowStates`, `safeScoutFile`, `type ScoutEditField`, `scoutEditKeys`, `scoutFile`, `scoutHowTo`, `scoutIcon`, `scoutKeys`, `scoutLastRunProblem`, `scoutLastText`, `scoutListKeys`, `scoutListRows`, `scoutOutcomeTone`, `scoutRow`, `scoutRunLine`, `scoutRunsFile`, `scoutRunTasks`, `scoutTone`, `SEARCH_WORDS`, `searchBoxHint`, `searchLine`, `searchTasks`, `SECTION_LABEL`, `type Seg`, `SETTING_GROUPS`, `settingChoices`, `settingInfo`, `settingShown`, `type SettingName`, `type SettingPage`, `SETTINGS`, `type SettingsInput`, `settingsKeys`, `settingValue`, `shownStatus`, `showsAnswer`, `sortScouts`, `type StageMark`, `stageSegs`, `STATE_LABEL`, `stateText`, `STATUS_BADGE`, `STATUS_MARK`, `STATUS_WORD`, `statusBadge`, `statusCell`, `statusCounts`, `statusMark`, `sumRuns`, `type TaskAction`, `type TaskActionId`, `taskActions`, `taskAsks`, `taskCopyText`, `taskKeys`, `taskPhase`, `taskReports`, `taskStage`, `testsShort`, `TITLE_ROOM`, `versionMark`, `whyFailed`, `withCrew`, `wrapSegs`, `YOUR_EDITS`
+**`hooks/board`**: `actionButtonLabel`, `ALL_CLEAR`, `ALWAYS_ON_KINDS`, `answerChoices`, `answeredLeadLine`, `answerText`, `archivedNote`, `archivedOf`, `BACKLOG_SHOWN`, `backlogMoreLabel`, `BAD_EVERY_STATE`, `bandBrand`, `bandLeads`, `bandNote`, `bandWhere`, `bannerCounts`, `bannerLines`, `bannerRule`, `type BannerTone`, `type BoardTask`, `boxHint`, `canMarkMerged`, `canPickRole`, `cantPlayNotify`, `viewAsBoard`, `checkerOn`, `choiceLines`, `copyToast`, `crossBranchNotes`, `cutDiff`, `DEFAULT_ROLE`, `type DetailRow`, `detailRows`, `DIFF_COLOR`, `DIFF_LINES`, `type DiffFile`, `diffKeys`, `diffKinds`, `driveWarning`, `emptyBoard`, `everyMinutesOf`, `everyText`, `failAsks`, `failNext`, `fileWaitText`, `findKind`, `findRole`, `fitRow`, `fmtDuration`, `fmtRun`, `fmtTotal`, `foldedRow`, `folderName`, `footerRule`, `groupLabel`, `groupSummaryParts`, `hintLines`, `intoOf`, `isAnswered`, `isCheckerRole`, `isInvestigation`, `isNothing`, `isScoutRunReport`, `isSettingPage`, `type KeyHint`, `type KindDef`, `kindMark`, `kindNameError`, `kindsKeys`, `kindTag`, `listKeys`, `localOffset`, `mergeKinds`, `mergeRoles`, `MODE_MEANING`, `MODE_NAME`, `modeButton`, `modeLabel`, `modeOf`, `needsYou`, `newestFirst`, `nextMode`, `offStatusParts`, `originOf`, `originSegs`, `type OwnerQuestion`, `ownersTurn`, `packRows`, `panelSections`, `parseScoutRuns`, `parseSettingValue`, `pickHint`, `planBandText`, `promptsOfRole`, `questionsForYou`, `questionsLabel`, `ROLE_PLACEHOLDERS`, `ROLE_PROMPTS`, `ROLE_SLOT`, `roleChoices`, `type RoleDef`, `roleEditKeys`, `roleKeys`, `roleMark`, `roleNameError`, `roleOf`, `rolePromptKeys`, `type RolePromptKind`, `rolesKeys`, `roleTag`, `rowCell`, `rowTitle`, `projectTag`, `rowEndText`, `rowExtra`, `rowMark`, `rowStates`, `safeScoutFile`, `type ScoutEditField`, `scoutEditKeys`, `scoutFile`, `scoutHowTo`, `scoutIcon`, `scoutKeys`, `scoutLastRunProblem`, `scoutLastText`, `scoutListKeys`, `scoutListRows`, `scoutOutcomeTone`, `scoutRow`, `scoutRunLine`, `scoutRunsFile`, `scoutRunTasks`, `scoutTone`, `SEARCH_WORDS`, `searchBoxHint`, `searchLine`, `searchTasks`, `SECTION_LABEL`, `type Seg`, `SETTING_GROUPS`, `settingChoices`, `settingInfo`, `settingShown`, `type SettingName`, `type SettingPage`, `SETTINGS`, `type SettingsInput`, `settingsKeys`, `settingValue`, `shownStatus`, `showsAnswer`, `sortScouts`, `type StageMark`, `stageSegs`, `STATE_LABEL`, `stateText`, `STATUS_BADGE`, `STATUS_MARK`, `STATUS_WORD`, `statusBadge`, `statusCell`, `statusCounts`, `statusMark`, `sumRuns`, `type TaskAction`, `type TaskActionId`, `taskActions`, `taskAsks`, `taskCopyText`, `taskKeys`, `taskPhase`, `taskReports`, `taskStage`, `testsShort`, `TITLE_ROOM`, `versionMark`, `whyFailed`, `withCrew`, `wrapSegs`, `YOUR_EDITS`
 
 **`hooks/core/ask`**: `ASK_TOOL`
 
@@ -176,11 +176,11 @@ This is the list in `hooks/engine.ts`, by the file each name comes from (paths a
 
 **`hooks/core/def-files`**: `type BrokenDef`, `brokenLabel`, `brokenNamed`, `defNamed`, `defSource`, `type DefSource`, `sourceLabel`
 
-**`hooks/core/history`**: `HISTORY_COLOR`, `historyEvent`, `historyTime`
+**`hooks/core/timeline`**: `TIMELINE_COLOR`, `timelineEvent`, `timelineTime`
 
 **`hooks/core/org-mem`**: `ORG_MEM_EMPTY`, `ORG_MEM_TITLE`, `orgMemAbout`, `orgMemCount`, `orgMemDeleteAsk`, `orgMemFile`, `orgMemKeys`, `type OrgMemNote`, `orgMemNoteHead`, `orgMemNoteKey`
 
-**`hooks/core/path-guard`**: `spawnFailedText`
+**`hooks/core/path-guard`**: `shellCwd`, `spawnFailedText`
 
 **`hooks/core/prompts`**: `basePromptFor`, `SCOUT_BASE`, `WORKER_BASE`
 
@@ -188,17 +188,17 @@ This is the list in `hooks/engine.ts`, by the file each name comes from (paths a
 
 **`hooks/core/roles`**: `ROLE_TOOL_WORDS`
 
-**`hooks/core/runs`**: `cleanTokens`, `fmtTokens`, `sumTokens`, `TOKEN_KINDS`, `tokenCount`
+**`hooks/core/runs`**: `addTokens`, `cleanTokens`, `fmtTokens`, `sumTokens`, `TOKEN_KINDS`, `tokenCount`
 
 **`hooks/core/scouts`**: `SCOUT_BOARD_TOOLS`
 
 **`hooks/core/stats`**: `type LeadCall`, `rangeSpan`, `type StatsRange`
 
-**`hooks/core/task-sections`**: `type SectionLine`, `type TaskSection`, `taskSections`
+**`hooks/core/task-sections`**: `checkerReportOf`, `type SectionLine`, `type TaskSection`, `taskSections`
 
 **`hooks/core/text`**: `jsonObj`, `squash`
 
-**`hooks/host`**: `ALL_FEATURES`, `type FileTouch`, `type Host`, `type HostAgent`, `type HostAgentKind`, `type HostAgentStart`, `type HostFeatures`, `type HostFileEntry`, `type HostFileStat`, `type HostLead`, `type HostRunResult`, `type HostWords`, `type LeadSend`, `type LeadUsage`, `manifestVersion`, `noUi`, `type PanelValues`, `SYMCC_WORDS`
+**`hooks/host`**: `ALL_FEATURES`, `etimeArgv`, `type FileTouch`, `holderFromPs`, `startFromEtime`, `type Host`, `type HostAgent`, `type HostAgentKind`, `type HostAgentStart`, `type HostFeatures`, `type HostFileEntry`, `type HostFileStat`, `type HostLead`, `type HostProcess`, `type HostProcesses`, `type HostRunResult`, `type HostWords`, `type LeadSend`, `type LeadUsage`, `manifestVersion`, `noUi`, `type PanelValues`, `SYMCC_WORDS`
 
 **`hooks/name`**: `cleanName`, `dataDir`, `DEFAULT_NAME`, `ICON`, `namesFor`
 
