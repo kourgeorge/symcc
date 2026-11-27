@@ -5,7 +5,7 @@
       "label": "symcc: build Cursor extension",
       "type": "shell",
       "command": "npm run build && cd extension && node build.mjs",
-      "options": { "cwd": "${workspaceFolder}/hosts/cursor" },
+      "options": { "cwd": "${workspaceFolder}/hosts/vscode" },
       "problemMatcher": []
     }
   ]

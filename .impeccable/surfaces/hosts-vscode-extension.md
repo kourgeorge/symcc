@@ -1,7 +1,7 @@
 ---
 version: 1
-slug: "hosts-cursor-extension"
-primary_target: "hosts/cursor/extension"
+slug: "hosts-vscode-extension"
+primary_target: "hosts/vscode/extension"
 related_targets: []
 ---
 

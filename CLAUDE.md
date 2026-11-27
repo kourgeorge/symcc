@@ -28,7 +28,7 @@ symcc runs these four before merging, so you don't need to run them all at the e
     sh scripts/test-node-host.sh
 
 `sh scripts/test-node-host.sh` runs both the Node host's tests (`hosts/node/`) and the Cursor
-host's tests (`hosts/cursor/tests/`).
+host's tests (`hosts/vscode/tests/`).
 
 ## Engine and clients
 

@@ -8,7 +8,7 @@ web
 
 ## Stack
 
-The Cursor extension's panel (a VS Code webview, so it also runs in VS Code) is built with React (the owner's choice). The engine it talks to is `hosts/cursor/` (Node, Cursor SDK).
+The Cursor extension's panel (a VS Code webview, so it also runs in VS Code) is built with React (the owner's choice). The engine it talks to is `hosts/vscode/` (Node, Cursor SDK).
 
 ## Users
 

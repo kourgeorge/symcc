@@ -75,7 +75,7 @@ async function loadCopilot(): Promise<CopilotModule> {
   try {
     return (await import(COPILOT_SDK)) as CopilotModule
   } catch (err) {
-    throw new Error(`symcc on Copilot needs ${COPILOT_SDK}: run npm install in hosts/cursor (${(err as Error).message})`)
+    throw new Error(`symcc on Copilot needs ${COPILOT_SDK}: run npm install in hosts/vscode (${(err as Error).message})`)
   }
 }
 

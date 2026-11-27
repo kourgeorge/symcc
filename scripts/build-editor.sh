@@ -1,10 +1,10 @@
 #!/bin/sh
-# Builds what symcc ships for VS Code and Cursor into editor/: serve.mjs (symcc for an editor, from hosts/cursor/main.ts),
-# webview/ (the board's page, from hosts/cursor/extension/webview/) and THIRD-PARTY-NOTICES.md. The symcc extension
+# Builds what symcc ships for VS Code and Cursor into editor/: serve.mjs (symcc for an editor, from hosts/vscode/main.ts),
+# webview/ (the board's page, from hosts/vscode/extension/webview/) and THIRD-PARTY-NOTICES.md. The symcc extension
 # finds an installed symcc and runs its editor/serve.mjs; it bundles no engine of its own. The built files are
-# committed: an install from GitHub copies the repo as it is and runs no build. The sources stay in hosts/cursor/.
+# committed: an install from GitHub copies the repo as it is and runs no build. The sources stay in hosts/vscode/.
 # Rebuild after engine or webview changes; --check says whether the committed files are out of date.
-# Needs node, and npm ci done in hosts/cursor and hosts/cursor/extension.
+# Needs node, and npm ci done in hosts/vscode and hosts/vscode/extension.
 # Usage: sh scripts/build-editor.sh [--out <folder>] [--check]
 #   --out <folder>  build into <folder> instead of editor/ (tests use this)
 #   --check         build into a scratch folder and exit 1 when it differs from the committed editor/
@@ -26,7 +26,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 command -v node >/dev/null 2>&1 || { echo "build-editor: node is not on PATH." >&2; exit 2; }
-for d in hosts/cursor hosts/cursor/extension; do
+for d in hosts/vscode hosts/vscode/extension; do
   [ -d "$root/$d/node_modules" ] || { echo "build-editor: run npm ci in $d first." >&2; exit 2; }
 done
 
@@ -45,6 +45,6 @@ fi
 case $out in /*) ;; *) out="$(pwd)/$out" ;; esac
 rm -rf "$out"
 mkdir -p "$out"
-cd "$root/hosts/cursor"
+cd "$root/hosts/vscode"
 node build-editor.mjs "$out" >/dev/null
 echo "build-editor: wrote $out"

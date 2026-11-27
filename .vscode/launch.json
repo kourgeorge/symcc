@@ -5,8 +5,8 @@
       "name": "symcc: Cursor extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}/hosts/cursor/extension", "${input:project}"],
-      "outFiles": ["${workspaceFolder}/hosts/cursor/extension/dist/**/*.js"],
+      "args": ["--extensionDevelopmentPath=${workspaceFolder}/hosts/vscode/extension", "${input:project}"],
+      "outFiles": ["${workspaceFolder}/hosts/vscode/extension/dist/**/*.js"],
       "sourceMaps": true,
       "preLaunchTask": "symcc: build Cursor extension"
     }

@@ -1,5 +1,5 @@
 #!/bin/sh
-# Runs the Node host's tests (hosts/node/, T-377) and the Cursor host's tests (hosts/cursor/, T-1124) with bun test:
+# Runs the Node host's tests (hosts/node/, T-377) and the Cursor host's tests (hosts/vscode/, T-1124) with bun test:
 # symcc's engine outside Claude Code, one task end to end through the CLI on a scratch git repo with a fake `claude -p`,
 # and the Cursor host on a fake SDK (it imports engine text and helpers, so an engine change can break it). Not a
 # `claude plugin test` file: that runtime has
@@ -17,7 +17,7 @@ fi
 out=$(mktemp "${TMPDIR:-/tmp}/symcc-test-out.XXXXXX")
 code=$(mktemp "${TMPDIR:-/tmp}/symcc-test-code.XXXXXX")
 trap 'rm -f "$out" "$code"' EXIT
-{ set +e; bun test ./hosts/node/ ./hosts/cursor/ 2>&1; echo $? >"$code"; } | tee "$out"
+{ set +e; bun test ./hosts/node/ ./hosts/vscode/ 2>&1; echo $? >"$code"; } | tee "$out"
 status=$(cat "$code"); status=${status:-1}
 if [ "$status" != 0 ]; then
   # bun prints a test's error (code frame, "error: ...", the diff, "at ...") before its "(fail) <name>" line

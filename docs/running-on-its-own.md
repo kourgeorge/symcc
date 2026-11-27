@@ -20,9 +20,13 @@ example "add this to client"). A wrong name is refused, and the answer lists the
 pages show a small tag in front of the title, like `[client] Fix login`. A board inside one repo has no projects: no tag
 shows and `add` works as before.
 
-For now this is data and display only: git, merges and tests still run in the board's own folder. You can already give a
-project its own test commands with the settings tool (`project` plus `test_commands`); they are stored in `board.json`
-and used later.
+Each task works in its own project's repo. Its worker copy is a worktree of that repo (the copy itself sits under the
+board folder, in `.symcc/worktrees/T-n`), the checks and the merge run in that repo, and the change lands on that repo's
+branch. The task's files are relative to the repo (`README.md`, not `client/README.md`). A project has its own test
+commands (settings tool: `project` plus `test_commands`); a project without its own uses the board's. Git readiness is
+checked per project, so a repo that is not ready holds back only its own tasks. A change that touches two repos is two
+tasks, linked with `after`. The prompts of workers and checkers name the task's project, and scouts are told the list of
+project folders, because the board folder is not a repo. To start, ask the lead: "add this to client".
 
 ### A folder without git
 

@@ -1,4 +1,4 @@
-// Built by scripts/build-editor.sh from hosts/cursor/main.ts: do not edit by hand.
+// Built by scripts/build-editor.sh from hosts/vscode/main.ts: do not edit by hand.
 import { createRequire as __symccRequire } from 'node:module'; const require = __symccRequire(import.meta.url);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -69509,7 +69509,7 @@ async function loadCopilot() {
   try {
     return await Promise.resolve().then(() => (init_dist(), dist_exports));
   } catch (err) {
-    throw new Error(`symcc on Copilot needs ${COPILOT_SDK}: run npm install in hosts/cursor (${err.message})`);
+    throw new Error(`symcc on Copilot needs ${COPILOT_SDK}: run npm install in hosts/vscode (${err.message})`);
   }
 }
 var nodeFs2 = { exists: existsSync4, real: (p) => realpathSync2(p), read: (p) => readFileSync(p, "utf8") };

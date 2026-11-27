@@ -138,7 +138,9 @@ export const PROMPT_SECTIONS: readonly PromptSection[] = [
       const t = c.task
       const merge = c.kind === 'change' && t?.merge_main ? `First, ${intoOf(t)} has moved and your branch now conflicts with it. In that folder, run \`git merge ${intoOf(t)}\` and resolve the conflicts (commit the merge yourself, or leave it for symcc to commit). Keep this task's intent, keep the changes inside the task's files, and make sure the tests pass.` : ''
       const work = c.kind === 'change' && c.commits?.length ? `Your earlier tries' work is already here: it is committed on your branch, and your folder shows it. Their commits:\n${c.commits.map(l => `- ${l}`).join('\n')}` : ''
-      return [fixed(c, 'where'), merge, work].filter(Boolean).join('\n\n')
+      const proj = (t as { project?: string } | undefined)?.project
+      const project = proj ? `The task's project is ${proj}: your folder is a copy of that repo, and the task's files are relative to it (\`README.md\`, not \`${proj}/README.md\`).` : ''
+      return [fixed(c, 'where'), project, merge, work].filter(Boolean).join('\n\n')
     },
   },
   {

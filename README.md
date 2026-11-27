@@ -43,6 +43,7 @@ Other ways to install, and fixes, are in [Get started](https://kourgeorge.github
 ## What makes it different
 
 - **Checked work.** Each worker has its own copy of the code and a list of files it may change. Nothing merges until your tests pass; a checker can try to break each change first.
+- **Several repos, one board.** Put the board in a folder that holds your repos. Each task names its project and is worked on, tested and merged in that repo alone.
 - **Organizational memory.** Agents suggest short notes about the project, and the lead keeps the useful ones for the next agents.
 - **Scouts.** Helpers on a timer look for bugs, missing tests and old packages while you are away. The lead turns what they find into tasks.
 - **Works from a chat app.** You can talk to the lead from a chat app, such as Slack through DAM.

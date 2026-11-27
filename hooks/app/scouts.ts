@@ -10,6 +10,7 @@ import { path, load, change, now, oneAtATime, safeWrite } from './store'
 import { tellLead } from './tell'
 import { readArchiveFile, renameArchivedScoutOrigins } from './archive'
 import { orgMemText } from './org-mem'
+import { projectNames } from './git'
 import { addTokens } from '../core/runs'
 
 // ---------------- scouts ----------------
@@ -266,7 +267,7 @@ async function queueScout(host: Host, s: ScoutDef, misses = 0, byHand = false): 
   st.running = true
   await publish(host, b)
   const open = b.tasks.filter(t => OPEN.includes(t.status) || t.status === 'backlog').map(t => `${t.id} ${t.title}${t.status === 'backlog' ? ' (backlog)' : ''}`)
-  const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await orgMemText(host) })
+  const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await orgMemText(host), projects: await projectNames(host).catch(() => [] as string[]) })
   // T-759: driving may have moved to another session while the prompt was made (a hand-over stops the scouts first,
   // and a start queued after that would never be stopped): a session that no longer drives starts no scout run
   if (!(await drivesHere(host))) {

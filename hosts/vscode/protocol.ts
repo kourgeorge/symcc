@@ -243,7 +243,7 @@ export type PanelWorktree = {
 /** What the owner can do with a worktree on the Worktrees page. */
 export type WorktreeAction = 'window' | 'terminal' | 'reveal' | 'copy' | 'changes' | 'file' | 'remove'
 
-/** One step of an agent's turn (hosts/cursor/sdk.ts SdkStep), with when it happened. */
+/** One step of an agent's turn (hosts/vscode/sdk.ts SdkStep), with when it happened. */
 export type PanelStep = { atMs: number; kind: 'text' | 'thinking' | 'tool' | 'status'; text: string; tool?: string; callId?: string; status?: 'running' | 'completed' | 'error' }
 
 /**

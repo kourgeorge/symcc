@@ -1,6 +1,6 @@
-// GitHub Copilot's agents behind the host's Sdk (hosts/cursor/copilot.ts), with a fake of the Copilot SDK: a session's
+// GitHub Copilot's agents behind the host's Sdk (hosts/vscode/copilot.ts), with a fake of the Copilot SDK: a session's
 // options, a turn's events as steps and its end, a plan turn that only reads, steering, stopping, models and sign-in.
-// Run with `npx -y bun test ./tests/` in hosts/cursor/ (or `npm test` there).
+// Run with `npx -y bun test ./tests/` in hosts/vscode/ (or `npm test` there).
 import { test, expect } from 'bun:test'
 import { PLAN_NOTE, copilotCli, copilotModels, copilotSdk, excludedTools, protocolWords, readOnlyRefusal, type CliFs, type CopilotClient, type CopilotEvent, type CopilotModule, type CopilotPermissionRequest, type CopilotSession, type CopilotSessionConfig } from '../copilot'
 import { disallowedFor, sdkAgents } from '../agents'

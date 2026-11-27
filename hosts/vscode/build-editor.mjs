@@ -5,7 +5,7 @@
 //   serve.json       the contract's number ({"protocol": 1}), so an extension can choose a copy without starting it.
 //   webview/         the board's webview (webview.js, webview.css) and codicons, from extension/webview/.
 //   THIRD-PARTY-NOTICES.md  the licenses of the open packages inside both.
-// Usage: node build-editor.mjs <out>   (from hosts/cursor, after npm ci here and in extension/)
+// Usage: node build-editor.mjs <out>   (from hosts/vscode, after npm ci here and in extension/)
 import { build } from 'esbuild'
 import { cp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises'
 import { isAbsolute, join, relative, resolve } from 'node:path'
@@ -17,7 +17,7 @@ const editorBuild = {
   name: 'editor-build',
   setup(b) {
     // copilot.ts imports the SDK by a name in a variable, so dist/engine.mjs needn't have it; here it goes inside
-    b.onLoad({ filter: /hosts[\\/]cursor[\\/]copilot\.ts$/ }, async a => {
+    b.onLoad({ filter: /hosts[\\/]vscode[\\/]copilot\.ts$/ }, async a => {
       const text = await readFile(a.path, 'utf8')
       if (!text.includes('await import(COPILOT_SDK)')) throw new Error('build-editor: copilot.ts no longer imports the SDK as await import(COPILOT_SDK)')
       return { contents: text.replace('await import(COPILOT_SDK)', "await import('@microsoft/copilot-sdk')"), loader: 'ts' }
@@ -57,7 +57,7 @@ const serve = await build({
   outfile: join(out, 'serve.mjs'),
   external: ['@cursor/sdk'],
   plugins: [editorBuild, insideRepo],
-  banner: { js: "// Built by scripts/build-editor.sh from hosts/cursor/main.ts: do not edit by hand.\nimport { createRequire as __symccRequire } from 'node:module'; const require = __symccRequire(import.meta.url);" },
+  banner: { js: "// Built by scripts/build-editor.sh from hosts/vscode/main.ts: do not edit by hand.\nimport { createRequire as __symccRequire } from 'node:module'; const require = __symccRequire(import.meta.url);" },
   metafile: true,
   logLevel: 'warning',
 })

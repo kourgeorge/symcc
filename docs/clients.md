@@ -312,7 +312,7 @@ After you update symcc, run **symcc: Restart symcc**.
 
 ### Building it
 
-The extension runs the plugin's `editor/serve.mjs` and shows its `editor/webview/`. Both are built from `hosts/cursor/` and committed, like the Copilot CLI extension: `sh scripts/build-editor.sh` rebuilds them, and `--check` says whether the committed files are out of date. To work on the extension, open the repository in VS Code or Cursor and press F5 (**symcc: Cursor extension**): it runs this clone's `hosts/cursor/dist/engine.mjs` and its own webview build. How the extension and the plugin are released: [Releasing](releasing.md).
+The extension runs the plugin's `editor/serve.mjs` and shows its `editor/webview/`. Both are built from `hosts/vscode/` and committed, like the Copilot CLI extension: `sh scripts/build-editor.sh` rebuilds them, and `--check` says whether the committed files are out of date. To work on the extension, open the repository in VS Code or Cursor and press F5 (**symcc: Cursor extension**): it runs this clone's `hosts/vscode/dist/engine.mjs` and its own webview build. How the extension and the plugin are released: [Releasing](releasing.md).
 
 ## Chat apps
 

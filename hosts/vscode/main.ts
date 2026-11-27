@@ -24,7 +24,7 @@ import type { AgentChoice, FromWebview, PanelActionId, PanelMode, ToWebview } fr
 import { manifestVersion } from '../../hooks/host'
 import { nodeFs } from '../node/host'
 
-/** The symcc folder this file ships in: hosts/cursor/main.ts, its bundle in hosts/cursor/dist/, or editor/serve.mjs. */
+/** The symcc folder this file ships in: hosts/vscode/main.ts, its bundle in hosts/vscode/dist/, or editor/serve.mjs. */
 const HERE = dirname(fileURLToPath(import.meta.url))
 const PLUGIN_ROOT = resolve(HERE, basename(HERE) === 'editor' ? '..' : basename(HERE) === 'dist' ? '../../..' : '../..')
 
