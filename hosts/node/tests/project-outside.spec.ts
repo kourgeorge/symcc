@@ -61,3 +61,37 @@ test('T-1196: a project repo outside the board folder: worktree in <board>/.symc
     await rm(outside, { recursive: true, force: true })
   }
 }, 180_000)
+
+test('T-1196: a board that is its own repo: a task with no project runs, tests and merges in the board repo, no table', async () => {
+  const board = await realpath(await mkdtemp('/tmp/symcc-node-own-'))
+  const git = (cwd: string, ...args: string[]) => runCommand(['git', '-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd })
+  try {
+    await git(board, 'init', '-q', '-b', 'main')
+    await writeFile(`${board}/a.txt`, 'a')
+    await writeFile(`${board}/.gitignore`, '.symcc/\n')
+    await git(board, 'add', '.')
+    await git(board, 'commit', '-qm', 'init')
+    const MAIN = `${PLUGIN_ROOT}/hosts/node/main.ts`
+    await runCommand(['bun', MAIN, '--root', board, '--claude', FAKE, 'cmd', 'symcc-init'], { cwd: board, timeoutMs: 120_000 })
+    const s = await openSession({ root: board, runner: claudeRunner(nodeProcessSystem, { bin: FAKE }), say: () => undefined, sessionId: 'node-t1196b' })
+    try {
+      expect(await leadTool(s, 'add', { title: 'Own', details: 'Do it', files: ['a.txt'], why: 'test', origin_by: 'owner', request: 'test' })).toContain('T-1')
+      const t = find(await load(s.host), 'T-1')!
+      expect(repoOf(t)).toBe(board)
+      expect(await taskGitReady(s.host, await load(s.host), t)).toBe(true)
+      const made = await prepareWorktree(s.host, t, intoOf(t))
+      expect(made.dir).toBe(`${board}/.symcc/worktrees/T-1`)
+      await writeFile(`${made.dir}/a.txt`, 'changed')
+      const r = await checkAndMerge(s.host, { ...t, attempts: 1 }, made.dir, await load(s.host), 'finish')
+      expect(r.detail).toContain('merged into main')
+      expect((await git(board, 'rev-parse', 'main')).stdout.trim()).toBe(r.merged ?? '')
+      expect(await readFile(`${board}/a.txt`, 'utf8')).toBe('changed')
+      expect(JSON.parse(await readFile(`${board}/.symcc/board.json`, 'utf8')).projects).toBe(undefined)
+      await removeWorktree(s.host, 'T-1', made.dir).catch(() => false)
+    } finally {
+      await closeSession(s).catch(() => undefined)
+    }
+  } finally {
+    await rm(board, { recursive: true, force: true })
+  }
+}, 180_000)

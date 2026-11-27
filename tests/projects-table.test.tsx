@@ -8,7 +8,7 @@ import { runTool } from '../hooks/app/tools'
 import { S } from '../hooks/app/state'
 import { projectNames, repoOf, projectGone, taskGitReady, projectNotes, openProjects } from '../hooks/app/git'
 import { emptyBoard, find } from '../hooks/board'
-import { oldDataRows, upgradeBoard } from '../hooks/core/old-data'
+import { oldDataRows, upgradeBoard, withProjectPaths } from '../hooks/core/old-data'
 import { fakeHost, memoryFs, done } from './fake-host'
 
 const WISH = { why: 'asked', origin_by: 'owner', request: 'do it' }
@@ -56,11 +56,18 @@ test('repoOf gives the table path (anywhere on disk); an unknown name is refused
 
 test('the one-time move writes <root>/<name> for repo folders below the board, and nothing for a board that is its own repo', () => {
   const raw = { version: 1, projects: { client: { test_commands: ['npm test'] }, server: { path: '/elsewhere/server' } } }
-  const up = upgradeBoard(raw, '/ws/', ['client', 'server', 'web']) as { projects: Record<string, unknown> }
-  expect(up.projects).toEqual({ client: { test_commands: ['npm test'], path: '/ws/client' }, server: { path: '/elsewhere/server' }, web: { path: '/ws/web' } })
+  const up = upgradeBoard(raw, '/ws/', ['client', 'server', 'web']) as { projects?: Record<string, unknown> }
+  expect(up.projects).toEqual(raw.projects)
+  const raw2 = { version: 1, projects: { client: { test_commands: ['npm test'] } } }
+  const up2 = upgradeBoard(raw2, '/ws/', ['client', 'web']) as { projects: Record<string, unknown> }
+  expect(up2.projects).toEqual({ client: { test_commands: ['npm test'], path: '/ws/client' }, web: { path: '/ws/web' } })
+  // once only: a table that has a path already is not touched (a repo cloned later is no "old data")
+  expect(withProjectPaths(raw.projects, '/ws', ['web'])).toBe(null)
   const input = (repoFolders: string[], board: object) => ({ board, archive: [], scouts: null, withRuns: new Set<string>(), fieldGuide: false, orgMem: false, repoFolders, root: '/ws' })
-  expect(oldDataRows(input(['client'], { ...raw, tasks: [] })).find(r => r.text.startsWith('project folders'))?.n).toBe(1)
-  expect(oldDataRows(input(['server'], { ...raw, tasks: [] })).find(r => r.text.startsWith('project folders'))).toBe(undefined)
+  expect(oldDataRows(input(['client'], { ...raw2, tasks: [{}] })).find(r => r.text.startsWith('project folders'))?.n).toBe(1)
+  expect(oldDataRows(input(['server'], { ...raw, tasks: [{}] })).find(r => r.text.startsWith('project folders'))).toBe(undefined)
+  // a fresh board (no tasks) is not old data
+  expect(oldDataRows(input(['client'], { ...raw2, tasks: [] })).find(r => r.text.startsWith('project folders'))).toBe(undefined)
   // a board that is its own repo has no repo folders: nothing is written
   expect(upgradeBoard({ version: 1 }, '/ws', [])).toEqual({ version: 1 })
   expect(oldDataRows(input([], { version: 1, tasks: [] })).find(r => r.text.startsWith('project folders'))).toBe(undefined)

@@ -516,6 +516,8 @@ export function upgradeBoard(raw: unknown, root: string, repoFolders: readonly s
  * path `<root>/<name>` (an entry that already has a path keeps it). Null when nothing is added.
  */
 export function withProjectPaths(projects: unknown, root: string, repoFolders: readonly string[]): Raw | null {
+  // once only: a table that already has a path was moved before (a repo cloned later is not added by this)
+  if (isObj(projects) && Object.values(projects).some(e => isObj(e) && typeof e.path === 'string')) return null
   const table: Raw = isObj(projects) ? { ...projects } : {}
   let changed = false
   for (const name of repoFolders) {
@@ -669,6 +671,10 @@ export function oldDataRows(i: OldInput): OldRow[] {
   const unsafe = (i.unsafeScouts ?? []).filter(name => isObj(memory[name]) && typeof memory[name].last_report === 'string')
   const scoutFile = upgradeScoutFile(JSON.stringify(i.scouts ?? null), n => !(i.unsafeScouts ?? []).includes(n), i.nowMs ?? Date.now(), false) !== null
   const settings = (b.mode === 'off' ? 1 : 0) + (b.notify === 'sound' || 'sound_set' in b ? 1 : 0) + ('target_branch' in b ? 1 : 0)
+  // T-1196: the one-time move: only a board that has been used (not a fresh one) and whose table holds no path yet
+  const used = (Array.isArray(b.tasks) && b.tasks.length > 0) || (isNum(b.next_id) && b.next_id > 1)
+  const hasPath = isObj(b.projects) && Object.values(b.projects).some(e => isObj(e) && typeof e.path === 'string')
+  const moveFolders = isObj(i.board) && used && !hasPath ? (i.repoFolders ?? []).length : 0
   const rows: OldRow[] = [
     { n: c.unsplit, text: 'tries with `unsplit` tokens (counts saved before the kinds were kept apart; shown as they are)', fix: false },
     { n: c.numTok, text: 'tries with tokens saved as one number', fix: true },
@@ -698,7 +704,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: lastReport, text: 'scouts whose last report is not yet in a runs file', fix: true },
     { n: unsafe.length, text: `scouts whose name can't be a file name; rename them (${unsafe.join(', ')})`, fix: false },
     { n: i.fieldGuide && !i.orgMem ? 1 : 0, text: 'field-guide.md not yet moved to org-mem.md', fix: true },
-    { n: isObj(i.board) && i.repoFolders?.length ? Object.keys(withProjectPaths(b.projects, i.root ?? '', i.repoFolders) ?? {}).filter(k => !(isObj(b.projects) && isObj(b.projects[k]) && typeof b.projects[k].path === 'string')).length : 0, text: 'project folders below the board with no path in the project table', fix: true },
+    { n: moveFolders, text: 'project folders below the board with no path in the project table', fix: true },
   ]
   return rows.filter(r => r.n > 0)
 }
