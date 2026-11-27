@@ -3,7 +3,7 @@
 // backup of the data files and saves every file once in today's shape. migrateIfOld does the same on its own (at session
 // start, before every board save and in the hourly archive step) when it finds old data, with at most one backup an hour;
 // old data that comes back soon after a migration means an older symcc copy writes to the board, and the owner is told (T-886).
-import { readBoardValue } from '../core/board-file'
+import { isProjectName, readBoardValue } from '../core/board-file'
 import { archiveChunkFile, PARTS_DIR } from '../core/board-parts'
 import { orgMemFile } from '../core/org-mem'
 import { reportText } from '../core/reports'
@@ -46,9 +46,21 @@ async function boardForCount(host: Host): Promise<unknown | null> {
   return { ...b, tasks: b.tasks.filter(t => !(t && typeof t === 'object' && isStubbed(String((t as { id?: unknown }).id)))) }
 }
 
+/**
+ * T-1196: the folders directly below the board that hold their own .git (names that can be a project name), sorted;
+ * none when the board folder is itself a repo (a board in one repo needs no project table).
+ */
+async function repoFolders(host: Host): Promise<string[]> {
+  if (await host.fs.exists(`${S.root}/.git`).catch(() => false)) return []
+  const dirs = (await host.fs.list(S.root).catch(() => [])).filter(e => e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== S.N.dir).map(e => e.name)
+  const found: string[] = []
+  for (const d of dirs) if (isProjectName(d) && (await host.fs.exists(`${S.root}/${d}/.git`).catch(() => false))) found.push(d)
+  return found.sort()
+}
+
 /** Everything the count reads (read-only). */
 async function oldInput(host: Host, all = true): Promise<OldInput> {
-  if (!all) return { board: await boardForCount(host), archive: [], scouts: null, withRuns: new Set<string>(), fieldGuide: false, orgMem: false }
+  if (!all) return { board: await boardForCount(host), archive: [], scouts: null, withRuns: new Set<string>(), fieldGuide: false, orgMem: false, repoFolders: await repoFolders(host), root: S.root }
   const scoutsText = await host.fs.read(scoutMemoryFile()).catch(() => null)
   const scouts = jsonOf(scoutsText)
   const names = Object.keys((scouts as { scouts?: Record<string, unknown> } | null)?.scouts ?? {})
@@ -63,6 +75,8 @@ async function oldInput(host: Host, all = true): Promise<OldInput> {
     unsafeScouts,
     fieldGuide: await host.fs.exists(path(`${S.N.dir}/field-guide.md`)).catch(() => false),
     orgMem: await host.fs.exists(path(orgMemFile(S.N.dir))).catch(() => false),
+    repoFolders: await repoFolders(host),
+    root: S.root,
   }
 }
 
@@ -271,7 +285,7 @@ export async function migrateData(host: Host, reuseBackup?: string): Promise<{ f
     // 1. board.json and its parts files
     const raw = await readBoardRaw(host)
     if (raw !== null) {
-      const read = readBoardValue(upgradeBoard(raw, S.root))
+      const read = readBoardValue(upgradeBoard(raw, S.root, await repoFolders(host)))
       if (read.broken) return `board.json: ${read.broken}`
       await saveBoard(host, read.board)
       done.push(`board.json: ${read.board.tasks.length} tasks saved in the current shape`)

@@ -655,7 +655,7 @@ async function projectIn($: Host, a: In): Promise<string | undefined> {
   if (typeof a.project !== 'string') throw new Error('Nothing changed: project must be a project folder name (text)')
   const name = str(a.project)?.trim() ?? ''
   if (!name) return ''
-  const refusal = projectRefusal(name, await projectNames($))
+  const refusal = projectRefusal(name, projectNames())
   if (refusal) throw new Error(`Nothing changed: ${refusal}`)
   return name
 }
@@ -724,7 +724,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const project = await projectIn($, a)
       // T-1182: on a board over several repos a change task needs a project (an investigation or errand may have none)
       if (!project && !isInvestigation(kind ?? kindFor(undefined, role))) {
-        const needs = changeNeedsProject(await projectNames($).catch(() => [] as string[]))
+        const needs = changeNeedsProject(projectNames())
         if (needs) throw new Error(`Nothing added: ${needs}`)
       }
       const tooLong = detailsTooLong(clean(str(a.details) ?? '', Infinity).length)
@@ -814,7 +814,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       const kind = (await kindIn($, a)) ?? (role && role !== t.role && isInvestigation(kindFor(undefined, role)) ? kindFor(undefined, role) : undefined)
       // T-1182: a change that would leave a change task with no project on a board over several repos is refused (an old task is left alone unless project or kind changes)
       if ((project !== undefined || kind !== undefined) && !(project ?? t.project) && !isInvestigation(kind ?? t)) {
-        const needs = changeNeedsProject(await projectNames($).catch(() => [] as string[]))
+        const needs = changeNeedsProject(projectNames())
         if (needs) throw new Error(`Nothing changed: ${needs}`)
       }
       // Another branch to merge into: given, or the owner said yes to "branch x is gone: merge into main instead?".
@@ -1129,7 +1129,7 @@ export async function saveSettings($: Host, a: SettingsInput, who: string): Prom
   // T-1137: with a project name, test_commands is that project's own (its merges run them); nothing else is set per project
   if (a.project !== undefined) {
     const name = str(a.project)?.trim() ?? ''
-    const refusal = projectRefusal(name, await projectNames($))
+    const refusal = projectRefusal(name, projectNames())
     if (refusal) return { error: refusal, changes: [] }
     const other = SETTING_NAMES.filter(k => k !== 'test_commands' && a[k] !== undefined)
     if (other.length) return { error: `Nothing changed: with a project only test_commands can be set (not ${other.join(', ')}); set those without project.`, changes: [] }

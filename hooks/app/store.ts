@@ -337,6 +337,7 @@ export async function load(host: Host): Promise<Board> {
   if (!exists) {
     const b = emptyBoard()
     S.enabledNow = onHere(b)
+    S.projects = {}
     return b
   }
   const { text, read: r, missing, missingFiles } = await readJoined(host)
@@ -353,8 +354,13 @@ export async function load(host: Host): Promise<Board> {
   if (r.skipped || fixed.length)
     await keepCopy(host, text, 'before-fix', c => `${S.N.boardFile}: ${fixText(r.skipped, fixed)}${c ? `. The file as it was is kept in ${c}` : ''}.`)
   S.enabledNow = onHere(r.board)
+  S.projects = projectPaths(r.board)
   return r.board
 }
+
+/** T-1196: the project table of `b` as name -> path (entries with no path are not projects yet). */
+const projectPaths = (b: { projects?: Record<string, { path?: string }> }): Record<string, string> =>
+  Object.fromEntries(Object.entries(b.projects ?? {}).flatMap(([n, p]) => (p?.path ? [[n, p.path] as const] : [])))
 
 /**
  * Moves done and dropped tasks kept whole in board.json to their parts files once (T-675), keeping a copy of the file
@@ -617,6 +623,7 @@ export async function saveBoard(host: Host, b: Board) {
     first.set(file, text)
   }
   await safeWrite(host, path(S.N.boardFile), JSON.stringify(slim, null, 2) + '\n', 'the board')
+  S.projects = projectPaths(b)
   for (const [file, tasks] of want) {
     const text = partsText(tasks)
     if (text !== first.get(file)) await safeWriteIn(host, file, text, `the board's ${fileName(file)}`)

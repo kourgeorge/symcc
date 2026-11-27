@@ -151,6 +151,8 @@ export const startS = () => ({
   gitRoot: 'ok' as GitState,
   /** T-1154: what the last check found in each project's repo (folder -> state); a project not looked at yet is not in it */
   repoGit: new Map<string, GitState>(),
+  /** T-1196: the project table (name -> repo path) as of the last board load; repoOf reads it (no folder scan) */
+  projects: {} as Record<string, string>,
   /** the install step for this machine while git is missing (see installStepOf) */
   gitInstall: '',
   /** T-1136: the workspace text while the folder (no repo, or no commit yet) holds repos of its own; '' otherwise */

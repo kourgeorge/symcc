@@ -13,7 +13,7 @@ import type { BranchCommit } from '../core/live'
 import type { SymccTask } from '../../types'
 import type { Host } from '../host'
 import { type PaneView, S, updateView } from './state'
-import { git, repoOf, gitStateOfTask } from './git'
+import { git, repoOf, gitStateOfTask, projectGone } from './git'
 
 /** How long the figures are kept before they are read again. */
 export const BRANCH_CACHE_MS = 30_000
@@ -268,7 +268,7 @@ export const hasTaskBranch = (t: Pick<SymccTask, 'status' | 'branch' | 'merged'>
  * `done` (tests) is the read started, if any.
  */
 export function taskBranchFacts(host: Host, t: Pick<SymccTask, 'id' | 'status' | 'branch' | 'merged' | 'timeline' | 'attempts'> & Partial<Pick<SymccTask, 'runs'>>, into: string, nowMs = Date.now(), onRead?: () => void): { facts: TaskBranchFacts | undefined; done?: Promise<void> } {
-  if (S.gitState !== 'ok' || !S.root || !hasTaskBranch(t) || gitStateOfTask(t) !== 'ok') return { facts: undefined }
+  if (S.gitState !== 'ok' || !S.root || !hasTaskBranch(t) || projectGone(t) || gitStateOfTask(t) !== 'ok') return { facts: undefined }
   // T-1117: a finished task's answer only changes when main moves, so its key holds main's tip and it has no timer
   const finished = isFinished(t)
   const key = [into, t.status, t.branch ?? '', t.merged ?? '', t.attempts, finished ? (mainTips.get(tipKey(repoOf(t), into)) ?? '') : ''].join(' ')
@@ -335,7 +335,7 @@ export function taskBranchesView(host: Host, b: Pick<Board, 'tasks'>, nowMs = Da
       if (got.facts) facts[t.id] = got.facts
     }
   }
-  const tipsRead = S.gitState === 'ok' && S.root ? readTips(host, [...new Map(finished.map(t => [tipKey(repoOf(t), intoOf(t)), { repo: repoOf(t), into: intoOf(t) }] as const)).values()], nowMs) : undefined
+  const tipsRead = S.gitState === 'ok' && S.root ? readTips(host, [...new Map(finished.filter(t => !projectGone(t)).map(t => [tipKey(repoOf(t), intoOf(t)), { repo: repoOf(t), into: intoOf(t) }] as const)).values()], nowMs) : undefined
   const done = (async () => {
     if (tipsRead) await tipsRead
     for (const t of finished) read(t)

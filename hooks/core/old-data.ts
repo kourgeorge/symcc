@@ -496,9 +496,11 @@ export function upgradeArchiveTask(t0: Raw): Raw | null {
 }
 
 /** board.json's content (already joined with its parts, parsed) in today's shape: old settings renamed, every task upgraded. */
-export function upgradeBoard(raw: unknown, root: string): unknown {
+export function upgradeBoard(raw: unknown, root: string, repoFolders: readonly string[] = []): unknown {
   if (!isObj(raw)) return raw
   const out: Raw = { ...raw }
+  const projects = withProjectPaths(raw.projects, root, repoFolders)
+  if (projects) out.projects = projects
   if (out.notify === 'sound') out.notify = soundNotify(isSoundSet(out.sound_set) ? out.sound_set : soundSetFor(root))
   delete out.sound_set
   if (out.mode === 'off') out.mode = 'paused'
@@ -507,6 +509,22 @@ export function upgradeBoard(raw: unknown, root: string): unknown {
   if (isObj(out.archived) && isNum(out.archived.tokens)) out.archived = { ...out.archived, tokens: cleanTokens({ unsplit: out.archived.tokens }) ?? {} }
   if (Array.isArray(out.tasks)) out.tasks = out.tasks.map(t => (isObj(t) ? upgradeTask(t, into) ?? t : t))
   return out
+}
+
+/**
+ * T-1196: the board's project table with each folder below the board that holds a repo (`repoFolders`, names) given its
+ * path `<root>/<name>` (an entry that already has a path keeps it). Null when nothing is added.
+ */
+export function withProjectPaths(projects: unknown, root: string, repoFolders: readonly string[]): Raw | null {
+  const table: Raw = isObj(projects) ? { ...projects } : {}
+  let changed = false
+  for (const name of repoFolders) {
+    const e = table[name]
+    if (isObj(e) && typeof e.path === 'string') continue
+    table[name] = { ...(isObj(e) ? e : {}), path: `${root.replace(/\/+$/, '')}/${name}` }
+    changed = true
+  }
+  return changed ? table : null
 }
 
 /** scouts.json's text with every usage total whose tokens were saved as one number made { unsplit: n }. Null when nothing needs it. */
@@ -600,6 +618,9 @@ export type OldInput = {
   unsafeScouts?: readonly string[]
   /** the time now (ms), for the usage days to cut */
   nowMs?: number
+  /** T-1196: the names of the folders directly below the board that hold a .git (none when the board folder is itself a repo), and the board folder */
+  repoFolders?: readonly string[]
+  root?: string
 }
 
 /** The count of everything in old shape, as lines; rows with n = 0 are left out. */
@@ -677,6 +698,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: lastReport, text: 'scouts whose last report is not yet in a runs file', fix: true },
     { n: unsafe.length, text: `scouts whose name can't be a file name; rename them (${unsafe.join(', ')})`, fix: false },
     { n: i.fieldGuide && !i.orgMem ? 1 : 0, text: 'field-guide.md not yet moved to org-mem.md', fix: true },
+    { n: isObj(i.board) && i.repoFolders?.length ? Object.keys(withProjectPaths(b.projects, i.root ?? '', i.repoFolders) ?? {}).filter(k => !(isObj(b.projects) && isObj(b.projects[k]) && typeof b.projects[k].path === 'string')).length : 0, text: 'project folders below the board with no path in the project table', fix: true },
   ]
   return rows.filter(r => r.n > 0)
 }

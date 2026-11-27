@@ -7,11 +7,11 @@ import { timelineEntryOk } from './timeline'
 import { type OwnerQuestion, cleanAsk, cleanQuestions } from './questions'
 
 /** T-1137: the optional settings of one project. T-1153: docs_test_commands too (read, not set by the settings tool yet). */
-export type ProjectSettings = { test_commands?: string[]; docs_test_commands?: string[] }
+export type ProjectSettings = { /** T-1196: the repo's real absolute path (~ expanded); repoOf reads it */ path?: string; test_commands?: string[]; docs_test_commands?: string[] }
 
 /**
- * T-1153: whether `p` can be a project: one plain folder name right below the board folder (letters, digits, . _ -),
- * never "." or "..", a hidden name, or anything with a slash, so a task's git work can't leave the board folder.
+ * T-1153: whether `p` can be a project name: one plain name (letters, digits, . _ -), never "." or "..", a hidden
+ * name, or anything with a slash. T-1196: only a name rule; where the repo is comes from the project's `path`.
  */
 export const isProjectName = (p: unknown): p is string => typeof p === 'string' && /^[A-Za-z0-9_-][A-Za-z0-9._-]*$/.test(p) && p !== '..' && p.length <= 200
 
@@ -417,7 +417,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'version' | 'tasks' | 'next_id' |
   scout_findings: v => isScoutFindings(v),
   tests_with_changes: v => isTestsWithChanges(v),
   checker: v => typeof v === 'boolean',
-  projects: v => isObj(v) && Object.values(v).every(p => isObj(p) && [p.test_commands, p.docs_test_commands].every(l => l === undefined || (Array.isArray(l) && l.every(c => typeof c === 'string')))),
+  projects: v => isObj(v) && Object.values(v).every(p => isObj(p) && (p.path === undefined || (typeof p.path === 'string' && p.path.startsWith('/'))) && [p.test_commands, p.docs_test_commands].every(l => l === undefined || (Array.isArray(l) && l.every(c => typeof c === 'string')))),
 }
 
 /**

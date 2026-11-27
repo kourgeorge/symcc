@@ -588,7 +588,10 @@ export function applyProjectSettings(b: Board, project: string, a: SettingsInput
   const all = a.test_commands.map(x => String(x).trim()).filter(Boolean)
   const cmds = all.slice(0, MAX_TEST_COMMANDS)
   const projects = { ...(b.projects ?? {}) }
-  if (cmds.length) projects[project] = { ...(projects[project] ?? {}), test_commands: cmds }
+  // T-1196: the entry also holds the project's path: clearing the commands keeps it
+  const { test_commands: _gone, ...others } = projects[project] ?? {}
+  const entry = cmds.length ? { ...others, test_commands: cmds } : others
+  if (Object.keys(entry).length) projects[project] = entry
   else delete projects[project]
   const { projects: _old, ...rest } = b
   const board: Board = Object.keys(projects).length ? { ...rest, projects } : rest

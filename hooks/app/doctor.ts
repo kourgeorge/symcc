@@ -11,7 +11,7 @@ import { S, workers, starting, finishing, approving } from './state'
 import { load, path } from './store'
 import { readLeadText } from './lead'
 import { readArchiveFile } from './archive'
-import { git, deleteMergedBranch, repoOf, projectNames } from './git'
+import { git, deleteMergedBranch, repoOf, projectGone } from './git'
 import { oldDataFound, oldRowsText, migrateData } from './migrate-data'
 import { plural } from '../core/text'
 
@@ -29,7 +29,7 @@ async function mergeRuns(host: Host, b: Board | null): Promise<Merging | null> {
   const mine = [...finishing, ...approving][0]
   if (mine) return { id: mine }
   // T-1154: a git merge going on in the board folder or in any project's folder
-  for (const repo of await repoList(host)) {
+  for (const repo of repoList()) {
     const m = await git(host, ['rev-parse', '-q', '--verify', 'MERGE_HEAD'], repo).catch(() => null)
     if (m?.exitCode === 0 && m.stdout.trim()) return {}
   }
@@ -37,7 +37,7 @@ async function mergeRuns(host: Host, b: Board | null): Promise<Merging | null> {
 }
 
 /** T-1154: the repos to look at: the board folder and each project folder. */
-const repoList = async (host: Host): Promise<string[]> => [S.root, ...(await projectNames(host).catch(() => [] as string[])).map(p => `${S.root}/${p}`)]
+const repoList = (): string[] => [S.root, ...Object.values(S.projects)]
 
 /** The live agents of this session, or null when they can't be told. */
 const agentsNow = (host: Host) => host.agents.list().then(a => a.map(agentState), () => null)
@@ -223,7 +223,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
   }
 
   // 3. git worktree entries whose folder is gone (T-1154: in the board's repo and in each project's)
-  const repos = await repoList(host)
+  const repos = repoList()
   const staleIn: string[] = []
   let stale = 0
   for (const repo of repos) {
@@ -264,7 +264,7 @@ async function findAll(host: Host, b: Board | null, mergingId: string | undefine
         listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is being merged), left alone` })
         continue
       }
-      if (!t || !isFinished(t) || repoOf(t) !== repo) continue
+      if (!t || !isFinished(t) || projectGone(t) || repoOf(t) !== repo) continue
       // as for folders (T-1032): a branch an agent may still use is only listed, never offered
       if (inUse(id, t, agents)) {
         listed.push({ kind: 'branch', fixable: false, text: `branch ${br} (${id} is ${t.status}): an agent may still use it, kept` })

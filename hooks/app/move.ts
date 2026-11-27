@@ -2,7 +2,7 @@ import type { Host } from '../host'
 import { find, patchTask, withTimeline, endedBy, isInvestigation, intoOf, failedOnClash, gitNote, type BoardTask } from '../board'
 import { S, finishing, movedAway } from './state'
 import { load, change, now } from './store'
-import { repoOf, taskGitReady, gitStateOfTask, projectNotes, branchExists, prepareWorktree, taskBranch, worktreeDir } from './git'
+import { repoOf, taskGitReady, gitStateOfTask, projectNotes, projectGone, branchExists, prepareWorktree, taskBranch, worktreeDir } from './git'
 import { haltChecker } from './checker'
 import { stopWorker } from './board-mode'
 import { checkingNow, mergingNow, MERGING_TEXT, CHECKING_TEXT, stopAsked, mergeFinished, checkAgain, pump } from './workers'
@@ -34,7 +34,7 @@ export async function moveStage($: Host, id: string, word: string): Promise<stri
   if (stage !== 'work') {
     if (isInvestigation(t)) throw new Error(`${t.id} is an investigation: it has no work to check, test or review`)
     if (!(await branchExists($, taskBranch(t), repoOf(t)))) throw new Error(`${t.id} has no branch yet (no worker has made work for it); move it to work instead`)
-    if (!(await taskGitReady($, await load($), t))) throw new Error(`${t.id} can't be moved to ${stage} now: ${gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`)
+    if (!(await taskGitReady($, await load($), t))) throw new Error(`${t.id} can't be moved to ${stage} now: ${projectGone(t) || gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`)
   }
   const why = `moved to ${stage} by the lead`
   // The task is written in a status the old step can't write over; then what ran is stopped and let go of.

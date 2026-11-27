@@ -1,5 +1,5 @@
 import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, beatText, driverTimes, carriedText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, driveNoticeParts, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
-import { homeBranch, noProjectText, openProjects, projectNotes } from './git'
+import { homeBranch, noProjectText, openProjects, projectNotes, projectPath } from './git'
 import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, fitView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
 import { timed } from './slow-log'
@@ -489,7 +489,8 @@ export async function readTodayTeam(host: Host, scouts: readonly string[], nowMs
 async function branchLine(host: Host, b: Board, own: string): Promise<string> {
   const parts = own ? [own] : []
   for (const p of openProjects(b)) {
-    const repo = `${S.root}/${p}`
+    const repo = projectPath(p)
+    if (!repo) continue
     if (S.repoGit.get(repo) && S.repoGit.get(repo) !== 'ok') continue
     const br = await homeBranch(host, repo).catch(() => '')
     if (br) parts.push(`${p}: ${br}`)

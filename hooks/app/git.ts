@@ -22,16 +22,29 @@ export async function gitOk($: Host, args: string[], cwd = S.root, timeoutMs = 1
   return r.stdout.trim()
 }
 
+/** T-1196: the repo path of project `p` from the board's project table, undefined when `p` is not in it. */
+export const projectPath = (p: unknown): string | undefined => (typeof p === 'string' && Object.prototype.hasOwnProperty.call(S.projects, p) ? S.projects[p] : undefined)
+
+/** T-1196: the project names of this board (its table), sorted. */
+export const projectNames = (): string[] => Object.keys(S.projects).sort()
+
+/** T-1196: the sentence for a task whose project is not in the board's project table; '' when it is (or it has none). */
+export const projectGone = (t?: object | null): string => {
+  const p = (t as { project?: unknown } | null | undefined)?.project
+  return p === undefined || p === null || p === '' || projectPath(p) ? '' : `project '${String(p).slice(0, 80)}' is not in this board's project table`
+}
+
 /**
- * T-1152: the repo a task's git work happens in: its project folder (below the board folder) when it has one, else the
- * board folder. Every git call that belongs to a task takes its folder from here.
+ * T-1152: the repo a task's git work happens in: its project's path from the board's project table (T-1196: a repo
+ * anywhere on disk) when it has one, else the board folder. Every git call that belongs to a task takes its folder
+ * from here. A project that is not in the table is refused.
  */
 export const repoOf = (t?: object | null): string => {
   const p = (t as { project?: unknown } | null | undefined)?.project
   if (p === undefined || p === null || p === '') return S.root
-  // T-1153: never a path out of the board folder ("..", "/abs", "a/b"); the board's loader drops such names already
-  if (!isProjectName(p)) throw new Error(`'${String(p).slice(0, 80)}' is not a project folder name`)
-  return `${S.root}/${p}`
+  const path = projectPath(p)
+  if (!path) throw new Error(`'${String(p).slice(0, 80)}' is not in this board's project table`)
+  return path
 }
 
 /** The branch checked out in the project, '' when none (a detached HEAD). */
@@ -124,23 +137,32 @@ export const openProjects = (b: Board): string[] => [...new Set(b.tasks.filter(t
 
 /** T-1154: what the last check found in the repo task `t` works in (the board's own repo when it has no project). */
 export const gitStateOfTask = (t?: object | null): GitState => {
+  if (projectGone(t)) return 'ok' // taskGitReady refuses it, with projectGone's words
   const repo = repoOf(t)
   return repo === S.root ? S.gitRoot : S.repoGit.get(repo) ?? 'ok'
 }
 
-/** T-1154: a short note per project whose repo is not ready ("client: no commits yet"); '' when all are. */
-export const projectNotes = (names?: readonly string[]): string =>
-  [...S.repoGit]
-    .map(([r, s]) => [r.slice(S.root.length + 1), s] as const)
-    .filter(([p, s]) => s !== 'ok' && (!names || names.includes(p)))
-    .map(([p, s]) => `${p}: ${s === 'no-git' ? 'git is not installed' : s === 'no-repo' ? 'no git repo' : 'no commits yet'}`)
-    .join('; ')
+/**
+ * T-1154: a short note per project whose repo is not ready ("client: no commits yet"); '' when all are. T-1196: also
+ * a note for each of `names` that is not in the project table.
+ */
+export const projectNotes = (names?: readonly string[]): string => {
+  const byPath = new Map(Object.entries(S.projects).map(([n, p]) => [p, n] as const))
+  return [
+    ...[...S.repoGit]
+      .map(([r, s]) => [byPath.get(r) ?? r, s] as const)
+      .filter(([p, s]) => s !== 'ok' && (!names || names.includes(p)))
+      .map(([p, s]) => `${p}: ${s === 'no-git' ? 'git is not installed' : s === 'no-repo' ? 'no git repo' : 'no commits yet'}`),
+    ...(names ?? []).filter(p => !projectPath(p)).map(p => `${p}: not in the project table`),
+  ].join('; ')
+}
 
 /** T-1154: whether every repo looked at so far is ready (the board's and each project's). */
 export const allGitReady = () => S.gitState === 'ok' && [...S.repoGit.values()].every(s => s === 'ok')
 
 /** T-1154: whether git is ready in the repo task `t` works in: looks at that repo (the board's, or its project's). */
 export async function taskGitReady($: Host, b: Board, t: object | null | undefined): Promise<boolean> {
+  if (projectGone(t)) return false
   const repo = repoOf(t)
   if (repo === S.root) {
     await gitReady($, b)
@@ -152,7 +174,7 @@ export async function taskGitReady($: Host, b: Board, t: object | null | undefin
 
 /** T-1165: forgets the repos of projects with no open (todo/doing/waiting/review/failed/paused) task: they no longer count. */
 function forgetClosedRepos(b: Board): void {
-  const open = new Set(b.tasks.filter(t => isOpenTask(t)).map(t => (t as { project?: string }).project).filter((p): p is string => !!p && isProjectName(p)).map(p => `${S.root}/${p}`))
+  const open = new Set(b.tasks.filter(t => isOpenTask(t)).map(t => (t as { project?: string }).project).filter((p): p is string => !!p && isProjectName(p)).flatMap(p => projectPath(p) ?? []))
   for (const r of [...S.repoGit.keys()]) if (!open.has(r)) S.repoGit.delete(r)
 }
 
@@ -160,7 +182,10 @@ function forgetClosedRepos(b: Board): void {
 export async function checkProjects($: Host, b: Board): Promise<void> {
   forgetClosedRepos(b)
   if (S.gitState === 'no-git') return
-  for (const p of openProjects(b)) await gitReady($, b, `${S.root}/${p}`).catch(() => false)
+  for (const p of openProjects(b)) {
+    const repo = projectPath(p)
+    if (repo) await gitReady($, b, repo).catch(() => false)
+  }
 }
 
 /** Looks at git again while it is not ready (the watchdog, the panel opening, the Check again button); when it just became ready, work starts. Returns a short answer. */
@@ -197,7 +222,7 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
   S.gitRoot = real
   // T-1178: a workspace (projects below, no repo of its own) is fine as it is; a task with no project holds back only itself
   const board = b ?? (await load($))
-  const s: GitState = real === 'no-repo' && (await projectNames($).catch(() => [] as string[])).length ? 'ok' : real
+  const s: GitState = real === 'no-repo' && projectNames().length ? 'ok' : real
   if (s === 'no-git' && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => '')
   if (s !== 'no-git') S.gitInstall = ''
   const ws = (s === 'no-repo' || s === 'no-commits') && (await holdsRepos($)) ? workspaceText() : ''
@@ -271,22 +296,9 @@ async function holdsRepos($: Host): Promise<boolean> {
   return false
 }
 
-/**
- * T-1137: the projects of this board: the folders directly below the board folder that hold their own .git (found by
- * folder name, nothing stored), sorted. None when the board folder is itself a repo (a board inside one repo).
- * Only folders whose names pass isProjectName count: a folder like "my app" is simply not offered as a project.
- */
-export async function projectNames($: Host): Promise<string[]> {
-  if (await $.fs.exists(`${S.root}/.git`)) return []
-  const dirs = (await $.fs.list(S.root).catch(() => [])).filter(e => e.kind === 'dir' && !e.name.startsWith('.') && e.name !== 'node_modules' && e.name !== S.N.dir).map(e => e.name)
-  const found: string[] = []
-  for (const d of dirs) if (isProjectName(d) && await $.fs.exists(`${S.root}/${d}/.git`)) found.push(d)
-  return found.sort()
-}
-
-/** T-1137: why `name` is not a project, or '' when it is one of `names`. */
+/** T-1137: why `name` is not a project, or '' when it is one of `names` (the board's project table). */
 export const projectRefusal = (name: string, names: readonly string[]): string =>
-  names.includes(name) ? '' : names.length ? `'${name}' is not a project here. The project folders are: ${names.join(', ')}.` : `'${name}' is not a project: this board has no project folders (a project is a folder below the board folder with its own .git).`
+  names.includes(name) ? '' : names.length ? `'${name}' is not a project here. The projects are: ${names.join(', ')}.` : `'${name}' is not a project: this board has no projects in its project table.`
 
 /**
  * Sets up git in the project, once the owner said yes: git init on main (if there is no repo),
@@ -728,13 +740,14 @@ export async function cleanupMerged($: Host, b: Board) {
       keptDirty.add(id)
       continue
     }
-    if ((await git($, ['worktree', 'remove', dir], repoOf(t))).exitCode === 0) dirs++
+    if (!projectGone(t) && (await git($, ['worktree', 'remove', dir], repoOf(t))).exitCode === 0) dirs++
   }
   // T-1154: each repo a task works in (the board's, and each project's) is pruned and cleaned on its own
-  const repoTasks = (repo: string) => b.tasks.filter(t => repoOf(t) === repo)
+  const known = b.tasks.filter(t => !projectGone(t))
+  const repoTasks = (repo: string) => known.filter(t => repoOf(t) === repo)
   // T-1165/T-1179: the board folder only when it is its own repo (never a parent repo)
   const rootNeeded = S.gitRoot === 'ok'
-  const repos = [...new Set(b.tasks.map(t => repoOf(t)))].filter(r => r !== S.root || rootNeeded)
+  const repos = [...new Set(known.map(t => repoOf(t)))].filter(r => r !== S.root || rootNeeded)
   if (!repos.includes(S.root) && rootNeeded) repos.push(S.root)
   for (const repo of repos) await git($, ['worktree', 'prune'], repo)
   let branches = 0

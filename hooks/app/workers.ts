@@ -2,7 +2,7 @@ import type { SymccTask, SymccTokens } from '../../types'
 import { doneLine, PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, liveWorkersFor, modeOf, symccOn, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, reviewTask, ownerEditedLine, gitNote, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withTimeline, timelineEntry, type TimelineAdd, type TimelineFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type TimelineKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, finishingNow, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, mergeTestCount, testMinutesOf, ranOverNote, waitsForFiles, blockerFiles, asBlockers, waitFilesNote, stillBlocks, timeLimitOf, hardCapOf, WRAP_UP_GRACE_MS, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, isCheckerOutput, checkerLine, checkerProblems, problemsBlockLines, CHECKER_PROBLEMS_MAX, checkerRetryText, kindOf, isInvestigation, isErrand, errandFolders, kindSection, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, ASK_TOOL, ASK_LINE, noteFilesInUse, askedMore, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, isUsageLimit, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, withStoppedUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withAgentStart, withWorkerStart, DEFAULT_ROLE, workerSince, workerActiveMs, isProseRole, checkerSendBacks, CHECKER_SEND_BACKS, checkerAskText, CHECKER_ASK_OPTIONS, firstProblemOf, CHECKER_MARK } from '../board'
 import { archiveOld } from './archive'
 import { checkHealth } from './health'
-import { repoOf, plainTask, workspaceNow, projectNames, gitReady, taskGitReady, gitStateOfTask, projectNotes, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
+import { repoOf, plainTask, workspaceNow, projectNames, projectGone, gitReady, taskGitReady, gitStateOfTask, projectNotes, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
 import { publish, drivesHere, drivenElsewhere, readLeadText } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
 import type { TurnLimit } from './merge-line'
@@ -238,7 +238,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       const cur = find(await load(host), id)
       return cur?.status === 'doing' && cur.live?.session === S.me && cur.attempts === t.attempts
     }
-    const plainNote = plain ? `\n\nYou work in a plain folder (no git, no branch). The board's projects are folders you may read, but never write into: ${(await projectNames(host)).map(n => `${S.root}/${n}`).join(', ')}. Read them with your file tools. Nothing you leave here is kept: put what the owner needs in your report.` : ''
+    const plainNote = plain ? `\n\nYou work in a plain folder (no git, no branch). The board's projects are folders you may read, but never write into: ${Object.entries(S.projects).map(([n, p]) => `${n}: ${p}`).join(', ')}. Read them with your file tools. Nothing you leave here is kept: put what the owner needs in your report.` : ''
     const errandOut = (x: BoardTask) => (isErrand(x) ? errandFolders(x.files, S.root, S.home) : [])
     const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince(host, t, dir, Date.parse(now()))) + plainNote + (errandOut(t).length ? `\n\nYou may write here (outside the project): ${errandOut(t).join(', ')}` : '') + reportsNote(reports, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(isProseRole(role) && !isInvestigation(t) ? { prose: true as const } : {}), ...(errandOut(t).length || (!isInvestigation(t) && t.files?.length) ? { files: isErrand(t) ? errandOut(t) : t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
@@ -1575,7 +1575,7 @@ export async function approve(host: Host, id: string, keepNote = false): Promise
   const b = await load(host)
   const t = reviewTask(b, id, 'approve')
   // T-1182: the note is a docs task, which needs a project on a board over several repos
-  if (isInvestigation(t) && keepNote && workspaceNow() && !t.project) throw new Error(`${t.id} has no project, and a note is a docs task that needs one on a board over several repos (${(await projectNames(host)).join(', ')}): give ${t.id} a project (${S.N.name} change project), then keep it as a note`)
+  if (isInvestigation(t) && keepNote && workspaceNow() && !t.project) throw new Error(`${t.id} has no project, and a note is a docs task that needs one on a board over several repos (${projectNames().join(', ')}): give ${t.id} a project (${S.N.name} change project), then keep it as a note`)
   if (isInvestigation(t)) return endInvestigation(host, t, keepNote)
   if (keepNote) throw new Error(`${t.id} is a change task: keep_note is only for an answered investigation. Approve it without keep_note to merge it.`)
   return mergeFinished(host, b, t, 'approve')
@@ -1644,7 +1644,7 @@ export async function mergeWaiting(host: Host, id: string): Promise<string> {
 export async function mergeFinished(host: Host, b: Board, t: SymccTask, kind: 'approve' | 'merge', force = false): Promise<string> {
   const stays = kind === 'approve' ? 'stays in review' : 'keeps waiting'
   if (approving.has(t.id)) return `${t.id} is already being merged`
-  if (!(await taskGitReady(host, b, t))) return `${t.id} ${stays}: ${gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`
+  if (!(await taskGitReady(host, b, t))) return `${t.id} ${stays}: ${projectGone(t) || gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`
   if (await waitIfBranchGone(host, b, t, 'merge')) return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`
   approving.add(t.id)
   // The same time limit as a finished worker's check (finishLimitMs): past it the merge is

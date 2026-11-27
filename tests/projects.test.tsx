@@ -38,7 +38,8 @@ async function world(repos: string[], own = false) {
   S.root = '/ws'
   S.writing = Promise.resolve()
   S.enabledNow = true
-  await change(w.host, b => b)
+  // T-1196: the project table (what the one-time move writes for repos below the board); a board that is its own repo has none
+  await change(w.host, b => (own ? b : { ...b, projects: Object.fromEntries(repos.filter(isProjectName).map(r => [r, { path: `/ws/${r}` }])) }))
   return { w, files }
 }
 
@@ -46,7 +47,7 @@ const boardOf = (files: Map<string, string>) => JSON.parse(files.get('/ws/.symcc
 
 test('add with a project stores it; a wrong name is refused with the project folders; change sets and clears it', async () => {
   const { w, files } = await world(['server', 'client'])
-  expect(await projectNames(w.host)).toEqual(['client', 'server'])
+  expect(projectNames()).toEqual(['client', 'server'])
   expect(await runTool(w.host, 'add', { ...WISH, title: 'Fix login', project: 'client' })).toContain('added T-1')
   expect(boardOf(files).tasks[0]!.project).toBe('client')
   const err = await runTool(w.host, 'add', { ...WISH, title: 'Nope', project: 'clinet' }).catch((e: Error) => e.message)
@@ -72,33 +73,33 @@ test('add with a project stores it; a wrong name is refused with the project fol
 
 test('a repo folder whose name is not a safe project name (like "my app") is not offered as a project', async () => {
   const { w, files } = await world(['client', 'my app'])
-  expect(await projectNames(w.host)).toEqual(['client'])
+  expect(projectNames()).toEqual(['client'])
   const err = await runTool(w.host, 'add', { ...WISH, title: 'Nope', project: 'my app' }).catch((e: Error) => e.message)
-  expect(err).toContain('The project folders are: client.')
+  expect(err).toContain('The projects are: client.')
   expect(boardOf(files).tasks.length).toBe(0)
 })
 
 test('a board inside one repo has no projects: add without project works, and a project name is refused', async () => {
   const { w, files } = await world(['server'], true)
-  expect(await projectNames(w.host)).toEqual([])
+  expect(projectNames()).toEqual([])
   expect(await runTool(w.host, 'add', { ...WISH, title: 'Plain' })).toContain('added T-1')
   expect(boardOf(files).tasks[0]!.project).toBe(undefined)
-  expect(await runTool(w.host, 'add', { ...WISH, title: 'Other', project: 'server' }).catch((e: Error) => e.message)).toContain('no project folders')
+  expect(await runTool(w.host, 'add', { ...WISH, title: 'Other', project: 'server' }).catch((e: Error) => e.message)).toContain("no projects in its project table")
 })
 
 test('per-project test_commands round-trip through board.json, only for a project folder', async () => {
   const { w, files } = await world(['server', 'client'])
   expect(await runTool(w.host, 'settings', { project: 'client', test_commands: ['npm test', 'npm run lint'] })).toContain('npm test')
-  expect(boardOf(files).projects).toEqual({ client: { test_commands: ['npm test', 'npm run lint'] } })
+  expect(boardOf(files).projects?.client).toEqual({ path: '/ws/client', test_commands: ['npm test', 'npm run lint'] })
   const read = readBoard(files.get('/ws/.symcc/board.json')!)
-  expect(read.board.projects).toEqual({ client: { test_commands: ['npm test', 'npm run lint'] } })
+  expect(read.board.projects?.client).toEqual({ path: '/ws/client', test_commands: ['npm test', 'npm run lint'] })
   expect((await load(w.host)).projects?.client?.test_commands).toEqual(['npm test', 'npm run lint'])
   // the board's own test_commands are not touched
   expect((await load(w.host)).test_commands).toEqual([])
   expect(await runTool(w.host, 'settings', { project: 'nope', test_commands: ['x'] })).toContain('server')
   expect(await runTool(w.host, 'settings', { project: 'client', max_parallel: 2 })).toContain('only test_commands')
   await runTool(w.host, 'settings', { project: 'client', test_commands: [] })
-  expect(boardOf(files).projects).toBe(undefined)
+  expect(boardOf(files).projects?.client).toEqual({ path: '/ws/client' })
 })
 
 test('the chat list and chat page show the project tag; a task with none shows none', async () => {
@@ -166,6 +167,7 @@ test('T-1153: a project that is not one plain folder name is dropped on load, an
   for (const p of ['client', 'my-app.v2', 'x_1']) expect(isProjectName(p)).toBe(true)
   for (const p of names.slice(0, 7)) expect(isProjectName(p)).toBe(false)
   S.root = '/ws'
+  S.projects = { client: '/ws/client' }
   expect(repoOf({ project: 'client' })).toBe('/ws/client')
   expect(repoOf({})).toBe('/ws')
   let err = ''
@@ -174,7 +176,7 @@ test('T-1153: a project that is not one plain folder name is dropped on load, an
   } catch (e) {
     err = (e as Error).message
   }
-  expect(err).toContain('not a project folder name')
+  expect(err).toContain('project table')
 })
 
 test("T-1153: a task of a project runs its own test commands (and docs ones) when set, else the board's", async () => {

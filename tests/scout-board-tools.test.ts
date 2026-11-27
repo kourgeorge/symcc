@@ -207,8 +207,8 @@ test("T-895: a scout's base prompt names the scouts tool (action list); a checke
 })
 
 test('T-1155: a scout on a workspace board is told the project folders; none on a one-repo board', () => {
-  const p = scoutPrompt({ scout: 'bugs', root: '/w', instructions: 'Find crashes.', open: [], name: 'symcc', projects: ['client', 'server'] })
-  expect(p).toContain('The project is in /w. That folder is not a repo itself')
-  expect(p).toContain('/w/client, /w/server')
-  expect(scoutPrompt({ scout: 'bugs', root: '/w', instructions: 'x', open: [], name: 'symcc' })).not.toContain('not a repo itself')
+  const p = scoutPrompt({ scout: 'bugs', root: '/w', instructions: 'Find crashes.', open: [], name: 'symcc', projects: { client: '/w/client', server: '/srv/server' } })
+  expect(p).toContain('The project is in /w. The board\'s projects')
+  expect(p).toContain('client: /w/client, server: /srv/server')
+  expect(scoutPrompt({ scout: 'bugs', root: '/w', instructions: 'x', open: [], name: 'symcc' })).not.toContain('The board\'s projects')
 })
