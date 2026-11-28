@@ -167,13 +167,13 @@ test('T-643: a session that does not drive: a warning line under the banner and 
 
 test('T-517, T-706: with no git repo the banner warns with Claude Code\'s "set up git (g)" and its git row with the [ Set up git (g) ] button', () => {
   const f = viewFile()
-  for (const git_state of ['no-repo', 'no-commits'] as const) {
+  for (const git_state of ['no-commits'] as const) {
     const d = panelLines({ ...f, view: { ...f.view, git_state, branch_note: gitNote(git_state) } }, { opened: '', cursor: 0 }, NOW, 140)
     const lines = d.lines.map(lineText)
-    expect(lines.join('\n')).toContain(git_state === 'no-repo' ? 'no git repo here; set up git (g)' : 'no commits yet; set up git (g)')
+    expect(lines.join('\n')).toContain('no commits yet; set up git (g)')
     expect(lines.join('\n')).not.toContain('ask the lead')
     // Claude Code's git row (parts.tsx gitRow): the warning, then the button
-    expect(lines).toContain(`${git_state === 'no-repo' ? 'No git repo here: symcc needs git for task branches. No worker starts until it is set up. ' : 'No commits yet: symcc needs a first commit for task branches. No worker starts until it is set up. '}[ Set up git (g) ]`)
+    expect(lines).toContain(`${'No commits yet: symcc needs a first commit for task branches. No worker starts until it is set up. '}[ Set up git (g) ]`)
     expect(d.lines.flat().find(s => s.text === '[ Set up git (g) ]')?.hit).toEqual({ key: 'g' })
   }
   // T-861: git missing: the notice gives the install step and has no button
@@ -182,7 +182,7 @@ test('T-517, T-706: with no git repo the banner warns with Claude Code\'s "set u
   expect(missing.some(l => l.includes('Set up git'))).toBe(false)
   expect(missing.some(l => l.includes('[ Check again (g) ]'))).toBe(true)
   // the panel clips lines: at 80 columns (inner 78) the notice wraps and no line is wider
-  for (const git_state of ['no-repo', 'no-commits', 'no-git'] as const) {
+  for (const git_state of ['no-commits', 'no-git'] as const) {
     const rows = gitRowLines({ git_state, git_install: 'sudo apt install git' }, 78)
     expect(rows.length).toBeGreaterThan(1)
     for (const r of rows) expect(lineText(r).length).toBeLessThan(79)
@@ -559,7 +559,7 @@ test('startTui on a fake OpenCode TUI: reads the view file in its folder, draws 
 })
 
 test('T-887: opening the board while git is not ok posts nothing into the session (no /symcc-settings git check in the chat)', async () => {
-  for (const git_state of ['no-git', 'no-repo', 'no-commits'] as const) {
+  for (const git_state of ['no-git', 'no-commits'] as const) {
     const f = viewFile()
     const files = new Map([['/work/proj/.symcc/view.json', viewFileText({ ...f, view: { ...f.view, open_on_start: false, git_state, branch_note: gitNote(git_state) } })]])
     const sent: { sessionID: string; name: string; text: string }[] = []
@@ -3630,7 +3630,7 @@ test('T-700: the board header (banner, tests/limits line, drive warning, tabs) s
 // ---------------- T-706: the Claude Code buttons OpenCode lacked ----------------
 
 /** defsViewFile with an added role (docs) and an added kind (chore), and (`git`) no git repo or no commit yet. */
-function addedViewFile(git?: 'no-repo' | 'no-commits'): ViewFile {
+function addedViewFile(git?: 'no-commits'): ViewFile {
   const f = defsViewFile()
   const docsRole = { name: 'docs', description: 'Writes docs', skills: [], prompt: 'Keep it short.' }
   const choreKind = { name: 'chore', description: 'A small chore', body: 'Do it.' }
@@ -3998,7 +3998,7 @@ test('T-1052: the banner shows [ Drive here (d) ] only while another session dri
 })
 
 test('T-706: startTui: Set up git (g, or the banner\'s button) asks a yes first, then sends /symcc-settings git setup; Cancel sends nothing; no git row, or a page without the banner: g does nothing', async () => {
-  const t = await tuiOn(addedViewFile('no-repo'))
+  const t = await tuiOn(addedViewFile('no-commits'))
   for (const how of ['key', 'click'] as const) {
     await t.board.press('t', 's')
     t.sent.length = 0
@@ -4029,7 +4029,7 @@ test('T-706: startTui: Set up git (g, or the banner\'s button) asks a yes first,
 })
 
 test('T-861/T-887: opening the board (/symcc-board) sends no /symcc-settings git check, with git ok or not', async () => {
-  for (const [state, want] of [['no-repo', 0], ['no-commits', 0], [undefined, 0]] as const) {
+  for (const [state, want] of [['no-commits', 0], [undefined, 0]] as const) {
     const f = fakeCtx({})
     const sent: { name: string; text: string }[] = []
     const ctx: TuiContext = { ...f.ctx, client: { session: { command: async i => void sent.push(unmarked(i)) } } }

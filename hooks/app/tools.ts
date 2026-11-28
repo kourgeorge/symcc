@@ -4,7 +4,7 @@ import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, know
 import { checkerReportOf } from '../core/task-sections'
 import { sizeSegs } from '../core/page-header'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
-import { plainTask, changeNeedsProject, noProjectText, repoOf, taskGitReady, setupGit, branchExists, branchList, homeBranch, projectNames, projectGone, projectRefusal } from './git'
+import { workspaceNow, plainTask, changeNeedsProject, noProjectText, repoOf, taskGitReady, setupGit, branchExists, branchList, homeBranch, projectNames, projectGone, projectRefusal } from './git'
 import { taskBranch, removeWorktree, worktreeDir, taskWork, resetScratch } from './worktree'
 import { addProject, changeProjectPath, removeProject } from './projects'
 import { loadRoles, leadRoles } from './roles'
@@ -197,9 +197,9 @@ ${features.panel ? '' : `  /${S.N.name}-board               show the board panel
   /${S.N.name}-enable              the one on switch: ${S.N.name} on, in this window: turns the project back on
                        if it was disabled and this window on if it was off here, in the mode the
                        board had (it never makes a board)
-  /${S.N.name}-init [git]          set up ${S.N.name} in this folder, like git init: makes ${S.N.dir}/ here, turns it on and opens the board; with no .git of its
-                       own the board still opens and shows a "No git repo here" notice (workers wait until git is set up);
-                       /${S.N.name}-init git sets up git here first (never a parent folder's repo)
+  /${S.N.name}-init [git]          set up ${S.N.name} in this folder, like git init: makes ${S.N.dir}/ here, turns it on and opens the board; in a folder
+                       that is not a repo the board is a control center: it works with projects;
+                       /${S.N.name}-init git makes the folder a repo first, if you want that (never a parent folder's repo)
   /${S.N.name}-drive               make this session drive the board (start workers, merge, run scouts);
                        a session that drives now hands over within 30 s, its running workers
                        restart here without using up a try
@@ -371,7 +371,7 @@ Everything else, just say to the lead: "pause T-5", "drop T-2", "do T-4 first",
     change the project; changes only go through board tasks.
   • Test commands are run by ${S.N.name} itself, without a permission prompt.
   • Add ${S.N.dir}/ to the project's .gitignore.
-  • A folder with no git repo (or no commits yet): no worker starts. The board shows a "No git repo here" notice; on your yes
+  • A folder that is not a repo is a control center: it works with projects, and no setup is needed. A repo with no commits yet: no worker starts; on your yes
     (${features.panel ? 'press g in the board, or ' : ''}the lead's setup_git) runs git init on main, writes a .gitignore
     and makes a first commit of your files, leaving out secrets (.env, *.pem, id_rsa; templates like .env.example are kept) and files
     over 50 MB. It never pushes or adds a remote. With git not installed the notice says so and gives the install step for your machine.`,
@@ -428,7 +428,7 @@ ${
 - Details are limited to 8,000 characters; add and change refuse longer text (never cut it). Put long pasted material (a draft, a log) in a file and name the file in the details.
 - To add a note or one more line to a task's details, use ${S.N.name} change add_details: the note (added at the end as "Note (lead, <date>): ...", the rest kept, written in its timeline; a running task restarts). A change to a running task's details, title or files (add_details too) restarts its try, so put a note in the same change as an answer instead of sending it a moment later. After a checker send-back (or any other retry, not a task's first try), add your note within a minute of the retry starting: a retry under a minute old starts again with the note on the same try number (no lost try); later, the note restarts it as a new try. Changing only its priority or after-list keeps it running (saved for its next try). details rewrites the whole text, so use it only for a full rewrite, never both at once.
 - When the owner answers a waiting task, put the answer into the task with ${S.N.name} change and answer: their words (that sends it back to work; what the worker already changed is kept).
-- If you are told the folder has no git repo (or no commits), ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
+- If you are told the repo has no commits, ask the owner whether to set one up; only when they say yes, run ${S.N.name} setup_git. Never do it without asking.
 - Set the test command with ${S.N.name} settings (e.g. ["npm test"]); for a new project pick the stack and test command when you plan the first tasks.
 - A scout with every_minutes: 0 runs only on demand: never on its timer, only when the owner presses "run now" or types /${S.N.name}-scout <name>. A scout whose every_minutes is not valid also runs only on demand, with a warning.
 - Manage scouts with ${S.N.name} scouts, never by writing ${S.N.dir}/scouts/ files by hand: action list (the default) shows each scout (how often, paused, running, next and last run, the start of its last report), list with name shows one in full (with its last few runs: when, outcome, findings, tasks made from it and its report file); add / edit with name (lowercase letters, digits, dashes), every_minutes (0 = only on demand), optional model and prompt; remove deletes one (ask the owner first); run runs one now, like the owner's "run now".
@@ -1081,7 +1081,7 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   const b = await load($)
   const waits = runNowWaits(b, t)
   if (waits.length && !anyway) return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`
-  if (S.gitState === 'ok' && S.gitRoot === 'no-repo' && !isProjectName(t.project ?? '') && !isInvestigation(t)) return `${noProjectText({ ...b, tasks: [t] })}; nothing started`
+  if (workspaceNow() && !isProjectName(t.project ?? '') && !isInvestigation(t)) return `${noProjectText({ ...b, tasks: [t] })}; nothing started`
   if (projectGone(t)) return `${t.id} didn't start: ${projectGone(t)}`
   if (S.gitState === 'no-git' || (!plainTask(t) && !(await taskGitReady($, b, t)))) return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : 'here'} yet`
   const busy = workers.size + starting.size

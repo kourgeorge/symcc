@@ -51,7 +51,7 @@ T-3 a priority below 0 (-1, -2…); work that can wait gets 1, 2…
 `$.clock` plugin API, and panels). This API is early access and can change. symcc is
 built and tested with Claude Code **2.1.319** (`claude --version`); Option B needs 2.1.275
 or later. You also need **git**; if it is missing, nothing starts and the board and the lead tell you the
-install step for your machine. With no git repo yet, symcc offers to run `git init` on `main`, write a
+install step for your machine. A folder that is not a repo is a control center that works with projects; `/symcc-init git` (or the settings git setup) makes it a repo if you want that. With a repo that has no commit yet, symcc offers to write a
 `.gitignore` and make a first commit. It never pushes. There is no build step.
 
 **Option A: try it from a clone** (nothing is installed; you pass the folder each time):
@@ -164,7 +164,7 @@ Type these in the chat. `/symcc` opens everything; `/symcc-<word>` does one thin
 | `/symcc-doctor [fix [all\|id ...]]` | Check `.symcc/` and git (old backups, merged branches, leftover task folders, files near 4 MB, a stuck board). It only lists them; `fix all` or `fix <id> ...` cleans up |
 | `/symcc-disable` | Disable symcc for this project: Claude works as normal (no lead guide, workers, scouts, updates, sounds or voice); the board is kept |
 | `/symcc-enable` | Turn symcc on in this window: the project too if it was disabled, and this window if it was off here (it becomes a lead again), in the mode the board had. It says "already enabled" only when both were on. It never creates a board; with no `.symcc` in the folder the session started in, it points to `/symcc-init`. A window opened while another live window has symcc on starts as a follower (`/symcc-drive` drives from it; `/symcc-disable here` turns it off) |
-| `/symcc-init [git]` | Create `.symcc/` with the board in the folder Claude started in (a board in a parent folder does not matter), turn symcc on, become the lead, add the example scouts and open the panel. With no repository of its own the board still opens, with a "No git repo here" notice and a Set up git button; `/symcc-init git` sets git up here first. Where `.symcc/` already exists it changes nothing |
+| `/symcc-init [git]` | Create `.symcc/` with the board in the folder Claude started in (a board in a parent folder does not matter), turn symcc on, become the lead, add the example scouts and open the panel. In a folder that is not a repo the board is a control center that works with projects; `/symcc-init git` makes the folder a repo first, if you want that. Where `.symcc/` already exists it changes nothing |
 | `/symcc-disable here` | Turn symcc off in this window only (plain Claude here). It is kept in this session, not in `board.json`; other windows are not changed. If this window drives the board, it hands driving over |
 | `/symcc-drive` | Make this session drive the board (start workers, merge, run scouts). If another session drives, it hands over within 30 s: its running workers stop and restart here from their kept folders and branches, without using up a try. If it doesn't answer within 3 minutes, this session takes over anyway. The other windows name the driver: "this window follows (driver started Nov 23 09:26, active 3 min ago); /symcc-drive to drive from here" (lead.json keeps `since` and `active` for it) |
 | `/symcc-help [topic]` | The built-in manual |

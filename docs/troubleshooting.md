@@ -29,7 +29,7 @@ nothing else). `/symcc-init` and help work; every other symcc command and tool a
 /symcc-init to create one here". Nothing is written (no `.symcc/` folder). Type `/symcc-init` (it works like the command that starts a repo): it creates the board in the
 folder Claude started in, even when a parent folder has a `.symcc`; a parent's board never matters. A task's worker folder
 (under `.symcc/worktrees/`) is the one exception: it only guards, using the main project's board. Where `.symcc/` already exists it changes nothing and says "already set up
-here" (it also says so when this window is off here). If this folder has no repository of its own, it still makes the board, which then shows a "No git repo here" notice with a **Set up git** button (a parent's repository is never used); `/symcc-init git` sets up the
+here" (it also says so when this window is off here). If this folder has no repository of its own, it still makes the board, which is a control center that works with projects (a parent's repository is never used); `/symcc-init git` makes it a repo if you want that, and sets up the
 repository and a first commit here first, then makes the board. It turns symcc on, opens the board panel by itself on the Live tab (unless `open_on_start` is off, and not again if it is already open), and tells the lead it is the lead now. `/symcc-enable` and
 `/symcc-disable` only switch an existing board on or off; with no board they point to `/symcc-init`. Projects
 that already have a board start on as before. With several windows (see above), the first window
