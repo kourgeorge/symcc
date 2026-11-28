@@ -366,8 +366,8 @@ test("the board panel: a task in review is a card with Approve first, Approve on
     expect(need.actions[0]!.primary).toBe(true)
     expect(need.files).toEqual([{ file: 'hello.txt', added: 1, removed: 0 }])
     expect(s.view().mode).toBe('review')
-    // T-1210: a task that needs the owner has no lane; it is in needs
-    expect(s.view().lanes.find(l => l.id === 'T-1')).toBe(undefined)
+    // T-1228: a task that needs the owner keeps its lane (at "you") and is in needs too
+    expect(s.view().lanes.find(l => l.id === 'T-1')?.stations[s.view().lanes.find(l => l.id === 'T-1')!.at]).toBe('you')
     expect(await s.act('T-1', 'show-changes')).toContain('hello from the fake worker')
 
     await s.act('T-1', 'approve')

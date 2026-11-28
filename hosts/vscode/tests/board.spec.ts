@@ -13,7 +13,7 @@ import { panelView } from '../view'
 import { addTask } from '../../../hooks/core/task'
 import { emptyBoard } from '../../../hooks/core/board-file'
 
-test('T-1210: a doing task asking for more time has no lane but still counts as running (the pause warning)', () => {
+test('T-1228: a doing task asking for more time keeps its lane and counts as running (the pause warning)', () => {
   const nowMs = Date.now()
   const iso = new Date(nowMs).toISOString()
   let b = emptyBoard()
@@ -21,7 +21,7 @@ test('T-1210: a doing task asking for more time has no lane but still counts as 
   const run = { started: iso, agents: [{ id: 'a', role: 'worker', started: iso }] }
   const tasks = b.tasks.map(t => ({ ...t, status: 'doing', runs: [run], ...(t.id === 'T-1' ? { live: { time_ask: iso } } : {}) }))
   const v = panelView({ ...b, tasks } as never, { project: 'p', dir: '/tmp/p', nowMs })
-  expect(v.lanes.map(l => l.id)).toEqual(['T-2'])
+  expect(v.lanes.map(l => l.id).sort()).toEqual(['T-1', 'T-2'])
   expect(v.needs.map(n => n.id)).toEqual(['T-1'])
   expect(v.counts.running).toBe(2)
 })

@@ -68,8 +68,8 @@ function statusTextHasLiveSections(now: number) {
   // T-1074: the first line has no time; the second line under it has the try, the time and the task type
   expect(tasks[tasks.indexOf(lane) + 1]).toMatch(/^   try 2\/\d · ⏱ .*change$/)
   expect(tasks[tasks.indexOf(lane) + 2]).toMatch(/^   └─◇ T-4 Write the export  waits$/)
-  // T-1210: T-3 (review) needs the owner, so it is in NEEDS YOU only, with no lane
-  expect(tasks.some(l => l.includes('T-3'))).toBe(false)
+  // T-1228: T-3 (review) needs the owner: it is in NEEDS YOU and keeps its lane in TASKS
+  expect(tasks.some(l => l.includes('T-3'))).toBe(true)
   // T-1177: a finished lane's "merged … ago" is on its second line
   const doneAt = tasks.findIndex(l => /^ ✓ /.test(l))
   if (doneAt >= 0) expect(tasks[doneAt + 1]).toMatch(/^   (merged|\d+\w? ago|.*ago)/)
@@ -94,7 +94,7 @@ function statusTextHasLiveSections(now: number) {
   expect(text.split('\n').every(l => textWidth(l) <= 80)).toBe(true)
 }
 
-test('T-1210: a task that needs the owner and the tasks waiting on it are not drawn in TASKS; they come back once it runs', () => {
+test('T-1228: a task that needs the owner and the tasks waiting on it stay in TASKS, and it is in NEEDS YOU too', () => {
   const now = Date.now()
   const iso = new Date(now).toISOString()
   let b = emptyBoard()
@@ -103,23 +103,21 @@ test('T-1210: a task that needs the owner and the tasks waiting on it are not dr
   const ask = { by: 'worker', text: 'Which one?', options: ['a', 'b'], asked_at: iso }
   const make = (asking: boolean): Board => ({
     ...b,
-    tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? (asking ? { status: 'waiting', ask } : { status: 'doing', runs: [run] }) : t.id === 'T-3' ? { status: 'doing', runs: [run] } : {}) }) as BoardTask),
+    tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? { status: 'doing', runs: [run], ...(asking ? { live: { time_ask: iso } } : {}) } : t.id === 'T-3' ? { status: 'doing', runs: [run] } : {}) }) as BoardTask),
   })
   const tasks = (bb: Board) => statusSection(liveStatusText(bb as never, [], now), 'TASKS').join('\n')
-  const hidden = tasks(make(true))
+  const shown = tasks(make(true))
   expect(statusSection(liveStatusText(make(true) as never, [], now), 'NEEDS YOU').join('\n')).toContain('T-1')
-  expect(hidden).not.toContain('T-1 ')
-  expect(hidden).not.toContain('T-2')
-  // T-4 stays under T-3's lane, without naming the hidden T-1
-  expect(hidden).toMatch(/└─◇ T-4 Waits on both {2}waits$/m)
-  expect(hidden).not.toContain('also')
+  expect(shown).toContain('T-1 ')
+  expect(shown).toContain('T-2 Waits on asks')
+  expect(shown).toContain('+ also')
   const back = tasks(make(false))
   expect(back).toContain('▶ T-1')
   expect(back).toContain('T-2 Waits on asks')
   expect(back).toContain('+ also')
 })
 
-test('T-1217: "+ also" leaves out a task that is not drawn, and keeps a drawn one', () => {
+test('T-1228: "+ also" names both the asking task and the running one', () => {
   const now = Date.now()
   const iso = new Date(now).toISOString()
   let b = emptyBoard()
@@ -129,15 +127,15 @@ test('T-1217: "+ also" leaves out a task that is not drawn, and keeps a drawn on
   const ask = { by: 'worker', text: 'Which one?', options: ['a', 'b'], asked_at: iso }
   const board = {
     ...b,
-    tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? { status: 'waiting', ask } : t.id === 'T-3' || t.id === 'T-5' ? { status: 'doing', runs: [run] } : {}) }) as BoardTask),
+    tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? { status: 'doing', runs: [run], live: { time_ask: iso } } : t.id === 'T-3' || t.id === 'T-5' ? { status: 'doing', runs: [run] } : {}) }) as BoardTask),
   } as Board
   const tasks = statusSection(liveStatusText(board as never, [], now), 'TASKS').join('\n')
-  expect(tasks).not.toContain('T-2')
-  expect(tasks).toMatch(/T-4 Waits on two {2}waits$/m)
+  expect(tasks).toContain('T-2 Waits on asks')
+  expect(tasks).toMatch(/T-4 Waits on two/)
   expect(tasks).toMatch(/T-6 Waits on lanes.*\+ also T-[35]/)
 })
 
-test('T-1210: a running task asking for more time is in NEEDS YOU, not in TASKS, and its trains go too', () => {
+test('T-1228: a running task asking for more time is in NEEDS YOU and stays in TASKS with its trains', () => {
   const now = Date.now()
   const iso = new Date(now).toISOString()
   let b = emptyBoard()
@@ -151,13 +149,12 @@ test('T-1210: a running task asking for more time is in NEEDS YOU, not in TASKS,
   const text = liveStatusText(board as never, [], now)
   const tasks = statusSection(text, 'TASKS').join('\n')
   expect(statusSection(text, 'NEEDS YOU').join('\n')).toContain('T-1')
-  expect(tasks).not.toContain('T-1 ')
-  expect(tasks).not.toContain('T-2')
-  expect(tasks).toMatch(/└─◇ T-4 Waits on both {2}waits$/m)
-  expect(tasks).not.toContain('also')
+  expect(tasks).toContain('T-1 ')
+  expect(tasks).toContain('T-2 Waits on asks')
+  expect(tasks).toContain('T-4 Waits on both')
 })
 
-test('T-1210: a hidden asking task still counts as a busy agent, and the idle line says needs you', () => {
+test('T-1228: an asking task still counts as a busy agent, and the idle line says needs you', () => {
   const now = Date.now()
   const iso = new Date(now).toISOString()
   let b = emptyBoard()
@@ -166,18 +163,10 @@ test('T-1210: a hidden asking task still counts as a busy agent, and the idle li
   const ask = { by: 'worker', text: 'Which one?', asked_at: iso }
   const board = { ...b, tasks: b.tasks.map(t => ({ ...t, status: 'doing' as const, runs: [run], ...(t.id === 'T-1' ? { live: { time_ask: iso } } : {}) }) as unknown as BoardTask) } as Board
   const text = liveStatusText(board as never, [], now)
-  expect(statusSection(text, 'TASKS').join('\n')).not.toContain('T-1 ')
+  expect(statusSection(text, 'TASKS').join('\n')).toContain('T-1 ')
   expect(text).toMatch(/agents 2\/\d+ busy/)
   const alone = { ...board, tasks: board.tasks.filter(t => t.id === 'T-1') }
   expect(statusSection(liveStatusText(alone as never, [], now), 'TASKS').join('\n')).not.toContain('stopped')
-})
-
-test('T-1210: when every open task needs the owner, TASKS shows the nothing running line', () => {
-  const now = Date.now()
-  const b = statusBoard(now)
-  const only = { ...b, tasks: b.tasks.filter(t => t.id === 'T-1' || t.status === 'done') }
-  const text = liveStatusText(only as never, [], now)
-  expect(statusSection(text, 'TASKS').join('\n')).toContain('Nothing running')
 })
 
 test('T-902: NEEDS YOU is left out when nothing waits; BRANCHES comes between the tasks and today once git was read', () => {
