@@ -136,7 +136,7 @@ test('T-1213: once grep has -e anywhere, every plain word is checked as a path',
     expect([c, await ok('Bash', { command: c }, R)]).toEqual([c, true])
 })
 
-const TABLE = { api:'/code/api', web: '/code/web', docs: '/code/docs' }
+const TABLE = { api: '/code/api', web: '/code/web', docs: '/code/docs' }
 const base = { scout: 'bugs', root: '/board', instructions: 'Find bugs.', open: [] as string[], name: 'symcc' }
 
 test('projects: in the front matter is read, and left out means none named', () => {
