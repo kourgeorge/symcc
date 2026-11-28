@@ -37,11 +37,11 @@ to date. `sh scripts/typecheck.sh` prints the first as a note.
    higher `data_version` in the file and refuses to write over it.
 3. Bump the version in `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, and add an entry to
    `CHANGELOG.md`.
-3. Merge to `main`. People update with their harness:
+4. Merge to `main`. People update with their harness:
    - Claude Code: `claude plugin marketplace update symcc && claude plugin update symcc@symcc`
    - Copilot CLI: `copilot plugin marketplace update symcc`, then `copilot plugin update symcc@symcc`
    - OpenCode: `opencode plugin update`, or `git pull` in the clone they linked
-4. In the editor, **symcc: Restart symcc** picks up the new copy.
+5. In the editor, **symcc: Restart symcc** picks up the new copy.
 
 ## Releasing the extension
 
