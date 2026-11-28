@@ -232,7 +232,7 @@ export async function gitReady($: Host, b?: Board, repo = S.root): Promise<boole
   S.gitRoot = real
   // T-1178: a workspace (projects below, no repo of its own) is fine as it is; a task with no project holds back only itself
   const board = b ?? (await load($))
-  const s: GitState = real === 'no-repo' && projectNames().length ? 'ok' : real
+  const s: GitState = real === 'no-repo' ? 'ok' : real
   if (s === 'no-git' && (s !== S.gitState || !S.gitInstall)) S.gitInstall = await installStepOf($).catch(() => '')
   if (s !== 'no-git') S.gitInstall = ''
   if (s !== S.gitState) {
@@ -265,7 +265,7 @@ export const plainTask = (t: object | null | undefined): boolean => workspaceNow
 
 /** T-1182: why a change task can't have no project on a board over several repos; '' when there are no project folders. */
 export const changeNeedsProject = (names: readonly string[]): string =>
-  names.length ? `on a board over several repos a change task needs a project: ${names.join(', ')} (only an investigation or an errand may have none)` : ''
+  S.gitRoot === 'no-repo' && !names.length ? "name the repo it changes (a project); this board's folder is not a repo" : names.length ? `on a board over several repos a change task needs a project: ${names.join(', ')} (only an investigation or an errand may have none)` : ''
 
 /** T-1178: on a workspace board, the open change tasks with no project (they can't start there; investigations and errands may have none, T-1182); '' when none or not a workspace. */
 export function noProjectText(b: Board): string {

@@ -3191,7 +3191,7 @@ test('T-769: the Live tab\'s ▍Today has 4 lines (medians per task, work time, 
   expect(/[▁▂▃▄▅▆▇]/.test(wide.lines[1]!)).toBe(false)
   expect(wide.lines[2]).toBe(LIVE_INDENT + TODAY_LINE_3)
   // (the hours depend on the machine's time zone)
-  expect(/^ ⏱ 1h 15m agent work · ≈ \$12 this session   busiest hour \d\d:00 · ⌀ \S+   ⌀\/h 00▕[▁▂▃▄▅▆▇█]+·*▏24$/.test(wide.lines[3]!.replace(LIVE_INDENT, ' '))).toBe(true)
+  expect(/^ ⏱ 1h 30m agent work · ≈ \$12 this session   busiest hour \d\d:00 · ⌀ \S+   ⌀\/h 00▕[▁▂▃▄▅▆▇█]+·*▏24$/.test(wide.lines[3]!.replace(LIVE_INDENT, ' '))).toBe(true)
   // T-855: no lane here, so no key line: the dim note ends ▍Today
   expect(wide.texts.at(-1) === undefined || wide.texts.some(t => t === `${LIVE_INDENT}⌀ = tokens`)).toBe(true)
   // a broken today_team is left out: no lead, scouts or cost

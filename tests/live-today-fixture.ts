@@ -29,5 +29,5 @@ export const todayTeamOf = (t0: number, offsetMin: number, hours?: Record<number
 })
 
 /** T-809: the lines these give at a wide panel (the bar's shares: workers 5.7M, checkers 0.3M, scouts 3M, lead 1M): 2 the bar alone, 3 the medians, 4 work, cost, busiest hour, sparkline. */
-export const TODAY_LINE_3 = 'median ⌀ 2M/task · 10m work · 30m start-to-merge   first try 67% · avg 1.3 tries/task'
+export const TODAY_LINE_3 = 'median ⌀ 2M/task · 15m work · 30m start-to-merge   first try 67% · avg 1.3 tries/task'
 export const TODAY_BAR_START = '⌀ ████████████████ lead 10% · workers 57% · checkers 3% · scouts 30%'

@@ -586,6 +586,28 @@ export function runMs(r: Pick<SymccRun, 'started' | 'ended' | 'restarts' | 'idle
 }
 
 /**
+ * T-1231: the time every agent of try `r` ran (each worker and each checker on its own start and end, added up), in ms,
+ * cut to `from`..`to` (default: all, up to `nowMs`) and without the try's gaps. An open agent counts up to `nowMs`
+ * (a worker not past the try's end). Tests and the merge queue are not agents, so they are not counted. A try with no
+ * agent entries (old data) counts its own start to end.
+ */
+export function agentMs(r: SymccRun, nowMs: number, from: number = -Infinity, to: number = nowMs): number {
+  const gaps = gapsOf(r)
+  const end = Date.parse(r.ended ?? '')
+  const spans = agentsOf(r).length
+    ? agentsOf(r).map(a => ({ a: Date.parse(a.started), z: a.ended ? Date.parse(a.ended) : a.kind === 'worker' && Number.isFinite(end) ? end : nowMs }))
+    : [{ a: Date.parse(r.started), z: Number.isFinite(end) ? end : nowMs }]
+  let sum = 0
+  for (const s of spans) {
+    const a = Math.max(s.a, from)
+    const b = Math.min(s.z, to, nowMs)
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) continue
+    sum += b - a - gaps.reduce((n, g) => n + Math.max(0, Math.min(g.to, b) - Math.max(g.from, a)), 0)
+  }
+  return Math.max(0, sum)
+}
+
+/**
  * T-873: how long the worker of try `r` has worked on it, in ms, for the over-time check (max_minutes) and its hard cap:
  * the try's active time from its first start (runMs, closed-app gaps left out), the same time the band and Live tab show.
  * `nowMs - sinceMs` when the board has no start for the try.
