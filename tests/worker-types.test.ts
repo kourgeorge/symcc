@@ -3,7 +3,7 @@
 // has no real git or disk, so a small fake below keeps files in memory and answers the few commands used.
 import { expect } from 'claude-code/testing'
 import { type SymccTask } from '../types'
-import { prepareWorktree, copyTypes, worktreeDir, TYPES_DIR, clearScratch } from '../hooks/app/git'
+import { prepareWorktree, copyTypes, worktreeDir, TYPES_DIR, clearScratch } from '../hooks/app/worktree'
 import { S } from '../hooks/app/state'
 import { test } from './reset'
 import { fakeHost } from './fake-host'
