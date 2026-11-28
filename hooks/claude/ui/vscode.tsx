@@ -7,7 +7,7 @@
 // actions on a page are Buttons, the one main action `primary`, the rest `secondary`.
 import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, SvgProps, TextProps } from 'claude-code'
-import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, offStatusParts, testsShort, driveNoticeParts, DRIVE_HERE_LABEL, showsDriveButton } from '../../board'
+import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, offStatusParts, testsShort, projectTestsList, projectsWithoutTests, driveNoticeParts, DRIVE_HERE_LABEL, showsDriveButton } from '../../board'
 import { ICON, namesFor } from '../../name'
 import { type PaneView, S } from '../../app/state'
 import type { PaneTab } from '../../app/open'
@@ -92,10 +92,14 @@ export function vsLink(k: VsKit, key: string, text: string, links: [href: string
 
 /** T-973: the tests line of the Live tab's Status section: "claude, typecheck · 45 min · 2 retries" (the tests, the
  *  time limit, the retries; how many run at once is in the Mode row's "agents 0/3 busy"). */
-export function testsValue(v: Pick<PaneView, 'test_commands' | 'max_minutes' | 'auto_retries'>): { tests: string; limits: string } {
+export function testsValue(v: Pick<PaneView, 'test_commands' | 'max_minutes' | 'auto_retries' | 'projects'>): { tests: string; warnings: string[]; limits: string } {
   const d = emptyBoard()
   const retries = v.auto_retries ?? d.auto_retries
-  return { tests: shortTests(v.test_commands ?? []), limits: `${v.max_minutes ?? d.max_minutes} min · ${retries} ${retries === 1 ? 'retry' : 'retries'}` }
+  const none = projectsWithoutTests(v)
+  const tests = [shortTests(v.test_commands ?? []), ...projectTestsList(v)].filter(Boolean).join(' · ')
+  // T-1234: like the banner: a warning per project with none; the board-wide one only when nothing has tests
+  const warnings = [...(tests || none.length ? [] : ['no test command']), ...none.map(p => `${p}: no test command`)]
+  return { tests, warnings, limits: `${v.max_minutes ?? d.max_minutes} min · ${retries} ${retries === 1 ? 'retry' : 'retries'}` }
 }
 
 /**

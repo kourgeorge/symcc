@@ -494,7 +494,8 @@ words as bold headings with the same spacing):
   type at the right end; the `⏱` time is left out, since line 2 shows the time, and the type goes when the row is too narrow). One header row above all the lanes names the stations in full words (`work check queue tests
   done`, with `you` when a task waits for you), so every train lines up under it. VS Code has no legend line and no
   folding sections: the headings are plain bold words. Status is split into Mode (with a `change` link), Scouts, Branch
-  and Tests rows; Organizational memory is one line with an `All notes` link. When nothing runs: `All done`, `Up next
+  and Tests rows (Tests lists the board's commands, then each project's, with a warning like `api: no test command` for each
+  project with none, as the banner does); Organizational memory is one line with an `All notes` link. When nothing runs: `All done`, `Up next
   from the backlog`, and one primary `Tell the lead` button. On a narrow panel the train and header shrink together.
 - The second row has no bar, only numbers about this task:
   `try 4/4 · ⏱ 41m · ⌀ 7.3M (7.6×median) · worker 5.4M · checker 1.9M · ⌕ × 2`. That is

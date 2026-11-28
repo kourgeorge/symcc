@@ -236,7 +236,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
       {
         key: 'tests',
         label: 'Tests',
-        value: [tv.tests ? <Text key="t" wrap="wrap" color={C('text')}>{tv.tests}</Text> : <Text key="t" color={C('warning')}>no test command</Text>, <Text key="l" tabular color={C('inactive')}>{`· ${tv.limits}`}</Text>],
+        value: [...(tv.tests ? [<Text key="t" wrap="wrap" color={C('text')}>{tv.tests}</Text>] : []), ...tv.warnings.map((w, i) => <Text key={`tw${i}`} wrap="wrap" color={C('warning')}>{w}</Text>), <Text key="l" tabular color={C('inactive')}>{`· ${tv.limits}`}</Text>],
       },
     ]),
   ]

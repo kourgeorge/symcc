@@ -355,7 +355,7 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 /** `branch`: the branch checked out in the project now (new tasks merge into it); `branch_note`: a warning (e.g. no git), shown in place of it.
  *  `enabled` false (symcc disabled) or `mode` 'paused' puts a warning on the first line, after the name. */
 /** T-1154: each project's own test commands, short ("client: pytest"), for the banner's tests fact. */
-const projectTestsList = (b: { projects?: Record<string, { test_commands?: string[] }> }): string[] =>
+export const projectTestsList = (b: { projects?: Record<string, { test_commands?: string[] }> }): string[] =>
   Object.entries(b.projects ?? {}).filter(([, x]) => x?.test_commands?.length).map(([p, x]) => `${p}: ${testsShort(x.test_commands ?? [])}`)
 
 /** T-1229: the projects with no test command of their own (a project never runs the board's), for a warning each. */
