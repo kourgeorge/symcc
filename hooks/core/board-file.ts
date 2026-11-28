@@ -6,8 +6,8 @@ import { isNum, isObj, parseStamp } from './text'
 import { timelineEntryOk } from './timeline'
 import { type OwnerQuestion, cleanAsk, cleanQuestions } from './questions'
 
-/** T-1137: the optional settings of one project. T-1153: docs_test_commands too (read, not set by the settings tool yet). */
-export type ProjectSettings = { /** T-1196: the repo's real absolute path (~ expanded); repoOf reads it */ path?: string; test_commands?: string[]; docs_test_commands?: string[] }
+/** T-1137: the optional settings of one project. */
+export type ProjectSettings = { /** T-1196: the repo's real absolute path (~ expanded); repoOf reads it */ path?: string; test_commands?: string[] }
 
 /**
  * T-1153: whether `p` can be a project name: one plain name (letters, digits, . _ -), never "." or "..", a hidden
@@ -21,16 +21,16 @@ const projectOf = (b: { projects?: Record<string, ProjectSettings> }, t?: object
   return isProjectName(p) && b.projects && Object.prototype.hasOwnProperty.call(b.projects, p) ? b.projects[p] : undefined
 }
 
-/** T-1153: the test commands task `t`'s merge runs: its project's test_commands when set, else the board's. */
+/** T-1229: the test commands task `t`'s merge runs: its project's own (none when it has none); the board's only for a task with no project. */
 export const testCommandsOf = (b: { test_commands: string[]; projects?: Record<string, ProjectSettings> }, t?: object | null): string[] => {
-  const own = projectOf(b, t)?.test_commands
-  return own?.length ? own : b.test_commands
+  const p = (t as { project?: unknown } | null | undefined)?.project
+  return p === undefined || p === null || p === '' ? b.test_commands : (projectOf(b, t)?.test_commands ?? [])
 }
 
-/** T-1153: the docs test commands task `t`'s prose-only change runs: its project's docs_test_commands when set, else the board's. */
+/** T-1229: the docs test commands task `t`'s prose-only change runs: the board's for a task with no project, none for a task of a project. */
 export const docsTestCommandsOf = (b: { docs_test_commands?: string[]; projects?: Record<string, ProjectSettings> }, t?: object | null): string[] => {
-  const own = projectOf(b, t)?.docs_test_commands
-  return own?.length ? own : (b.docs_test_commands ?? [])
+  const p = (t as { project?: unknown } | null | undefined)?.project
+  return p === undefined || p === null || p === '' ? (b.docs_test_commands ?? []) : []
 }
 
 /**
@@ -429,7 +429,7 @@ const SETTING_OK: { [K in Exclude<keyof Board, 'data_version' | 'tasks' | 'next_
   scout_findings: v => isScoutFindings(v),
   tests_with_changes: v => isTestsWithChanges(v),
   checker: v => typeof v === 'boolean',
-  projects: v => isObj(v) && Object.values(v).every(p => isObj(p) && (p.path === undefined || (typeof p.path === 'string' && p.path.startsWith('/'))) && [p.test_commands, p.docs_test_commands].every(l => l === undefined || (Array.isArray(l) && l.every(c => typeof c === 'string')))),
+  projects: v => isObj(v) && Object.values(v).every(p => isObj(p) && (p.path === undefined || (typeof p.path === 'string' && p.path.startsWith('/'))) && [p.test_commands].every(l => l === undefined || (Array.isArray(l) && l.every(c => typeof c === 'string')))),
 }
 
 /**

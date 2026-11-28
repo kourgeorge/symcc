@@ -8,6 +8,7 @@ import { runTool } from '../hooks/app/tools'
 import { S } from '../hooks/app/state'
 import { projectNames, repoOf } from '../hooks/app/git'
 import { bandItems, bannerLines, emptyBoard, settingWithProjects, rowTitle, readBoard, parseBoard, isProjectName, testCommandsOf, docsTestCommandsOf, mergeTestCount } from '../hooks/board'
+import { workerTestText } from '../hooks/app/prompt-values'
 import { chatTasksText } from '../hooks/core/chat-text'
 import { tasksListText } from '../hooks/core/task-list'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -179,17 +180,25 @@ test('T-1153: a project that is not one plain folder name is dropped on load, an
   expect(err).toContain('project table')
 })
 
-test("T-1153: a task of a project runs its own test commands (and docs ones) when set, else the board's", async () => {
-  const b = { test_commands: ['npm test'], docs_test_commands: ['lint docs'], projects: { client: { test_commands: ['test -f ok'] }, docs: { docs_test_commands: ['vale .'] } } }
+test("T-1229: a task of a project runs only that project's test commands; the board's are for a task with no project", async () => {
+  const b = { test_commands: ['npm test'], docs_test_commands: ['lint docs'], projects: { client: { test_commands: ['test -f ok'] }, api: {} } }
   expect(testCommandsOf(b, { project: 'client' })).toEqual(['test -f ok'])
-  expect(testCommandsOf(b, { project: 'server' })).toEqual(['npm test'])
+  expect(testCommandsOf(b, { project: 'api' })).toEqual([])
+  expect(testCommandsOf(b, { project: 'server' })).toEqual([])
   expect(testCommandsOf(b, {})).toEqual(['npm test'])
-  expect(testCommandsOf(b, { project: 'constructor' })).toEqual(['npm test'])
-  expect(docsTestCommandsOf(b, { project: 'client' })).toEqual(['lint docs'])
-  expect(docsTestCommandsOf(b, { project: 'docs' })).toEqual(['vale .'])
+  expect(docsTestCommandsOf(b, { project: 'client' })).toEqual([])
+  expect(docsTestCommandsOf(b, {})).toEqual(['lint docs'])
   expect(mergeTestCount({ ...b, test_commands: ['a', 'b', 'c'] }, { project: 'client' })).toBe(1)
-  // boards with no projects work as before
-  expect(testCommandsOf({ test_commands: ['x'] }, { project: 'client' })).toEqual(['x'])
+  expect(mergeTestCount(b, { project: 'api' })).toBe(0)
+  expect(workerTestText('symcc', testCommandsOf(b, { project: 'api' }))).toContain('There is no test command')
+})
+
+test('T-1229: the banner and Settings warn "api: no test command" for a project with no commands', () => {
+  const b = { ...emptyBoard(), test_commands: ['npm test'], projects: { api: { path: '/code/api' }, client: { test_commands: ['pytest'] } }, tasks: [] }
+  const lines = bannerLines(b, '/ws', '/home', true, 160)
+  expect(lines.map(l => l.parts.map(p => p.text).join('')).join('\n')).toContain('api: no test command')
+  expect(lines.flatMap(l => l.parts).find(p => p.text === 'api: no test command')?.tone).toBe('warning')
+  expect(settingWithProjects(b, 'test_commands')).toContain('api: no test command')
 })
 
 test('T-1154: the band\'s "yours" rows carry the project tag, and the banner shows a project\'s own test commands next to the board\'s', () => {
