@@ -2,7 +2,9 @@
 // with git (here a fake git), and the terminal and VS Code Live tabs draw it (OpenCode's: hooks/opencode/tests).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { BRANCH_ROWS_MAX, LIVE_INDENT, liveInner, LIVE_TONE, liveBranches, liveFinishedLanes, segText } from '../hooks/core/live'
+import { liveFinishedLanes } from '../hooks/core/live'
+import { LIVE_INDENT, liveInner, LIVE_TONE, segText } from '../hooks/core/live-seg'
+import { BRANCH_ROWS_MAX, liveBranches } from '../hooks/core/live-branches'
 import { LIST_TONE } from '../hooks/core/details'
 import { textWidth } from '../hooks/core/width'
 import { branchFacts, readBranches, BRANCH_CACHE_MS } from '../hooks/app/branches'

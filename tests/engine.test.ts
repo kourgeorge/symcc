@@ -7,6 +7,7 @@ import { expect, test } from 'claude-code/testing'
 import * as engine from '../hooks/engine'
 import * as m_app_ask from '../hooks/app/ask'
 import * as m_app_board_mode from '../hooks/app/board-mode'
+import * as m_app_changes from '../hooks/app/changes'
 import * as m_app_git from '../hooks/app/git'
 import * as m_app_kinds from '../hooks/app/kinds'
 import * as m_app_logo from '../hooks/app/logo'
@@ -14,7 +15,6 @@ import * as m_app_open from '../hooks/app/open'
 import * as m_app_org_mem from '../hooks/app/org-mem'
 import * as m_app_plan from '../hooks/app/plan'
 import * as m_app_questions from '../hooks/app/questions'
-import * as m_app_review from '../hooks/app/review'
 import * as m_app_roles from '../hooks/app/roles'
 import * as m_app_scouts from '../hooks/app/scouts'
 import * as m_app_starts from '../hooks/app/starts'
@@ -50,6 +50,7 @@ import * as m_process_record from '../hooks/process/record'
 const SOURCES: [string, Record<string, unknown>][] = [
   ['./app/ask', m_app_ask],
   ['./app/board-mode', m_app_board_mode],
+  ['./app/changes', m_app_changes],
   ['./app/git', m_app_git],
   ['./app/kinds', m_app_kinds],
   ['./app/logo', m_app_logo],
@@ -57,7 +58,6 @@ const SOURCES: [string, Record<string, unknown>][] = [
   ['./app/org-mem', m_app_org_mem],
   ['./app/plan', m_app_plan],
   ['./app/questions', m_app_questions],
-  ['./app/review', m_app_review],
   ['./app/roles', m_app_roles],
   ['./app/scouts', m_app_scouts],
   ['./app/starts', m_app_starts],

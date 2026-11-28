@@ -4,7 +4,8 @@
 // OpenCode in hooks/opencode/tests/opencode-tui.spec.ts.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { laneLines, liveColumns, liveLanes, liveLayout, liveInner, liveLabelLine, segText } from '../hooks/core/live'
+import { laneLines, liveColumns, liveLanes, liveLayout, liveLabelLine } from '../hooks/core/live'
+import { liveInner, segText } from '../hooks/core/live-seg'
 import { PANE, T0, seedBoard } from './board-fixture'
 import { vsHref } from '../hooks/claude/ui/vscode'
 

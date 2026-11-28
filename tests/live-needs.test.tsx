@@ -2,7 +2,8 @@
 // per open board question, task waiting for the owner and task ready for review; Enter on a row opens it.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { LIVE_SECTIONS, liveNeeds, segText } from '../hooks/core/live'
+import { liveNeeds } from '../hooks/core/live'
+import { LIVE_SECTIONS, segText } from '../hooks/core/live-seg'
 import { textWidth } from '../hooks/core/width'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { PANE, T0, seedBoard } from './board-fixture'

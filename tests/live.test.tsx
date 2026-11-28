@@ -2,7 +2,9 @@
 // numbers; claude/ui/live.tsx draws them on the terminal panel).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveLanes, liveTaskLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, LIVE_TONE, liveStations, liveTrains, trainRows, type LiveTrain, liveToday, todayLines, segText, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, LIVE_INDENT, liveInner, liveLegend, LANE_WARN_TIMES, laneTimes, liveTodayLines, liveTodayRows, pastDays, pastLines } from '../hooks/core/live'
+import { liveLanes, liveTaskLanes, liveLayout, laneLines, liveLabelLine, liveLabelSegs, LIVE_AGENT_MARK, liveStations, liveTrains, trainRows, type LiveTrain, liveBlink, liveHeader, liveHeaderSegs, liveScoutMark, scoutsRunning, scoutNext, tabRow, LIVE_TABS, LIVE_LEGEND, liveLegend, LANE_WARN_TIMES, laneTimes } from '../hooks/core/live'
+import { LIVE_TONE, segText, LIVE_INDENT, liveInner } from '../hooks/core/live-seg'
+import { liveToday, todayLines, liveTodayLines, liveTodayRows, pastDays, pastLines } from '../hooks/core/live-today'
 import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from './live-past-fixture'
 import { textWidth } from '../hooks/core/width'
 import { FINISH_STALE_MS } from '../hooks/core/lead'

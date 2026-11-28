@@ -7,7 +7,7 @@
 // actions on a page are Buttons, the one main action `primary`, the rest `secondary`.
 import type { SymccMode } from '../../../types'
 import type { BoxProps, ButtonProps, ElementConstructor, InputProps, MarkdownProps, RenderChildren, RenderSurface, SelectProps, SvgProps, TextProps } from 'claude-code'
-import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, MODE_NAME, nextMode, offStatusParts, testsShort, driveNoticeParts, DRIVE_HERE_LABEL, showsDriveButton } from '../../board'
+import { emptyBoard, bannerCounts, folderName, versionMark, modeLabel, offStatusParts, testsShort, driveNoticeParts, DRIVE_HERE_LABEL, showsDriveButton } from '../../board'
 import { ICON, namesFor } from '../../name'
 import { type PaneView, S } from '../../app/state'
 import type { PaneTab } from '../../app/open'
@@ -35,10 +35,6 @@ export const shortTests = (cmds: readonly string[]): string => (cmds.some(c => c
 
 /** The color a mode's word is drawn in (the same as the terminal footer's). */
 export const modeColor = (m: SymccMode) => (m === 'paused' ? 'warning' : m === 'review' ? 'suggestion' : 'text')
-
-/** The mode switch's label in VS Code: "Switch to approve merge" in auto (and off), "Switch to auto merge" in review. */
-export const switchLabel = (m: SymccMode) => `Switch to ${MODE_NAME[nextMode(m)]}`
-
 /** The color of a status's dot in the counts badges (the same as the list's marks). */
 const COUNT_COLOR: Record<string, string> = { backlog: 'inactive', review: 'suggestion', waiting: 'warning', failed: 'error', doing: 'success', paused: 'permission', todo: 'text', done: 'inactive', dropped: 'inactive' }
 
@@ -237,27 +233,6 @@ export function vsNotice(k: VsKit, key: string, parts: readonly { text: string; 
   )
 }
 
-/**
- * T-973: a section heading in VS Code, like VS Code's side bar: a plain Button (`<key>`) with the chevron (▾ open,
- * ▸ folded) and the name in small bold UPPERCASE (a press folds or opens it), then `count` as a badge on the right
- * when it has one; `extra`: more at its right end (a quiet "All notes" button). The row lightens under the pointer.
- */
-export function vsSectionHead(k: VsKit, key: string, name: string, open: boolean, onToggle: () => void, count?: number | string, extra?: RenderChildren): RenderChildren {
-  const { Box, Text, Button, C } = k
-  return (
-    <Box key={`${key}-row`} flexDirection="row" alignItems="center" justifyContent="space-between" columnGap={1} hover={{ backgroundColor: ROW_HOVER }}>
-      <Button key={key} plain label={`${open ? '▾' : '▸'} ${name.toUpperCase()}`} onPress={onToggle}>
-        <Text size="footnote" color={C('inactive')}>{open ? '▾ ' : '▸ '}</Text>
-        <Text bold size="footnote" color={C('text')}>{name.toUpperCase()}</Text>
-      </Button>
-      <Box key={`${key}-end`} flexDirection="row" columnGap={1} alignItems="center">
-        {extra ?? null}
-        {count === undefined ? null : vsBadge(k, `${key}-count`, count, 'inactive')}
-      </Box>
-    </Box>
-  )
-}
-
 /** T-1002: the one label column's width in VS Code: "Agent time" (10) and a space. */
 export const VS_LABEL_W = 11
 
@@ -357,19 +332,5 @@ export function vsSection(k: VsKit, key: string, label: string): RenderChildren 
     <Text key={key} wrap="wrap" bold color={C('text')}>
       {label}
     </Text>
-  )
-}
-
-/** A callout in VS Code: a box with a rounded border in its tone (warning, error) around a heading in that tone and
- *  what it holds (the words and their buttons), so it stands out at the top of a page. */
-export function vsCallout(k: VsKit, key: string, mark: string, label: string, tone: string, body: RenderChildren[]): RenderChildren {
-  const { Box, Text, C } = k
-  return (
-    <Box key={key} flexDirection="column" borderStyle="round" borderColor={C(tone)} paddingX={1} gap={1}>
-      <Text key={`${key}-head`} wrap="wrap" bold size="heading" color={C(tone)}>
-        {`${mark} ${label}`}
-      </Text>
-      {body as never}
-    </Box>
   )
 }

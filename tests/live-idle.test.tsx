@@ -2,7 +2,8 @@
 // runs and what to do next (liveIdle in core/live.ts): paused, open tasks that wait, all done, or a brand-new board.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { LIVE_INDENT, liveIdle, liveIdleLine } from '../hooks/core/live'
+import { liveIdle, liveIdleLine } from '../hooks/core/live'
+import { LIVE_INDENT } from '../hooks/core/live-seg'
 import { liveStatusText } from '../hooks/core/live-text'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { LIVE_UP_NEXT } from '../hooks/claude/ui/vscode-live'

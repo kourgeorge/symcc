@@ -16,7 +16,11 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747, T-789: each section (Tasks, Today, Branches, Organizational memory) starts with a bold UPPERCASE heading (core's
 // liveHeading; no bar, no rule), one empty line above it (none above the first) and one under it, its lines indented by LIVE_INDENT.
-import { liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranchBlocks, liveNowSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
+import { liveIdle, liveLegend, laneLines, liveBold, liveNowSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLanes, liveLayout, liveColumns, liveTrains, trainRows } from '../../core/live'
+import { LIVE_INDENT, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveHeading, liveIndented, liveInner } from '../../core/live-seg'
+import { liveTodayLines } from '../../core/live-today'
+import { liveOrgMem } from '../../core/live-orgmem'
+import { liveBranchBlocks } from '../../core/live-branches'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'

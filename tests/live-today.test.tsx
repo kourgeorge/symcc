@@ -4,7 +4,8 @@
 // figures (readTodayTeam), and the terminal and VS Code Live tabs draw it (OpenCode's: hooks/opencode/tests).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { LIVE_INDENT, LIVE_TONE, liveTodayLines, liveTodayRows, segText, squeezeHours, todayBar, todayMore, todayMoreLines, type LiveSeg, type TodayTeam } from '../hooks/core/live'
+import { LIVE_INDENT, LIVE_TONE, segText, type LiveSeg } from '../hooks/core/live-seg'
+import { liveTodayLines, liveTodayRows, squeezeHours, todayBar, todayMore, todayMoreLines, type TodayTeam } from '../hooks/core/live-today'
 import { textWidth } from '../hooks/core/width'
 import { dayOf, localOffset } from '../hooks/core/days'
 import { publish, readTodayTeam, resetTodayTeam, todayTeam } from '../hooks/app/lead'

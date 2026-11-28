@@ -5,11 +5,12 @@
 // the open branches changed), starts a new read in the background, which puts its figures in the view when done.
 // A git command that fails leaves out only what it was for: a task's row, or (the main line's log) the whole section.
 import type { Board } from '../board'
-import { BRANCH_COMMITS, BRANCH_STATUSES, liveFinishedLanes, type BranchFacts, type BranchFigures, type BranchRepo } from '../core/live'
+import { liveFinishedLanes } from '../core/live'
+import { BRANCH_COMMITS, BRANCH_STATUSES, type BranchFacts, type BranchFigures, type BranchRepo } from '../core/live-branches'
 import { intoOf, isFinished, isSha } from '../core/board-file'
 import { TASK_BRANCH_COMMITS, TASK_BRANCH_MAIN, type TaskBranchCommit, type TaskBranchFacts } from '../core/task-branch'
 import { trailerPrefix } from '../core/commits'
-import type { BranchCommit } from '../core/live'
+import type { BranchCommit } from '../core/live-branches'
 import type { SymccTask } from '../../types'
 import type { Host } from '../host'
 import { type PaneView, S, updateView } from './state'
