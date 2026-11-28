@@ -491,6 +491,9 @@ export function testsShort(cmds: readonly string[]): string {
   return `${list.length} ${list.length === 1 ? 'command' : 'commands'}`
 }
 
+/** T-1229: the warning for a project with no test command of its own (it never runs the board's): "api: no test command (/code/api)". */
+export const projectNoTestText = (name: string, path?: string): string => `${name}: no test command${path ? ` (${path})` : ''}`
+
 /** T-1154: a setting's value as the Settings rows show it: the board's test commands, then each project's own ("npm test · client: pytest"). Not for edit boxes (settingValue). */
 export function settingWithProjects(b: Partial<Board>, name: SettingName, root = ''): string {
   const v = settingValue(b, name, root)
@@ -498,7 +501,7 @@ export function settingWithProjects(b: Partial<Board>, name: SettingName, root =
   // T-1199: each project as "name → path" (its repo) with its own test commands when it has some
   const ps = Object.entries(b.projects ?? {})
     .filter(([, x]) => x?.test_commands?.length || x?.path)
-    .map(([p, x]) => `${p}${x.path ? ` → ${x.path}` : ''}${x.test_commands?.length ? `: ${testCommandsText(x.test_commands)}` : ''}`)
+    .map(([p, x]) => (x.test_commands?.length ? `${p}${x.path ? ` → ${x.path}` : ''}: ${testCommandsText(x.test_commands)}` : projectNoTestText(p, x.path)))
   return ps.length ? [v, ...ps].join(' · ') : v
 }
 
@@ -727,7 +730,7 @@ export function leadSettingsText(b: Partial<Board>, can: Pick<Playable, 'sound' 
       }),
       ...(g.items.some(isSettingPage) ? ['roles and task types: use the roles and kinds tools (the owner sees roles and task types as pages in the Settings view)', 'org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board\'s Live tab, and may delete them there)'] : []),
     ]),
-    ...Object.entries(b.projects ?? {}).filter(([, v]) => v?.test_commands?.length || v?.path).map(([name, v]) => `project ${name}${v.path ? ` → ${v.path}` : ''}: test_commands: ${testCommandsText(v.test_commands ?? [])}`),
+    ...Object.entries(b.projects ?? {}).filter(([, v]) => v?.test_commands?.length || v?.path).map(([name, v]) => (v.test_commands?.length ? `project ${name}${v.path ? ` → ${v.path}` : ''}: test_commands: ${testCommandsText(v.test_commands)}` : `project ${projectNoTestText(name, v.path)}`)),
   ].join('\n')
 }
 

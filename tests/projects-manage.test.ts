@@ -169,7 +169,7 @@ test('adding the missing project clears the scout warning; another project does 
 
 test('the Settings value lists each project as name -> path with its test commands', () => {
   const b = { ...emptyBoard(), test_commands: ['npm test'], projects: { api: { path: '/code/api', test_commands: ['pytest'] }, web: { path: '/code/web' } } }
-  expect(settingWithProjects(b, 'test_commands')).toBe('npm test · api → /code/api: pytest · web → /code/web')
+  expect(settingWithProjects(b, 'test_commands')).toBe('npm test · api → /code/api: pytest · web: no test command (/code/web)')
 })
 
 test('the Branches section draws one block per repo, each task hanging off its own repo line; one repo is as before', () => {
