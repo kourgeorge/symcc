@@ -16,7 +16,8 @@ import { orgMemNow } from '../../hooks/app/org-mem'
 import { type DiffFile, intoOf, isAnswered, type BoardTask } from '../../hooks/board'
 import { nodeHost } from '../node/host'
 import { sdkAgents, type SdkAgents } from './agents'
-import { leadChat, type LeadChat, type LeadChoice, type LeadEvent } from './lead'
+import { leadChat, type LeadChat, type LeadChoice, type LeadEvent, type LeadSent } from './lead'
+import { handBackNote } from './scope'
 import type { Sdk, SdkImage, SdkModelInfo, SdkStep, SdkTool } from './sdk'
 import { checkerOf, panelView } from './view'
 import { LEAD_AGENT, addStep, isWords, sessionPath } from './steps'
@@ -99,8 +100,10 @@ export type CursorSession = {
   /**
    * the owner typed a message to the lead, with pictures. A /command of symcc's runs: its answer for the owner comes
    * back as `said` (nothing goes to the lead), any other goes to the lead; /<skill> tells the lead to use the skill.
+   * While the lead works, a message goes into its running turn, or waits for its next one with `queue` (or when it
+   * can't go in: it has pictures, or the turn just ended); `sent` says which.
    */
-  message: (text: string, images?: readonly SdkImage[]) => Promise<{ said?: string }>
+  message: (text: string, images?: readonly SdkImage[], queue?: boolean) => Promise<{ said?: string; sent?: LeadSent }>
   /** the slash commands the lead chat offers: symcc's and the skills */
   slash: () => Promise<SlashItem[]>
   /** the models the account can use (none where the SDK can't list them) */
@@ -187,6 +190,7 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     onEnd: (agentId, end) => agentFinished(ref.host!, agentId, end),
     onTool: async (agentId, tool, input) => answerText(tool, await toolCall(ref.host!, toolName(tool), agentId, input)),
     onStep,
+    handBack: agentId => handBackNote(ref.host!, agentId),
     log,
     ...(guard ? { guard: (agentId: string, dir: string) => guard({ host: ref.host!, dir, agentId }) } : {}),
   })
@@ -292,8 +296,8 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
     lead,
     tool: async (name, input) => answerText(name, await toolCall(host, toolName(name), undefined, input)),
     command,
-    async message(text, images) {
-      const how = images?.length ? { images } : undefined
+    async message(text, images, queue) {
+      const how = { ...(images?.length ? { images } : {}), ...(queue ? {} : { urgent: true }) }
       const slash = /^\/([\w.:-]+)(?:\s+([\s\S]*))?$/.exec(text.trim())
       if (slash) {
         const [, name, rest = ''] = slash as unknown as [string, string, string | undefined]
@@ -303,13 +307,11 @@ export async function openCursorSession(o: CursorSessionOptions): Promise<Cursor
         const skill = answer ? undefined : (await skills()).find(s => s.name === name)
         if (answer || skill) {
           ownerTyped(text)
-          await lead.send(answer ? answer.text : skillMessage(skill!, rest.trim()), 'owner', how)
-          return {}
+          return { sent: await lead.send(answer ? answer.text : skillMessage(skill!, rest.trim()), 'owner', how) }
         }
       }
       ownerTyped(text)
-      await lead.send(text, 'owner', how)
-      return {}
+      return { sent: await lead.send(text, 'owner', how) }
     },
     async slash() {
       const listed: { name: string; description: string; argumentHint?: string }[] = [...COMMANDS(host.features), ANSWER_COMMAND()]

@@ -1,5 +1,5 @@
-// Small pieces every page uses: the mark, icons, time words, the staff (a task's stations as notes on one line) and
-// the lead's Markdown, drawn as elements (never as HTML).
+// Small pieces every page uses: the mark, icons, time words, a task's stages in one line and the lead's Markdown,
+// drawn as elements (never as HTML).
 import { memo, useEffect, useState, type ReactNode } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -9,19 +9,18 @@ import { tell } from './bridge'
 const CLEF =
   'M164,138 C150,132 140,144 150,152 C162,160 184,152 184,132 C184,110 160,104 146,114 C126,128 124,160 150,170 C178,180 200,160 192,128 C186,104 160,90 152,70 C146,52 154,30 166,30 C178,30 180,52 166,70 C150,90 160,170 162,190 C164,206 142,210 136,198'
 
-/** symcc's mark: the treble clef on its coral tile. */
+/** symcc's mark: the treble clef, in the text's own color like the activity bar's icon. */
 export function Mark({ size = 32 }: { size?: number }) {
   return (
     <svg className="mark" width={size} height={size} viewBox="0 0 32 32" role="img" aria-label="symcc">
-      <rect width="32" height="32" rx="8" />
-      <g transform="translate(16 16.5) scale(0.125) translate(-162 -120)">
+      <g transform="translate(16 16.5) scale(0.15) translate(-162 -120)">
         <path d={CLEF} />
       </g>
     </svg>
   )
 }
 
-export const Icon = ({ name, label }: { name: string; label?: string }) => <span className={`codicon codicon-${name}`} {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })} />
+export const Icon = ({ name, label }: { name: string; label?: string }) => <span className={`codicon codicon-${name}${name === 'loading' ? ' codicon-modifier-spin' : ''}`} {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })} />
 
 /** The time now, again every `ms`. */
 export function useNow(ms = 1000): number {
@@ -65,24 +64,25 @@ export const tokensWord = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).to
 
 /** Why nothing runs, in the board's words; when all is done, what to do next and the first backlog items (`compact`: the line only). */
 export function IdleNote({ idle, onTask, compact = false }: { idle: PanelIdle; onTask: (id: string) => void; compact?: boolean }) {
-  if (idle.kind !== 'done') return <p className="quiet">{idle.text}</p>
+  if (idle.kind !== 'done') return <p className="empty">{idle.text}</p>
   return (
     <div className="idle">
-      <p className="idle-done">
+      <p className="empty">
         <Icon name="pass" /> {idle.text}
       </p>
-      {!compact && idle.hint && <p className="quiet">{idle.hint}</p>}
+      {!compact && idle.hint && <p className="empty">{idle.hint}</p>}
       {!compact && idle.next.length > 0 && (
-        <ul className="next">
+        <ul className="rows">
           {idle.next.map(t => (
             <li key={t.id}>
-              <button type="button" className="row-btn" onClick={() => onTask(t.id)}>
+              <button type="button" className="row" onClick={() => onTask(t.id)}>
+                <Icon name="circle-large-outline" />
                 <span className="id">{t.id}</span>
                 <span className="title">{t.title}</span>
               </button>
             </li>
           ))}
-          {idle.more > 0 && <li className="quiet">and {idle.more} more in the backlog</li>}
+          {idle.more > 0 && <li className="empty">and {idle.more} more in the backlog</li>}
         </ul>
       )}
     </div>
@@ -92,36 +92,20 @@ export function IdleNote({ idle, onTask, compact = false }: { idle: PanelIdle; o
 /** The word under each station's note. */
 export const STATION_WORD: Record<PanelStation, string> = { work: 'work', check: 'checker', queue: 'queue', tests: 'tests', you: 'you', done: 'done' }
 
-/**
- * The staff: a task's stations as notes on one line, the ones passed filled, the current one coral. The current note
- * is one element that slides along the line when the task moves on.
- */
-export function Staff({ lane, compact = false }: { lane: PanelLane; compact?: boolean }) {
-  const n = lane.stations.length
+/** A task's stages in one line ("work › checker › queue › tests › done"): passed ones checked, the current one bold. */
+export function Stages({ lane }: { lane: PanelLane }) {
   const done = lane.doneMs !== undefined
-  const at = done ? n - 1 : lane.at
-  const x = (i: number) => (n <= 1 ? 50 : (i / (n - 1)) * 100)
-  const waiting = lane.stations[at] === 'you'
+  const at = done ? lane.stations.length - 1 : lane.at
   return (
-    <div className={`staff${compact ? ' compact' : ''}${done ? ' finished' : ''}`} aria-label={`${lane.id} is at ${STATION_WORD[lane.stations[at]!]}, step ${at + 1} of ${n}`} role="img">
-      <div className="staff-track">
-        <span className="staff-line" />
-        <span className="staff-passed" style={{ width: `${x(at)}%` }} />
-        {lane.stations.map((s, i) => (
-          <span key={s} className={`note${i < at || done ? ' passed' : ''}${lane.skipped.includes(s) ? ' skipped' : ''}`} style={{ left: `${x(i)}%` }} />
-        ))}
-        {!done && <span className={`note-now${waiting ? ' waiting' : ''}${lane.agent ? ' agent' : ''}`} style={{ left: `${x(at)}%` }} />}
-      </div>
-      {!compact && (
-        <div className="staff-words" aria-hidden>
-          {lane.stations.map((s, i) => (
-            <span key={s} className={i === at && !done ? 'here' : ''} style={{ left: `${x(i)}%` }}>
-              {STATION_WORD[s]}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
+    <ol className="stages" aria-label={`${lane.id} is at ${STATION_WORD[lane.stations[at]!]}, stage ${at + 1} of ${lane.stations.length}`}>
+      {lane.stations.map((s, i) => (
+        <li key={s} className={i < at || done ? 'passed' : i === at ? 'here' : lane.skipped.includes(s) ? 'skipped' : ''}>
+          {(i < at || done) && <Icon name="check" />}
+          {i === at && !done && <Icon name={s === 'you' ? 'bell-dot' : 'loading'} />}
+          {STATION_WORD[s]}
+        </li>
+      ))}
+    </ol>
   )
 }
 
@@ -247,7 +231,7 @@ export const Markdown = memo(function Markdown({ text, onTask }: { text: string;
         <table>{children}</table>
       </div>
     ),
-    img: ({ alt }) => <span className="quiet">[{alt || 'picture'}]</span>,
+    img: ({ alt }) => <span className="dim">[{alt || 'picture'}]</span>,
     input: ({ checked }) => <input type="checkbox" checked={!!checked} disabled readOnly />,
   }
   return (

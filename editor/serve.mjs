@@ -7159,7 +7159,7 @@ var require_client_h1 = __commonJS({
         } else {
           socket[kReset] = true;
         }
-        const pause = request.onHeaders(statusCode, headers, this.resume, statusText2) === false;
+        const pause2 = request.onHeaders(statusCode, headers, this.resume, statusText2) === false;
         if (request.aborted) {
           return -1;
         }
@@ -7173,7 +7173,7 @@ var require_client_h1 = __commonJS({
           socket[kBlocking] = false;
           client[kResume]();
         }
-        return pause ? constants2.ERROR.PAUSED : 0;
+        return pause2 ? constants2.ERROR.PAUSED : 0;
       }
       /**
        * @param {Buffer} buf
@@ -69307,7 +69307,100 @@ function nodeHost(o) {
   };
 }
 
+// steps.ts
+var STEPS_KEPT = 200;
+var WORDS_KEPT = 2e4;
+var isWords = (s) => s.kind === "text" || s.kind === "thinking";
+function argWords(args) {
+  if (!args || typeof args !== "object") return typeof args === "string" ? args : "";
+  const a = args;
+  for (const k of ["command", "path", "target_file", "file", "filePath", "pattern", "query", "glob", "url", "target_directory"]) if (typeof a[k] === "string" && a[k]) return a[k];
+  const json = JSON.stringify(a);
+  return json === "{}" ? "" : json;
+}
+var short2 = (s, n) => s.length > n ? `${s.slice(0, n - 1)}\u2026` : s;
+var LEAD_AGENT = "lead";
+var sessionPath = (dir, agent) => `${dir}/sessions/${agent.replace(/[^\w.-]/g, "_")}.jsonl`;
+function pushStep(list2, s) {
+  const last = list2[list2.length - 1];
+  if (isWords(s) && last?.kind === s.kind) {
+    const text2 = last.text + s.text;
+    list2[list2.length - 1] = { ...last, text: text2.length > WORDS_KEPT ? `\u2026${text2.slice(-WORDS_KEPT)}` : text2 };
+    return;
+  }
+  if (s.kind === "tool" && s.callId) {
+    for (let i = list2.length - 1; i >= 0; i--)
+      if (list2[i].kind === "tool" && list2[i].callId === s.callId) return void (list2[i] = { ...s, atMs: list2[i].atMs });
+  }
+  list2.push(s);
+}
+function addStep(list2, s) {
+  const out = [...list2];
+  pushStep(out, s);
+  return out.length > STEPS_KEPT ? out.slice(-STEPS_KEPT) : out;
+}
+function readSteps(text2) {
+  const out = [];
+  for (const line of text2.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const s = JSON.parse(line);
+      if (typeof s.kind === "string" && typeof s.text === "string") pushStep(out, s);
+    } catch {
+    }
+  }
+  return out;
+}
+var clock = (ms4) => new Date(ms4).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+function sessionMarkdown(title, steps) {
+  const lines = [`# ${title}`, ""];
+  if (!steps.length) lines.push("No steps were saved for this agent.");
+  for (const s of steps) {
+    const at3 = `\`${clock(s.atMs)}\``;
+    if (s.kind === "text") lines.push(`${at3} **said**`, "", s.text, "");
+    else if (s.kind === "thinking") lines.push(`${at3} *thought*`, "", ...s.text.split("\n").map((l) => `> ${l}`), "");
+    else if (s.kind === "tool") lines.push(`${at3} **${s.tool}**${s.status === "error" ? " (failed)" : s.status === "running" ? " (still running)" : ""}`, "", "```", s.text || "(no arguments)", "```", "");
+    else lines.push(`${at3} *${s.text}*`, "");
+  }
+  return lines.join("\n");
+}
+function turnSteps(steps, sinceMs = 0) {
+  let at3 = steps.length - 1;
+  while (at3 >= 0 && !(steps[at3].kind === "status" && steps[at3].text === "running") && steps[at3].atMs >= sinceMs) at3--;
+  return steps.slice(at3 + 1);
+}
+
+// retry.ts
+var RETRY_DELAYS_MS = [15e3, 45e3, 12e4];
+var SERVICE_ERROR = /\b(?:50[0234]|429)\b|unavailable|deadline|timed? ?out|overloaded|rate.?limit|resource.?exhausted|internal (?:server )?error|bad gateway|stream (?:closed|ended|stalled|reset)|connection (?:closed|reset|lost)|network|fetch failed|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|socket hang up/i;
+var NOT_SERVICE = /unauthenticated|unauthori[sz]ed|forbidden|api key|not logged in|\b40[13]\b|context (?:length|window|limit)|too long|maximum context/i;
+function serviceErrorText(text2) {
+  let t = text2.trim();
+  try {
+    const m = JSON.parse(t).message;
+    if (typeof m === "string") t = m;
+  } catch {
+  }
+  if (!SERVICE_ERROR.test(t) || NOT_SERVICE.test(t)) return void 0;
+  return short2(t, 160);
+}
+function serviceError(r) {
+  if (r.status !== "error" || r.error === void 0) return void 0;
+  return serviceErrorText(typeof r.error === "string" ? r.error : JSON.stringify(r.error));
+}
+var resumeText = (why2, lead = false) => `Your last turn was cut off by an error on the agent service (${why2}), not by anything you did. Carry on from where you stopped: ` + (lead ? "what you did so far still stands, so finish it and answer the owner." : "look at the files as they are now (what you changed so far is still there), finish the work, and end your turn as your instructions say.");
+var retryingText = (why2, ms4, n, of) => `retrying: ${why2}; symcc sends it on in ${Math.round(ms4 / 1e3)}s (${n} of ${of})`;
+function pause(ms4) {
+  let wake3;
+  const done = new Promise((r) => {
+    const timer = setTimeout(r, ms4);
+    wake3 = () => (clearTimeout(timer), r());
+  });
+  return { done, wake: wake3 };
+}
+
 // agents.ts
+var HAND_BACK_TURNS = 2;
 function agentToolDefs(kind) {
   if (kind === "worker") return [ASK_TOOL_DEF()];
   const names2 = kind === "scout" ? [...SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL] : [...SCOUT_BOARD_TOOLS];
@@ -69344,19 +69437,50 @@ function sdkAgents(o) {
       { description: d.description, inputSchema: d.inputSchema, execute: (input) => o.onTool(agentId, d.name, input) }
     ])
   );
+  async function run2(id, e, text2, mode) {
+    const delays = o.retryDelaysMs ?? RETRY_DELAYS_MS;
+    let spent;
+    for (let n2 = 0, message = text2; ; n2++) {
+      let end2;
+      let why2;
+      try {
+        e.run = await e.sdk.send(message, { ...mode ? { mode } : {}, ...n2 ? { force: true } : {}, ...o.onStep ? { onStep: (s) => o.onStep(id, s) } : {} });
+        if (e.killed) await e.run.cancel().catch(() => void 0);
+        const r = await e.run.wait();
+        end2 = runEnd(r, e.killed, o.sdk.name);
+        why2 = e.killed ? void 0 : serviceError(r);
+      } catch (err) {
+        end2 = e.killed ? runEnd({ status: "cancelled" }, true) : { answer: `the ${o.sdk.name} agent could not run: ${err.message}`.slice(0, 800), end: { reason: "error" }, isAborted: false, tokens: void 0 };
+        why2 = e.killed ? void 0 : serviceErrorText(err.message);
+      }
+      e.run = void 0;
+      spent = end2.tokens ? addTokens(spent, end2.tokens) : spent;
+      if (!why2 || n2 >= delays.length) return { ...end2, tokens: spent };
+      const ms4 = delays[n2];
+      log(`${id}: the service cut its run off (${why2}); trying again in ${ms4} ms`);
+      o.onStep?.(id, { kind: "status", text: retryingText(why2, ms4, n2 + 1, delays.length) });
+      const wait = pause(ms4);
+      e.wake = wait.wake;
+      await wait.done;
+      e.wake = void 0;
+      if (e.killed) return { ...runEnd({ status: "cancelled" }, true), tokens: spent };
+      message = resumeText(why2);
+    }
+  }
   async function turn(id, e, text2, mode) {
     e.agent = { ...e.agent, status: "running" };
     let done;
     e.ended = new Promise((r) => done = r);
-    let end2;
-    try {
-      e.run = await e.sdk.send(text2, { ...mode ? { mode } : {}, ...o.onStep ? { onStep: (s) => o.onStep(id, s) } : {} });
-      if (e.killed) await e.run.cancel().catch(() => void 0);
-      end2 = runEnd(await e.run.wait(), e.killed, o.sdk.name);
-    } catch (err) {
-      end2 = e.killed ? runEnd({ status: "cancelled" }, true) : { answer: `the ${o.sdk.name} agent could not run: ${err.message}`.slice(0, 800), end: { reason: "error" }, isAborted: false, tokens: void 0 };
+    let end2 = await run2(id, e, text2, mode);
+    for (let n2 = 0; o.handBack && e.start.kind === "worker" && !mode && !e.killed && end2.end.reason === "answer" && n2 < HAND_BACK_TURNS; n2++) {
+      const say = await o.handBack(id).catch((err) => void log(`${id}: couldn't check its files: ${err.message}`));
+      if (!say) break;
+      log(`${id}: changed files outside its task; asking it to undo them`);
+      o.onStep?.(id, { kind: "status", text: "checking: files outside the task; symcc asks the worker to undo them" });
+      const again = await run2(id, e, say);
+      const tokens = end2.tokens || again.tokens ? addTokens(end2.tokens, again.tokens) : void 0;
+      end2 = again.isAborted ? { ...again, tokens } : { ...end2, tokens };
     }
-    e.run = void 0;
     e.agent = { ...e.agent, status: end2.isAborted ? "killed" : end2.end.reason === "answer" ? "completed" : "failed" };
     done();
     log(`${id} ended: ${e.agent.status}`);
@@ -69380,15 +69504,16 @@ function sdkAgents(o) {
     },
     list: async () => [...entries.values()].map((e) => e.agent),
     async send(agentId, text2) {
-      const run2 = entries.get(agentId)?.run;
-      if (!run2?.steer) return;
-      const outcome = await run2.steer(text2);
+      const run3 = entries.get(agentId)?.run;
+      if (!run3?.steer) return;
+      const outcome = await run3.steer(text2);
       log(`${agentId}: message ${outcome === "complete_delivered" ? "delivered" : "not delivered (the turn ended first)"}`);
     },
     async stop(agentId) {
       const e = entries.get(agentId);
       if (!e || e.agent.status !== "running" && e.agent.status !== "pending") return;
       e.killed = true;
+      e.wake?.();
       await e.run?.cancel().catch(() => void 0);
     },
     // T-656: a finished agent gets one more turn with its whole memory of the task; a follow-up only reads
@@ -69403,6 +69528,7 @@ function sdkAgents(o) {
       const live = [...entries.values()].filter((e) => e.agent.status === "running" || e.agent.status === "pending");
       for (const e of live) {
         e.killed = true;
+        e.wake?.();
         await e.run?.cancel().catch(() => void 0);
       }
       await Promise.race([Promise.all(live.map((e) => e.ended)), new Promise((r) => setTimeout(r, graceMs))]);
@@ -69418,6 +69544,8 @@ function leadChat(o) {
   let running = false;
   let guided = false;
   let closed = false;
+  let stopped2 = false;
+  let wake3;
   const waiting2 = [];
   let idleWaiters = [];
   let choice = { mode: "agent" };
@@ -69433,6 +69561,8 @@ function leadChat(o) {
     o.onEvent({ type: "busy", busy: true });
     o.onEvent({ type: "message", from, text: text2 });
     const meanwhile2 = from === "owner" ? o.meanwhile?.() : void 0;
+    stopped2 = false;
+    let started2 = false;
     try {
       const guide = guided ? void 0 : await o.guide();
       if (guide) guided = true;
@@ -69444,14 +69574,43 @@ ${text2}` : text2;
 ---
 
 ${body}` : body;
-      const how = { ...o.onStep ? { onStep: o.onStep } : {}, ...choice.model ? { model: choice.model } : {}, ...choice.mode === "plan" ? { mode: "plan" } : {}, ...images?.length ? { images } : {} };
-      run2 = await (await getAgent()).send(message, Object.keys(how).length ? how : void 0);
-      const r = await run2.wait();
-      if (r.status === "finished") o.onEvent({ type: "answer", text: r.result ?? "" });
-      else if (r.status === "cancelled") o.onEvent({ type: "stopped" });
-      else o.onEvent({ type: "error", text: `the lead's turn ended with status ${r.status}${r.error ? `: ${JSON.stringify(r.error).slice(0, 300)}` : ""}` });
+      const how = { ...o.onStep ? { onStep: o.onStep } : {}, ...choice.model ? { model: choice.model } : {}, ...choice.mode === "plan" ? { mode: "plan" } : {} };
+      const delays = o.retryDelaysMs ?? RETRY_DELAYS_MS;
+      for (let n = 0, say = message; ; n++) {
+        let r;
+        let failed2 = "";
+        try {
+          const sent = n ? { ...how, force: true } : images?.length ? { ...how, images } : how;
+          run2 = await (await getAgent()).send(say, Object.keys(sent).length ? sent : void 0);
+          started2 = true;
+          r = await run2.wait();
+        } catch (err) {
+          failed2 = err.message;
+        }
+        run2 = void 0;
+        const why2 = stopped2 || closed ? void 0 : r ? serviceError(r) : serviceErrorText(failed2);
+        if (why2 && n < delays.length) {
+          o.onEvent({ type: "retry", text: `The agent service cut the lead's turn off (${why2}). symcc sends it on in ${Math.round(delays[n] / 1e3)}s (${n + 1} of ${delays.length}).` });
+          const p = pause(delays[n]);
+          wake3 = p.wake;
+          await p.done;
+          wake3 = void 0;
+          if (!stopped2 && !closed) {
+            say = resumeText(why2, true);
+            continue;
+          }
+          r = { status: "cancelled" };
+        }
+        if (!r) {
+          if (!started2) meanwhile2?.back();
+          o.onEvent({ type: "error", text: `the lead could not run: ${failed2}` });
+        } else if (r.status === "finished") o.onEvent({ type: "answer", text: r.result ?? "" });
+        else if (r.status === "cancelled") o.onEvent({ type: "stopped" });
+        else o.onEvent({ type: "error", text: `the lead's turn ended with status ${r.status}${r.error ? `: ${JSON.stringify(r.error).slice(0, 300)}` : ""}` });
+        break;
+      }
     } catch (err) {
-      if (!run2) meanwhile2?.back();
+      if (!started2) meanwhile2?.back();
       o.onEvent({ type: "error", text: `the lead could not run: ${err.message}` });
     }
     run2 = void 0;
@@ -69472,18 +69631,29 @@ ${body}` : body;
   return {
     async send(text2, from, how) {
       if (closed) throw new Error("the lead chat is closed");
-      if (!running) return void start(text2, from, how?.images);
+      if (!running) {
+        void start(text2, from, how?.images);
+        return "started";
+      }
       if (how?.urgent && run2?.steer && !how.images?.length) {
         const outcome = await run2.steer(text2).catch(() => "failed");
-        if (outcome === "complete_delivered") return void o.onEvent({ type: "message", from, text: text2 });
+        if (outcome === "complete_delivered") {
+          o.onEvent({ type: "message", from, text: text2 });
+          return "steered";
+        }
       }
       waiting2.push({ text: text2, from, ...how?.images?.length ? { images: how.images } : {} });
       if (!running) next();
+      return "queued";
     },
     busy: () => running,
     configure: (c) => choice = { ...choice, ...c },
     choice: () => choice,
-    stop: async () => void await run2?.cancel().catch(() => void 0),
+    async stop() {
+      stopped2 = true;
+      wake3?.();
+      await run2?.cancel().catch(() => void 0);
+    },
     async summarize() {
       if (running) return "the lead is working: summarize once its turn is done";
       if (!agent) return "there is nothing to summarize yet";
@@ -69510,11 +69680,51 @@ ${body}` : body;
     async close() {
       closed = true;
       waiting2.length = 0;
+      wake3?.();
       await run2?.cancel().catch(() => void 0);
       if (agent) await (await agent.catch(() => void 0))?.close().catch(() => void 0);
       settled();
     }
   };
+}
+
+// scope.ts
+var NAMED = 10;
+async function changedInFolder($, dir, target) {
+  const list2 = async (args) => {
+    const r = await git($, args, dir);
+    if (r.exitCode !== 0) throw new Error(`git ${args[0]}: ${(r.stderr || r.stdout).trim().slice(0, 200)}`);
+    return r.stdout.split("\0").map((f) => f.replace(/^\n+/, "")).filter(Boolean);
+  };
+  const main2 = (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${target}`], dir)).stdout.trim();
+  const base = main2 && (await git($, ["merge-base", main2, "HEAD"], dir)).stdout.trim() || "HEAD";
+  const files = /* @__PURE__ */ new Set([
+    ...base === "HEAD" ? [] : await list2(["log", "--cc", "--format=", "--name-only", "--no-renames", "-z", `${base}..HEAD`]),
+    ...await list2(["diff", "--name-only", "--no-renames", "-z", "HEAD"]),
+    ...await list2(["ls-files", "--others", "--exclude-standard", "-z"])
+  ]);
+  return { base, files: [...files] };
+}
+function outsideTaskText(bad, allowed, base) {
+  const named = bad.slice(0, NAMED).join(", ") + (bad.length > NAMED ? ` and ${bad.length - NAMED} more` : "");
+  const at3 = base === "HEAD" ? "HEAD" : base.slice(0, 12);
+  return [
+    `Before you hand back: you changed files outside this task's files, and symcc's merge refuses the whole try while any of them is left: ${named}.`,
+    `This task may change only ${allowed.join(", ")}.`,
+    `Undo them now. Delete the files you added there (helper scripts and notes too), and put back the ones you changed or deleted with \`git checkout ${at3} -- <file>\` (also when you committed them already; then commit again).`,
+    "For throwaway files use a folder outside the project, such as /tmp.",
+    "If the task needs one of these files, undo it anyway and say so in your report, so the lead can add it to the task's files.",
+    "Then end your turn with your report, as before."
+  ].join(" ");
+}
+async function handBackNote($, agentId) {
+  const w = workers.get(agentId);
+  if (!w) return void 0;
+  const t = find(await load($), w.task);
+  if (!t || isInvestigation(t) || !t.files.length) return void 0;
+  const { base, files } = await changedInFolder($, w.worktree, intoOf(t));
+  const bad = outOfScope(files, t.files, S.N.dir);
+  return bad.length ? outsideTaskText(bad, t.files, base) : void 0;
 }
 
 // view.ts
@@ -69743,69 +69953,6 @@ function panelView(v, o) {
     dir: o.dir,
     nowMs
   };
-}
-
-// steps.ts
-var STEPS_KEPT = 200;
-var WORDS_KEPT = 2e4;
-var isWords = (s) => s.kind === "text" || s.kind === "thinking";
-function argWords(args) {
-  if (!args || typeof args !== "object") return typeof args === "string" ? args : "";
-  const a = args;
-  for (const k of ["command", "path", "target_file", "file", "filePath", "pattern", "query", "glob", "url", "target_directory"]) if (typeof a[k] === "string" && a[k]) return a[k];
-  const json = JSON.stringify(a);
-  return json === "{}" ? "" : json;
-}
-var short2 = (s, n) => s.length > n ? `${s.slice(0, n - 1)}\u2026` : s;
-var LEAD_AGENT = "lead";
-var sessionPath = (dir, agent) => `${dir}/sessions/${agent.replace(/[^\w.-]/g, "_")}.jsonl`;
-function pushStep(list2, s) {
-  const last = list2[list2.length - 1];
-  if (isWords(s) && last?.kind === s.kind) {
-    const text2 = last.text + s.text;
-    list2[list2.length - 1] = { ...last, text: text2.length > WORDS_KEPT ? `\u2026${text2.slice(-WORDS_KEPT)}` : text2 };
-    return;
-  }
-  if (s.kind === "tool" && s.callId) {
-    for (let i = list2.length - 1; i >= 0; i--)
-      if (list2[i].kind === "tool" && list2[i].callId === s.callId) return void (list2[i] = { ...s, atMs: list2[i].atMs });
-  }
-  list2.push(s);
-}
-function addStep(list2, s) {
-  const out = [...list2];
-  pushStep(out, s);
-  return out.length > STEPS_KEPT ? out.slice(-STEPS_KEPT) : out;
-}
-function readSteps(text2) {
-  const out = [];
-  for (const line of text2.split("\n")) {
-    if (!line.trim()) continue;
-    try {
-      const s = JSON.parse(line);
-      if (typeof s.kind === "string" && typeof s.text === "string") pushStep(out, s);
-    } catch {
-    }
-  }
-  return out;
-}
-var clock = (ms4) => new Date(ms4).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-function sessionMarkdown(title, steps) {
-  const lines = [`# ${title}`, ""];
-  if (!steps.length) lines.push("No steps were saved for this agent.");
-  for (const s of steps) {
-    const at3 = `\`${clock(s.atMs)}\``;
-    if (s.kind === "text") lines.push(`${at3} **said**`, "", s.text, "");
-    else if (s.kind === "thinking") lines.push(`${at3} *thought*`, "", ...s.text.split("\n").map((l) => `> ${l}`), "");
-    else if (s.kind === "tool") lines.push(`${at3} **${s.tool}**${s.status === "error" ? " (failed)" : s.status === "running" ? " (still running)" : ""}`, "", "```", s.text || "(no arguments)", "```", "");
-    else lines.push(`${at3} *${s.text}*`, "");
-  }
-  return lines.join("\n");
-}
-function turnSteps(steps, sinceMs = 0) {
-  let at3 = steps.length - 1;
-  while (at3 >= 0 && !(steps[at3].kind === "status" && steps[at3].text === "running") && steps[at3].atMs >= sinceMs) at3--;
-  return steps.slice(at3 + 1);
 }
 
 // skills.ts
@@ -70078,6 +70225,7 @@ async function openCursorSession(o) {
     onEnd: (agentId, end2) => agentFinished(ref.host, agentId, end2),
     onTool: async (agentId, tool, input) => answerText2(tool, await toolCall(ref.host, toolName(tool), agentId, input)),
     onStep,
+    handBack: (agentId) => handBackNote(ref.host, agentId),
     log,
     ...guard ? { guard: (agentId, dir) => guard({ host: ref.host, dir, agentId }) } : {}
   });
@@ -70175,8 +70323,8 @@ async function openCursorSession(o) {
     lead,
     tool: async (name, input) => answerText2(name, await toolCall(host, toolName(name), void 0, input)),
     command,
-    async message(text2, images) {
-      const how = images?.length ? { images } : void 0;
+    async message(text2, images, queue2) {
+      const how = { ...images?.length ? { images } : {}, ...queue2 ? {} : { urgent: true } };
       const slash = /^\/([\w.:-]+)(?:\s+([\s\S]*))?$/.exec(text2.trim());
       if (slash) {
         const [, name, rest = ""] = slash;
@@ -70186,13 +70334,11 @@ async function openCursorSession(o) {
         const skill = answer ? void 0 : (await skills()).find((s) => s.name === name);
         if (answer || skill) {
           ownerTyped(text2);
-          await lead.send(answer ? answer.text : skillMessage(skill, rest.trim()), "owner", how);
-          return {};
+          return { sent: await lead.send(answer ? answer.text : skillMessage(skill, rest.trim()), "owner", how) };
         }
       }
       ownerTyped(text2);
-      await lead.send(text2, "owner", how);
-      return {};
+      return { sent: await lead.send(text2, "owner", how) };
     },
     async slash() {
       const listed = [...COMMANDS(host.features), ANSWER_COMMAND()];
@@ -70434,7 +70580,7 @@ function cursorSdk(env = process.env) {
         id: agent.agentId,
         async send(text2, so) {
           const message = so?.images?.length ? { text: text2, images: so.images.map((i) => ({ data: i.data, mimeType: i.mimeType })) } : text2;
-          const options = { ...so?.mode ? { mode: so.mode } : {}, ...so?.model ? { model: so.model } : {} };
+          const options = { ...so?.mode ? { mode: so.mode } : {}, ...so?.model ? { model: so.model } : {}, ...so?.force ? { local: { force: true } } : {} };
           return hostRun(await agent.send(message, Object.keys(options).length ? options : void 0), so?.onStep);
         },
         summarize: async () => hostRun(await agent.summarize()),
@@ -70947,7 +71093,14 @@ function openBoard(o) {
   });
   const addChat = (who, text2, more = {}) => {
     const atMs = Date.now();
-    chat = [...chat, { key: `${atMs}-${chat.length}`, who, text: text2, atMs, ...more }].slice(-CHAT_KEPT);
+    const key = `${atMs}-${chat.length}`;
+    chat = [...chat, { key, who, text: text2, atMs, ...more }].slice(-CHAT_KEPT);
+    keep("chat.json", savedChat(chat));
+    post({ type: "chat", items: chat, busy });
+    return key;
+  };
+  const markChat = (key, more) => {
+    chat = chat.map((x) => x.key === key ? { ...x, ...more } : x);
     keep("chat.json", savedChat(chat));
     post({ type: "chat", items: chat, busy });
   };
@@ -70967,9 +71120,10 @@ function openBoard(o) {
       o.log?.(`couldn't set the lead's model: ${err.message}`);
     }
   };
-  const sendLead = async (text2, images = []) => {
-    addChat("owner", text2, images.length ? { images: images.map((i) => `data:${i.mimeType};base64,${i.data}`) } : {});
-    const a = await s().message(text2, images);
+  const sendLead = async (text2, images = [], queue2 = false) => {
+    const key = addChat("owner", text2, images.length ? { images: images.map((i) => `data:${i.mimeType};base64,${i.data}`) } : {});
+    const a = await s().message(text2, images, queue2);
+    if (a.sent === "steered" || a.sent === "queued") markChat(key, { sent: a.sent });
     if (typeof a.said === "string") addChat("note", a.said);
     return a.said ?? "";
   };
@@ -71059,7 +71213,7 @@ function openBoard(o) {
       o.editor({ do: "setting", key: "proxy", value: p });
       return p ? "symcc restarts with the new proxy." : "symcc restarts without a proxy.";
     }
-    if (m.type === "send") return sendLead(m.text, m.images);
+    if (m.type === "send") return sendLead(m.text, m.images, m.queue);
     if (m.type === "summarize") {
       const said = await s().lead.summarize() ?? "summarizing";
       if (said !== "summarizing") addChat("note", `${said.charAt(0).toUpperCase()}${said.slice(1)}${/[.!?]$/.test(said) ? "" : "."}`);
@@ -71146,7 +71300,8 @@ function openBoard(o) {
       }
       if (e.type === "message") return;
       if (e.type === "stopped") return addChat("note", "You stopped the lead.", leadTurn());
-      if (e.type === "summarized") return addChat("note", "The lead summarized the chat so far to free its memory. The summary is in its session.");
+      if (e.type === "summarized") return void addChat("note", "The lead summarized the chat so far to free its memory. The summary is in its session.");
+      if (e.type === "retry") return void addChat("note", e.text);
       if (e.type === "error" && NETWORK_ERROR.test(e.text)) setNetwork({ text: e.text, proxy: o.proxy, service });
       if (e.type === "answer" && network) setNetwork(null);
       if (e.type === "answer") return addChat("lead", e.text, leadTurn());

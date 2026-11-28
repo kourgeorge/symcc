@@ -7,7 +7,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { runCommand } from '../../node/host'
 import type { AgentRunEnd } from '../../../hooks/app/symcc'
-import { agentToolDefs, disallowedFor, runEnd, sdkAgents, withCursorPrompt } from '../agents'
+import { HAND_BACK_TURNS, agentToolDefs, disallowedFor, runEnd, sdkAgents, withCursorPrompt } from '../agents'
 import { leadChat, type LeadEvent } from '../lead'
 import { actionCommand, openCursorSession } from '../session'
 import type { PanelSize, PanelStep, PanelView } from '../protocol'
@@ -16,7 +16,7 @@ import { addStep, readSteps, sessionMarkdown } from '../steps'
 import { CHECKER_SHOWN_CHARS, TIMELINE_SHOWN, panelView, taskSessions } from '../view'
 import type { PaneView } from '../../../hooks/app/state'
 import { driveWarning, timelineTime } from '../../../hooks/board'
-import { modelInfos, type SdkToolVerdict } from '../sdk'
+import { modelInfos, type SdkRunResult, type SdkStep, type SdkToolVerdict } from '../sdk'
 import { copilotGuard } from '../guard'
 import { skillOf } from '../skills'
 import { parseLog, parseNumstat, parseWorktreeList } from '../worktrees'
@@ -165,14 +165,14 @@ test('the lead chat: an idle lead starts at once, messages for a busy lead go to
   const sdk = fakeSdk(t => new Promise(r => void gates.push(() => r({ status: 'finished', result: `answered ${t.agent.turns.length}` }))))
   const ev: LeadEvent[] = []
   const lead = leadChat({ sdk, cwd: '/tmp', model: 'm', tools: () => ({}), guide: async () => 'GUIDE', onEvent: e => void ev.push(e) })
-  await lead.send('first', 'owner')
+  expect(await lead.send('first', 'owner')).toBe('started')
   await until(() => sdk.agents[0]?.turns.length === 1)
   expect(sdk.agents[0]!.turns[0]!.text).toBe('GUIDE\n\n---\n\nfirst')
   expect(lead.busy()).toBe(true)
 
-  await lead.send('update A', 'symcc')
+  expect(await lead.send('update A', 'symcc')).toBe('queued')
   await lead.send('update B', 'symcc')
-  await lead.send('T-3 needs you now', 'symcc', { urgent: true })
+  expect(await lead.send('T-3 needs you now', 'symcc', { urgent: true })).toBe('steered')
   expect(sdk.agents[0]!.turns[0]!.steered).toEqual(['T-3 needs you now'])
   expect(sdk.agents[0]!.turns.length).toBe(1)
 
@@ -214,7 +214,7 @@ test("the lead chat on Cursor: it loads the project's and plugins' settings, a t
 
     await s.lead.idle()
     s.lead.configure({ model: { id: 'gpt-x', params: [{ id: 'reasoning', value: 'high' }] }, mode: 'plan' })
-    expect(await s.message('/tidy src only', [{ data: 'AAAA', mimeType: 'image/png' }])).toEqual({})
+    expect(await s.message('/tidy src only', [{ data: 'AAAA', mimeType: 'image/png' }])).toEqual({ sent: 'started' })
     await until(() => leadTurns().some(t => t.text.includes('"tidy"')), 20_000, "the skill's turn")
     const turn = leadTurns().find(t => t.text.includes('"tidy"'))!
     expect(turn.text).toContain(`Use the skill "tidy": read ${repo}/.cursor/skills/tidy/SKILL.md and follow it.`)
@@ -255,6 +255,125 @@ test('the lead chat: Stop ends the running turn, summarize waits for an idle lea
   expect(ev.filter(e => e.type === 'busy').map(e => (e as { busy: boolean }).busy)).toEqual([true, false, true, false])
   await lead.close()
 })
+
+test("a run the agent service cut off (an HTTP 504) is sent on from where it stopped, a few times; any other error ends the worker's try as before, and a stop while symcc waits ends it", async () => {
+  const cut: SdkRunResult = { status: 'error', error: { message: '[unavailable] HTTP 504' } }
+  const sdk = fakeSdk(async t => {
+    const asked = t.agent.turns[0]!.text
+    if (asked.includes('a bad key')) return { status: 'error', error: { message: '[unauthenticated] bad api key' } }
+    if (asked.includes('always cut off') || asked.includes('wait for it')) return cut
+    return t.agent.turns.length === 1 ? cut : { status: 'finished', result: 'Wrote hello.txt.', usage: { inputTokens: 10, outputTokens: 2 } }
+  })
+  const ends: AgentRunEnd[] = []
+  const steps: SdkStep[] = []
+  const o = { sdk, model: 'm', onEnd: (_id: string, e: AgentRunEnd) => void ends.push(e), onTool: async () => '', onStep: (_id: string, s: SdkStep) => void steps.push(s) }
+  const agents = sdkAgents({ ...o, retryDelaysMs: [1, 1] })
+
+  await agents.spawn({ kind: 'worker', prompt: 'say hello', name: 'w', description: 'T-1', cwd: '/tmp' })
+  await until(() => ends.length === 1)
+  expect(ends[0]).toEqual({ answer: 'Wrote hello.txt.', end: { reason: 'answer' }, isAborted: false, tokens: { input: 10, output: 2 } })
+  const [first, again] = sdk.agents[0]!.turns
+  expect([first!.force, again!.force]).toEqual([undefined, true])
+  expect(again!.text).toContain('cut off by an error on the agent service ([unavailable] HTTP 504)')
+  expect(steps.some(s => s.kind === 'status' && s.text.startsWith('retrying: [unavailable] HTTP 504'))).toBe(true)
+
+  await agents.spawn({ kind: 'worker', prompt: 'always cut off', name: 'w2', description: 'T-2', cwd: '/tmp' })
+  await until(() => ends.length === 2)
+  expect(sdk.agents[1]!.turns.length).toBe(3)
+  expect(ends[1]!.end).toEqual({ reason: 'error' })
+
+  await agents.spawn({ kind: 'worker', prompt: 'a bad key', name: 'w3', description: 'T-3', cwd: '/tmp' })
+  await until(() => ends.length === 3)
+  expect(sdk.agents[2]!.turns.length).toBe(1)
+  expect(ends[2]!.answer).toContain('unauthenticated')
+  await agents.stopAll()
+
+  const slow = sdkAgents({ ...o, retryDelaysMs: [60_000] })
+  const w = await slow.spawn({ kind: 'worker', prompt: 'wait for it', name: 'w4', description: 'T-4', cwd: '/tmp' })
+  await until(() => steps.filter(s => s.kind === 'status' && s.text.includes('60s')).length === 1)
+  await slow.stop(w.agentId!, 'Stop now')
+  await until(() => ends.length === 4, 2000, 'the stop to end the wait')
+  expect(ends[3]!.isAborted).toBe(true)
+  expect(sdk.agents[3]!.turns.length).toBe(1)
+  await slow.stopAll()
+})
+
+test("the lead's turn the agent service cut off is sent on, and the chat hears of it; a stop while symcc waits ends the turn", async () => {
+  const sdk = fakeSdk(async t => (t.agent.turns[0]!.text === 'stop me' || t.agent.turns.length === 1 ? { status: 'error', error: '[unavailable] HTTP 503' } : { status: 'finished', result: 'Added T-1.' }))
+  const ev: LeadEvent[] = []
+  const lead = leadChat({ sdk, cwd: '/tmp', model: 'm', tools: () => ({}), guide: async () => undefined, onEvent: e => void ev.push(e), retryDelaysMs: [1] })
+  await lead.send('add a task', 'owner')
+  await lead.idle()
+  expect(ev.filter(e => e.type === 'retry' || e.type === 'answer').map(e => e.type)).toEqual(['retry', 'answer'])
+  const [first, again] = sdk.agents[0]!.turns
+  expect([first!.force, again!.force]).toEqual([undefined, true])
+  expect(again!.text).toContain('answer the owner')
+  await lead.close()
+
+  const ev2: LeadEvent[] = []
+  const slow = leadChat({ sdk, cwd: '/tmp', model: 'm', tools: () => ({}), guide: async () => undefined, onEvent: e => void ev2.push(e), retryDelaysMs: [60_000] })
+  await slow.send('stop me', 'owner')
+  await until(() => ev2.some(e => e.type === 'retry'))
+  await slow.stop()
+  await slow.idle()
+  expect(ev2.some(e => e.type === 'stopped')).toBe(true)
+  await slow.close()
+})
+
+test("before a Cursor worker hands back, files it changed outside its task are its to undo: it gets a turn or two, and its report stays the answer", async () => {
+  const sdk = fakeSdk(async t => ({ status: 'finished', result: t.text.startsWith('Before you hand back') ? 'Undid them.' : 'Wrote hello.txt.' }))
+  const ends: AgentRunEnd[] = []
+  const notes = ['Before you hand back: undo x.sh', undefined]
+  const agents = sdkAgents({ sdk, model: 'm', onEnd: (_id, e) => void ends.push(e), onTool: async () => '', handBack: async () => notes.shift() })
+  await agents.spawn({ kind: 'worker', prompt: 'say hello', name: 'w', description: 'T-1', cwd: '/tmp' })
+  await until(() => ends.length === 1)
+  expect(sdk.agents[0]!.turns.map(t => t.text.endsWith('say hello') || t.text)).toEqual([true, 'Before you hand back: undo x.sh'])
+  expect(ends[0]!.answer).toBe('Wrote hello.txt.')
+
+  const stubborn = sdkAgents({ sdk, model: 'm', onEnd: (_id, e) => void ends.push(e), onTool: async () => '', handBack: async () => 'Before you hand back: undo x.sh' })
+  await stubborn.spawn({ kind: 'worker', prompt: 'say hello', name: 'w', description: 'T-2', cwd: '/tmp' })
+  await stubborn.spawn({ kind: 'scout', prompt: 'look around', name: 's', description: 'scout', cwd: '/tmp' })
+  await until(() => ends.length === 3)
+  expect(sdk.agents[1]!.turns.length).toBe(1 + HAND_BACK_TURNS)
+  expect(sdk.agents[2]!.turns.length).toBe(1)
+  await agents.stopAll()
+  await stubborn.stopAll()
+})
+
+test("a worker's throwaway script in .scratch/, where the project keeps files in git, is undone before it hands back, and its task merges", async () => {
+  const repo = await scratchRepo()
+  await mkdir(`${repo}/.scratch`, { recursive: true })
+  await writeFile(`${repo}/.scratch/notes.md`, 'kept in git\n')
+  await git(repo, 'add', '.')
+  await git(repo, 'commit', '-qm', 'scratch notes')
+  const sdk = fakeSdk(async t => {
+    if (!isWorker(t) || t.mode === 'plan') return { status: 'finished', result: 'none' }
+    const dir = t.agent.options.cwd!
+    if (t.text.startsWith('Before you hand back')) {
+      await rm(`${dir}/.scratch/try.sh`, { force: true })
+      return { status: 'finished', result: 'Removed .scratch/try.sh.' }
+    }
+    await writeFile(`${dir}/hello.txt`, 'hello from the fake worker\n')
+    await writeFile(`${dir}/.scratch/try.sh`, 'cat hello.txt\n')
+    return { status: 'finished', result: 'Wrote hello.txt.' }
+  })
+  const s = await openCursorSession({ root: repo, sdk, pluginRoot: PLUGIN_ROOT, sessionId: 'cursor-scope' })
+  try {
+    await s.command('symcc-init')
+    await s.tool('settings', { test_commands: ['sh check.sh'] })
+    await s.tool('add', { title: 'Say hello', details: 'Write hello.txt with a greeting', files: ['hello.txt'], why: 'a test', origin_by: 'owner', request: 'Say hello' })
+    await until(async () => (await board(repo)).tasks[0]?.status === 'done', 60_000, 'T-1 to be done')
+    const turns = sdk.agents.flatMap(a => a.turns).filter(t => isWorker(t) && t.mode !== 'plan')
+    expect(turns.length).toBe(2)
+    expect(turns[1]!.text).toContain('.scratch/try.sh')
+    expect(turns[1]!.text).toContain('This task may change only hello.txt.')
+    expect((await git(repo, 'show', 'main:hello.txt')).stdout).toBe('hello from the fake worker\n')
+    expect((await git(repo, 'ls-tree', '--name-only', 'main', '.scratch/')).stdout.trim()).toBe('.scratch/notes.md')
+  } finally {
+    await s.close()
+    await rm(repo, { recursive: true, force: true })
+  }
+}, 120_000)
 
 test("the Worktrees page: a worker's folder against the branch it merges into, the project and another checkout; only a finished task's folder can be removed", async () => {
   const repo = await scratchRepo()

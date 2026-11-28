@@ -9,6 +9,8 @@ export type Turn = {
   mode?: 'agent' | 'plan'
   model?: SdkModel
   images?: readonly SdkImage[]
+  /** sent with `force` (a new try after the service cut a run off) */
+  force?: boolean
   /** messages put into this turn so far */
   steered: string[]
   /** resolves with the next message put into the turn (or at once with one that came already) */
@@ -50,6 +52,7 @@ export function fakeSdk(behave: Behave, models: SdkModelInfo[] = []): Sdk & { ag
             ...(so?.mode ? { mode: so.mode } : {}),
             ...(so?.model ? { model: so.model } : {}),
             ...(so?.images ? { images: so.images } : {}),
+            ...(so?.force ? { force: true } : {}),
             steered: [],
             nextSteer: () => (turn.steered.length > taken ? Promise.resolve(turn.steered[taken++]!) : new Promise<string>(r => waiters.push(m => (taken++, r(m))))),
             cancelled: () => cancelled,

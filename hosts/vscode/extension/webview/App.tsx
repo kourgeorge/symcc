@@ -1,13 +1,15 @@
-// The board panel: a rail (Now, Board, Worktrees, Scouts, Memory), the header with the mode switch, and the page. Now is one stream:
-// what needs you pinned on top as cards you decide in place, the lead's chat and the board's news in one timeline
-// with the message box under it, and the running work beside it.
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from 'react'
-import type { AgentChoice, BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelChecker, PanelFollows, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelSize, PanelStep, PanelTask, PanelView, SlashItem } from '../../protocol'
+// The board panel, drawn like the workbench around it: VS Code's panel tabs (Now, Board, Worktrees, Scouts, Memory)
+// with the project, its counts and the mode switch at their right, and the page under them. Now is the lead's chat in
+// the main area and the work beside it as folding views, the way VS Code stacks views in a side bar: what needs the
+// owner (each decided in place when opened), what runs, what's next.
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import type { AgentChoice, BoardPage, ChatItem, EngineState, LeadSettings, ModelInfo, NetworkProblem, PanelAction, PanelActionId, PanelChecker, PanelFollows, PanelLane, PanelMode, PanelNeed, PanelOrgMem, PanelScout, PanelSize, PanelStep, PanelTask, PanelTimeline, PanelView, SlashItem } from '../../protocol'
 import { LEAD_AGENT, addStep } from '../../steps'
 import { ask, onMessage, tell } from './bridge'
-import { Icon, IdleNote, Linked, Mark, Markdown, Staff, STATION_WORD, ago, clock, dayWord, duration, tokensWord, useNow } from './parts'
+import { LeadChat, useDismiss } from './chat'
+import { Icon, IdleNote, Mark, Markdown, STATION_WORD, ago, duration, tokensWord, useNow } from './parts'
 import { TaskSession, latestStep, openSession, stepIcon, stepWords } from './session'
-import { LeadChat } from './chat'
+import { Badge, Button, Collapsible, TabHeader, TabPanel, Tabs, Textarea, Textfield, focusMe, valueOf } from './ui'
 import { Worktrees, type WorktreeList } from './worktrees'
 
 type Page = BoardPage
@@ -66,17 +68,27 @@ export function useNotice(): [Notice | null, Say] {
   return [notice, say]
 }
 
+/** How an action went, as a notification in the corner like the editor's own. */
 export function NoticeLine({ notice }: { notice: Notice | null }) {
   return (
-    <div className="notice" role="status" aria-live="polite">
+    <div className="toast-wrap" role="status" aria-live="polite">
       {notice && (
-        <p className={notice.bad ? 'bad' : ''}>
-          <Icon name={notice.bad ? 'error' : 'check'} /> {notice.text}
+        <p className={`toast${notice.bad ? ' bad' : ''}`}>
+          <Icon name={notice.bad ? 'error' : 'info'} />
+          <span>{notice.text}</span>
         </p>
       )}
     </div>
   )
 }
+
+const PAGES: { page: Page; word: string }[] = [
+  { page: 'now', word: 'Now' },
+  { page: 'board', word: 'Board' },
+  { page: 'trees', word: 'Worktrees' },
+  { page: 'scouts', word: 'Scouts' },
+  { page: 'memory', word: 'Memory' },
+]
 
 export function App() {
   const [page, setPage] = useState<Page>('now')
@@ -84,95 +96,96 @@ export function App() {
   const { view, chat, busy, engine, network, steps, lead, trees } = useSymcc((p, task) => (setPage(p), task && setFocus(task)))
   const [notice, say] = useNotice()
   const openTask = useCallback((id: string) => (setPage('board'), setFocus(id)), [])
+  const needs = view?.counts.needs ?? 0
+  const at = Math.max(0, PAGES.findIndex(p => p.page === page))
+
+  const body = (p: Page): ReactNode =>
+    !view ? null : p === 'now' ? (
+      <Now view={view} chat={chat} busy={busy} steps={steps} lead={lead} ready={engine.state === 'ready'} onSay={say} onTask={openTask} onPage={setPage} />
+    ) : p === 'board' ? (
+      <Board view={view} steps={steps} focus={focus} onSay={say} onTask={openTask} />
+    ) : p === 'trees' ? (
+      <Worktrees view={view} steps={steps} trees={trees} onSay={say} onTask={openTask} />
+    ) : p === 'scouts' ? (
+      <Scouts scouts={view.scouts} onSay={say} />
+    ) : (
+      <Memory mem={view.orgMem} onSay={say} />
+    )
 
   return (
     <div className="app">
-      <Rail page={page} onPage={setPage} needs={view?.counts.needs ?? 0} />
-      <div className="frame">
-        <Header view={view} onSay={say} />
-        <NoticeLine notice={notice} />
-        {network && (
-          <div className="network-wrap">
-            <NetworkCard key={network.text + network.proxy} problem={network} onSay={say} />
+      {engine.state !== 'ready' && !view ? (
+        <EngineScreen engine={engine} />
+      ) : view && !view.on ? (
+        <OffScreen view={view} onSay={say} />
+      ) : view ? (
+        <Tabs panel selectedIndex={at} onVscTabsSelect={e => setPage(PAGES[e.detail.selectedIndex]?.page ?? 'now')} className="pages">
+          {PAGES.map(p => (
+            <TabHeader key={p.page} slot="header" panel>
+              {p.word}
+              {p.page === 'now' && !!needs && (
+                <Badge variant="tab-header-counter" title={`${needs} need${needs === 1 ? 's' : ''} you`}>
+                  {needs}
+                </Badge>
+              )}
+            </TabHeader>
+          ))}
+          <div slot="addons" className="tab-addons">
+            <Header view={view} onSay={say} />
           </div>
-        )}
-        {engine.state !== 'ready' && !view ? (
-          <EngineScreen engine={engine} />
-        ) : view && !view.on ? (
-          <OffScreen view={view} onSay={say} />
-        ) : view ? (
-          page === 'now' ? (
-            <Now view={view} chat={chat} busy={busy} steps={steps} lead={lead} ready={engine.state === 'ready'} onSay={say} onTask={openTask} onMemory={() => setPage('memory')} />
-          ) : page === 'board' ? (
-            <Board view={view} steps={steps} focus={focus} onSay={say} onTask={openTask} />
-          ) : page === 'trees' ? (
-            <Worktrees view={view} steps={steps} trees={trees} onSay={say} onTask={openTask} />
-          ) : page === 'scouts' ? (
-            <Scouts scouts={view.scouts} onSay={say} />
-          ) : (
-            <Memory mem={view.orgMem} onSay={say} />
-          )
-        ) : (
-          <EngineScreen engine={{ state: 'starting' }} />
-        )}
-      </div>
+          {PAGES.map(p => (
+            <TabPanel key={p.page} panel className="page-panel">
+              {p.page === page && (
+                <>
+                  <Banners view={view} network={network} onSay={say} />
+                  {body(p.page)}
+                </>
+              )}
+            </TabPanel>
+          ))}
+        </Tabs>
+      ) : (
+        <EngineScreen engine={{ state: 'starting' }} />
+      )}
+      <NoticeLine notice={notice} />
     </div>
   )
 }
 
-function Rail({ page, onPage, needs }: { page: Page; onPage: (p: Page) => void; needs: number }) {
-  const item = (p: Page, icon: string, word: string, count?: number) => (
-    <button type="button" className="rail-item" aria-current={page === p ? 'page' : undefined} onClick={() => onPage(p)}>
-      <Icon name={icon} />
-      <span>{word}</span>
-      {!!count && <b className="rail-count">{count}</b>}
-    </button>
-  )
+function Header({ view, onSay }: { view: PanelView; onSay: Say }) {
+  const c = view.counts
   return (
-    <nav className="rail" aria-label="symcc">
-      <Mark />
-      {item('now', 'pulse', 'Now', needs)}
-      {item('board', 'checklist', 'Board')}
-      {item('trees', 'repo-forked', 'Worktrees')}
-      {item('scouts', 'telescope', 'Scouts')}
-      {item('memory', 'book', 'Memory')}
-    </nav>
+    <div className="head">
+      <span className="head-project" title={view.branch ? `New tasks merge into ${view.branch}` : undefined}>
+        <b>{view.project}</b>
+        {view.branch && (
+          <span className="dim">
+            <Icon name="git-branch" />
+            {view.branch}
+          </span>
+        )}
+      </span>
+      <span className="head-counts dim">
+        {c.running} running · {c.next} up next · {c.doneToday} done today
+      </span>
+      <ModeMenu view={view} onSay={onSay} />
+    </div>
   )
 }
 
-function Header({ view, onSay }: { view: PanelView | null; onSay: Say }) {
-  const c = view?.counts
+/** What the owner should know before anything else on the page: another window drives, a setup note, no network. */
+export function Banners({ view, network, onSay }: { view: PanelView | null; network: NetworkProblem | null; onSay: Say }) {
   return (
-    <header className="head">
-      <div className="head-title">
-        <h1>{view?.project ?? 'symcc'}</h1>
-        {view?.branch && (
-          <span className="branch" title="The branch new tasks merge into">
-            <Icon name="git-branch" /> {view.branch}
-          </span>
-        )}
-      </div>
-      {c && view?.on && (
-        <p className="head-counts">
-          <span>
-            <b>{c.running}</b> running
-          </span>
-          <span>
-            <b>{c.next}</b> up next
-          </span>
-          <span>
-            <b>{c.doneToday}</b> done today
-          </span>
-        </p>
-      )}
-      {view?.on && <ModeMenu view={view} onSay={onSay} />}
-      {view?.note && (
-        <p className="head-note">
-          <Icon name="warning" /> {view.note}
-        </p>
-      )}
+    <>
+      {network && <NetworkCard key={network.text + network.proxy} problem={network} onSay={onSay} />}
       {view?.follows && <DriveNotice follows={view.follows} onSay={onSay} />}
-    </header>
+      {view?.note && (
+        <div className="banner" role="status">
+          <Icon name="warning" />
+          <p>{view.note}</p>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -186,9 +199,9 @@ export function DriveNotice({ follows, onSay }: { follows: PanelFollows; onSay: 
       .finally(() => setBusy(false))
   }
   return (
-    <div className="head-note drive-note" role="status">
+    <div className="banner" role="status">
+      <Icon name="warning" />
       <p>
-        <Icon name="warning" />{' '}
         {follows.parts.map((p, i) =>
           p.command ? (
             <button key={i} type="button" className="link" disabled={busy} onClick={drive}>
@@ -199,10 +212,9 @@ export function DriveNotice({ follows, onSay }: { follows: PanelFollows; onSay: 
           ),
         )}
       </p>
-      <button type="button" className="btn" disabled={busy} onClick={drive}>
-        {busy ? <Icon name="loading" /> : null}
+      <Button disabled={busy} onClick={drive} {...(busy ? { icon: 'loading', iconSpin: true } : {})}>
         {follows.button}
-      </button>
+      </Button>
     </div>
   )
 }
@@ -224,7 +236,7 @@ function modeEffect(view: PanelView, to: PanelMode): string {
   return `${starts}Finished tasks that pass their checks merge${into} on their own, without your review.`
 }
 
-/** The board's mode: one button that opens the three modes; a change is said and confirmed before it happens. */
+/** The board's mode: a dropdown of the three modes; a change is said and confirmed before it happens. */
 export function ModeMenu({ view, onSay }: { view: PanelView; onSay: Say }) {
   const [open, setOpen] = useState(false)
   const [pick, setPick] = useState<PanelMode | null>(null)
@@ -232,14 +244,7 @@ export function ModeMenu({ view, onSay }: { view: PanelView; onSay: Say }) {
   const box = useRef<HTMLDivElement>(null)
   const current = view.modes.find(m => m.mode === view.mode)
   const close = useCallback(() => (setOpen(false), setPick(null)), [])
-  useEffect(() => {
-    if (!open) return
-    const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && close()
-    const esc = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && close()
-    document.addEventListener('mousedown', away)
-    document.addEventListener('keydown', esc)
-    return () => (document.removeEventListener('mousedown', away), document.removeEventListener('keydown', esc))
-  }, [open, close])
+  useDismiss(open, box, close)
   const confirm = () => {
     if (!pick) return
     setSaving(true)
@@ -250,45 +255,44 @@ export function ModeMenu({ view, onSay }: { view: PanelView; onSay: Say }) {
   const chosen = view.modes.find(m => m.mode === pick)
   return (
     <div className="mode" ref={box}>
-      <button type="button" className="mode-button" aria-haspopup="dialog" aria-expanded={open} onClick={() => (open ? close() : setOpen(true))} title={current?.meaning}>
+      <button type="button" className="dropdown" aria-haspopup="dialog" aria-expanded={open} onClick={() => (open ? close() : setOpen(true))} title={current ? `${sentence(current.name)}: ${current.meaning}` : undefined}>
         <Icon name={MODE_ICON[view.mode]} />
         <span>{sentence(current?.name ?? view.mode)}</span>
         <Icon name="chevron-down" />
       </button>
       {open && (
-        <div className="mode-pop" role="dialog" aria-label="Board mode">
+        <div className="menu down" role="dialog" aria-label="Board mode">
           {!chosen ? (
             <>
-              <p className="mode-pop-head">How the board runs</p>
-              <ul className="mode-list">
+              <p className="menu-group">How the board runs</p>
+              <ul className="menu-list">
                 {view.modes.map(m => (
                   <li key={m.mode}>
-                    <button type="button" className="mode-option" aria-current={m.mode === view.mode || undefined} disabled={m.mode === view.mode} onClick={() => setPick(m.mode)}>
+                    <button type="button" className="menu-item" aria-current={m.mode === view.mode || undefined} disabled={m.mode === view.mode} onClick={() => setPick(m.mode)}>
                       <Icon name={MODE_ICON[m.mode]} />
                       <span>
                         <b>{sentence(m.name)}</b>
-                        {m.mode === view.mode && <em> · now</em>}
                         <small>{sentence(m.meaning)}.</small>
                       </span>
+                      {m.mode === view.mode && <Icon name="check" />}
                     </button>
                   </li>
                 ))}
               </ul>
             </>
           ) : (
-            <div className="mode-confirm">
-              <p className="mode-pop-head">
+            <div className="menu-confirm">
+              <p className="menu-title">
                 <Icon name={MODE_ICON[chosen.mode]} /> Switch to {chosen.name}?
               </p>
               <p>{modeEffect(view, chosen.mode)}</p>
-              <div className="card-actions">
-                <button type="button" className="btn primary" disabled={saving} onClick={confirm}>
-                  {saving ? <Icon name="loading" /> : null}
+              <div className="actions">
+                <Button disabled={saving} onClick={confirm} {...(saving ? { icon: 'loading', iconSpin: true } : {})}>
                   {chosen.mode === 'paused' ? 'Pause the board' : `Switch to ${chosen.name}`}
-                </button>
-                <button type="button" className="btn ghost" disabled={saving} onClick={() => setPick(null)} autoFocus>
+                </Button>
+                <Button secondary disabled={saving} onClick={() => setPick(null)} ref={focusMe}>
                   Back
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -302,51 +306,51 @@ export function ModeMenu({ view, onSay }: { view: PanelView; onSay: Say }) {
 export function NetworkCard({ problem, onSay }: { problem: NetworkProblem; onSay: Say }) {
   const [text, setText] = useState(problem.proxy)
   const [saving, setSaving] = useState(false)
-  const save = (e: FormEvent) => {
-    e.preventDefault()
+  const save = () => {
     setSaving(true)
     ask({ type: 'proxy', proxy: text })
       .then(t => onSay(t), (err: Error) => onSay(err.message, true))
       .finally(() => setSaving(false))
   }
   return (
-    <article className="card need-failed network" role="alert">
-      <h3>symcc can't reach {problem.service}</h3>
-      <p className="card-text bad">{problem.text}</p>
-      <p className="card-text">
-        {problem.proxy ? `It ran through the proxy ${problem.proxy.replace(/\/\/[^@/]*@/, '//***@')}.` : 'It ran with no proxy.'} The lead and the workers need {problem.service}'s servers. On a network that needs a proxy, enter it here; symcc restarts with it. In a terminal, <code>echo $HTTPS_PROXY</code> shows the one your shell uses.
-      </p>
-      <form className="card-answer" onSubmit={save}>
-        <label className="sr" htmlFor="proxy">
-          Proxy
-        </label>
-        <input id="proxy" placeholder="http://proxy.example.com:912" value={text} onChange={e => setText(e.target.value)} disabled={saving} />
-        <button type="submit" className="btn primary" disabled={saving}>
-          {saving ? <Icon name="loading" /> : null}
-          Use and restart
-        </button>
-        <button type="button" className="btn ghost" onClick={() => tell({ type: 'log' })}>
-          Open the log
-        </button>
-      </form>
-    </article>
+    <div className="banner bad network" role="alert">
+      <Icon name="error" />
+      <div className="banner-body">
+        <p>
+          <b>symcc can't reach {problem.service}.</b> {problem.text}
+        </p>
+        <p className="dim">
+          {problem.proxy ? `It ran through the proxy ${problem.proxy.replace(/\/\/[^@/]*@/, '//***@')}.` : 'It ran with no proxy.'} The lead and the workers need {problem.service}'s servers. On a network that needs a proxy, enter it here; symcc restarts with it. In a terminal, <code>echo $HTTPS_PROXY</code> shows the one your shell uses.
+        </p>
+        <div className="field-row">
+          <Textfield aria-label="Proxy" placeholder="http://proxy.example.com:912" value={text} disabled={saving} onInput={e => setText(valueOf(e))} onKeyDown={e => e.key === 'Enter' && save()} />
+          <Button disabled={saving} onClick={save} {...(saving ? { icon: 'loading', iconSpin: true } : {})}>
+            Use and restart
+          </Button>
+          <Button secondary onClick={() => tell({ type: 'log' })}>
+            Open the log
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }
 
 export function EngineScreen({ engine }: { engine: EngineState }) {
   if (engine.state === 'failed' || engine.state === 'stopped')
     return (
-      <section className="screen">
+      <section className="welcome">
+        <Mark size={40} />
         <h2>{engine.state === 'failed' ? 'symcc stopped' : 'symcc is not running'}</h2>
-        <p>{engine.text ?? 'The engine is not running in this window.'} Its log is under “symcc: Show the engine log” in the command palette.</p>
-        <button type="button" className="btn primary" onClick={() => tell({ type: 'restart' })}>
-          <Icon name="debug-restart" /> Start symcc again
-        </button>
+        <p>{engine.text ?? 'The engine is not running in this window.'} Its log is under “symcc: Show the log” in the command palette.</p>
+        <Button icon="debug-restart" onClick={() => tell({ type: 'restart' })}>
+          Start symcc again
+        </Button>
       </section>
     )
   return (
-    <section className="screen" aria-busy="true">
-      <p className="quiet">
+    <section className="welcome" aria-busy="true">
+      <p className="dim">
         <Icon name="loading" /> Starting symcc…
       </p>
     </section>
@@ -362,66 +366,203 @@ export function OffScreen({ view, onSay }: { view: PanelView; onSay: Say }) {
       .finally(() => setBusy(false))
   }
   return (
-    <section className="screen">
-      <Mark size={48} />
+    <section className="welcome">
+      <Mark size={40} />
       <h2>Set up symcc in {view.project}</h2>
       <p>{view.off}</p>
-      <p>symcc keeps its board in .symcc/ in this project. You tell the lead what you want; it plans tasks, and workers do each one in its own git worktree. You decide what merges.</p>
-      <button type="button" className="btn primary" disabled={busy} onClick={setUp}>
-        {busy ? <Icon name="loading" /> : <Icon name="play" />} Set up symcc here
-      </button>
+      <p className="dim">symcc keeps its board in .symcc/ in this project. You tell the lead what you want; it plans tasks, and workers do each one in its own git worktree. You decide what merges.</p>
+      <Button disabled={busy} onClick={setUp} icon={busy ? 'loading' : 'play'} iconSpin={busy}>
+        Set up symcc here
+      </Button>
     </section>
   )
 }
 
-/* ---------- Now: needs, stream, composer, running ---------- */
+/* ---------- Now: the chat, and the work beside it ---------- */
 
-function Now({ view, chat, busy, steps, lead, ready, onSay, onTask, onMemory }: { view: PanelView; chat: ChatItem[]; busy: boolean; steps: Steps; lead: Lead; ready: boolean; onSay: Say; onTask: (id: string) => void; onMemory: () => void }) {
+const STACKED = '(max-width: 720px)'
+
+/** Whether the page is narrow enough that the views stack above the chat (styles.css's same media query). */
+function useStacked() {
+  const [on, setOn] = useState(() => matchMedia(STACKED).matches)
+  useEffect(() => {
+    const q = matchMedia(STACKED)
+    const change = () => setOn(q.matches)
+    q.addEventListener('change', change)
+    return () => q.removeEventListener('change', change)
+  }, [])
+  return on
+}
+
+function Now({ view, chat, busy, steps, lead, ready, onSay, onTask, onPage }: { view: PanelView; chat: ChatItem[]; busy: boolean; steps: Steps; lead: Lead; ready: boolean; onSay: Say; onTask: (id: string) => void; onPage: (p: Page) => void }) {
+  const stacked = useStacked()
   return (
     <div className="now">
-      <div className="center">
-        <Needs needs={view.needs} tasks={view.tasks} onSay={onSay} onTask={onTask} />
+      <section className="now-chat" aria-label="The lead">
         <LeadChat chat={chat} news={view.news} lanes={view.lanes} busy={busy} lead={steps[LEAD_AGENT] ?? []} ready={ready} settings={lead.settings} models={lead.models} slash={lead.slash} agents={lead.agents} onSay={onSay} onTask={onTask} />
-      </div>
-      <Side view={view} steps={steps} onTask={onTask} onMemory={onMemory} />
+      </section>
+      <aside className="now-views" aria-label="The work">
+        <WorkViews view={view} steps={steps} onSay={onSay} onTask={onTask} onMemory={() => onPage('memory')} stacked={stacked} />
+      </aside>
     </div>
   )
 }
 
-function Needs({ needs, tasks, onSay, onTask }: { needs: PanelNeed[]; tasks: PanelTask[]; onSay: Say; onTask: (id: string) => void }) {
-  if (!needs.length)
-    return (
-      <section className="needs clear" aria-label="Needs you">
-        <p>
-          <Icon name="pass" /> Nothing needs you.
-        </p>
-      </section>
-    )
+const NEXT_SHOWN = 8
+
+/**
+ * The work as folding views, like a side bar's: what needs the owner (each opens to be decided in place), what runs
+ * with what its agent does now, and what's next; the merged, the backlog and org-mem folded below. `lead` goes
+ * after Needs you (the sidebar's lead). `stacked` (the views above the chat on a narrow page) folds Running and Up next
+ * to their headers and counts.
+ */
+export function WorkViews({ view, steps, onSay, onTask, onMemory, lead, compact = false, stacked = false }: { view: PanelView; steps: Steps; onSay: Say; onTask: (id: string) => void; onMemory?: () => void; lead?: ReactNode; compact?: boolean; stacked?: boolean }) {
+  const running = view.lanes.filter(l => l.doneMs === undefined && l.stations[l.at] !== 'you')
+  const merged = view.lanes.filter(l => l.doneMs !== undefined)
+  const next = view.next.slice(0, compact ? 4 : NEXT_SHOWN)
+  const backlog = view.tasks.filter(t => t.status === 'backlog')
   return (
-    <section className="needs" aria-labelledby="needs-h">
-      <h2 id="needs-h">
-        Needs you <span className="count">{needs.length}</span>
-      </h2>
-      <div className="cards">
-        {needs.map(n => (
-          <NeedCard key={n.id} need={n} task={tasks.find(t => t.id === n.id)} onSay={onSay} onTask={onTask} />
-        ))}
-      </div>
-    </section>
+    <div className="views">
+      <Collapsible heading="Needs you" open className="view is-needs">
+        {!!view.needs.length && (
+          <Badge slot="decorations" variant="activity-bar-counter">
+            {view.needs.length}
+          </Badge>
+        )}
+        {view.needs.length ? (
+          <ul className="rows">
+            {view.needs.map((n, i) => (
+              <NeedItem key={n.id} need={n} task={view.tasks.find(t => t.id === n.id)} first={i === 0} onSay={onSay} onTask={onTask} />
+            ))}
+          </ul>
+        ) : (
+          <p className="empty">
+            <Icon name="pass" /> Nothing needs you.
+          </p>
+        )}
+      </Collapsible>
+      {lead}
+      <Collapsible heading="Running" open={!stacked} className="view">
+        {!!view.counts.running && (
+          <Badge slot="decorations" variant="counter">
+            {view.counts.running}
+          </Badge>
+        )}
+        {running.length ? (
+          <ul className="rows">
+            {running.map(l => (
+              <LaneRow key={l.id} lane={l} step={l.agentId ? latestStep(steps[l.agentId]) : undefined} task={view.tasks.find(t => t.id === l.id)} onSay={onSay} onTask={onTask} />
+            ))}
+          </ul>
+        ) : (
+          <IdleNote idle={view.idle} onTask={onTask} compact={compact} />
+        )}
+      </Collapsible>
+      <Collapsible heading="Up next" open={!stacked} className="view">
+        {!!view.counts.next && (
+          <Badge slot="decorations" variant="counter">
+            {view.counts.next}
+          </Badge>
+        )}
+        {next.length ? (
+          <ul className="rows">
+            {next.map(t => (
+              <li key={t.id}>
+                <button type="button" className="row" onClick={() => onTask(t.id)} title={`${t.id} ${t.title}`}>
+                  <Icon name="circle-large-outline" />
+                  <span className="id">{t.id}</span>
+                  <span className="title">{t.title}</span>
+                </button>
+              </li>
+            ))}
+            {view.next.length > next.length && (
+              <li>
+                <button type="button" className="row more" onClick={() => onTask(view.next[next.length]!.id)}>
+                  and {view.next.length - next.length} more on the board
+                </button>
+              </li>
+            )}
+          </ul>
+        ) : (
+          <p className="empty">Nothing waits to start.</p>
+        )}
+      </Collapsible>
+      {!compact && !!merged.length && (
+        <Collapsible heading="Just merged" className="view">
+          <Badge slot="decorations" variant="counter">
+            {merged.length}
+          </Badge>
+          <ul className="rows">
+            {merged.map(l => (
+              <LaneRow key={l.id} lane={l} onSay={onSay} onTask={onTask} />
+            ))}
+          </ul>
+        </Collapsible>
+      )}
+      {!compact && !!view.counts.backlog && (
+        <Collapsible heading="Backlog" className="view">
+          <Badge slot="decorations" variant="counter">
+            {view.counts.backlog}
+          </Badge>
+          <ul className="rows">
+            {backlog.slice(0, NEXT_SHOWN).map(t => (
+              <li key={t.id}>
+                <button type="button" className="row" onClick={() => onTask(t.id)} title={`${t.id} ${t.title}`}>
+                  <Icon name="archive" />
+                  <span className="id">{t.id}</span>
+                  <span className="title">{t.title}</span>
+                  {t.kind && <span className="row-end">{t.kind}</span>}
+                </button>
+              </li>
+            ))}
+            {backlog.length > NEXT_SHOWN && <li className="empty">and {backlog.length - NEXT_SHOWN} more on the board</li>}
+            {!backlog.length && <li className="empty">They show on the board.</li>}
+          </ul>
+        </Collapsible>
+      )}
+      {!compact && onMemory && (
+        <Collapsible heading="Organizational memory" className="view" description={`${view.orgMem.notes.length} / ${view.orgMem.max}`}>
+          <ul className="rows">
+            <li>
+              <button type="button" className="row" onClick={onMemory}>
+                <Icon name="book" />
+                <span className="title">{view.orgMem.notes.length ? 'All notes' : view.orgMem.empty}</span>
+              </button>
+            </li>
+          </ul>
+        </Collapsible>
+      )}
+    </div>
   )
 }
 
 const NEED_ICON: Record<PanelNeed['kind'], string> = { question: 'comment-discussion', asks: 'question', files: 'file-add', time: 'watch', review: 'git-pull-request', answer: 'book', failed: 'error' }
 
-export function NeedCard({ need, task: of, onSay, onTask }: { need: PanelNeed; task?: PanelTask; onSay: Say; onTask: (id: string) => void }) {
+/** One thing that needs the owner: a row that opens to decide it in place (the first one opens by itself). */
+export function NeedItem({ need, task, first = false, onSay, onTask }: { need: PanelNeed; task?: PanelTask; first?: boolean; onSay: Say; onTask: (id: string) => void }) {
   const now = useNow(30_000)
+  const [open, setOpen] = useState(first)
+  return (
+    <li className={`need is-${need.kind}${open ? ' open' : ''}`}>
+      <button type="button" className="row" aria-expanded={open} onClick={() => setOpen(o => !o)} title={need.title}>
+        <Icon name={open ? 'chevron-down' : 'chevron-right'} />
+        <Icon name={NEED_ICON[need.kind]} />
+        <span className="title">{need.title}</span>
+        <span className="row-end">
+          {need.id}
+          {need.sinceMs !== undefined && ` · ${ago(need.sinceMs, now)}`}
+        </span>
+      </button>
+      {open && <NeedBody need={need} task={task} onSay={onSay} onTask={onTask} />}
+    </li>
+  )
+}
+
+function NeedBody({ need, task: of, onSay, onTask }: { need: PanelNeed; task?: PanelTask; onSay: Say; onTask: (id: string) => void }) {
   const [box, setBox] = useState<{ action?: PanelAction; hint: string } | null>(null)
   const [text, setText] = useState('')
   const [sending, setSending] = useState<string | null>(null)
-  const area = useRef<HTMLTextAreaElement>(null)
-  const field = useRef<HTMLInputElement>(null)
   const [nudge, setNudge] = useState(false)
-  useEffect(() => void (box && area.current?.focus()), [box])
 
   const run = (label: string, p: Promise<string>) => {
     setSending(label)
@@ -433,43 +574,35 @@ export function NeedCard({ need, task: of, onSay, onTask }: { need: PanelNeed; t
   const answer = (words: string) => run(words, ask({ type: 'answer', need: need.id, text: words }))
   const act = (a: PanelAction, words = '') => run(a.label, ask({ type: 'act', task: need.id, action: a.id, ...(words ? { text: words } : {}) }))
   const press = (a: PanelAction) => (a.ask ? setBox({ action: a, hint: a.ask }) : act(a))
-  const submit = (e: FormEvent) => {
-    e.preventDefault()
+  const submit = () => {
     const words = text.trim()
     if (box?.action) return box.action.id === 'drop' || words ? act(box.action, words) : undefined
     if (words) answer(words)
-  }
-  const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Escape') setBox(null)
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(e)
+    else setNudge(true)
   }
   const choices = need.choices.filter(c => c !== 'Answer…')
   const ownAnswer = need.choices.includes('Answer…') || (!need.choices.length && !need.actions.length)
-  const task = /^T-\d+$/.test(need.id)
+  const isTask = /^T-\d+$/.test(need.id)
+  const spin = (label: string) => (sending === label ? { icon: 'loading', iconSpin: true } : {})
 
   return (
-    <article className={`card need-${need.kind}`} aria-busy={!!sending}>
-      <h3>{need.title}</h3>
-      <p className="card-meta">
-        <Icon name={NEED_ICON[need.kind]} />
-        {task ? (
+    <div className="need-body" aria-busy={!!sending}>
+      <p className="meta">
+        {isTask ? (
           <button type="button" className="task-ref" onClick={() => onTask(need.id)}>
             {need.id}
           </button>
         ) : (
           <span className="id">{need.id}</span>
         )}
-        <span>
-          {need.meta.replace(`${need.id} · `, '')}
-          {need.sinceMs !== undefined && <span className="since">{ago(need.sinceMs, now)}</span>}
-        </span>
+        <span>{need.meta.replace(`${need.id} · `, '')}</span>
         {of?.sessions[0] && (
-          <button type="button" className="link card-session" onClick={() => openSession(of, of.sessions[0]!)}>
+          <button type="button" className="link" onClick={() => openSession(of, of.sessions[0]!)}>
             What the agent did
           </button>
         )}
       </p>
-      {need.text && <p className={`card-text${need.kind === 'failed' ? ' bad' : ''}`}>{need.text}</p>}
+      {need.text && <p className={`need-text${need.kind === 'failed' ? ' bad' : ''}`}>{need.text}</p>}
       {need.files && need.files.length > 1 && (
         <ul className="files">
           {need.files.slice(0, 3).map(f => (
@@ -479,189 +612,133 @@ export function NeedCard({ need, task: of, onSay, onTask }: { need: PanelNeed; t
               <span className="del">−{f.removed}</span>
             </li>
           ))}
-          {need.files.length > 3 && <li className="quiet">and {need.files.length - 3} more</li>}
+          {need.files.length > 3 && <li className="dim">and {need.files.length - 3} more</li>}
         </ul>
       )}
       {box ? (
-        <form className="card-box" onSubmit={submit}>
-          <label className="sr" htmlFor={`box-${need.id}`}>
-            {box.hint}
-          </label>
-          <textarea id={`box-${need.id}`} ref={area} rows={2} placeholder={box.hint} value={text} onChange={e => setText(e.target.value)} onKeyDown={keys} />
-          <div className="card-actions">
-            <button type="submit" className="btn primary" disabled={!!sending || (!text.trim() && box.action?.id !== 'drop')}>
-              {sending ? <Icon name="loading" /> : null}
+        <div className="need-box">
+          <Textarea aria-label={box.hint} rows={2} placeholder={box.hint} value={text} ref={focusMe} onInput={e => setText(valueOf(e))} onKeyDown={e => (e.key === 'Escape' ? setBox(null) : e.key === 'Enter' && (e.metaKey || e.ctrlKey) && submit())} />
+          <div className="actions">
+            <Button disabled={!!sending || (!text.trim() && box.action?.id !== 'drop')} onClick={submit} {...(sending ? { icon: 'loading', iconSpin: true } : {})}>
               {box.action ? box.action.label.replace('…', '') : 'Send answer'}
-            </button>
-            <button type="button" className="btn ghost" onClick={() => setBox(null)}>
+            </Button>
+            <Button secondary onClick={() => setBox(null)}>
               Cancel
-            </button>
+            </Button>
           </div>
-        </form>
-      ) : !choices.length && !need.actions.length ? null : (
-        <div className="card-actions">
-          {choices.map(c => (
-            <button key={c} type="button" className="btn choice" disabled={!!sending} onClick={() => answer(c)}>
-              {sending === c ? <Icon name="loading" /> : null}
-              {c}
-            </button>
-          ))}
-          {need.actions.map(a => (
-            <button key={a.id} type="button" className={`btn${a.primary ? ' primary' : ''}`} disabled={!!sending} onClick={() => press(a)}>
-              {sending === a.label ? <Icon name="loading" /> : null}
-              {a.label}
-            </button>
-          ))}
         </div>
+      ) : (
+        (!!choices.length || !!need.actions.length) && (
+          <div className="actions">
+            {need.actions.map(a => (
+              <Button key={a.id} secondary={!a.primary} disabled={!!sending} onClick={() => press(a)} {...spin(a.label)}>
+                {a.label}
+              </Button>
+            ))}
+            {choices.map(c => (
+              <Button key={c} secondary disabled={!!sending} onClick={() => answer(c)} {...spin(c)}>
+                {c}
+              </Button>
+            ))}
+          </div>
+        )
       )}
       {ownAnswer && !box && (
-        <form className="card-answer" onSubmit={submit}>
-          <label className="sr" htmlFor={`answer-${need.id}`}>
-            Your answer
-          </label>
-          <input
-            id={`answer-${need.id}`}
-            ref={field}
-            className={nudge ? 'nudge' : undefined}
-            aria-invalid={nudge || undefined}
+        <div className="field-row">
+          <Textfield
+            aria-label="Your answer"
+            invalid={nudge}
             placeholder={nudge ? 'Type your answer here first' : choices.length ? 'Or write your own answer' : 'Write your answer'}
             value={text}
-            onChange={e => (setText(e.target.value), setNudge(false))}
             disabled={!!sending}
+            onInput={e => (setText(valueOf(e)), setNudge(false))}
+            onKeyDown={e => e.key === 'Enter' && submit()}
           />
-          <button type="submit" className="btn primary" disabled={!!sending} onClick={e => !text.trim() && (e.preventDefault(), setNudge(true), field.current?.focus())}>
-            {sending && !choices.includes(sending) ? <Icon name="loading" /> : null}
+          <Button disabled={!!sending} onClick={submit} {...(sending && !choices.includes(sending) ? { icon: 'loading', iconSpin: true } : {})}>
             Answer
-          </button>
-        </form>
+          </Button>
+        </div>
       )}
-    </article>
+    </div>
   )
 }
 
-function Side({ view, steps, onTask, onMemory }: { view: PanelView; steps: Steps; onTask: (id: string) => void; onMemory: () => void }) {
-  const running = view.lanes.filter(l => l.doneMs === undefined && l.stations[l.at] !== 'you')
-  const merged = view.lanes.filter(l => l.doneMs !== undefined)
-  const shown = view.next.slice(0, 6)
-  return (
-    <aside className="side" aria-label="The work">
-      <section>
-        <h2>
-          Running <span className="count">{view.counts.running}</span>
-        </h2>
-        {running.length ? running.map(l => <LaneCard key={l.id} lane={l} step={l.agentId ? latestStep(steps[l.agentId]) : undefined} onTask={onTask} />) : <IdleNote idle={view.idle} onTask={onTask} />}
-      </section>
-      {!!merged.length && (
-        <section>
-          <h2>Just merged</h2>
-          {merged.map(l => (
-            <LaneCard key={l.id} lane={l} onTask={onTask} />
-          ))}
-        </section>
-      )}
-      <section>
-        <h2>
-          Up next <span className="count">{view.counts.next}</span>
-        </h2>
-        {shown.length ? (
-          <ul className="next">
-            {shown.map(t => (
-              <li key={t.id}>
-                <button type="button" className="row-btn" onClick={() => onTask(t.id)}>
-                  <span className="id">{t.id}</span>
-                  <span className="title">{t.title}</span>
-                </button>
-              </li>
-            ))}
-            {view.next.length > shown.length && <li className="quiet">and {view.next.length - shown.length} more</li>}
-          </ul>
-        ) : (
-          <p className="quiet">Nothing waits to start.</p>
-        )}
-      </section>
-      {!!view.counts.backlog && <Backlog tasks={view.tasks.filter(t => t.status === 'backlog')} count={view.counts.backlog} onTask={onTask} />}
-      <section className="org-line">
-        <h2>
-          Organizational memory{' '}
-          <span className="count">
-            {view.orgMem.notes.length} / {view.orgMem.max}
-          </span>
-        </h2>
-        <button type="button" className="row-btn" onClick={onMemory}>
-          <Icon name="book" />
-          <span className="title">{view.orgMem.notes.length ? 'All notes' : view.orgMem.empty}</span>
-        </button>
-      </section>
-    </aside>
-  )
-}
+const LANE_ICON: Partial<Record<string, string>> = { queue: 'clock', tests: 'beaker', you: 'bell-dot' }
 
-/** The backlog, folded to its count; open, its tasks, each a way to the task on the board. */
-function Backlog({ tasks, count, onTask }: { tasks: PanelTask[]; count: number; onTask: (id: string) => void }) {
-  const [open, setOpen] = useState(false)
-  const shown = tasks.slice(0, 8)
-  return (
-    <section className="backlog">
-      <h2>
-        <button type="button" className="fold" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-          <Icon name={open ? 'chevron-down' : 'chevron-right'} />
-          Backlog <span className="count">{count}</span>
-        </button>
-      </h2>
-      {open && (
-        <ul className="next">
-          {shown.map(t => (
-            <li key={t.id}>
-              <button type="button" className="row-btn" onClick={() => onTask(t.id)}>
-                <span className="id">{t.id}</span>
-                <span className="title">{t.title}</span>
-                {t.kind && <span className="tag">{t.kind}</span>}
-              </button>
-            </li>
-          ))}
-          {tasks.length > shown.length && (
-            <li>
-              <button type="button" className="row-btn quiet" onClick={() => onTask(tasks[shown.length]!.id)}>
-                and {tasks.length - shown.length} more on the board
-              </button>
-            </li>
-          )}
-          {!tasks.length && <li className="quiet">They show on the board.</li>}
-        </ul>
-      )}
-    </section>
-  )
-}
-
-export function LaneCard({ lane, step, onTask }: { lane: PanelLane; step?: PanelStep; onTask: (id: string) => void }) {
+/**
+ * A running or just merged task as one row: where it is and for how long, and under it what its agent does now. A
+ * running one always shows the board's own Pause and Drop (the engine stops its worker either way); Drop asks first.
+ */
+export function LaneRow({ lane, step, task, onSay, onTask }: { lane: PanelLane; step?: PanelStep; task?: PanelTask; onSay: Say; onTask: (id: string) => void }) {
   const now = useNow(1000)
+  const [confirm, setConfirm] = useState(false)
+  const [why, setWhy] = useState('')
+  const [sending, setSending] = useState<PanelActionId | null>(null)
   const station = lane.stations[lane.at]
   const done = lane.doneMs !== undefined
-  const what = done ? `merged ${ago(lane.doneMs, now)} ago`.replace('now ago', 'just now') : station === 'you' ? 'waits for you' : `${STATION_WORD[station!]}${lane.sinceMs !== undefined ? ` · ${duration(now - lane.sinceMs)}` : ''}`
+  const what = done ? (ago(lane.doneMs, now) === 'now' ? 'just now' : `${ago(lane.doneMs, now)} ago`) : station === 'you' ? 'waits for you' : `${STATION_WORD[station!]}${lane.sinceMs !== undefined ? ` ${duration(now - lane.sinceMs)}` : ''}`
+  const facts = [lane.tries > 1 ? `try ${lane.tryNo} of ${lane.tries}` : '', lane.tokens ? `${tokensWord(lane.tokens)} tokens` : ''].filter(Boolean).join(' · ')
+  const pause = done ? undefined : task?.actions.find(a => a.id === 'pause')
+  const drop = done ? undefined : task?.actions.find(a => a.id === 'drop')
+  const act = (a: PanelAction, words = '') => {
+    setSending(a.id)
+    ask({ type: 'act', task: lane.id, action: a.id, ...(words ? { text: words } : {}) })
+      .then(t => (t && onSay(t), setConfirm(false), setWhy('')), (e: Error) => onSay(e.message, true))
+      .finally(() => setSending(null))
+  }
   return (
-    <button type="button" className={`lane${done ? ' finished' : ''}`} onClick={() => onTask(lane.id)}>
-      <span className="lane-head">
-        <span className="id">{lane.id}</span>
-        <span className="title">{lane.title}</span>
-      </span>
-      <Staff lane={lane} />
-      <span className="lane-meta">
-        <span>{what}</span>
-        {lane.tries > 1 && (
-          <span>
-            try {lane.tryNo} of {lane.tries}
+    <li className={`lane${done ? ' merged' : ''}`}>
+      <div className="row-line">
+        <button type="button" className="row" onClick={() => onTask(lane.id)} title={`${lane.id} ${lane.title}${facts ? ` · ${facts}` : ''}`}>
+          <Icon name={done ? 'git-merge' : lane.agent ? 'loading' : (LANE_ICON[station!] ?? 'circle-large-outline')} />
+          <span className="id">{lane.id}</span>
+          <span className="title">{lane.title}</span>
+          <span className="row-end">{what}</span>
+        </button>
+        {(pause || drop) && (
+          <span className="row-actions">
+            {pause && (
+              <button type="button" className="icon-btn" title={`Pause ${lane.id}: its worker stops, and Resume starts it again`} aria-label={`Pause ${lane.id}`} disabled={!!sending} onClick={() => act(pause)}>
+                <Icon name={sending === 'pause' ? 'loading' : 'debug-pause'} />
+              </button>
+            )}
+            {drop && (
+              <button type="button" className="icon-btn" title={`Stop ${lane.id} and drop it`} aria-label={`Stop and drop ${lane.id}`} aria-expanded={confirm} disabled={!!sending} onClick={() => setConfirm(c => !c)}>
+                <Icon name="debug-stop" />
+              </button>
+            )}
           </span>
         )}
-        {!!lane.tokens && <span>{tokensWord(lane.tokens)} tokens</span>}
-        {done && lane.size && <Size size={lane.size} />}
-      </span>
+      </div>
       {step && !done && (
-        <span className="lane-step" title={stepWords(step)}>
-          <Icon name={step.kind === 'tool' && step.status === 'running' ? 'loading' : stepIcon(step)} />
+        <p className="row-sub" title={stepWords(step)}>
+          <Icon name={stepIcon(step)} />
           <span>{stepWords(step)}</span>
-        </span>
+        </p>
       )}
-    </button>
+      {confirm && drop && (
+        <div className="row-confirm">
+          <p>
+            Stop {lane.id} and drop it? Its worker stops now and the task leaves the board.
+          </p>
+          <Textfield aria-label={drop.ask ?? 'Why (optional)'} placeholder={drop.ask ?? 'Why (optional)'} value={why} ref={focusMe} onInput={e => setWhy(valueOf(e))} onKeyDown={e => (e.key === 'Enter' ? act(drop, why.trim()) : e.key === 'Escape' && setConfirm(false))} />
+          <div className="actions">
+            <Button disabled={!!sending} onClick={() => act(drop, why.trim())} {...(sending === 'drop' ? { icon: 'loading', iconSpin: true } : {})}>
+              Drop it
+            </Button>
+            <Button secondary onClick={() => setConfirm(false)}>
+              Keep it
+            </Button>
+          </div>
+        </div>
+      )}
+      {done && lane.size && (
+        <p className="row-sub">
+          <Size size={lane.size} />
+          {facts && <span className="dim"> · {facts}</span>}
+        </p>
+      )}
+    </li>
   )
 }
 
@@ -696,38 +773,35 @@ function Board({ view, steps, focus, onSay, onTask }: { view: PanelView; steps: 
   const tasks = f ? view.tasks.filter(t => `${t.id} ${t.title} ${t.kind} ${t.role}`.toLowerCase().includes(f)) : view.tasks
   return (
     <div className="page board">
-      <div className="page-head">
-        <h2>Board</h2>
-        <label className="filter">
-          <Icon name="search" />
-          <span className="sr">Filter tasks</span>
-          <input type="search" placeholder="Filter by id, title, task type or role" value={filter} onChange={e => setFilter(e.target.value)} />
-        </label>
+      <div className="toolbar">
+        <Textfield type="search" aria-label="Filter tasks" placeholder="Filter by id, title, task type or role" value={filter} onInput={e => setFilter(valueOf(e))}>
+          <span slot="content-before" className="codicon codicon-search" aria-hidden />
+        </Textfield>
+        <span className="dim">{f ? `${tasks.length} of ${view.tasks.length}` : tasks.length === 1 ? '1 task' : `${tasks.length} tasks`}</span>
       </div>
-      {!tasks.length && <p className="quiet">{f ? `No task matches “${filter}”.` : ALL_CLEAR.join(' ')}</p>}
+      {!tasks.length && <p className="empty">{f ? `No task matches “${filter}”.` : ALL_CLEAR.join(' ')}</p>}
       {GROUPS.map(g => {
         const xs = tasks.filter(g.has)
         if (!xs.length) return null
         const open = g.open || !!f || xs.some(t => t.id === focus)
         return (
-          <details key={g.key} className={`group is-${g.key}`} open={open}>
-            <summary>
-              <h3>{g.title}</h3>
-              <span className="count">{xs.length}</span>
-            </summary>
-            <ul>
+          <Collapsible key={`${g.key}-${open}`} heading={g.title} open={open} className={`view is-${g.key}`}>
+            <Badge slot="decorations" variant={g.key === 'needs' ? 'activity-bar-counter' : 'counter'}>
+              {xs.length}
+            </Badge>
+            <ul className="rows">
               {xs.map(t => (
                 <TaskRow key={t.id} task={t} steps={steps} focused={t.id === focus} onSay={onSay} onTask={onTask} />
               ))}
             </ul>
-          </details>
+          </Collapsible>
         )
       })}
     </div>
   )
 }
 
-const STATUS_TONE: Record<PanelTask['status'], string> = { backlog: 'other', todo: 'other', doing: 'run', paused: 'wait', waiting: 'you', review: 'you', failed: 'bad', done: 'good', dropped: 'other' }
+const STATUS_ICON: Record<PanelTask['status'], string> = { backlog: 'archive', todo: 'circle-large-outline', doing: 'loading', paused: 'debug-pause', waiting: 'bell-dot', review: 'git-pull-request', failed: 'error', done: 'pass', dropped: 'circle-slash' }
 
 function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; steps: Steps; focused: boolean; onSay: Say; onTask: (id: string) => void }) {
   const [open, setOpen] = useState(focused)
@@ -748,30 +822,31 @@ function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; ste
       .finally(() => setSending(null))
   }
   return (
-    <li ref={li} className={`task${open ? ' open' : ''}${focused ? ' focused' : ''}`}>
-      <button type="button" className="task-row" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+    <li ref={li} className={`task is-${task.status}${task.needsYou ? ' needs' : ''}${open ? ' open' : ''}${focused ? ' focused' : ''}`}>
+      <button type="button" className="row" aria-expanded={open} onClick={() => setOpen(o => !o)}>
         <Icon name={open ? 'chevron-down' : 'chevron-right'} />
+        <Icon name={STATUS_ICON[task.status]} />
         <span className="id">{task.id}</span>
         <span className="title">{task.title}</span>
         {task.kind && <span className="tag">{task.kind}</span>}
-        <span className={`state ${STATUS_TONE[task.status]}`}>{task.word}</span>
+        <span className="row-end">{task.word}</span>
       </button>
       {open && (
         <div className="task-body">
-          <p className="task-facts">
+          <p className="facts">
             <span>role {task.role}</span>
             {task.attempts > 0 && <span>{task.attempts === 1 ? '1 try' : `${task.attempts} tries`}</span>}
             {task.size && <Size size={task.size} />}
           </p>
           {task.done && (
-            <div className="task-part">
+            <div className="part">
               <h4>Done</h4>
               <Markdown text={task.done} onTask={onTask} />
             </div>
           )}
           {task.note && <p className="task-note">{task.note}</p>}
           {task.details && (
-            <div className="task-details">
+            <div className="part details">
               <Markdown text={task.details} onTask={onTask} />
             </div>
           )}
@@ -779,34 +854,24 @@ function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; ste
           {task.checker && <CheckerReport checker={task.checker} onTask={onTask} />}
           <TaskSession task={task} steps={steps} />
           {box ? (
-            <form
-              className="card-box"
-              onSubmit={e => {
-                e.preventDefault()
-                if (text.trim() || box.id === 'drop') act(box, text.trim())
-              }}
-            >
-              <label className="sr" htmlFor={`row-${task.id}`}>
-                {box.ask}
-              </label>
-              <textarea id={`row-${task.id}`} rows={2} placeholder={box.ask} value={text} onChange={e => setText(e.target.value)} autoFocus />
-              <div className="card-actions">
-                <button type="submit" className="btn primary" disabled={!!sending || (!text.trim() && box.id !== 'drop')}>
+            <div className="need-box">
+              <Textarea aria-label={box.ask} rows={2} placeholder={box.ask} value={text} ref={focusMe} onInput={e => setText(valueOf(e))} onKeyDown={e => e.key === 'Escape' && setBox(null)} />
+              <div className="actions">
+                <Button disabled={!!sending || (!text.trim() && box.id !== 'drop')} onClick={() => (text.trim() || box.id === 'drop') && act(box, text.trim())}>
                   {box.label.replace('…', '')}
-                </button>
-                <button type="button" className="btn ghost" onClick={() => setBox(null)}>
+                </Button>
+                <Button secondary onClick={() => setBox(null)}>
                   Cancel
-                </button>
+                </Button>
               </div>
-            </form>
+            </div>
           ) : (
             !!task.actions.length && (
-              <div className="card-actions">
+              <div className="actions">
                 {task.actions.map(a => (
-                  <button key={a.id} type="button" className={`btn${a.primary ? ' primary' : ''}`} disabled={!!sending} onClick={() => (a.ask ? setBox(a) : act(a))}>
-                    {sending === a.label ? <Icon name="loading" /> : null}
+                  <Button key={a.id} secondary={!a.primary} disabled={!!sending} onClick={() => (a.ask ? setBox(a) : act(a))} {...(sending === a.label ? { icon: 'loading', iconSpin: true } : {})}>
                     {a.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             )
@@ -817,30 +882,34 @@ function TaskRow({ task, steps, focused, onSay, onTask }: { task: PanelTask; ste
   )
 }
 
+const TIMELINE_ICON: Record<PanelTimeline['tone'], string> = { good: 'check', bad: 'close', step: 'circle-small-filled', other: 'circle-small' }
+
 /** A task's timeline, newest first: each line's mark in its tone, when, who wrote it, its try, what was said and the try's result. */
 function TaskTimeline({ task }: { task: PanelTask }) {
   const lines = task.timeline ?? []
   const older = (task.timelineCount ?? lines.length) - lines.length
   return (
-    <details className="report">
+    <details className="fold-box">
       <summary>
-        Timeline <span className="count">{task.timelineCount ?? lines.length}</span>
+        <Icon name="chevron-right" /> Timeline <span className="dim">{task.timelineCount ?? lines.length}</span>
       </summary>
       <ol className="timeline">
         {lines.map((h, i) => (
           <li key={i} className={`is-${h.tone}`}>
-            <span className="timeline-mark">{h.mark}</span>
+            <span className="timeline-mark">
+              <Icon name={TIMELINE_ICON[h.tone]} />
+            </span>
             <span>
-              {h.at && <span className="timeline-dim">{h.at} </span>}
-              {h.by && <span className="timeline-dim">{h.by}: </span>}
+              {h.at && <span className="dim">{h.at} </span>}
+              {h.by && <span className="dim">{h.by}: </span>}
               {h.label && <b>{h.label}: </b>}
-              <span className={h.tone === 'bad' && !h.result ? 'timeline-bad' : 'timeline-dim'}>{h.said}</span>
-              {h.result && <span className="timeline-result"> → {h.result}</span>}
+              <span className={h.tone === 'bad' && !h.result ? 'bad' : 'dim'}>{h.said}</span>
+              {h.result && <span> → {h.result}</span>}
             </span>
           </li>
         ))}
       </ol>
-      {older > 0 && <p className="quiet">and {older} older</p>}
+      {older > 0 && <p className="empty">and {older} older</p>}
     </details>
   )
 }
@@ -848,12 +917,13 @@ function TaskTimeline({ task }: { task: PanelTask }) {
 /** The checker's saved report of the task's latest try, and its file to open. */
 function CheckerReport({ checker, onTask }: { checker: PanelChecker; onTask: (id: string) => void }) {
   return (
-    <details className="report checker">
+    <details className="fold-box">
       <summary>
+        <Icon name="chevron-right" />
         <Icon name={checker.ok ? 'pass' : 'warning'} /> {checker.title}
       </summary>
-      {checker.text === null ? <p className="quiet">Could not read the checker report file.</p> : <Markdown text={checker.text} onTask={onTask} />}
-      <p className="checker-file">
+      {checker.text === null ? <p className="empty">Could not read the checker report file.</p> : <Markdown text={checker.text} onTask={onTask} />}
+      <p className="dim">
         {checker.cut ? 'The rest is in ' : ''}
         <button type="button" className="link" onClick={() => tell({ type: 'open-file', path: checker.file })}>
           {checker.file}
@@ -876,23 +946,22 @@ function Scouts({ scouts, onSay }: { scouts: PanelScout[]; onSay: Say }) {
   }
   return (
     <div className="page scouts">
-      <div className="page-head">
-        <h2>Scouts</h2>
-        <p className="quiet">Scouts look over the project on a timer and report what they find; the lead turns findings into tasks. Ask the lead to add or change one.</p>
-      </div>
-      {!scouts.length && <p className="quiet">No scouts yet. Ask the lead to add one, for example “add a scout that looks for missing tests every day”.</p>}
-      <ul className="scout-list">
+      <p className="page-about dim">Scouts look over the project on a timer and report what they find; the lead turns findings into tasks. Ask the lead to add or change one.</p>
+      {!scouts.length && <p className="empty">No scouts yet. Ask the lead to add one, for example “add a scout that looks for missing tests every day”.</p>}
+      <ul className="cards-list">
         {scouts.map(s => (
-          <li key={s.name} className="scout">
-            <div className="scout-head">
-              <h3>{s.name}</h3>
-              <span className={`state ${s.running ? 'run' : s.paused ? 'wait' : 'other'}`}>{s.running ? 'running' : s.paused ? 'paused' : s.every}</span>
-              <button type="button" className="btn" disabled={s.running || running === s.name} onClick={() => run(s.name)}>
-                {running === s.name ? <Icon name="loading" /> : <Icon name="play" />} Run now
-              </button>
+          <li key={s.name} className="item">
+            <div className="item-head">
+              <Icon name={s.running ? 'loading' : s.paused ? 'debug-pause' : 'telescope'} />
+              <b>{s.name}</b>
+              <span className="dim">{s.running ? 'running' : s.paused ? 'paused' : s.every}</span>
+              <span className="gap" />
+              <Button secondary disabled={s.running || running === s.name} onClick={() => run(s.name)} icon={running === s.name ? 'loading' : 'play'} iconSpin={running === s.name}>
+                Run now
+              </Button>
             </div>
             {s.summary && <p>{s.summary}</p>}
-            <p className="scout-facts">
+            <p className="facts">
               <span>{s.lastRunMs ? `last run ${ago(s.lastRunMs, now)} ago`.replace('now ago', 'just now') : 'not run yet'}</span>
               {s.nextRunMs && !s.paused && <span>{s.nextRunMs > now ? `next in ${duration(s.nextRunMs - now).replace(/ \d+s$/, '')}` : 'next: now'}</span>}
             </p>
@@ -902,8 +971,10 @@ function Scouts({ scouts, onSay }: { scouts: PanelScout[]; onSay: Say }) {
               </p>
             )}
             {s.lastReport && (
-              <details className="report">
-                <summary>Last report</summary>
+              <details className="fold-box">
+                <summary>
+                  <Icon name="chevron-right" /> Last report
+                </summary>
                 <Markdown text={s.lastReport} />
               </details>
             )}
@@ -930,33 +1001,35 @@ function Memory({ mem, onSay }: { mem: PanelOrgMem; onSay: Say }) {
   }
   return (
     <div className="page memory">
-      <div className="page-head">
-        <h2>{mem.title}</h2>
-        <span className="count">{topic ? `${notes.length} of ${mem.notes.length}` : `${mem.notes.length} / ${mem.max}`}</span>
-        <button type="button" className="btn" onClick={() => tell({ type: 'open-file', path: mem.file })}>
-          <Icon name="go-to-file" /> Open {mem.file}
-        </button>
+      <div className="toolbar">
+        <b>{mem.title}</b>
+        <span className="dim">{topic ? `${notes.length} of ${mem.notes.length}` : `${mem.notes.length} / ${mem.max}`}</span>
+        <span className="gap" />
+        <Button secondary icon="go-to-file" onClick={() => tell({ type: 'open-file', path: mem.file })}>
+          Open {mem.file}
+        </Button>
       </div>
-      <p className="quiet mem-about">{mem.about}</p>
+      <p className="page-about dim">{mem.about}</p>
       {mem.topics.length > 1 && (
-        <div className="mem-topics" role="group" aria-label="Topics">
-          <button type="button" className="mem-topic" aria-pressed={!topic} onClick={() => setPick(null)}>
-            all <span className="count">{mem.notes.length}</span>
+        <div className="filters" role="group" aria-label="Topics">
+          <button type="button" className="filter-chip" aria-pressed={!topic} onClick={() => setPick(null)}>
+            all <span className="dim">{mem.notes.length}</span>
           </button>
           {mem.topics.map(t => (
-            <button key={t.topic} type="button" className="mem-topic" aria-pressed={topic === t.topic} onClick={() => setPick(t.topic)}>
-              {t.topic} <span className="count">{t.count}</span>
+            <button key={t.topic} type="button" className="filter-chip" aria-pressed={topic === t.topic} onClick={() => setPick(t.topic)}>
+              {t.topic} <span className="dim">{t.count}</span>
             </button>
           ))}
         </div>
       )}
       {notes.length ? (
-        <ul className="mem-notes">
+        <ul className="cards-list">
           {notes.map(x => (
-            <li key={`${x.n}-${x.key}`} className="mem-note">
-              <div className="mem-note-head">
-                <span>{x.head}</span>
+            <li key={`${x.n}-${x.key}`} className="item">
+              <div className="item-head">
+                <b>{x.head}</b>
                 <span className="tag">{x.topic}</span>
+                <span className="gap" />
                 <button type="button" className="icon-btn" title={`Delete note ${x.head}`} aria-label={`Delete note ${x.head}`} disabled={deleting !== null} onClick={() => forget(x.n)}>
                   <Icon name={deleting === x.n ? 'loading' : 'trash'} />
                 </button>
@@ -966,7 +1039,7 @@ function Memory({ mem, onSay }: { mem: PanelOrgMem; onSay: Say }) {
           ))}
         </ul>
       ) : (
-        <p className="quiet">{mem.empty}</p>
+        <p className="empty">{mem.empty}</p>
       )}
     </div>
   )

@@ -17,8 +17,51 @@ const TOOL_ICON: [RegExp, string][] = [
 
 const STATUS_WORD: Record<string, string> = { running: 'started a turn', finished: 'finished its turn', error: 'stopped on an error', cancelled: 'was stopped', expired: 'ran out of time', creating: 'is starting' }
 
-export const stepIcon = (s: PanelStep) =>
-  s.kind === 'tool' ? (s.status === 'error' ? 'error' : (TOOL_ICON.find(([re]) => re.test(s.tool ?? ''))?.[1] ?? 'tools')) : s.kind === 'thinking' ? 'lightbulb' : s.kind === 'text' ? 'comment' : 'pulse'
+const toolIcon = (s: PanelStep) => TOOL_ICON.find(([re]) => re.test(s.tool ?? ''))?.[1] ?? 'tools'
+
+export const stepIcon = (s: PanelStep) => (s.kind === 'tool' ? (s.status === 'error' ? 'error' : toolIcon(s)) : s.kind === 'thinking' ? 'lightbulb' : s.kind === 'text' ? 'comment' : 'pulse')
+
+/** A run of one kind of step in a turn: thinking, tool calls, or what the agent said between them. */
+export type StepGroup = { kind: 'thought' | 'tools' | 'said'; steps: PanelStep[] }
+
+/** A turn's steps as runs, the way Cursor's chat shows them: "Thought for 12s", "Ran 3 commands", its words. */
+export function stepGroups(steps: readonly PanelStep[]): StepGroup[] {
+  const out: StepGroup[] = []
+  for (const s of steps) {
+    if (s.kind === 'status') continue
+    const kind = s.kind === 'thinking' ? 'thought' : s.kind === 'tool' ? 'tools' : 'said'
+    const last = out[out.length - 1]
+    if (last?.kind === kind) last.steps.push(s)
+    else out.push({ kind, steps: [s] })
+  }
+  return out
+}
+
+const TOOL_WORDS: Record<string, [string, string, string]> = {
+  terminal: ['ran', 'command', 'commands'],
+  edit: ['edited', 'file', 'files'],
+  file: ['read', 'file', 'files'],
+  search: ['ran', 'search', 'searches'],
+  globe: ['fetched', 'page', 'pages'],
+  trash: ['deleted', 'file', 'files'],
+  checklist: ['used', 'board tool', 'board tools'],
+  tools: ['used', 'tool', 'tools'],
+}
+
+/** What a run of tool calls did ("Ran 2 commands, read 3 files"); while one runs, that one ("Running npm test"). */
+export function toolsWords(steps: readonly PanelStep[], live: boolean): string {
+  const running = live ? steps.findLast(s => s.status === 'running') : undefined
+  if (running) return `${running.tool ?? 'tool'}: ${flat(running.text)}`
+  const counts = new Map<string, number>()
+  for (const s of steps) counts.set(toolIcon(s), (counts.get(toolIcon(s)) ?? 0) + 1)
+  const parts = [...counts].map(([icon, n]) => {
+    const [verb, one, many] = TOOL_WORDS[icon] ?? TOOL_WORDS.tools!
+    return `${verb} ${n} ${n === 1 ? one : many}`
+  })
+  const failed = steps.filter(s => s.status === 'error').length
+  const text = parts.join(', ') + (failed ? ` (${failed} failed)` : '')
+  return text.charAt(0).toUpperCase() + text.slice(1)
+}
 
 const flat = (t: string) => t.replace(/\s+/g, ' ').trim()
 const tail = (t: string, n = 160) => (t.length > n ? `…${t.slice(-n)}` : t)
@@ -102,14 +145,14 @@ export function TaskSession({ task, steps }: { task: PanelTask; steps: Record<st
         <h4>
           {first.running ? 'Working now' : 'Last agent'} <span>{first.label}</span>
         </h4>
-        <button type="button" className="btn ghost" onClick={() => openSession(task, first)}>
+        <button type="button" className="link" onClick={() => openSession(task, first)}>
           <Icon name="go-to-file" /> Open the full session
         </button>
       </div>
       {list.length ? (
         <StepList steps={list} label={`${first.label}: its steps`} />
       ) : (
-        <p className="quiet">{first.running ? 'Nothing yet. Its steps show here as it works.' : 'Its steps are in the full session.'}</p>
+        <p className="empty">{first.running ? 'Nothing yet. Its steps show here as it works.' : 'Its steps are in the full session.'}</p>
       )}
       {!!older.length && (
         <p className="session-older">

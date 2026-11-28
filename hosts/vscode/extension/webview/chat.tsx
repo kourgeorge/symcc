@@ -1,8 +1,10 @@
 // The lead chat on the Now page: the stream (the lead's conversation and the board's news as one timeline) and the box
 // to write to the lead, on assistant-ui's building blocks: its runtime over the chat the extension keeps, its thread
-// viewport, composer, slash popover and picture attachments, drawn in the panel's own styles. A lead answer shows
-// what it said, with its work (thinking, tools) folded above it; the running turn shows its work as it happens.
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+// viewport, composer, slash popover and picture attachments. It reads like Cursor's own chat: the owner's messages in
+// an input-coloured box, the lead's answers as plain text, and its work folded run by run above each answer
+// ("Thought for 12s", "Ran 3 commands") that opens to the steps. While the lead works, Enter puts a message into its
+// running turn, Alt+Enter queues it for after, and Esc stops it.
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MutableRefObject, type ReactNode } from 'react'
 import {
   ActionBarPrimitive,
   AssistantRuntimeProvider,
@@ -23,7 +25,7 @@ import type { AgentChoice, ChatImage, ChatItem, LeadSettings, ModelInfo, PanelLa
 import { LEAD_AGENT, turnSteps } from '../../steps'
 import { ask, tell } from './bridge'
 import { Icon, Linked, Mark, Markdown, clock, dayWord, duration, tokensWord, useNow } from './parts'
-import { StepList } from './session'
+import { stepGroups, stepIcon, toolsWords, type StepGroup } from './session'
 
 type Say = (text: string, bad?: boolean) => void
 
@@ -54,16 +56,6 @@ function workOf(steps: readonly PanelStep[]): { work: PanelStep[]; said: string 
   return { work, said }
 }
 
-/** "Worked for 42s · 6 tools · thought" for a turn's work. */
-function workWords(work: readonly PanelStep[], live: boolean, now: number): string {
-  const tools = work.filter(s => s.kind === 'tool').length
-  const thought = work.some(s => s.kind === 'thinking')
-  const first = work[0]?.atMs
-  const last = live ? now : work[work.length - 1]?.atMs
-  const time = first !== undefined && last !== undefined && last - first >= 1000 ? ` for ${duration(last - first)}` : ''
-  return [`${live ? 'Working' : 'Worked'}${time}`, tools ? `${tools} tool${tools === 1 ? '' : 's'}` : '', thought ? 'thought it through' : ''].filter(Boolean).join(' · ')
-}
-
 /* ---------- the chat ---------- */
 
 type Ctx = { onTask: (id: string) => void }
@@ -89,6 +81,7 @@ export type LeadChatProps = {
 export function LeadChat({ chat, news, lanes, busy, lead, ready, settings, models, slash, agents, onSay, onTask }: LeadChatProps) {
   const now = useNow(60_000)
   const turn = useMemo(() => turnSteps(lead), [lead])
+  const queueNext = useRef(false)
   const messages = useMemo<ThreadMessageLike[]>(() => {
     const lines: { m: ThreadMessageLike; atMs: number; row: Row }[] = [
       ...chat.map(c => ({ m: chatMessage(c), atMs: c.atMs, row: { kind: 'chat', item: c } as Row })),
@@ -112,6 +105,8 @@ export function LeadChat({ chat, news, lanes, busy, lead, ready, settings, model
   }, [chat, news, lanes, busy, turn, now])
 
   const onNew = async (m: AppendMessage) => {
+    const queue = queueNext.current
+    queueNext.current = false
     const text = m.content
       .map(p => (p.type === 'text' ? p.text : ''))
       .join('\n')
@@ -119,12 +114,12 @@ export function LeadChat({ chat, news, lanes, busy, lead, ready, settings, model
     const images = (m.attachments ?? []).flatMap(a => (a.content ?? []).flatMap(c => (c.type === 'image' ? [imageOf(c.image)] : []))).filter((i): i is ChatImage => !!i)
     if (!text && !images.length) return
     if (runChatCommand(text, { settings, onSay })) return
-    await ask({ type: 'send', text: text || 'Have a look at this picture.', ...(images.length ? { images } : {}) }).catch((err: Error) => onSay(err.message, true))
+    await ask({ type: 'send', text: text || 'Have a look at this picture.', ...(images.length ? { images } : {}), ...(queue && busy ? { queue: true } : {}) }).catch((err: Error) => onSay(err.message, true))
   }
   const runtime = useExternalStoreRuntime<ThreadMessageLike>({
     messages,
     convertMessage: m => m,
-    // the owner can write while the lead works: what they send goes into its next turn (Stop is the composer's own)
+    // the owner can write while the lead works: Enter puts it into the running turn (Stop is the composer's own)
     isRunning: false,
     isDisabled: !ready,
     onNew,
@@ -136,15 +131,18 @@ export function LeadChat({ chat, news, lanes, busy, lead, ready, settings, model
       <ChatCtx.Provider value={ctx}>
         <ThreadPrimitive.Root className="thread">
           <ThreadPrimitive.Viewport className="stream" aria-label="The lead and the board" aria-live="polite" aria-relevant="additions">
-            {!messages.length && (
-              <div className="stream-empty">
-                <p>{ALL_CLEAR[0]}</p>
-                <p className="quiet">{ALL_CLEAR[1]} It plans the work as tasks, and you see them here as they run and merge.</p>
-              </div>
-            )}
-            <ThreadPrimitive.Messages>{renderMessage}</ThreadPrimitive.Messages>
+            <div className="stream-in">
+              {!messages.length && (
+                <div className="stream-empty">
+                  <Mark size={40} />
+                  <p>{ALL_CLEAR[0]}</p>
+                  <p className="dim">{ALL_CLEAR[1]} It plans the work as tasks, and you see them here as they run and merge.</p>
+                </div>
+              )}
+              <ThreadPrimitive.Messages>{renderMessage}</ThreadPrimitive.Messages>
+            </div>
           </ThreadPrimitive.Viewport>
-          <Composer ready={ready} busy={busy} settings={settings} models={models} slash={slash} agents={agents} onSay={onSay} />
+          <Composer ready={ready} busy={busy} settings={settings} models={models} slash={slash} agents={agents} queueNext={queueNext} onSay={onSay} />
         </ThreadPrimitive.Root>
       </ChatCtx.Provider>
     </AssistantRuntimeProvider>
@@ -157,106 +155,76 @@ function OneMessage() {
   const r = useAuiState(s => row(s.message))
   if (!r) return null
   const day = r.day ? <p className="day">{r.day}</p> : null
-  if (r.kind === 'news')
-    return (
-      <>
-        {day}
-        <NewsLine n={r.news} lane={r.lane} />
-      </>
-    )
-  if (r.kind === 'live')
-    return (
-      <>
-        {day}
-        <LiveTurn steps={r.steps} />
-      </>
-    )
   return (
     <>
       {day}
-      <ChatLine c={r.item} />
+      {r.kind === 'news' ? <NewsLine n={r.news} lane={r.lane} /> : r.kind === 'live' ? <LiveTurn steps={r.steps} /> : <ChatLine c={r.item} />}
     </>
   )
 }
 
 const openLeadSession = () => tell({ type: 'session', agent: LEAD_AGENT, title: "The lead's session" })
 
-function Who({ icon, name, atMs, children }: { icon: ReactNode; name: string; atMs: number; children?: ReactNode }) {
-  return (
-    <div className="who">
-      {icon}
-      <b>{name}</b>
-      <time>{clock(atMs)}</time>
-      {children}
-    </div>
-  )
-}
-
-const you = (
-  <span className="you" aria-hidden>
-    <Icon name="account" />
-  </span>
-)
-
 function ChatLine({ c }: { c: ChatItem }) {
   const { onTask } = useContext(ChatCtx)
-  if (c.who === 'error')
-    return (
-      <MessagePrimitive.Root className="msg error" role="alert">
-        <Icon name="error" />
-        <p>{c.text}</p>
-      </MessagePrimitive.Root>
-    )
   if (c.who === 'owner')
     return (
       <MessagePrimitive.Root className="msg owner">
-        <Who icon={you} name="You" atMs={c.atMs} />
-        {!!c.images?.length && (
-          <div className="pictures">
-            {c.images.map((src, i) => (
-              <img key={i} src={src} alt={`Picture ${i + 1} you sent`} />
-            ))}
-          </div>
-        )}
-        {!c.images?.length && !!c.pictures && (
-          <p className="pictures-gone">
-            <Icon name="file-media" /> {c.pictures === 1 ? 'A picture' : `${c.pictures} pictures`}
+        <div className="bubble">
+          {!!c.images?.length && (
+            <div className="pictures">
+              {c.images.map((src, i) => (
+                <img key={i} src={src} alt={`Picture ${i + 1} you sent`} />
+              ))}
+            </div>
+          )}
+          {!c.images?.length && !!c.pictures && (
+            <p className="pictures-gone">
+              <Icon name="file-media" /> {c.pictures === 1 ? 'A picture' : `${c.pictures} pictures`}
+            </p>
+          )}
+          <p className="said">
+            <Linked text={c.text} onTask={onTask} />
+          </p>
+        </div>
+        {c.sent && (
+          <p className="msg-foot">
+            {c.sent === 'steered' ? (
+              <>
+                <Icon name="debug-step-into" /> Went into the lead's running turn
+              </>
+            ) : (
+              <>
+                <Icon name="history" /> Queued: the lead reads it when its turn ends
+              </>
+            )}
           </p>
         )}
-        <p className="said">
-          <Linked text={c.text} onTask={onTask} />
-        </p>
       </MessagePrimitive.Root>
     )
-  if (c.who === 'note')
+  if (c.who === 'error' || c.who === 'note')
     return (
-      <MessagePrimitive.Root className="msg cmd">
-        <Who
-          icon={
-            <span className="you" aria-hidden>
-              <Icon name="terminal" />
-            </span>
-          }
-          name="symcc"
-          atMs={c.atMs}
-        />
-        <div className="cmd-body">
-          <Markdown text={c.text} onTask={onTask} />
+      <MessagePrimitive.Root className={`msg ${c.who}`} {...(c.who === 'error' ? { role: 'alert' } : {})}>
+        {!!c.steps?.length && <TurnWork steps={c.steps} endMs={c.atMs} />}
+        <div className="note-line">
+          <Icon name={c.who === 'error' ? 'error' : 'info'} />
+          <div className="note-body">{c.who === 'error' ? <p>{c.text}</p> : <Markdown text={c.text} onTask={onTask} />}</div>
+          <time>{clock(c.atMs)}</time>
         </div>
-        {!!c.steps?.length && <Work steps={c.steps} />}
       </MessagePrimitive.Root>
     )
   const { work, said } = workOf(c.steps ?? [])
   return (
     <MessagePrimitive.Root className="msg lead">
-      <Who icon={<Mark size={22} />} name="Lead" atMs={c.atMs}>
-        {c.model && <span className="model-tag">{c.model}</span>}
-      </Who>
-      {!!work.length && <Work steps={work} />}
+      {!!work.length && <TurnWork steps={work} endMs={c.atMs} />}
       <Markdown text={c.text || said} onTask={onTask} />
-      <ActionBarPrimitive.Root className="msg-actions" autohide="never">
-        <CopyButton />
-      </ActionBarPrimitive.Root>
+      <div className="msg-foot">
+        <time>{clock(c.atMs)}</time>
+        {c.model && <span>{c.model}</span>}
+        <ActionBarPrimitive.Root className="msg-actions" autohide="never">
+          <CopyButton />
+        </ActionBarPrimitive.Root>
+      </div>
     </MessagePrimitive.Root>
   )
 }
@@ -270,35 +238,80 @@ function CopyButton() {
   )
 }
 
-/** A turn's work, folded to one line ("Worked for 42s · 6 tools") that opens to its steps. */
-function Work({ steps, live = false }: { steps: readonly PanelStep[]; live?: boolean }) {
-  const [open, setOpen] = useState(live)
+/**
+ * A turn's work as Cursor's chat shows it: each run of thinking or tool calls folded to one line that opens to its
+ * steps, and what the agent said between runs in view. The last run of a live turn says what it does now.
+ */
+function TurnWork({ steps, live = false, endMs }: { steps: readonly PanelStep[]; live?: boolean; endMs?: number }) {
   const now = useNow(live ? 1000 : 60_000)
+  const groups = stepGroups(steps)
   return (
-    <div className={`work${live ? ' live' : ''}`}>
-      <button type="button" className="work-head" aria-expanded={open} onClick={() => setOpen(o => !o)}>
-        <Icon name={open ? 'chevron-down' : 'chevron-right'} />
-        <span>{workWords(steps, live, now)}</span>
-      </button>
-      {open && <StepList steps={steps} max={live ? 60 : 200} label={live ? "The lead's steps so far" : "The lead's steps for this answer"} />}
+    <div className="turn-work">
+      {groups.map((g, i) => {
+        const last = i === groups.length - 1
+        const until = groups[i + 1]?.steps[0]?.atMs ?? (live ? now : (endMs ?? g.steps[g.steps.length - 1]!.atMs))
+        return g.kind === 'said' ? <Said key={`${i}-${g.steps[0]!.atMs}`} steps={g.steps} /> : <Fold key={`${i}-${g.steps[0]!.atMs}`} group={g} live={live && last} untilMs={until} />
+      })}
     </div>
   )
 }
 
-/** The lead's running turn: its work as it comes, open; what it says shows once it answers. */
+function Said({ steps }: { steps: readonly PanelStep[] }) {
+  const { onTask } = useContext(ChatCtx)
+  return (
+    <div className="work-said">
+      <Markdown text={steps.map(s => s.text).join('')} onTask={onTask} />
+    </div>
+  )
+}
+
+/** One run of a turn, folded: "Thought for 12s" or "Ran 2 commands, read 3 files"; open, its steps. */
+function Fold({ group, live, untilMs }: { group: StepGroup; live: boolean; untilMs: number }) {
+  const [open, setOpen] = useState(false)
+  const took = untilMs - group.steps[0]!.atMs
+  const thought = group.kind === 'thought'
+  const words = thought ? (live ? 'Thinking' : took >= 1000 ? `Thought for ${duration(took)}` : 'Thought briefly') : toolsWords(group.steps, live)
+  return (
+    <div className={`fold${open ? ' open' : ''}${live ? ' live' : ''}`}>
+      <button type="button" className="fold-head" aria-expanded={open} onClick={() => setOpen(o => !o)} title={words}>
+        {live ? <Icon name="loading" /> : <Icon name={open ? 'chevron-down' : 'chevron-right'} />}
+        <span>{words}</span>
+        {live && thought && took >= 1000 && <span className="dim">{duration(took)}</span>}
+      </button>
+      {open &&
+        (thought ? (
+          <p className="thought">{group.steps.map(s => s.text).join('').trim()}</p>
+        ) : (
+          <ol className="tool-steps">
+            {group.steps.map((s, i) => (
+              <li key={`${s.atMs}-${i}`} className={s.status ?? ''}>
+                <Icon name={s.status === 'running' ? 'loading' : stepIcon(s)} />
+                <b>{s.tool}</b>
+                <code>{s.text || '(no arguments)'}</code>
+              </li>
+            ))}
+          </ol>
+        ))}
+    </div>
+  )
+}
+
+/** The lead's running turn: its work as it comes, folded run by run, and what it says as it says it. */
 function LiveTurn({ steps }: { steps: PanelStep[] }) {
+  const now = useNow(1000)
   const work = steps.filter(s => s.kind !== 'status')
+  const since = steps[0]?.atMs
   return (
     <MessagePrimitive.Root className="msg lead live">
-      <Who icon={<Mark size={22} />} name="Lead" atMs={steps[0]?.atMs ?? Date.now()}>
-        <span className="live-word">
-          <Icon name="loading" /> working
-        </span>
+      {!!work.length && <TurnWork steps={work} live />}
+      <p className="working">
+        {!work.length && <Icon name="loading" />}
+        <span>{since !== undefined && now - since >= 1000 ? `Working for ${duration(now - since)}` : 'Working'}</span>
+        <span className="dim">Esc stops it</span>
         <button type="button" className="link" onClick={openLeadSession}>
           Open its session
         </button>
-      </Who>
-      {work.length ? <Work steps={work} live /> : <p className="quiet live-wait">It has started; its steps show here as they come.</p>}
+      </p>
     </MessagePrimitive.Root>
   )
 }
@@ -326,7 +339,7 @@ function NewsLine({ n, lane }: { n: PanelNews; lane?: PanelLane }) {
       <span className="news-title">{n.title}</span>
       <span className="news-word">{k.word}</span>
       {n.why && n.tone === 'bad' && (
-        <span className="news-more news-why" title={n.why}>
+        <span className="news-more" title={n.why}>
           {n.why}
         </span>
       )}
@@ -453,11 +466,11 @@ function settingsFor(m: ModelInfo | undefined, params: Params, mode: LeadSetting
 }
 
 /** Closes popover `box` on a click outside it or Escape. */
-function useDismiss(open: boolean, box: React.RefObject<HTMLElement | null>, close: () => void) {
+export function useDismiss(open: boolean, box: React.RefObject<HTMLElement | null>, close: () => void) {
   useEffect(() => {
     if (!open) return
     const away = (e: MouseEvent) => !box.current?.contains(e.target as Node) && close()
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && (e.stopPropagation(), close())
+    const esc = (e: globalThis.KeyboardEvent) => e.key === 'Escape' && (e.stopPropagation(), close())
     document.addEventListener('mousedown', away)
     document.addEventListener('keydown', esc, true)
     return () => (document.removeEventListener('mousedown', away), document.removeEventListener('keydown', esc, true))
@@ -466,16 +479,34 @@ function useDismiss(open: boolean, box: React.RefObject<HTMLElement | null>, clo
 
 type Agents = LeadChatProps['agents']
 
+/** A chip of the composer that opens a menu above it, in the editor's menu colours. */
+function Chip({ icon, label, title, open, onOpen, children }: { icon: string; label: string; title: string; open: boolean; onOpen: (open: boolean) => void; children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null)
+  useDismiss(open, box, () => onOpen(false))
+  return (
+    <div className="chip-wrap" ref={box}>
+      <button type="button" className="chip" aria-haspopup="dialog" aria-expanded={open} onClick={() => onOpen(!open)} title={title}>
+        <Icon name={icon} />
+        <span>{label}</span>
+        <Icon name="chevron-down" />
+      </button>
+      {open && (
+        <div className="menu up" role="dialog" aria-label={title}>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ModelPicker({ settings, models, agents }: { settings: LeadSettings; models: ModelInfo[]; agents: Agents }) {
   const [open, setOpen] = useState(false)
   const [find, setFind] = useState('')
-  const box = useRef<HTMLDivElement>(null)
-  const close = useMemo(() => () => (setOpen(false), setFind('')), [])
-  useDismiss(open, box, close)
   useEffect(() => {
     openModels = () => setOpen(true)
     return () => void (openModels = undefined)
   }, [])
+  const show = (o: boolean) => (setOpen(o), o || setFind(''))
   const chosen = models.find(m => m.id === settings.model?.id)
   const params = paramsOf(settings)
   const q = find.trim().toLowerCase()
@@ -484,99 +515,105 @@ function ModelPicker({ settings, models, agents }: { settings: LeadSettings; mod
   const options = chosen?.options.filter(o => o.values.length > 1) ?? []
   const variant = chosen?.variants.find(v => sameParams(v.params, params))
   return (
-    <div className="picker" ref={box}>
-      <button type="button" className="pill" aria-haspopup="dialog" aria-expanded={open} onClick={() => (open ? close() : setOpen(true))} title="The model the lead's turns run on">
-        <Icon name="sparkle" />
-        <span>{settings.modelLabel ?? 'Default model'}</span>
-        <Icon name="chevron-up" />
-      </button>
-      {open && (
-        <div className="pick-pop" role="dialog" aria-label="The lead's model">
-          <input className="pick-find" type="search" placeholder="Find a model" value={find} onChange={e => setFind(e.target.value)} autoFocus aria-label="Find a model" />
-          <ul className="pick-list">
-            {!q && (
-              <li>
-                <button type="button" className="pick-item" aria-current={!settings.model || undefined} onClick={() => pick(undefined)}>
-                  <span>
-                    <b>Default model</b>
-                    <small>The lead's own, from the symcc.leadModel setting</small>
-                  </span>
-                  {!settings.model && <Icon name="check" />}
-                </button>
-              </li>
-            )}
-            {shown.map(m => (
-              <li key={m.id}>
-                <button type="button" className="pick-item" aria-current={m.id === chosen?.id || undefined} onClick={() => pick(m)} title={m.description ?? m.id}>
-                  <span>
-                    <b>{m.label}</b>
-                    {defaultVariant(m)?.maxMode && <em>Max</em>}
-                  </span>
-                  {m.id === chosen?.id && <Icon name="check" />}
-                </button>
-              </li>
-            ))}
-            {!shown.length && <li className="pick-none">{models.length ? 'No model by that name.' : 'The models show once symcc has listed them.'}</li>}
-          </ul>
-          {chosen && !!options.length && (
-            <div className="pick-options" aria-label={`${chosen.label}'s options`}>
-              {options.map(o => (
-                <div key={o.id} className="pick-option">
-                  <span>{o.label}</span>
-                  <div className="seg" role="radiogroup" aria-label={o.label}>
-                    {o.values.map(v => {
-                      const can = chosen.variants.some(x => x.params[o.id] === v.value)
-                      return (
-                        <button
-                          key={v.value}
-                          type="button"
-                          role="radio"
-                          aria-checked={params[o.id] === v.value}
-                          disabled={!can}
-                          onClick={() => tell({ type: 'lead-set', settings: settingsFor(chosen, withOption(chosen, params, o.id, v.value), settings.mode) })}
-                        >
-                          {v.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              ))}
-              {variant?.maxMode && <p className="pick-note">Max mode: this choice costs more per turn.</p>}
-            </div>
-          )}
-          {agents.list.length > 1 && (
-            <div className="pick-options" aria-label="Agents">
-              <div className="pick-option">
-                <span>Agents</span>
-                <div className="seg" role="radiogroup" aria-label="Whose agents run the lead and the workers">
-                  {agents.list.map(a => (
-                    <button key={a.id} type="button" role="radio" aria-checked={a.id === agents.current} onClick={() => a.id !== agents.current && (tell({ type: 'agents-set', agents: a.id }), close())}>
-                      {a.name}
+    <Chip icon="sparkle" label={settings.modelLabel ?? 'Default model'} title="The model the lead's turns run on" open={open} onOpen={show}>
+      <input className="menu-find" type="search" placeholder="Find a model" value={find} onChange={e => setFind(e.target.value)} autoFocus aria-label="Find a model" />
+      <ul className="menu-list">
+        {!q && (
+          <li>
+            <button type="button" className="menu-item" aria-current={!settings.model || undefined} onClick={() => pick(undefined)}>
+              <span>
+                <b>Default model</b>
+                <small>The lead's own, from the symcc.leadModel setting</small>
+              </span>
+              {!settings.model && <Icon name="check" />}
+            </button>
+          </li>
+        )}
+        {shown.map(m => (
+          <li key={m.id}>
+            <button type="button" className="menu-item" aria-current={m.id === chosen?.id || undefined} onClick={() => pick(m)} title={m.description ?? m.id}>
+              <span>
+                <b>{m.label}</b>
+                {defaultVariant(m)?.maxMode && <em>Max</em>}
+              </span>
+              {m.id === chosen?.id && <Icon name="check" />}
+            </button>
+          </li>
+        ))}
+        {!shown.length && <li className="menu-none">{models.length ? 'No model by that name.' : 'The models show once symcc has listed them.'}</li>}
+      </ul>
+      {chosen && !!options.length && (
+        <div className="menu-options" aria-label={`${chosen.label}'s options`}>
+          {options.map(o => (
+            <div key={o.id} className="menu-option">
+              <span>{o.label}</span>
+              <div className="seg" role="radiogroup" aria-label={o.label}>
+                {o.values.map(v => {
+                  const can = chosen.variants.some(x => x.params[o.id] === v.value)
+                  return (
+                    <button
+                      key={v.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={params[o.id] === v.value}
+                      disabled={!can}
+                      onClick={() => tell({ type: 'lead-set', settings: settingsFor(chosen, withOption(chosen, params, o.id, v.value), settings.mode) })}
+                    >
+                      {v.label}
                     </button>
-                  ))}
-                </div>
+                  )
+                })}
               </div>
-              <p className="pick-note">symcc restarts with the agents you choose.</p>
             </div>
-          )}
+          ))}
+          {variant?.maxMode && <p className="menu-note">Max mode: this choice costs more per turn.</p>}
         </div>
       )}
-    </div>
+      {agents.list.length > 1 && (
+        <div className="menu-options" aria-label="Agents">
+          <div className="menu-option">
+            <span>Agents</span>
+            <div className="seg" role="radiogroup" aria-label="Whose agents run the lead and the workers">
+              {agents.list.map(a => (
+                <button key={a.id} type="button" role="radio" aria-checked={a.id === agents.current} onClick={() => a.id !== agents.current && (tell({ type: 'agents-set', agents: a.id }), show(false))}>
+                  {a.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="menu-note">symcc restarts with the agents you choose.</p>
+        </div>
+      )}
+    </Chip>
   )
 }
 
-function ModeSwitch({ settings }: { settings: LeadSettings }) {
-  const set = (mode: LeadSettings['mode']) => mode !== settings.mode && tell({ type: 'lead-set', settings: { ...settings, mode } })
+const LEAD_MODES: { mode: LeadSettings['mode']; icon: string; name: string; meaning: string }[] = [
+  { mode: 'agent', icon: 'person', name: 'Agent', meaning: 'The lead works as usual: it plans tasks and uses its tools' },
+  { mode: 'plan', icon: 'list-tree', name: 'Plan', meaning: 'The lead thinks it through and changes no files' },
+]
+
+function LeadMode({ settings }: { settings: LeadSettings }) {
+  const [open, setOpen] = useState(false)
+  const now = LEAD_MODES.find(m => m.mode === settings.mode) ?? LEAD_MODES[0]!
+  const set = (mode: LeadSettings['mode']) => (setOpen(false), mode !== settings.mode && tell({ type: 'lead-set', settings: { ...settings, mode } }))
   return (
-    <div className="seg mode-seg" role="radiogroup" aria-label="How the lead's turns run">
-      <button type="button" role="radio" aria-checked={settings.mode === 'agent'} onClick={() => set('agent')} title="The lead works as usual: it plans tasks and uses its tools">
-        <Icon name="person" /> Agent
-      </button>
-      <button type="button" role="radio" aria-checked={settings.mode === 'plan'} onClick={() => set('plan')} title="The lead thinks it through and changes no files">
-        <Icon name="list-tree" /> Plan
-      </button>
-    </div>
+    <Chip icon={now.icon} label={now.name} title="How the lead's turns run" open={open} onOpen={setOpen}>
+      <ul className="menu-list" role="radiogroup" aria-label="How the lead's turns run">
+        {LEAD_MODES.map(m => (
+          <li key={m.mode}>
+            <button type="button" className="menu-item" role="radio" aria-checked={m.mode === settings.mode} onClick={() => set(m.mode)}>
+              <Icon name={m.icon} />
+              <span>
+                <b>{m.name}</b>
+                <small>{m.meaning}</small>
+              </span>
+              {m.mode === settings.mode && <Icon name="check" />}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </Chip>
   )
 }
 
@@ -608,12 +645,12 @@ function slashAdapter(items: readonly SlashItem[]): TriggerAdapter {
 }
 
 function SlashList({ items }: { items: readonly TriggerItem[] }) {
-  if (!items.length) return <p className="slash-none">No command or skill by that name.</p>
+  if (!items.length) return <p className="menu-none">No command or skill by that name.</p>
   return (
     <>
       {items.map((it, i) => (
         <div key={it.id} className="slash-row">
-          {(i === 0 || items[i - 1]!.type !== it.type) && <p className="slash-group">{GROUP[it.type as SlashItem['kind']] ?? it.type}</p>}
+          {(i === 0 || items[i - 1]!.type !== it.type) && <p className="menu-group">{GROUP[it.type as SlashItem['kind']] ?? it.type}</p>}
           <ComposerPrimitive.TriggerPopoverItem item={it} index={i} className="slash-item" title={it.description}>
             <code>{it.label}</code>
             {typeof it.metadata?.hint === 'string' && <span className="slash-hint">{it.metadata.hint}</span>}
@@ -626,7 +663,9 @@ function SlashList({ items }: { items: readonly TriggerItem[] }) {
   )
 }
 
-function Composer({ ready, busy, settings, models, slash, agents, onSay }: { ready: boolean; busy: boolean; settings: LeadSettings; models: ModelInfo[]; slash: SlashItem[]; agents: Agents; onSay: Say }) {
+const Keys = ({ k }: { k: string }) => <kbd>{k}</kbd>
+
+function Composer({ ready, busy, settings, models, slash, agents, queueNext, onSay }: { ready: boolean; busy: boolean; settings: LeadSettings; models: ModelInfo[]; slash: SlashItem[]; agents: Agents; queueNext: MutableRefObject<boolean>; onSay: Say }) {
   const aui = useAui()
   const adapter = useMemo(() => slashAdapter([...CHAT_COMMANDS, ...slash]), [slash])
   const run = (item: TriggerItem) => {
@@ -635,39 +674,68 @@ function Composer({ ready, busy, settings, models, slash, agents, onSay }: { rea
     runChatCommand(`/${item.id}`, { settings, onSay })
   }
   const empty = useAuiState(s => !s.composer.text.trim() && !s.composer.attachments.length)
+  const keys = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing) return
+    if (e.key === 'Enter' && e.altKey && !e.shiftKey) queueNext.current = true
+    // the slash menu takes Escape for itself while it is open
+    if (e.key === 'Escape' && busy && !e.currentTarget.closest('.composer')?.querySelector('.slash-pop')) {
+      e.preventDefault()
+      tell({ type: 'lead-stop' })
+    }
+  }
   return (
     <ComposerPrimitive.Root className="composer">
       <ComposerPrimitive.TriggerPopoverRoot>
-        <ComposerPrimitive.TriggerPopover char="/" adapter={adapter} className="slash-pop" aria-label="Commands and skills">
+        <ComposerPrimitive.TriggerPopover char="/" adapter={adapter} className="slash-pop menu" aria-label="Commands and skills">
           <ComposerPrimitive.TriggerPopover.Action formatter={formatter} onExecute={run} />
           <ComposerPrimitive.TriggerPopoverItems>{items => <SlashList items={items} />}</ComposerPrimitive.TriggerPopoverItems>
         </ComposerPrimitive.TriggerPopover>
-        <div className="composer-pictures">
-          <ComposerPrimitive.Attachments>{() => <Picture />}</ComposerPrimitive.Attachments>
-        </div>
-        <label className="sr" htmlFor="composer">
-          Message the lead
-        </label>
-        <ComposerPrimitive.Input id="composer" className="composer-input" rows={1} maxRows={10} submitMode="enter" placeholder={settings.mode === 'plan' ? 'Ask the lead to plan something… (it changes no files)' : 'Tell the lead what you want next… / for commands and skills'} />
-        <div className="composer-bar">
-          <ModeSwitch settings={settings} />
-          <ModelPicker settings={settings} models={models} agents={agents} />
-          <ComposerPrimitive.AddAttachment className="icon-btn" aria-label="Add a picture" title="Add a picture (or paste one)">
-            <Icon name="file-media" />
-          </ComposerPrimitive.AddAttachment>
-          <span className="composer-gap" />
-          {busy && (
-            <button type="button" className="btn ghost stop" onClick={() => tell({ type: 'lead-stop' })} title="Stop the lead's running turn">
-              <Icon name="stop-circle" /> Stop
-            </button>
-          )}
-          <ComposerPrimitive.Send className="btn primary send" disabled={!ready || empty}>
-            <Icon name="send" />
-            <span>Send</span>
-          </ComposerPrimitive.Send>
+        <div className="composer-box">
+          <div className="composer-pictures">
+            <ComposerPrimitive.Attachments>{() => <Picture />}</ComposerPrimitive.Attachments>
+          </div>
+          <label className="sr" htmlFor="composer">
+            Message the lead
+          </label>
+          <ComposerPrimitive.Input
+            id="composer"
+            className="composer-input"
+            rows={1}
+            maxRows={12}
+            submitMode="enter"
+            onKeyDown={keys}
+            placeholder={busy ? 'Add to what the lead is doing…' : settings.mode === 'plan' ? 'Ask the lead to plan something (it changes no files)' : 'Tell the lead what you want next, / for commands and skills'}
+          />
+          <div className="composer-bar">
+            <LeadMode settings={settings} />
+            <ModelPicker settings={settings} models={models} agents={agents} />
+            <ComposerPrimitive.AddAttachment className="icon-btn" aria-label="Add a picture" title="Add a picture (or paste one)">
+              <Icon name="file-media" />
+            </ComposerPrimitive.AddAttachment>
+            <span className="gap" />
+            {busy && empty ? (
+              <button type="button" className="send" onClick={() => tell({ type: 'lead-stop' })} title="Stop the lead (Esc)" aria-label="Stop the lead">
+                <Icon name="debug-stop" />
+              </button>
+            ) : (
+              <ComposerPrimitive.Send className="send" disabled={!ready || empty} title={busy ? "Send into the lead's running turn (Enter); Alt+Enter queues it" : 'Send (Enter)'} aria-label="Send">
+                <Icon name="arrow-up" />
+              </ComposerPrimitive.Send>
+            )}
+          </div>
         </div>
       </ComposerPrimitive.TriggerPopoverRoot>
-      <p className="composer-hint">{busy ? 'The lead is working; what you send goes into its next turn.' : 'Enter sends · Shift+Enter for a new line · / for commands and skills'}</p>
+      <p className="composer-hint">
+        {busy ? (
+          <>
+            <Keys k="Enter" /> goes into the lead's turn · <Keys k="Alt+Enter" /> queues it for after · <Keys k="Esc" /> stops the lead
+          </>
+        ) : (
+          <>
+            <Keys k="Enter" /> sends · <Keys k="Shift+Enter" /> new line · <Keys k="/" /> commands and skills
+          </>
+        )}
+      </p>
     </ComposerPrimitive.Root>
   )
 }

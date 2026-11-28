@@ -9,9 +9,13 @@ import { basePromptFor } from '../../hooks/core/prompts'
 import { ASK_TOOL_DEF } from '../../hooks/app/ask'
 import { TOOLS } from '../../hooks/app/tools'
 import { SCOUT_BOARD_TOOLS, SCOUT_LIST_TOOL } from '../../hooks/core/scouts'
-import { cleanTokens } from '../../hooks/core/runs'
+import { addTokens, cleanTokens } from '../../hooks/core/runs'
 import { S } from '../../hooks/app/state'
 import type { Sdk, SdkAgent, SdkRun, SdkRunResult, SdkStep, SdkTool, SdkToolGuard } from './sdk'
+import { RETRY_DELAYS_MS, pause, resumeText, retryingText, serviceError, serviceErrorText } from './retry'
+
+/** How many more turns a worker gets to undo its files outside its task before it hands back. */
+export const HAND_BACK_TURNS = 2
 
 /** A tool's definition as symcc lists it (TOOLS, ASK_TOOL_DEF). */
 export type ToolDef = { name: string; description: string; inputSchema: unknown }
@@ -62,6 +66,14 @@ export type SdkAgentsOptions = {
   guard?: (agentId: string, dir: string) => SdkToolGuard
   /** each step of agent `agentId`'s turns as it happens */
   onStep?: (agentId: string, s: SdkStep) => void
+  /**
+   * What worker `agentId` is told when its turn ends with an answer and its folder holds changes outside its task's
+   * files (the merge refuses the whole try on them), or nothing. Cursor's agents have no guard before a call runs, so
+   * this is when they hear of it.
+   */
+  handBack?: (agentId: string) => Promise<string | undefined>
+  /** how long to wait before each new try of a run the agent service cut off */
+  retryDelaysMs?: readonly number[]
   /** a line for the debug log */
   log?: (line: string) => void
 }
@@ -75,7 +87,7 @@ export type SdkAgents = Host['agents'] & {
 }
 
 export function sdkAgents(o: SdkAgentsOptions): SdkAgents {
-  type Entry = { agent: HostAgent; start: HostAgentStart; sdk?: SdkAgent; run?: SdkRun; killed: boolean; ended: Promise<void> }
+  type Entry = { agent: HostAgent; start: HostAgentStart; sdk?: SdkAgent; run?: SdkRun; killed: boolean; ended: Promise<void>; wake?: () => void }
   const entries = new Map<string, Entry>()
   const log = o.log ?? (() => undefined)
   let n = 0
@@ -88,20 +100,54 @@ export function sdkAgents(o: SdkAgentsOptions): SdkAgents {
       ]),
     )
 
+  /** One run of `e` with `text`, sent on from where it stopped when the agent service cut it off. */
+  async function run(id: string, e: Entry, text: string, mode?: 'plan'): Promise<AgentRunEnd> {
+    const delays = o.retryDelaysMs ?? RETRY_DELAYS_MS
+    let spent: AgentRunEnd['tokens']
+    for (let n = 0, message = text; ; n++) {
+      let end: AgentRunEnd
+      let why: string | undefined
+      try {
+        e.run = await e.sdk!.send(message, { ...(mode ? { mode } : {}), ...(n ? { force: true } : {}), ...(o.onStep ? { onStep: (s: SdkStep) => o.onStep!(id, s) } : {}) })
+        if (e.killed) await e.run.cancel().catch(() => undefined)
+        const r = await e.run.wait()
+        end = runEnd(r, e.killed, o.sdk.name)
+        why = e.killed ? undefined : serviceError(r)
+      } catch (err) {
+        end = e.killed ? runEnd({ status: 'cancelled' }, true) : { answer: `the ${o.sdk.name} agent could not run: ${(err as Error).message}`.slice(0, 800), end: { reason: 'error' }, isAborted: false, tokens: undefined }
+        why = e.killed ? undefined : serviceErrorText((err as Error).message)
+      }
+      e.run = undefined
+      spent = end.tokens ? addTokens(spent, end.tokens) : spent
+      if (!why || n >= delays.length) return { ...end, tokens: spent }
+      const ms = delays[n]!
+      log(`${id}: the service cut its run off (${why}); trying again in ${ms} ms`)
+      o.onStep?.(id, { kind: 'status', text: retryingText(why, ms, n + 1, delays.length) })
+      const wait = pause(ms)
+      e.wake = wait.wake
+      await wait.done
+      e.wake = undefined
+      if (e.killed) return { ...runEnd({ status: 'cancelled' }, true), tokens: spent }
+      message = resumeText(why)
+    }
+  }
+
   /** Runs one turn of `e` with `text`; its end goes to onEnd once. */
   async function turn(id: string, e: Entry, text: string, mode?: 'plan') {
     e.agent = { ...e.agent, status: 'running' }
     let done!: () => void
     e.ended = new Promise<void>(r => (done = r))
-    let end: AgentRunEnd
-    try {
-      e.run = await e.sdk!.send(text, { ...(mode ? { mode } : {}), ...(o.onStep ? { onStep: (s: SdkStep) => o.onStep!(id, s) } : {}) })
-      if (e.killed) await e.run.cancel().catch(() => undefined)
-      end = runEnd(await e.run.wait(), e.killed, o.sdk.name)
-    } catch (err) {
-      end = e.killed ? runEnd({ status: 'cancelled' }, true) : { answer: `the ${o.sdk.name} agent could not run: ${(err as Error).message}`.slice(0, 800), end: { reason: 'error' }, isAborted: false, tokens: undefined }
+    let end = await run(id, e, text, mode)
+    // the merge refuses a worker's whole try when it changed files outside its task: it gets a turn or two to undo them
+    for (let n = 0; o.handBack && e.start.kind === 'worker' && !mode && !e.killed && end.end.reason === 'answer' && n < HAND_BACK_TURNS; n++) {
+      const say = await o.handBack(id).catch(err => void log(`${id}: couldn't check its files: ${(err as Error).message}`))
+      if (!say) break
+      log(`${id}: changed files outside its task; asking it to undo them`)
+      o.onStep?.(id, { kind: 'status', text: 'checking: files outside the task; symcc asks the worker to undo them' })
+      const again = await run(id, e, say)
+      const tokens = end.tokens || again.tokens ? addTokens(end.tokens, again.tokens) : undefined
+      end = again.isAborted ? { ...again, tokens } : { ...end, tokens }
     }
-    e.run = undefined
     e.agent = { ...e.agent, status: end.isAborted ? 'killed' : end.end.reason === 'answer' ? 'completed' : 'failed' }
     done()
     log(`${id} ended: ${e.agent.status}`)
@@ -135,6 +181,7 @@ export function sdkAgents(o: SdkAgentsOptions): SdkAgents {
       const e = entries.get(agentId)
       if (!e || (e.agent.status !== 'running' && e.agent.status !== 'pending')) return
       e.killed = true
+      e.wake?.()
       await e.run?.cancel().catch(() => undefined)
     },
     // T-656: a finished agent gets one more turn with its whole memory of the task; a follow-up only reads
@@ -149,6 +196,7 @@ export function sdkAgents(o: SdkAgentsOptions): SdkAgents {
       const live = [...entries.values()].filter(e => e.agent.status === 'running' || e.agent.status === 'pending')
       for (const e of live) {
         e.killed = true
+        e.wake?.()
         await e.run?.cancel().catch(() => undefined)
       }
       await Promise.race([Promise.all(live.map(e => e.ended)), new Promise(r => setTimeout(r, graceMs))])

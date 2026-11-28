@@ -427,6 +427,9 @@ After you update symcc, run **symcc: Restart symcc**.
 - The panel has the Now, Board, Worktrees, Scouts and Memory pages. The sidebar shows the board at a glance, and its badge counts what needs you.
 - On the Board page, a task shows what it has done so far, its change size, its timeline with who wrote each line, and its checker's report.
 - When another window drives the board, the header says so. **Drive here** makes this window drive it.
+- While the lead works, Enter sends your message into its running turn. Alt+Enter keeps it for after the turn. Esc or the Stop button stops the lead.
+- A running task has Pause and Stop on its row. Stop asks first, then drops the task.
+- When the agent service cuts a run off (an HTTP 504, for example), symcc sends it on after 15 seconds, 45 seconds and 2 minutes before the try fails.
 - **symcc: Message the lead** sends the lead a message from anywhere.
 - The settings are `symcc.agents`, `symcc.leadModel`, `symcc.workerModel`, `symcc.pluginPath`, `symcc.nodePath`, `symcc.proxy` and `symcc.notify`.
 
