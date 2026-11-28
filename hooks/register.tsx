@@ -210,7 +210,8 @@ export const register: Register = on => {
     const deny = await toolCheck(host, e.agentId, editTouch(e.tool, e.input), cwd)
     if (deny) return { decision: 'deny', reason: deny }
     // T-1200: a symcc agent's plain read inside a project's repo path is allowed (no prompt a background agent can't answer)
-    return readAllowed(e.agentId, roots => readInsideProjects(e.tool, e.input, roots)) ? { decision: 'allow' } : next(e)
+    // T-1211: each path is looked up on disk first, so a link out of a project repo gets no allow
+    return (await readAllowed(host, e.agentId, (roots, look) => readInsideProjects(e.tool, e.input, roots, look))) ? { decision: 'allow' } : next(e)
   }).catch(($, e, next) => {
     if (next.called) return next(e)
     useName(claudeHost($))

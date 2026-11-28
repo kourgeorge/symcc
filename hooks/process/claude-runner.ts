@@ -34,7 +34,7 @@ export function editRule(file: string): string[] {
  * names in the agent's folder (gitAliases), denied by name.
  */
 export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'tools'>, scratch = false, aliases: readonly string[] = []): { allowed: string[]; denied: string[] } {
-  const read = ['Read', 'Glob', 'Grep', 'Bash']
+  const read = ['Read', 'Bash']
   const web = a.tools?.includes('web') ? ['WebSearch', 'WebFetch'] : []
   const denied = gitDeniedRules(a.kind === 'worker', aliases)
   const scratchRules = scratch && a.kind !== 'scout' ? editRule(`${SCRATCH_DIR}/`) : []
@@ -111,7 +111,7 @@ export function claudeSession(out: ProcessOutput): string | undefined {
 }
 
 /** T-656: what a follow-up turn (the debrief) may use: reading only; no commands, no edits. */
-export const FOLLOW_UP_ALLOWED = ['Read', 'Glob', 'Grep']
+export const FOLLOW_UP_ALLOWED = ['Read']
 export const FOLLOW_UP_DENIED = ['Bash', 'Edit', 'Write', 'NotebookEdit', 'WebSearch', 'WebFetch']
 
 /** Options of claudeRunner: the claude binary (default `claude`, or SYMCC_CLAUDE), and a model for agents that name none. */
