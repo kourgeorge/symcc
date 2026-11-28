@@ -3,7 +3,8 @@
 // for its verdict; turn.complete (agentFinished in app/symcc.ts) hands the checker's answer back through checkerFinished.
 import type { SymccTask, SymccTokens } from '../../types'
 import { emptyBoard, type Board, CHECKER_ROLE, type CheckerVerdict, roleSection, checkerIdOf, withAgentStart, agentSafeName, checkerDiff, checkerChangedFiles, checkerTestsText, testCommandsOf, checkerEntry, checkerPrompt, checkerVerdict, checkerReportFile, reportText, cutLine, find, findRole, intoOf, patchTask, tryLabel, withTimeline, withAgentUsed, type TimelineAdd } from '../board'
-import { git, taskBranch } from './git'
+import { git } from './git'
+import { taskBranch } from './worktree'
 import { markStep } from './review'
 import { loadRoles } from './roles'
 import { changeValues } from './prompt-values'

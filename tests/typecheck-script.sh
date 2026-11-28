@@ -136,6 +136,14 @@ expect_host_bound "board-view.ts: @opencode import" hooks/opencode/board-view.ts
 expect_host_bound "board-view.ts: fs import" hooks/opencode/board-view.ts "import { readFileSync } from 'fs'\n" "a host-bound import.*board-view.ts:1"
 expect_host_bound "board-view.ts: import of a sibling OpenCode file" hooks/opencode/board-view.ts "import { tui } from './tui'\n" "a host-bound import.*board-view.ts:1"
 expect_host_bound "board-view.ts: require of a sibling OpenCode file" hooks/opencode/board-view.ts "const t = require('./tui')\n" "board-view.ts may not import hooks/opencode/ files.*board-view.ts:1"
+# T-798: board-view.ts and its parts (board-view-*.ts) may import each other, but no other OpenCode file nor a host
+printf "import { c } from '../core/c'\nexport * from './board-view-band'\nexport const v = c\n" > "$tmp/hooks/opencode/board-view.ts"
+printf "import type { V } from './board-view'\nexport type B = V\n" > "$tmp/hooks/opencode/board-view-band.ts"
+clean
+out="$(sh "$tmp/tests/host-free.sh" "$tmp" 2>&1)"; code=$?
+[ "$code" -eq 0 ] || bad "host-free with board-view.ts and board-view-band.ts importing each other: expected exit 0, got $code: $out"
+expect_host_bound "board-view-band.ts: import of a sibling OpenCode file" hooks/opencode/board-view-band.ts "import { tui } from './tui'\n" "board-view.ts may not import hooks/opencode/ files.*board-view-band.ts:1"
+expect_host_bound "board-view-band.ts: fs import" hooks/opencode/board-view-band.ts "import { readFileSync } from 'fs'\n" "a host-bound import.*board-view-band.ts:1"
 rm -rf "$tmp/hooks/process" "$tmp/hooks/opencode"
 # and through scripts/typecheck.sh, on code that type-checks fine with Claude Code's types
 clean

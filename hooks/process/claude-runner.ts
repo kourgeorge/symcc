@@ -48,7 +48,7 @@ export function claudePermissions(a: Pick<HostAgentStart, 'kind' | 'files' | 'to
 
 /**
  * Whether the folder `cwd` uses its SCRATCH_DIR: the project keeps no file there in git (`git ls-files -- .scratch`
- * prints nothing). A git failure counts as kept, so nothing is let through on a guess (like scratchTracked in hooks/app/git).
+ * prints nothing). A git failure counts as kept, so nothing is let through on a guess (like scratchTracked in hooks/app/worktree).
  */
 function scratchInUse(sys: Pick<ProcessSystem, 'run'>, cwd: string | undefined): boolean {
   const r = sys.run(['git', 'ls-files', '--', SCRATCH_DIR], cwd)
