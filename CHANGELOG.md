@@ -2,6 +2,18 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here. Before a release, rerun `bun scripts/site-stats.ts` and commit `docs/data/symcc-stats.json`: it feeds the "Built with symcc" numbers on the website.
 
+## 0.6.2 (2026-11-28)
+
+### Changed
+- The Cursor and VS Code board (PR #3, by Pierre Kour) is drawn with VS Code's own parts and codicons. The lead's chat is in the main area, and thinking and tool runs fold.
+- A worker's or the lead's run cut off by a service error (504, 503, 429, a dropped connection) is sent on after 15 s, 45 s, then 2 min, instead of failing the try.
+- A worker undoes files outside its task before it hands back.
+- Your message can go into the lead's running turn (Enter) or after it (Alt+Enter). Esc or Stop stops the lead.
+- Running rows show Pause and Stop.
+
+### Fixed
+- Starting a task no longer fails when its branch appears at the same moment.
+
 ## 0.6.1 (2026-11-28)
 
 ### Added

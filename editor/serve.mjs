@@ -61985,7 +61985,30 @@ async function removePlain($, id, dir) {
 }
 var worktreeDir = (id) => `${S.root}/${S.N.worktrees}/${id}`;
 var taskBranch = (t) => t.branch ?? S.N.branch(t.id);
-async function prepareWorktree($, t, target, catchUp = false) {
+function prepareWorktree($, t, target, catchUp = false) {
+  const dir = worktreeDir(t.id);
+  const before = preparing.get(dir) ?? Promise.resolve();
+  const run2 = before.then(() => prepareNow($, t, target, catchUp));
+  const tail = run2.then(() => void 0, () => void 0);
+  preparing.set(dir, tail);
+  void tail.then(() => {
+    if (preparing.get(dir) === tail) preparing.delete(dir);
+  });
+  return run2;
+}
+var preparing = /* @__PURE__ */ new Map();
+async function addWorktree($, dir, branch, target, repo) {
+  if (await branchExists($, branch, repo)) {
+    await gitOk($, ["worktree", "add", dir, branch], repo);
+    return false;
+  }
+  const r = await git($, ["worktree", "add", "-b", branch, dir, target], repo);
+  if (r.exitCode === 0) return true;
+  if (!await branchExists($, branch, repo)) throw new Error(`git worktree add -b ${branch} ${dir} ${target}: ${(r.stderr || r.stdout).trim().slice(0, 300)}`);
+  if (!await $.fs.exists(`${dir}/.git`)) await gitOk($, ["worktree", "add", dir, branch], repo);
+  return false;
+}
+async function prepareNow($, t, target, catchUp) {
   const dir = worktreeDir(t.id);
   const repo = repoOf(t);
   const branch = plainTask(t) ? taskBranch(t) : await renameIfOld($, t, repo).catch(() => void 0) ?? taskBranch(t);
@@ -62003,12 +62026,7 @@ async function prepareWorktree($, t, target, catchUp = false) {
       await $.run(["rm", "-rf", dir]);
     }
     await git($, ["worktree", "prune"], repo);
-    const has2 = (await git($, ["rev-parse", "--verify", "-q", `refs/heads/${branch}`], repo)).exitCode === 0;
-    if (has2) await gitOk($, ["worktree", "add", dir, branch], repo);
-    else {
-      await gitOk($, ["worktree", "add", "-b", branch, dir, target], repo);
-      made = true;
-    }
+    made = await addWorktree($, dir, branch, target, repo);
   }
   const kept = catchUp && !made ? await catchUpBranch($, dir, branch, target, t).catch(() => ({ behind: 0 })) : { behind: 0 };
   await copyTypes($, dir, repo).catch(() => false);
