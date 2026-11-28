@@ -19,7 +19,8 @@ import { taskSections, resolveReport, type ReportPick, type SectionLine, type Ta
 import { NAV_KEYS, navHint, TASK_ID_COLOR, sizeSegs, taskPlace, taskStateGroups, type PageFrom } from '../../core/page-header'
 import { pageHeader, type PageHeader } from './page-header'
 import { claudeHost } from '../host'
-import { mergingNow, mergeOutcome } from '../../app/workers'
+import { mergingNow } from '../../app/workers'
+import { mergeOutcome } from '../../app/approve'
 import { boardAnswered } from '../../app/questions'
 import { canRunNow, runNowQuestion, runNowWaits, RUN_NOW_NO, RUN_NOW_YES } from '../../core/run-now'
 

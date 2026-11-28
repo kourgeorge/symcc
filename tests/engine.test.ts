@@ -24,6 +24,7 @@ import * as m_app_symcc from '../hooks/app/symcc'
 import * as m_app_tell from '../hooks/app/tell'
 import * as m_app_tools from '../hooks/app/tools'
 import * as m_app_workers from '../hooks/app/workers'
+import * as m_app_approve from '../hooks/app/approve'
 import * as m_board from '../hooks/board'
 import * as m_core_ask from '../hooks/core/ask'
 import * as m_core_banner from '../hooks/core/banner'
@@ -67,6 +68,7 @@ const SOURCES: [string, Record<string, unknown>][] = [
   ['./app/tell', m_app_tell],
   ['./app/tools', m_app_tools],
   ['./app/workers', m_app_workers],
+  ['./app/approve', m_app_approve],
   ['./board', m_board],
   ['./core/ask', m_core_ask],
   ['./core/banner', m_core_banner],

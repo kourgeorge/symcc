@@ -69,6 +69,10 @@ if [ -f hooks/engine.ts ] && [ -f tests/engine-names.mjs ]; then
   if [ -f tests/engine-drift.sh ]; then
     sh tests/engine-drift.sh "$root" >/dev/null || bad "tests/engine-drift.sh: drift in hooks/engine.ts must only be noted (see above)"
   fi
+  # T-1222: docs/architecture.md's export list must list the same modules and names as hooks/engine.ts
+  if [ -f tests/engine-doc.mjs ] && [ -f docs/architecture.md ]; then
+    "$js" tests/engine-doc.mjs "$root" || bad "docs/architecture.md's export list does not match hooks/engine.ts (see above)"
+  fi
 fi
 
 # T-926: every host.env / $.env name read in hooks/ is written out in the Claude host's envGet

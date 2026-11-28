@@ -8,6 +8,7 @@ import { WORKER_PROMPT, changedSince } from '../hooks/app/workers'
 import { pathsNamed, mayBeStale, changedSinceText, CHANGED_ASK, CHANGED_ASK_NO_TOOLS } from '../hooks/core/changed-since'
 import { withoutSymccTools } from '../hooks/core/prompts'
 import { fakeHost, done } from './fake-host'
+import { gitLines } from '../hooks/app/git'
 
 const ROOT = '/proj'
 const WT = `${ROOT}/.symcc/worktrees/T-1`
@@ -179,4 +180,14 @@ test('T-1063: an errand worker is told to do the work and hand back a short repo
   expect(p).not.toContain('find the answer')
   expect(p).not.toContain('read-only')
   expect(WORKER_PROMPT({ ...errand, kind: 'investigation' }, b, WT)).toContain('find the answer')
+})
+
+test('T-948: gitLines gives the trimmed, non-blank output lines; [] when git fails or cannot run', async () => {
+  setup()
+  const ok = fakeHost({ run: async () => done({ stdout: '  a1 one \n\n b2 two\n' }) }).host
+  expect(await gitLines(ok, ['log'], ROOT)).toEqual(['a1 one', 'b2 two'])
+  const failed = fakeHost({ run: async () => done({ exitCode: 1, stdout: 'a1 one\n' }) }).host
+  expect(await gitLines(failed, ['log'], ROOT)).toEqual([])
+  const broken = fakeHost({ run: async () => { throw new Error('no git') } }).host
+  expect(await gitLines(broken, ['log'], ROOT)).toEqual([])
 })

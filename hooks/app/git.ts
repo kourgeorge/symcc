@@ -20,6 +20,11 @@ export async function gitOk($: Host, args: string[], cwd = S.root, timeoutMs = 1
   if (r.exitCode !== 0) throw new Error(`git ${args.join(' ')}: ${(r.stderr || r.stdout).trim().slice(0, 300)}`)
   return r.stdout.trim()
 }
+/** T-948: git's output lines, trimmed, without blank ones; [] when git fails or can't run. */
+export async function gitLines($: Host, args: string[], cwd = S.root): Promise<string[]> {
+  const r = await git($, args, cwd).catch(() => null)
+  return r && r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trim()).filter(Boolean) : []
+}
 
 /** T-1196: the repo path of project `p` from the board's project table, undefined when `p` is not in it. */
 export const projectPath = (p: unknown): string | undefined => (typeof p === 'string' && Object.prototype.hasOwnProperty.call(S.projects, p) ? S.projects[p] : undefined)
