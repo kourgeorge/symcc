@@ -4,6 +4,7 @@ import type { Host } from '../host'
 import { S } from './state'
 import { loadScouts } from './scouts'
 import { change, load } from './store'
+import { applyProjectSettings } from '../core/settings'
 import { git, repoOf, branchExists } from './git'
 import { worktreeDir, taskBranch } from './worktree'
 
@@ -47,13 +48,32 @@ async function savePath($: Host, b: Board, name: string, rawPath: string, skip: 
   return c
 }
 
-/** Adds project `name` at `rawPath` (nothing else is set); returns the answer text, or an error. */
-export async function addProject($: Host, name: string, rawPath: string): Promise<{ error: string } | { text: string }> {
-  if (!isProjectName(name)) return { error: `Nothing changed: '${String(name).slice(0, 80)}' is not a project name (letters, digits, . _ - only)` }
+/** A folder name as a project name: lowercased, other characters turned into `-`. */
+const cleanName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/^[.]+/, '-')
+
+/** T-1226: adds a repo in one call. `name` null = the folder's name (cleaned); `tests` are its test commands.
+ *  A path that is already a project answers with its name (no error); a taken name is refused with `<parent>-<name>`. */
+export async function addProject($: Host, name: string | null, rawPath: string, tests?: unknown[]): Promise<{ error: string } | { text: string }> {
+  if (name !== null && !isProjectName(name)) return { error: `Nothing changed: '${String(name).slice(0, 80)}' is not a project name (letters, digits, . _ - only)` }
+  const c = await checkRepo($, expand(rawPath))
+  if ('error' in c) return c
   const b = await load($)
-  if (b.projects?.[name]?.path) return { error: `Nothing changed: the project name '${name}' is taken (path ${b.projects[name]?.path})` }
-  const c = await savePath($, b, name, rawPath, null)
-  return 'error' in c ? c : { text: `project ${name} added: ${c.top}` }
+  const same = Object.entries(b.projects ?? {}).find(([, p]) => p.path === c.top)
+  const withTests = (n: string) => (x: Board): [Board, null] => [tests ? applyProjectSettings(x, n, { test_commands: tests }).board : x, null]
+  if (same) {
+    if (tests) await change($, withTests(same[0]))
+    return { text: `${c.top} is already the project ${same[0]}${tests ? '; test commands saved' : ''}` }
+  }
+  const parts = c.top.split('/').filter(Boolean)
+  const base = parts[parts.length - 1] ?? ''
+  const chosen = name ?? cleanName(base)
+  if (!isProjectName(chosen)) return { error: `Nothing changed: no project name can be made from '${base.slice(0, 80)}'; give project` }
+  if (b.projects?.[chosen]?.path) {
+    const alt = parts.length > 1 ? cleanName(`${parts[parts.length - 2]}-${base}`) : ''
+    return { error: `Nothing changed: the project name '${chosen}' is taken (path ${b.projects[chosen]?.path})${alt && isProjectName(alt) ? `; use the name '${alt}' instead` : ''}` }
+  }
+  await change($, x => withTests(chosen)({ ...x, projects: { ...(x.projects ?? {}), [chosen]: { ...(x.projects?.[chosen] ?? {}), path: c.top } } } as Board))
+  return { text: `project ${chosen} added: ${c.top}${tests ? `; tests: ${tests.map(String).join(', ')}` : ''}` }
 }
 
 /** Points project `name` at another repo path, only while no open task of it has a copy or a branch. */
