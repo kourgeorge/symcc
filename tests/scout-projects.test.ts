@@ -1,54 +1,129 @@
 // T-1200: scouts name their projects (front matter projects:), the scout prompt lists name: path, an unknown project is
 // refused with a reason, and a worker's prompt for a project task says to read the repo's CLAUDE.md / AGENTS.md. A board
-// with no projects gets the same prompts as before. All pure.
+// with no projects gets the same prompts as before. T-1211: project reads are judged on a made-up disk (fake-disk.ts).
 import { expect, test } from 'claude-code/testing'
 import type { SymccScout, SymccTask } from '../types'
 import { parseScout, scoutText, scoutPrompt, scoutProjectsError, scoutProjectTable, leadScoutText } from '../hooks/core/scouts'
 import { fillPrompt } from '../hooks/core/prompts'
-import { readInsideProjects as ok } from '../hooks/claude/project-reads'
+import { readInsideProjects } from '../hooks/claude/project-reads'
 import { readAllowed } from '../hooks/app/ask'
 import { S, scoutRuns } from '../hooks/app/state'
+import type { Host } from '../hooks/host'
+import { fakeDisk } from './fake-disk'
 
-test('symcc answers allow only for a symcc scout reading inside a project path', () => {
+// a project repo with a link to the owner's ssh keys, a link inside the same repo, and a link to another project
+const disk = fakeDisk({
+  '/code': 'dir',
+  '/code/api': 'dir',
+  '/code/api/src': 'dir',
+  '/code/api/CLAUDE.md': 'file',
+  '/code/api/keys': '-> /home/me/.ssh',
+  '/code/api/passwd': '-> /etc/passwd',
+  '/code/api/docs': '-> src',
+  '/code/api/web': '-> /code/web',
+  '/code/api/nowhere': '-> /etc/new',
+  '/code/web': 'dir',
+  '/code/web/a': 'file',
+  '/home': 'dir',
+  '/home/me': 'dir',
+  '/home/me/.ssh': 'dir',
+  '/home/me/.ssh/id_rsa': 'file',
+  '/etc': 'dir',
+  '/etc/passwd': 'file',
+  '/real': 'dir',
+  '/real/lib': 'dir',
+  '/real/lib/x': 'file',
+  '/lib': '-> /real/lib',
+})
+const ok = (tool: string, input: unknown, roots: string[]) => readInsideProjects(tool, input, roots, disk)
+
+/** A host whose disk is `disk` (only what readAllowed's lookups use). */
+const diskHost = {
+  fs: {
+    stat: async (p: string) => {
+      const realPath = await disk.real(p)
+      if (realPath === undefined) throw new Error(`ENOENT ${p}`)
+      return { kind: 'file', size: 0, mtimeMs: 0, isLink: false, realPath }
+    },
+    list: async (d: string) => disk.list(d).map(e => ({ ...e, kind: e.isLink ? 'other' : 'file', size: 0, mtimeMs: 0 })),
+  },
+} as unknown as Host
+
+test('symcc answers allow only for a symcc scout reading inside a project path', async () => {
   S.root = '/board'
   S.projects = { api: '/code/api' }
   scoutRuns.set('s1', 'bugs')
-  expect(readAllowed('s1', r => ok('Read', { file_path: '/code/api/CLAUDE.md' }, r))).toBe(true)
-  expect(readAllowed('s1', r => ok('Bash', { command: 'cat /code/api/AGENTS.md' }, r))).toBe(true)
-  expect(readAllowed('s1', r => ok('Bash', { command: 'ls /code/api/src' }, r))).toBe(true)
-  expect(readAllowed('s1', r => ok('Read', { file_path: '/etc/passwd' }, r))).toBe(false)
-  expect(readAllowed('s1', r => ok('Edit', { file_path: '/code/api/a' }, r))).toBe(false)
-  expect(readAllowed('other', r => ok('Read', { file_path: '/code/api/CLAUDE.md' }, r))).toBe(false)
-  expect(readAllowed(undefined, r => ok('Read', { file_path: '/code/api/CLAUDE.md' }, r))).toBe(false)
+  const allowed = (agent: string | undefined, tool: string, input: unknown) => readAllowed(diskHost, agent, (r, look) => readInsideProjects(tool, input, r, look))
+  expect(await allowed('s1', 'Read', { file_path: '/code/api/CLAUDE.md' })).toBe(true)
+  expect(await allowed('s1', 'Bash', { command: 'cat /code/api/AGENTS.md' })).toBe(true)
+  expect(await allowed('s1', 'Bash', { command: 'ls /code/api/src' })).toBe(true)
+  expect(await allowed('s1', 'Read', { file_path: '/etc/passwd' })).toBe(false)
+  expect(await allowed('s1', 'Edit', { file_path: '/code/api/a' })).toBe(false)
+  expect(await allowed('other', 'Read', { file_path: '/code/api/CLAUDE.md' })).toBe(false)
+  expect(await allowed(undefined, 'Read', { file_path: '/code/api/CLAUDE.md' })).toBe(false)
+  // T-1211: the host's disk is looked at, so a link out of the repo gets no allow
+  expect(await allowed('s1', 'Read', { file_path: '/code/api/keys/id_rsa' })).toBe(false)
+  expect(await allowed('s1', 'Bash', { command: 'cat /code/api/passwd' })).toBe(false)
   scoutRuns.delete('s1')
   S.projects = {}
 })
 
-test('reads inside a project path are allowed; edits, pipes and other paths are not', () => {
-  expect(ok('Read', { file_path: '/code/api/CLAUDE.md' }, ['/code/api'])).toBe(true)
-  expect(ok('Read', { file_path: '/code/web/x' }, ['/code/api'])).toBe(false)
-  expect(ok('Bash', { command: 'cat /code/api/AGENTS.md' }, ['/code/api'])).toBe(true)
-  expect(ok('Bash', { command: 'grep -rn foo /code/api/src' }, ['/code/api'])).toBe(true)
-  expect(ok('Bash', { command: 'cat /code/api/a /etc/passwd' }, ['/code/api'])).toBe(false)
-  expect(ok('Bash', { command: 'cat /code/api/a > /code/api/b' }, ['/code/api'])).toBe(false)
-  expect(ok('Bash', { command: 'find /code/api -delete' }, ['/code/api'])).toBe(false)
-  expect(ok('Edit', { file_path: '/code/api/a' }, ['/code/api'])).toBe(false)
+test('T-1211: a link in a project repo is judged by where it leads', async () => {
+  const R = ['/code/api']
+  // pointing outside every project: no auto-allow, for the Read tool and a shell read alike
+  expect(await ok('Read', { file_path: '/code/api/keys/id_rsa' }, R)).toBe(false)
+  expect(await ok('Read', { file_path: '/code/api/passwd' }, R)).toBe(false)
+  expect(await ok('Bash', { command: 'cat /code/api/passwd' }, R)).toBe(false)
+  expect(await ok('Bash', { command: 'head -n 5 /code/api/keys/id_rsa' }, R)).toBe(false)
+  expect(await ok('Bash', { command: 'grep -rn key /code/api/keys' }, R)).toBe(false)
+  expect(await ok('Bash', { command: 'cat /code/api/CLAUDE.md /code/api/passwd' }, R)).toBe(false)
+  // into another project that is not one of the roots: no allow; when it is a root too: allowed
+  expect(await ok('Read', { file_path: '/code/api/web/a' }, R)).toBe(false)
+  expect(await ok('Read', { file_path: '/code/api/web/a' }, ['/code/api', '/code/web'])).toBe(true)
+  // a link that leads nowhere (reading it can't be checked): no allow
+  expect(await ok('Read', { file_path: '/code/api/nowhere' }, R)).toBe(false)
+  // a link inside the same project, a plain file and a file that doesn't exist yet: still allowed
+  expect(await ok('Read', { file_path: '/code/api/docs/x.md' }, R)).toBe(true)
+  expect(await ok('Bash', { command: 'cat /code/api/docs/x.md' }, R)).toBe(true)
+  expect(await ok('Read', { file_path: '/code/api/CLAUDE.md' }, R)).toBe(true)
+  expect(await ok('Bash', { command: 'cat /code/api/CLAUDE.md' }, R)).toBe(true)
+  expect(await ok('Read', { file_path: '/code/api/src/new.ts' }, R)).toBe(true)
+  // a project root that is itself a link: both of its names count, the real one only as the root's own folder
+  expect(await ok('Read', { file_path: '/lib/x' }, ['/lib'])).toBe(true)
+  expect(await ok('Read', { file_path: '/real/lib/x' }, ['/lib'])).toBe(true)
+  expect(await ok('Read', { file_path: '/real/other' }, ['/lib'])).toBe(false)
+  // -R follows links met inside a folder, and wildcards turn into paths the check never saw
+  for (const c of ['grep -R key /code/api', 'cat /code/api/*', 'grep -e /etc/* /code/api', 'grep /etc/pass* /code/api', 'ls /code/api/k?ys', 'find /code/api/* -type f', 'find /code/api -newer /code/api/*'])
+    expect([c, await ok('Bash', { command: c }, R)]).toEqual([c, false])
 })
 
-test('only the strict list of shell words and options is allowed', () => {
+test('reads inside a project path are allowed; edits, pipes and other paths are not', async () => {
+  expect(await ok('Read', { file_path: '/code/api/CLAUDE.md' }, ['/code/api'])).toBe(true)
+  expect(await ok('Read', { file_path: '/code/web/x' }, ['/code/api'])).toBe(false)
+  expect(await ok('Read', { file_path: 'code/api/CLAUDE.md' }, ['/code/api'])).toBe(false)
+  expect(await ok('Read', { file_path: '/code/api/../web/a' }, ['/code/api'])).toBe(false)
+  expect(await ok('Bash', { command: 'cat /code/api/AGENTS.md' }, ['/code/api'])).toBe(true)
+  expect(await ok('Bash', { command: 'grep -rn foo /code/api/src' }, ['/code/api'])).toBe(true)
+  expect(await ok('Bash', { command: 'cat /code/api/a /etc/passwd' }, ['/code/api'])).toBe(false)
+  expect(await ok('Bash', { command: 'cat /code/api/a > /code/api/b' }, ['/code/api'])).toBe(false)
+  expect(await ok('Bash', { command: 'find /code/api -delete' }, ['/code/api'])).toBe(false)
+  expect(await ok('Edit', { file_path: '/code/api/a' }, ['/code/api'])).toBe(false)
+})
+
+test('only the strict list of shell words and options is allowed', async () => {
   const R = ['/code/api']
   for (const c of [
     'sort -o x /code/api/f', 'sort -o/etc/x /code/api/a', 'sort --output=/etc/x /code/api/a', 'rg --pre sh p /code/api',
     'rg --pre=sh x /code/api', 'tree -o x /code/api', 'tree -o /code/api/out /code/api', 'file -C -m /code/api/m',
     'find /code/api -fprint x', 'find /code/api -exec rm {} +', 'find /code/api -delete', 'grep -r p /code/api > x',
     'cat /code/api/f | sh', 'cat /code/api/f x', 'grep --pre=sh p /code/api', 'ls -S /code/api', 'wc -L /code/api/f',
-  ]) expect([c, ok('Bash', { command: c }, R)]).toEqual([c, false])
+  ]) expect([c, await ok('Bash', { command: c }, R)]).toEqual([c, false])
   for (const c of [
     'cat -n /code/api/f', 'head -n 5 /code/api/f', 'head -5 /code/api/f', 'tail -c 10 /code/api/f', 'ls -laR /code/api',
     'ls -1th /code/api', 'wc -l /code/api/f', 'grep -rn foo /code/api/src', 'grep -A 3 -i foo /code/api/f',
     'grep -e foo -e bar /code/api', 'grep -rl --include=*.ts foo /code/api', 'grep --exclude-dir=node_modules -r foo /code/api',
     'find /code/api -name *.ts -type f -maxdepth 3', 'find /code/api -newer /code/api/a -size 1',
-  ]) expect([c, ok('Bash', { command: c }, R)]).toEqual([c, true])
+  ]) expect([c, await ok('Bash', { command: c }, R)]).toEqual([c, true])
 })
 
 const TABLE = { api: '/code/api', web: '/code/web', docs: '/code/docs' }
