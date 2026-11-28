@@ -11,6 +11,7 @@ import { S } from '../hooks/app/state'
 import { COMMANDS, runCommand } from '../hooks/app/symcc'
 import { manual } from '../hooks/app/tools'
 import { liveStatusText, statusHint } from '../hooks/core/live-text'
+import { liveTaskLanes } from '../hooks/core/live'
 import { liveHeading, segText } from '../hooks/core/live-seg'
 import { liveToday } from '../hooks/core/live-today'
 import { textWidth } from '../hooks/core/width'
@@ -152,6 +153,27 @@ test('T-1228: a running task asking for more time is in NEEDS YOU and stays in T
   expect(tasks).toContain('T-1 ')
   expect(tasks).toContain('T-2 Waits on asks')
   expect(tasks).toContain('T-4 Waits on both')
+})
+
+test('T-1228: a waiting task that asks the owner has a lane at a station, with its waiting task under it', () => {
+  const now = Date.now()
+  const iso = new Date(now).toISOString()
+  const run = { started: iso, ended: iso, agents: [] }
+  const asks = [
+    { by: 'worker', text: 'Which one?', options: ['a', 'b'], asked_at: iso },
+    { by: 'worker', text: 'May I edit docs/?', asked_at: iso, files: ['docs/'] },
+    { by: 'symcc', text: 'Merge as is / Keep fixing / Drop', options: ['Merge as is', 'Keep fixing', 'Drop'], asked_at: iso },
+  ]
+  for (const ask of asks) for (const kind of ['change', 'investigation']) {
+    let b = emptyBoard()
+    for (const title of ['Asks', 'Waits on asks']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'], kind, after: title === 'Waits on asks' ? ['T-1'] : [] } as never, iso)[0]
+    const board = { ...b, tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? { status: 'waiting', runs: [run], ask } : {}) }) as BoardTask) } as Board
+    const lane = liveTaskLanes(board as never, now).find(l => l.id === 'T-1')
+    expect(lane !== undefined).toBe(true)
+    expect(lane!.at >= 0).toBe(true)
+    const text = statusSection(liveStatusText(board as never, [], now), 'TASKS').join('\n')
+    expect(text).toContain('T-2 Waits on asks')
+  }
 })
 
 test('T-1228: an asking task still counts as a busy agent, and the idle line says needs you', () => {

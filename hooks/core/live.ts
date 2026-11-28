@@ -328,7 +328,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
   const retries = view.auto_retries ?? DEFAULT_AUTO_RETRIES
   const lanes = view.tasks
     // T-846: a task in review (tests passed, waits for the owner) keeps its lane, sitting at "you"
-    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing' || (t.status === 'review' && !isInvestigation(t)))
+    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing' || (t.status === 'review' && !isInvestigation(t)) || (t.status === 'waiting' && needsYou(t as BoardTask, nowMs)))
     .map((x): LiveLane => {
       const t = x as BoardTask
       const waiting = shownStatus(t, nowMs) !== 'doing'
@@ -338,6 +338,8 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
       const investigation = isInvestigation(t)
       // an approve running on a task with a "you" station: the owner said yes, so it sits at done, never back at tests
       let station: LiveStation = waiting ? 'you' : investigation ? (stage === 'worker' ? 'work' : 'done') : t.status !== 'doing' && stations.includes('you') ? 'done' : stationOf(stage, checker)
+      // an investigation has no "you" station: a waiting one sits at work
+      if (!stations.includes(station)) station = stations[0]!
       const skipped = checker && !investigation && checkSkipped(t, stage, waiting)
       // a docs-only change has no check to sit at: in prep it is already waiting for the queue
       if (skipped && station === 'check') station = 'queue'
