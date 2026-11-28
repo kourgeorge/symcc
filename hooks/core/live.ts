@@ -332,7 +332,9 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
     .map((x): LiveLane => {
       const t = x as BoardTask
       const waiting = shownStatus(t, nowMs) !== 'doing'
-      const stations = laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
+      const base = laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
+      // an investigation that asks the owner something also sits at "you" (its lane needs a station to mark)
+      const stations: LiveStation[] = waiting && isInvestigation(t) ? ['work', 'you', 'done'] : base
       let stage: PhaseStage = taskPhase(t, nowMs).stage ?? 'worker'
       if (stage === 'worker' && handedBack(t)) stage = 'prep'
       const investigation = isInvestigation(t)

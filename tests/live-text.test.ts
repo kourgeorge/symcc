@@ -11,6 +11,7 @@ import { S } from '../hooks/app/state'
 import { COMMANDS, runCommand } from '../hooks/app/symcc'
 import { manual } from '../hooks/app/tools'
 import { liveStatusText, statusHint } from '../hooks/core/live-text'
+import { liveLanes } from '../hooks/core/live'
 import { liveHeading, segText } from '../hooks/core/live-seg'
 import { liveToday } from '../hooks/core/live-today'
 import { textWidth } from '../hooks/core/width'
@@ -250,4 +251,16 @@ test('T-1228: a waiting task with a worker question keeps its lane at the you st
   expect(tasks).toContain('T-1 ')
   expect(tasks).toContain('T-2 Waits on asks')
   expect(tasks).toMatch(/T-4 Waits on both.*\+ also T-[13]/)
+})
+
+test('T-1228: an investigation that asks the owner has a lane with a marked station', () => {
+  const now = Date.now()
+  const iso = new Date(now).toISOString()
+  let b = emptyBoard()
+  b = addTask(b, { origin: { why: 'a test' }, title: 'Look', kind: 'investigation', files: [] } as never, iso)[0]
+  const ask = { by: 'worker', text: 'Which?', options: ['a', 'b'], asked_at: iso }
+  const board = { ...b, tasks: b.tasks.map(t => ({ ...t, status: 'waiting', ask, runs: [{ started: iso, ended: iso, agents: [] }] }) as BoardTask) } as Board
+  const lane = liveLanes(board as never, now).find(l => l.id === 'T-1')!
+  expect(lane.at).toBeGreaterThan(-1)
+  expect(lane.stations[lane.at]).toBe('you')
 })
