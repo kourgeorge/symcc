@@ -12,7 +12,7 @@ import { S } from '../hooks/app/state'
 import { fakeHost, memoryFs } from './fake-host'
 import { todayTasks } from './live-today-fixture'
 import { pastTasks } from './live-past-fixture'
-import { inToday } from './day-clock'
+import { inToday, todayAt } from './day-clock'
 import { searchReads } from '../hooks/app/search-parts'
 
 const now = Date.now()
@@ -133,8 +133,9 @@ test('T-891: publish never reads a parts file (only a typed search does)', async
 test('T-891: ▍Today, yesterday and last 7 days show the same numbers from the slim view as from the whole tasks', () => {
   const view = (tasks: unknown[]) => ({ tasks, working: [], scouts: [], mode: 'auto', test_commands: [] }) as unknown as SymccView
   const lines = (tasks: unknown[], at: number) => liveTodayLines({ tasks: tasks as never[], today_team: undefined }, at, 140, 0).map(segText)
-  // tasks finished just now (updated a minute before the real now): before T-891 they were kept whole
-  const t0 = Date.now()
+  // tasks finished today (all within 200 minutes before noon, so never on yesterday after midnight): before T-891
+  // they were kept whole
+  const t0 = todayAt(12)
   const today = todayTasks(t0)
   const slimToday = slimView(view(today)).tasks
   expect((slimToday as unknown as { timeline: unknown[] }[]).every(t => t.timeline.length === 0)).toBe(true)
