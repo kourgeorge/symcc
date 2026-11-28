@@ -1,6 +1,7 @@
 import { expect } from 'claude-code/testing'
 import type { SymccTask } from '../types'
-import { checkAndMerge, changedFiles, changesText, ownerEdits, alreadyMerged } from '../hooks/app/review'
+import { checkAndMerge, alreadyMerged } from '../hooks/app/review'
+import { changedFiles, changesText, ownerEdits } from '../hooks/app/changes'
 import { isTaskCommit } from '../hooks/core/commits'
 import { notProseText } from '../hooks/core/checker'
 import { YOUR_EDITS } from '../hooks/core/review'

@@ -11,7 +11,7 @@ import { S, useName, toolName, workers, starting, finishing, approving, queuedWo
 import { stopForQuit } from '../../hooks/app/board-mode'
 import { TOOLS } from '../../hooks/app/tools'
 import { ANSWER_COMMAND, answerCommand } from '../../hooks/app/answer'
-import { changedFiles } from '../../hooks/app/review'
+import { changedFiles } from '../../hooks/app/changes'
 import { orgMemNow } from '../../hooks/app/org-mem'
 import { type DiffFile, intoOf, isAnswered, type BoardTask } from '../../hooks/board'
 import { nodeHost } from '../node/host'
