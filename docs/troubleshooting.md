@@ -73,13 +73,13 @@ your-project/
     ├── processes.json    the agent processes running now (Node host only)
     ├── org-mem.md        organizational memory (org-mem): short notes for the agents, kept by the lead (see below)
     └── worktrees/
-        └── T-3/          a worker's private copy of the project (branch symcc/T-3),
+        └── T-3/          a worker's private copy of the project (branch symcc/power-falcon/T-3),
                           kept while it waits for review, removed after it is merged
 ```
 
 Add `.symcc/` to your project's `.gitignore` so the board and the copies stay local.
 
-A task's branch (`symcc/T-3`) and its folder are removed once the task is merged, so old
+A task's branch (`symcc/power-falcon/T-3`) and its folder are removed once the task is merged, so old
 branches don't pile up; the regular check also tidies up any left from before. A branch is
 deleted only when all its work is in the branch the task merged into (even when that branch
 isn't the one you have checked out), and never while a folder still has it checked out, so

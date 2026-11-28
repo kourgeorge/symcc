@@ -1,3 +1,4 @@
+import { renameIfOld } from './board-name'
 import type { SymccTask } from '../../types'
 import { isFinished, liveWorkersFor, type Board, intoOf, find, worktreesToRemove, branchesToDelete, cleanupText, namedReports, latestReportPattern, latestReportOf, SCRATCH_DIR, SCRATCH_EXCLUDE, commitMessage, isSha, isTaskCommit } from '../board'
 import { S, workers, starting, finishing, approving, keptDirty, scratchUse } from './state'
@@ -36,8 +37,9 @@ export const taskBranch = (t: Pick<SymccTask, 'id' | 'branch'>) => t.branch ?? S
  */
 export async function prepareWorktree($: Host, t: SymccTask, target: string, catchUp = false) {
   const dir = worktreeDir(t.id)
-  const branch = taskBranch(t)
   const repo = repoOf(t)
+  // T-1218: an old-style branch (symcc/T-n) the one-time move could not rename is renamed now, at the try start
+  const branch = plainTask(t) ? taskBranch(t) : ((await renameIfOld($, t, repo).catch(() => undefined)) ?? taskBranch(t))
   // T-1182: no project on a workspace board: a plain folder, no git copy and no branch
   if (plainTask(t)) {
     if ((await $.fs.exists(dir)) && !(await $.fs.exists(`${dir}/.git`)) && !(await $.fs.exists(`${dir}/${PLAIN_MARKER}`))) throw new Error(unmarkedText(t.id))

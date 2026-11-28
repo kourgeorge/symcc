@@ -64,7 +64,7 @@ export const boardBrand = (name: string = DEFAULT_NAME, v: string = '') => (v ? 
 /** " · <folder>": the dimmed project part of a title, or '' when the folder is unknown. */
 export const boardWhere = (root: string) => (folderName(root) ? ` · ${folderName(root)}` : '')
 /** The board's title: "<icon> <name> v<version> · <folder>" ("<icon> <name> board · <folder>" with no version when `v` is ''), without " · <folder>" when the folder is unknown. */
-export const boardTitle = (root: string, name: string = DEFAULT_NAME, v: string = '') => `${boardBrand(name, v)}${boardWhere(root)}`
+export const boardTitle = (root: string, name: string = DEFAULT_NAME, v: string = '', friendly: string = '') => `${boardBrand(name, v)}${friendly ? ` · ${friendly}` : ''}${boardWhere(root)}`
 /** The band above the prompt's header start (Claude Code's band and OpenCode's strip): "<icon> <name>", then
  *  " · <folder>" only when the project's folder isn't called the plugin's name too (no "board", no version):
  *  "𝄞 symcc" in the symcc project, "𝄞 symcc · wats" in another one. */
@@ -358,7 +358,7 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 const projectTestsList = (b: { projects?: Record<string, { test_commands?: string[] }> }): string[] =>
   Object.entries(b.projects ?? {}).filter(([, x]) => x?.test_commands?.length).map(([p, x]) => `${p}: ${testsShort(x.test_commands ?? [])}`)
 
-export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived' | 'projects'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; home_branch?: string; branch_line?: string; branch_note?: string; mode?: SymccMode; on_here?: boolean; off_here?: OffHere; /** T-952: the driving window (from lead.json) when this one doesn't drive */ driver?: DriverFacts }
+export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived' | 'projects'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; home_branch?: string; /** T-1218: the board's friendly name, shown after the version */ board_name?: string; branch_line?: string; branch_note?: string; mode?: SymccMode; on_here?: boolean; off_here?: OffHere; /** T-952: the driving window (from lead.json) when this one doesn't drive */ driver?: DriverFacts }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
 export function statusCounts(tasks: (Pick<SymccTask, 'status'> & Pick<BoardTask, 'live'>)[], order: SymccStatus[], nowMs: number = Date.now()): string[] {
@@ -425,6 +425,7 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     ...(v
       ? [{ text: namesFor(name).name, tone: 'accent' as const, bold: true }, { text: versionMark(v), tone: 'plain' as const }]
       : [{ text: namesFor(name).boardName, tone: 'accent' as const, bold: true }]),
+    ...(b.board_name ? [{ text: ` · ${b.board_name}`, tone: 'plain' as const }] : []),
     ...(folder ? [{ text: ` · ${folder}`, tone: 'plain' as const }] : []),
     ...(off.length ? [sep, ...off] : []),
   ]

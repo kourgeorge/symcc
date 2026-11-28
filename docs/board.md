@@ -4,6 +4,12 @@ The board shows every task, what it is doing now and what it did. This page cove
 
 ## Live status: seeing the board
 
+- **The board's name.** Every board gets a friendly random name, two words like `power-falcon`, picked
+  once and kept in `board.json` (`name`). The banner's first line shows it next to the folder
+  (`𝄞 symcc v0.6.0 · power-falcon · ~/repositories/symcc`), in the terminal, VS Code and OpenCode. Its task
+  branches are `symcc/power-falcon/T-n`, so two boards that share one repo never touch each other's branches. There is
+  no setting to rename it. A board from before names gets one the first time it loads, and its open
+  `symcc/T-n` branches are renamed then (one that git refuses is renamed when its task starts a try).
 - **The panel** opens by itself when a session starts (on a wide enough terminal; turn it
   off with the `open_on_start` setting). It shows a small banner (folder, branch, test
   command, limits, counts) and the task list. The workers and scouts are not in the banner;
@@ -294,7 +300,7 @@ only; the Organizational memory page has the same header shape, see below):
 2. **The title**: the id, always in the board's orange whatever the status, then the title in
    bold. A long title wraps, indented under itself. Under it (T-1080) a dim line says how big the
    change is, from git: `merged c2fb0c16 · 25 files · +539 −3,722` once merged, and
-   `branch symcc/T-1063 · 25 files · +539 −3,722` before (a task in review shows it, so you see the
+   `branch symcc/power-falcon/T-1063 · 25 files · +539 −3,722` before (a task in review shows it, so you see the
    size before you approve). It is saved when a try hands back and again at the merge. An
    investigation or an errand, with no commits, shows no such line.
 3. **The state**: the status mark and word in its color, and for a running task its step and
@@ -400,7 +406,7 @@ Under **▍Details**, a task that has a branch shows it against the branch it me
 same look as the Live tab's `BRANCHES` section:
 
 ```
-▍Branch  symcc/T-733 · 3 commits · 10 behind main
+▍Branch  symcc/power-falcon/T-733 · 3 commits · 10 behind main
  main   ●─────●────────●──●──●────────●──●──●──●──●──●──●   447d3c8 · 2 min ago
         │ 14:42                 ⇣ caught up 15:50
         ╰──●────────●───────────┴──●

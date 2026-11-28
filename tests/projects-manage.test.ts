@@ -68,7 +68,6 @@ test('each add check refuses with a plain reason; a good add stores the real pat
   expect(await err({ project: 'api', path: '/code/notrepo' })).toContain('not a git repo')
   expect(await err({ project: 'api', path: '/code/api/src' })).toContain("not the repo's top folder")
   expect(await err({ project: 'api', path: '/code/empty' })).toContain('no commits')
-  expect(await err({ project: 'api', path: '/code/own' })).toContain('board of its own')
   expect(await err({ project: 'api', path: '/code/.symcc/x' })).toContain('inside a .symcc folder')
   expect(await err({ project: 'a/b', path: '/code/api' })).toContain('not a project name')
   expect(await err({ project: 'api', path: '/code/api', test_commands: ['x'] })).toContain('no other setting')
@@ -218,4 +217,11 @@ test('T-1212: a project with test commands but no path can be given a path', asy
   expect(r.error).toBe(undefined)
   expect((await load(w.host)).projects).toEqual({ api: { test_commands: ['pytest'], path: '/real/api' } })
   expect(S.projects.api).toBe('/real/api')
+})
+
+test('T-1218: a repo with a board of its own can be a project now', async () => {
+  const { w } = await world({ '/code/own': { top: '/code/own' } }, ['/code/own/.symcc/board.json'])
+  const r = await set(w, { project: 'own', path: '/code/own' })
+  expect(r.error).toBe(undefined)
+  expect(S.projects.own).toBe('/code/own')
 })

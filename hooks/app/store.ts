@@ -6,6 +6,7 @@ import { tellLead } from './tell'
 import { migrateIfOld, newerDataText } from './migrate-data'
 import { S, onHere, sizeNotes } from './state'
 import { timed } from './slow-log'
+import { newFriendlyName, useFriendly } from './board-name'
 import { boardEvents, withStageTimeline } from '../core/events'
 import { emitTaskEvents, logTaskEvents, type TaskEvent } from './events'
 import type { Host } from '../host'
@@ -338,6 +339,9 @@ export async function load(host: Host): Promise<Board> {
     const b = emptyBoard()
     S.enabledNow = onHere(b)
     S.projects = {}
+    // T-1218: a new board gets its friendly name now (kept in this window until the first save writes it)
+    if (!S.N.friendly) useFriendly(await newFriendlyName(host).catch(() => ''))
+    if (S.N.friendly) b.name = S.N.friendly
     return b
   }
   const { text, read: r, missing, missingFiles } = await readJoined(host)
@@ -355,6 +359,7 @@ export async function load(host: Host): Promise<Board> {
     await keepCopy(host, text, 'before-fix', c => `${S.N.boardFile}: ${fixText(r.skipped, fixed)}${c ? `. The file as it was is kept in ${c}` : ''}.`)
   S.enabledNow = onHere(r.board)
   S.projects = projectPaths(r.board)
+  useFriendly(r.board.name ?? '')
   return r.board
 }
 
