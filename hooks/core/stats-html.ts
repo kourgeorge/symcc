@@ -4,7 +4,8 @@
 
 import type { SymccTokens } from '../../types'
 import { fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, billedTokens, tokenCount } from './runs'
-import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, durOr, failedCountsNote, failedShown, pctText, rangeText, scoutResultsText, statsTitle, tokOr, unlinkedText, unreadText, type Spread, type SpreadRow, type StatsData, type StatsGroup, type StatsTop } from './stats'
+import { BILLED_FOOTNOTE, STAGES_NOTE, countingText, durOr, failedShown, pctText, rangeText, scoutResultsText, statsTitle, tokOr, unlinkedText, type Spread, type SpreadRow, type StatsData, type StatsGroup, type StatsTop } from './stats'
+import { failedCountsNote, unreadText } from './stats-text'
 import { plural } from './text'
 
 /** `s` safe inside HTML text and attribute values. */
