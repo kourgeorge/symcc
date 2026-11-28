@@ -198,3 +198,9 @@ test('the worker prompt for a project task says to read the repo CLAUDE.md and A
   const plain = task()
   expect(fillPrompt('change', values(plain), plain)).not.toContain('AGENTS.md')
 })
+
+test('T-1219: the Scouts list shows ", projects api, web" after the interval only when the scout names projects', () => {
+  const rows = scoutListRows([{ name: 'a', every_minutes: 30, last_run: null, running: false, projects: ['api', 'web'] } as SymccScout, { name: 'b', every_minutes: 30, last_run: null, running: false }], 0, 200)
+  expect(rows[0]!.every).toContain('every 30 min, projects api, web')
+  expect(rows[1]!.every).not.toContain('projects')
+})

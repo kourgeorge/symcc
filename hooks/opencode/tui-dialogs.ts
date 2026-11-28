@@ -49,6 +49,7 @@ export function makeDialogs(ctx: TuiContext, s: TuiState) {
       options: [
         { title: `How often: ${everyText(sc.every_minutes)}`, value: 'every' },
         { title: `Model: ${sc.model || "the session's model"}`, value: 'model' },
+        { title: `Projects: ${(sc as { projects?: string[] }).projects?.join(', ') || 'every project'}`, value: 'projects' },
         { title: `Findings: ${sc.findings ?? 'default (the board setting)'}`, value: 'findings' },
         { title: 'Instructions', value: 'prompt' },
       ],
@@ -64,7 +65,9 @@ export function makeDialogs(ctx: TuiContext, s: TuiState) {
         ? { title: `${sc.name}: runs every how many minutes (now ${sc.every_minutes})`, description: '0 = only on demand', placeholder: 'minutes: a whole number, 0 or more' }
         : field === 'model'
           ? { title: `${sc.name}: model (now ${sc.model || "the session's model"})`, description: "none = the session's model", placeholder: 'a model name, or none' }
-          : { title: `${sc.name}: new instructions`, description: (sc.prompt ?? '').split('\n').find(l => l.trim())?.trim() ?? '', placeholder: 'what to look for, in plain words (longer ones: edit its file)' }
+          : field === 'projects'
+            ? { title: `${sc.name}: projects (now ${(sc as { projects?: string[] }).projects?.join(', ') || 'none named'})`, description: 'names separated by commas; none = every project', placeholder: 'e.g. api, web, or none' }
+            : { title: `${sc.name}: new instructions`, description: (sc.prompt ?? '').split('\n').find(l => l.trim())?.trim() ?? '', placeholder: 'what to look for, in plain words (longer ones: edit its file)' }
     const value = (await ctx.ui.dialog.prompt(ask))?.trim()
     if (!value) return
     if (field === 'every' && everyMinutesOf(value) === null) return say('every must be a whole number of minutes: 0 for only on demand, or 1 or more', 'error')
