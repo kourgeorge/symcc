@@ -7,7 +7,8 @@ import { change, load } from '../hooks/app/store'
 import { saveSettings } from '../hooks/app/tools'
 import { addProject } from '../hooks/app/projects'
 import { readBranches } from '../hooks/app/branches'
-import { S } from '../hooks/app/state'
+import { S, leadQueue } from '../hooks/app/state'
+import { loadScouts } from '../hooks/app/scouts'
 import { addTask, emptyBoard, settingWithProjects } from '../hooks/board'
 import { liveBranchBlocks, segText, LIVE_INDENT } from '../hooks/core/live'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -105,6 +106,26 @@ test('change and remove are refused while open tasks use the project; they work 
   expect((await set(w, { project: 'api', remove: true })).error).toBe(undefined)
   expect((await load(w.host)).projects).toBe(undefined)
   expect((await set(w, { project: 'api', remove: true })).error).toContain('not a project')
+})
+
+// T-1214: a scout naming an unknown project gets a warning and the lead hears once; removing a project a scout names is refused
+test('a scout naming an unknown project warns and tells the lead once; remove is refused while a scout names the project', async () => {
+  const { w, files } = await world({ '/code/api': { top: '/code/api' } })
+  await set(w, { project: 'api', path: '/code/api' })
+  const file = `${S.root}/${S.N.scouts}/bugs.md`
+  files.set(file, '---\nevery_minutes: 30\nprojects: api, nope\n---\nLook.\n')
+  files.set(`${S.root}/${S.N.scouts}`, '')
+  w.host.fs.list = async () => [...files.keys()].filter(f => f.startsWith(`${S.root}/${S.N.scouts}/`)).map(f => ({ name: f.split('/').pop()!, kind: 'file' as const, size: 0, mtimeMs: 0, isLink: false }))
+  leadQueue.splice(0)
+  const first = await loadScouts(w.host)
+  expect(first[0]!.warning).toContain('unknown project "nope"')
+  await loadScouts(w.host)
+  expect(leadQueue.filter(t => t.includes('bugs')).length).toBe(1)
+  files.set(file, '---\nevery_minutes: 30\nprojects: api\n---\nLook.\n')
+  const refused = await set(w, { project: 'api', remove: true })
+  expect(refused.error ?? '').toContain('scout bugs still names project api')
+  files.set(file, '---\nevery_minutes: 30\n---\nLook.\n')
+  expect((await set(w, { project: 'api', remove: true })).error).toBe(undefined)
 })
 
 test('the Settings value lists each project as name -> path with its test commands', () => {
