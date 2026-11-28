@@ -3,7 +3,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import type { SymccTask } from '../types'
-import { mergedChanges, mergedDiff, DIFF_GONE } from '../hooks/app/review'
+import { mergedChanges, mergedDiff, DIFF_GONE } from '../hooks/app/changes'
 import { taskSections } from '../hooks/core/task-sections'
 import { taskActions } from '../hooks/core/panel'
 import { hasMergedChanges, type BoardTask } from '../hooks/core/board-file'
