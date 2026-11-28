@@ -4,7 +4,8 @@ import { archiveOld } from './archive'
 import { checkHealth } from './health'
 import { repoOf, plainTask, workspaceNow, projectNames, projectGone, gitReady, taskGitReady, gitStateOfTask, projectNotes, branchExists, homeBranch, prepareWorktree, removeWorktree, git, worktreeDir, cleanupMerged, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './git'
 import { publish, drivesHere, drivenElsewhere, readLeadText } from './lead'
-import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, ownerEdits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
+import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, alreadyMerged, AGAIN_MAX, RELOAD_AGAIN, againsThisTry, noteAgain } from './review'
+import { ownerEdits } from './changes'
 import type { TurnLimit } from './merge-line'
 import { timedOutRetryNote } from '../core/test-timeout'
 import { mayBeStale, changedSincePaths, pathsNamed, CHANGED_SINCE_MAX, type ChangedSince } from '../core/changed-since'
@@ -12,7 +13,7 @@ import { logNeedsFiles } from './evidence'
 import { loadRoles } from './roles'
 import { runChecker, checkerName, cleanFolder, STOPPED_AGAIN } from './checker'
 import { loadKinds } from './kinds'
-import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, movedAway, isOwnAgent, rememberOnBoard, halt, checkerRuns, adoptedCheckers, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
+import { S, onHere, workers, starting, queuedWorkers, type Worker, notReady, checkerNotReady, heard, finishing, approving, stopped, movedAway, isOwnAgent, rememberOnBoard, halt, checkerRuns, adoptedCheckers, hasWorker, busyHere, meanwhile, reminded, timers, haltedAnywhere, movedRefused } from './state'
 import { type Host, type HostAgent, type HostAgentStarted, ENDED_STATUSES, agentState, notReadyYet } from '../host'
 import { startAgent, startCancelled, claimNote, rewakeStarts } from './starts'
 import { load, change, now, path, safeWrite, aboutToWait, holdPublish } from './store'
@@ -127,7 +128,7 @@ export async function pump(host: Host) {
   const queued: Promise<void>[] = []
   for (const t of ready(b)) {
     if (workers.size + starting.size >= b.max_parallel) break
-    if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some(w => w.task === t.id)) continue
+    if (busyHere(t.id)) continue
     if (projectGone(t)) continue // an unknown project can't start
     const repo = repoOf(t)
     // T-1182: a task with no project on a workspace board needs no repo
@@ -178,7 +179,7 @@ export async function startWorker(host: Host, id: string) {
  */
 async function queueWorker(host: Host, id: string): Promise<{ started: Promise<void> } | null> {
   // Not while its last try is still being checked (it was resumed or retried meanwhile): it starts when the check ends.
-  if (starting.has(id) || checkingNow(id) || [...workers.values()].some(w => w.task === id)) return null
+  if (busyHere(id)) return null
   starting.add(id)
   onPurpose.delete(id) // a new try: an old stop on purpose is over
   let queued = false
@@ -744,7 +745,7 @@ export async function lateHandBack(host: Host, agentId: string): Promise<boolean
   const t = b?.tasks.find(x => workerIdOf(x) === agentId)
   // A task whose worker already handed back (handedBack) is being, or was, checked: not taken again.
   if (!t || t.status !== 'doing' || t.live?.session !== S.me || finishing.has(t.id) || starting.has(t.id) || handedBack(t)) return false
-  if ([...workers.values()].some(w => w.task === t.id)) return false
+  if (hasWorker(t.id)) return false
   // T-743: the time limit counts from this worker's own start, not the first start of a try that went on after a reopen
   workers.set(agentId, { task: t.id, worktree: worktreeDir(t.id), branch: taskBranch(t), since: workerSince(t.runs?.at(-1)) ?? Date.now() })
   return true
@@ -1137,7 +1138,7 @@ export async function restartCheckers(host: Host, agents: HostAgent[]) {
   const adoptedIds = new Set([...adoptedCheckers.values()].map(v => v.id))
   const running = new Set([...checkerRuns].filter(([id]) => !adoptedIds.has(id)).map(([, r]) => r.task))
   const checkerAlive = (id: string) => agents.some(a => a.name === checkerName(S.N.name, id) && !stopped.has(a.id) && !ENDED_STATUSES.includes(a.status))
-  const lost = b.tasks.filter(t => t.status === 'doing' && t.live?.phase === 'checker' && handedBack(t) && ownedHere(t, S.me, live) && !finishing.has(t.id) && !approving.has(t.id) && !starting.has(t.id) && !running.has(t.id) && !onPurpose.has(t.id) && ![...workers.values()].some(w => w.task === t.id) && (!checkerAlive(t.id) || adoptedCheckers.has(t.id)))
+  const lost = b.tasks.filter(t => t.status === 'doing' && t.live?.phase === 'checker' && handedBack(t) && ownedHere(t, S.me, live) && !busyHere(t.id) && !running.has(t.id) && !onPurpose.has(t.id) && (!checkerAlive(t.id) || adoptedCheckers.has(t.id)))
   for (const t of lost) void checkAgain(host, t).catch(() => undefined)
 }
 
@@ -1924,7 +1925,7 @@ export async function sendBackIdle(host: Host, agents: HostAgent[]) {
     tasks: x.tasks.map(t => {
       // Re-read here: left as it is if its status, agent or run changed since it was picked.
       const was = idle.find(i => i.id === t.id)
-      if (!was || !free(t) || !sameTry(t, was) || [...workers.values()].some(w => w.task === t.id)) return t
+      if (!was || !free(t) || !sameTry(t, was) || hasWorker(t.id)) return t
       // T-428: its worker was only queued and the queue lost it (a reload): it never started, so no try is counted,
       // no "restarted" line is written and the lead is not told; the next pump queues it again on the same try number
       if (queuedNeverStarted(t)) return unclaimed(t, now())

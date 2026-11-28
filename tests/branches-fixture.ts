@@ -1,7 +1,7 @@
 // T-727: a sample board for the Live tab's Branches section, the same in the core, terminal, VS Code and OpenCode
 // tests: main's 9 latest commits (c1 newest), T-721 in doing 3 ahead / 1 behind (forked at c2), T-725 in review 0 ahead
 // / 4 behind (forked at c5), T-726 next up in todo with no branch yet, and T-724 merged (at c1) 3 minutes before `now`.
-import type { BranchFacts } from '../hooks/core/live'
+import type { BranchFacts } from '../hooks/core/live-branches'
 import type { TaskBranchFacts } from '../hooks/core/task-branch'
 
 /** A commit's full sha: "c1" → "c1c1c1…" (40 characters). */

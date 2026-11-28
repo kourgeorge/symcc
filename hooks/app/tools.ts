@@ -8,7 +8,7 @@ import { plainTask, changeNeedsProject, noProjectText, repoOf, taskBranch, taskG
 import { addProject, changeProjectPath, removeProject } from './projects'
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
-import { S, heard, workers, starting, toolName } from './state'
+import { S, heard, workers, starting, toolName, hasWorker } from './state'
 import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { statsHtml, openCommands } from '../core/stats-html'
@@ -29,6 +29,7 @@ import { publish, enableHere, statusView } from './lead'
 import { orgMemTool, orgMemNow } from './org-mem'
 import { tasksListText } from '../core/task-list'
 import { clean } from '../core/text'
+import { folderName } from '../core/banner'
 import { liveStatusText } from '../core/live-text'
 import { chatTasksText, chatStatusText, chatTaskText } from '../core/chat-text'
 import { ORG_MEM_MAX_LINES, TOPIC_MAX_CHARS } from '../core/org-mem'
@@ -555,8 +556,7 @@ export async function statsText($: Host, args: string, full?: boolean, readOnly 
   if (!words.html) return statsReport(input)
   // "html" (T-674): the same figures (statsData) as a web page, written to .<name>/stats.html and opened in the browser
   const out = path(`${S.N.dir}/stats.html`)
-  const project = S.root.split(/[\\/]/).filter(Boolean).pop() ?? S.root
-  await $.fs.write(out, statsHtml(statsData(input), project))
+  await $.fs.write(out, statsHtml(statsData(input), folderName(S.root)))
   const opened = await openInBrowser($, out)
   return `${S.N.name} stats written to ${out}${opened ? ' (opened in your browser)' : ' (open it in your browser)'}`
 }
@@ -624,11 +624,17 @@ function tellOnce(id: string, answer: string, tell: () => void) {
   if (!boardAnswered(id, answer, tell)) tell()
 }
 
+/** Every field the change tool takes besides task and stage (the order is the one alreadyAnsweredText names them in). */
+const CHANGE_FIELDS = ['title', 'details', 'add_details', 'answer', 'files', 'after', 'priority', 'needs_review', 'backlog', 'role', 'kind', 'merge_into', 'project']
+
+/** True when the change call `a` gives no change field outside `allowed`. */
+const givenOnly = (a: In, allowed: string[]) => CHANGE_FIELDS.every(k => allowed.includes(k) || a[k] === undefined)
+
 /** The change tool's reply when `answer` comes for a task that is not waiting (any) more: nothing is changed. */
 function alreadyAnsweredText(t: SymccTask, a: In): string {
   const earlier = [...t.timeline].reverse().find(l => l.text.startsWith('the owner answered: '))?.text
   const quoted = earlier ? `, ${earlier}` : ''
-  const others = ['title', 'details', 'add_details', 'files', 'after', 'priority', 'needs_review', 'backlog', 'role', 'kind', 'merge_into', 'project'].filter(k => a[k] !== undefined)
+  const others = CHANGE_FIELDS.filter(k => k !== 'answer' && a[k] !== undefined)
   const also = others.length ? ` The other changes (${others.join(', ')}) were not made either; send them again without answer.` : ''
   return `${t.id} was already answered (it is ${STATUS_WORD[t.status]} now${quoted}); nothing changed. To add something, use add_details.${also}`
 }
@@ -682,8 +688,7 @@ export async function viewText($: Host, b: Awaited<ReturnType<typeof load>>, vie
 /** T-1103: writes the board as one page (.<name>/board.html); answers its full path and one line on what is in it. `open` also opens it in the browser. */
 export async function boardHtmlText($: Host, b: Awaited<ReturnType<typeof load>>, open = false): Promise<string> {
   const out = path(`${S.N.dir}/board.html`)
-  const project = S.root.split(/[\\/]/).filter(Boolean).pop() ?? S.root
-  await $.fs.write(out, boardHtml(b, project, Date.now()))
+  await $.fs.write(out, boardHtml(b, folderName(S.root), Date.now()))
   const opened = open ? await openInBrowser($, out) : false
   return `${out}\nThe board as one page: Needs you (questions with their choices, reviews, failed), Running, To do, Done today, and the counts.${open ? (opened ? ' (opened in your browser)' : ' (open it in your browser)') : ''}`
 }
@@ -716,7 +721,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (!t) throw new Error(`${id} is not on the board or in the archive`)
       const archived = !find(b, id)
       if (S.chat) return archived ? chatArchivedTaskText(t, page) : chatTaskText(t, await latestReport($, t), Date.now(), page)
-      return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport($, t), b.archived_done)}`
+      return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, hasWorker(t.id), b.tasks, await latestReport($, t), b.archived_done)}`
     }
     case 'add': {
       priorityIn(a)
@@ -783,8 +788,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       priorityIn(a)
       if (t.status === 'done') throw new Error(`${t.id} is done; add a new task instead`)
       if (a.stage !== undefined) {
-        const own = ['title', 'details', 'add_details', 'answer', 'files', 'after', 'priority', 'role', 'kind', 'needs_review', 'backlog', 'merge_into', 'project']
-        const extra = Object.keys(a).filter(k => own.includes(k) && a[k] !== undefined && a[k] !== null)
+        const extra = Object.keys(a).filter(k => CHANGE_FIELDS.includes(k) && a[k] !== undefined && a[k] !== null)
         if (extra.length) throw new Error(`stage moves a task on its own; nothing was saved. Send ${extra.join(', ')} in a separate change call`)
         return moveStage($, t.id, String(a.stage))
       }
@@ -890,29 +894,25 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
         return `${t.id} ${note ? 'note added' : 'updated'} (still in the backlog)`
       }
       // A change that sets only the project keeps the status (the task has no copy or branch yet, see above, so no worker either).
-      if (project !== undefined && ['title', 'details', 'add_details', 'files', 'after', 'priority', 'needs_review', 'role', 'kind', 'answer', 'merge_into'].every(k => a[k] === undefined)) {
-        const p = fields()
-        await change($, x => {
-          const lines = leadLines(changeLines(t, p, false))
-          return patchTask(x, t.id, { ...p, ...(lines.length ? { timeline: withTimeline(find(x, t.id)?.timeline ?? t.timeline, now(), ...lines) } : {}) }, now(), S.N.dir)
-        })
+      // Saves the change with no restart line, but a changed after-list still gets its "waits on changed" line (the health check counts them).
+      const saveKeepingWorker = (p: Partial<BoardTask>) => change($, x => {
+        const lines = leadLines(changeLines(t, p, false))
+        return patchTask(x, t.id, { ...p, ...(lines.length ? { timeline: withTimeline(find(x, t.id)?.timeline ?? t.timeline, now(), ...lines) } : {}) }, now(), S.N.dir)
+      })
+      if (project !== undefined && givenOnly(a, ['project', 'backlog'])) {
+        await saveKeepingWorker(fields())
         return `${t.id} updated (its worker keeps running if it has one; its status stays ${t.status})`
       }
-      const flagOnly = typeof a.needs_review === 'boolean' && ['title', 'details', 'add_details', 'files', 'after', 'priority', 'role', 'kind', 'answer', 'merge_into', 'project'].every(k => a[k] === undefined)
+      const flagOnly = typeof a.needs_review === 'boolean' && givenOnly(a, ['needs_review', 'backlog'])
       if (flagOnly) {
         await change($, x => patchTask(x, t.id, { needs_review: a.needs_review as boolean }, now(), S.N.dir))
         return `${t.id} ${a.needs_review ? 'will wait for review before merging' : 'no longer needs its own review'}`
       }
       // A running task whose change touches only its priority, after-list or needs_review keeps its worker:
       // the new values are saved and count from its next try.
-      const queueOnly = t.status === 'doing' && ['priority', 'after', 'needs_review'].some(k => a[k] !== undefined) && ['title', 'details', 'add_details', 'files', 'role', 'kind', 'answer', 'merge_into', 'project'].every(k => a[k] === undefined)
+      const queueOnly = t.status === 'doing' && ['priority', 'after', 'needs_review'].some(k => a[k] !== undefined) && givenOnly(a, ['priority', 'after', 'needs_review', 'backlog'])
       if (queueOnly) {
-        const p = fields()
-        // No restart line, but a changed after-list still gets its "waits on changed" line (the health check counts them).
-        await change($, x => {
-          const lines = leadLines(changeLines(t, p, false))
-          return patchTask(x, t.id, { ...p, ...(lines.length ? { timeline: withTimeline(find(x, t.id)?.timeline ?? t.timeline, now(), ...lines) } : {}) }, now(), S.N.dir)
-        })
+        await saveKeepingWorker(fields())
         return `${t.id} updated (its worker keeps running; this counts from its next try)`
       }
       const wasDoing = t.status === 'doing'
@@ -1095,7 +1095,7 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   // its start failed outright (startNow failed the task): say so, not "it starts when there is room"
   if (after?.status === 'failed') return `${t.id} failed: ${after.note ?? "couldn't start"}`
   // another start (e.g. a second Run now at the same moment) has it: it is starting or running
-  const started = claimed || after?.status === 'doing' || starting.has(t.id) || [...workers.values()].some(w => w.task === t.id)
+  const started = claimed || after?.status === 'doing' || starting.has(t.id) || hasWorker(t.id)
   if (!started) return `${t.id} is to do now but couldn't start at once${paused ? ' (the board is paused)' : ''}; ${paused ? `${S.N.name} run ${t.id} again tries once more` : 'it starts when there is room'}`
   const shares = runNowShares((await load($)).tasks, t)
   return [

@@ -6,7 +6,8 @@ import { type RoleDef, type KindDef, type SettingName, type GitState, type Board
 import { namesFor, DEFAULT_NAME, cleanName } from '../name'
 import type { DriverFacts } from '../core/driver-notice'
 import type { Players } from './voice'
-import type { BranchFacts, TodayTeam } from '../core/live'
+import type { TodayTeam } from '../core/live-today'
+import type { BranchFacts } from '../core/live-branches'
 import type { TaskBranchFacts } from '../core/task-branch'
 import { type Host, type HostWords, type PanelValues, SYMCC_WORDS, manifestVersion, wordsOf } from '../host'
 
@@ -381,4 +382,8 @@ export const changesCache = new Map<string, Promise<string>>()
 
 /** tasks being approved (checked and merged) now in this session, so a second approve waits its turn */
 export const approving = new Set<string>()
+/** a worker of this session works on the task now */
+export const hasWorker = (id: string) => [...workers.values()].some(w => w.task === id)
+/** this session starts, works on, checks or approves the task now */
+export const busyHere = (id: string) => starting.has(id) || finishing.has(id) || approving.has(id) || hasWorker(id)
 export const tmpWarned = new Set<string>()

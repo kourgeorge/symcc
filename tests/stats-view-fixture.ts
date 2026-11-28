@@ -2,7 +2,7 @@
 // origins with scouts, the whole team and this session's $), for the drawn stats in Claude Code's chat.
 import type { SymccRun, SymccTask } from '../types'
 import type { StatsInput } from '../hooks/core/stats'
-import { addScoutRun, parseScoutUsage } from '../hooks/core/stats'
+import { addScoutRun, parseScoutUsage } from '../hooks/core/scout-usage'
 import { oldTimelineFacts } from '../hooks/core/old-data'
 
 /** The time the fixture is read at: dates are relative to it (one day, one hour ago ...). */

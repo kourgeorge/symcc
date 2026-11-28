@@ -1,6 +1,6 @@
 import { settingShown, testMinutesOf, openQuestions, liveWorkersFor, whoDrives, drivesAfter, driveAsk, handRequest, noHandRequest, handedText, handedOff, HANDOVER_NOTE, putTask, leadText, beatText, driverTimes, carriedText, resetDoing, find, parseLead, relabelSession, openOnStart, type Board, gitNote, modeOf, notifyOf, notifyChoices, symccOn, statusLine, statusRoom, offHereAnswer, modeText, offStatusLine, driveNoticeParts, inPlan, liveDriver, backToTodo, restartsOf, type TodayTeam, dayOf, localOffset, tokenCount, safeScoutFile, parseScoutRuns, scoutRunsFile } from '../board'
 import { homeBranch, noProjectText, openProjects, projectNotes, projectPath } from './git'
-import { S, onHere, workers, queuedWorkers, scoutRuns, type PaneView, scoutState, updateView, fitView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
+import { S, onHere, workers, queuedWorkers, hasWorker, scoutRuns, type PaneView, scoutState, updateView, fitView, sizeNotes, MOVED_WHY, TAKEN_WHY } from './state'
 import { type Host, agentState } from '../host'
 import { timed } from './slow-log'
 import { path, locked, change, now, load, safeWrite, boardMtime } from './store'
@@ -105,7 +105,7 @@ async function claimLeadNow(host: Host, fresh: boolean): Promise<boolean> {
     // recorded go back: a task whose worker runs in the live driver keeps it.
     if (await host.fs.exists(path(S.N.boardFile)))
       await change(host, b => {
-        const keep = b.tasks.filter(t => liveWorkersFor(t, alive.map(agentState), S.N.name).length > 0 || [...workers.values()].some(w => w.task === t.id) || queuedWorkers.has(t.id)).map(t => t.id)
+        const keep = b.tasks.filter(t => liveWorkersFor(t, alive.map(agentState), S.N.name).length > 0 || hasWorker(t.id) || queuedWorkers.has(t.id)).map(t => t.id)
         // T-428: a task whose worker was only queued when the plugin reloaded (the reload emptied the queue) never
         // started: its claim is undone with no try counted and no "restarted" line, and the next pump queues it again
         const unqueued = unclaimQueued(b, S.me, liveDriver(leadBefore, Date.now()), now(), keep)

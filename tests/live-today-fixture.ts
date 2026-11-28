@@ -1,6 +1,6 @@
 // T-769: a board with three tasks merged today and the lead's, scouts' and cost figures, for the ▍Today tests
 // (tests/live-today.test.tsx and the OpenCode one in hooks/opencode/tests).
-import type { TodayTeam } from '../hooks/core/live'
+import type { TodayTeam } from '../hooks/core/live-today'
 import { dayOf } from '../hooks/core/days'
 
 /**

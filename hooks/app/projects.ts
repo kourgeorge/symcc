@@ -33,34 +33,43 @@ async function checkRepo($: Host, path: string): Promise<{ error: string } | { t
   return { top: real }
 }
 
+/** Checks `rawPath` (a repo's top folder that no other project has) and saves it as project `name`'s path; `skip`
+ *  is the project not counted as "another" (its own name when changing). `ready` is asked after the path checks,
+ *  right before saving. Returns the saved top folder, or an error. */
+async function savePath($: Host, b: Board, name: string, rawPath: string, skip: string | null, ready: () => Promise<{ error: string } | null> = async () => null): Promise<{ error: string } | { top: string }> {
+  const c = await checkRepo($, expand(rawPath))
+  if ('error' in c) return c
+  const same = Object.entries(b.projects ?? {}).find(([n, p]) => n !== skip && p.path === c.top)
+  if (same) return { error: `Nothing changed: ${c.top} is already the project '${same[0]}'` }
+  const no = await ready()
+  if (no) return no
+  await change($, x => [{ ...x, projects: { ...(x.projects ?? {}), [name]: { ...(x.projects?.[name] ?? {}), path: c.top } } } as Board, null])
+  return c
+}
+
 /** Adds project `name` at `rawPath` (nothing else is set); returns the answer text, or an error. */
 export async function addProject($: Host, name: string, rawPath: string): Promise<{ error: string } | { text: string }> {
   if (!isProjectName(name)) return { error: `Nothing changed: '${String(name).slice(0, 80)}' is not a project name (letters, digits, . _ - only)` }
   const b = await load($)
   if (b.projects?.[name]?.path) return { error: `Nothing changed: the project name '${name}' is taken (path ${b.projects[name]?.path})` }
-  const c = await checkRepo($, expand(rawPath))
-  if ('error' in c) return c
-  const same = Object.entries(b.projects ?? {}).find(([, p]) => p.path === c.top)
-  if (same) return { error: `Nothing changed: ${c.top} is already the project '${same[0]}'` }
-  await change($, x => [{ ...x, projects: { ...(x.projects ?? {}), [name]: { ...(x.projects?.[name] ?? {}), path: c.top } } } as Board, null])
-  return { text: `project ${name} added: ${c.top}` }
+  const c = await savePath($, b, name, rawPath, null)
+  return 'error' in c ? c : { text: `project ${name} added: ${c.top}` }
 }
 
 /** Points project `name` at another repo path, only while no open task of it has a copy or a branch. */
 export async function changeProjectPath($: Host, name: string, rawPath: string): Promise<{ error: string } | { text: string }> {
   const b = await load($)
   if (!Object.prototype.hasOwnProperty.call(b.projects ?? {}, name)) return { error: `Nothing changed: '${name}' is not a project here; add it with project and path` }
-  const c = await checkRepo($, expand(rawPath))
-  if ('error' in c) return c
-  const same = Object.entries(b.projects ?? {}).find(([n, p]) => n !== name && p.path === c.top)
-  if (same) return { error: `Nothing changed: ${c.top} is already the project '${same[0]}'` }
-  for (const t of openOf(b, name)) {
-    const old = S.projects[name]
-    const has = (await $.fs.exists(`${worktreeDir(t.id)}/.git`).catch(() => false)) || (!!old && (await branchExists($, taskBranch(t), repoOf(t)).catch(() => false)))
-    if (has) return { error: `Nothing changed: ${t.id} of project ${name} already has a copy or a branch in ${S.projects[name] ?? 'its repo'}; finish or drop it first` }
-  }
-  await change($, x => [{ ...x, projects: { ...(x.projects ?? {}), [name]: { ...(x.projects?.[name] ?? {}), path: c.top } } } as Board, null])
-  return { text: `project ${name} now points at ${c.top}` }
+  // an open task's copy or branch is looked for after the path checks, so their errors come first
+  const c = await savePath($, b, name, rawPath, name, async () => {
+    for (const t of openOf(b, name)) {
+      const old = S.projects[name]
+      const has = (await $.fs.exists(`${worktreeDir(t.id)}/.git`).catch(() => false)) || (!!old && (await branchExists($, taskBranch(t), repoOf(t)).catch(() => false)))
+      if (has) return { error: `Nothing changed: ${t.id} of project ${name} already has a copy or a branch in ${S.projects[name] ?? 'its repo'}; finish or drop it first` }
+    }
+    return null
+  })
+  return 'error' in c ? c : { text: `project ${name} now points at ${c.top}` }
 }
 
 /** Removes project `name` (its path and its test commands), refused while an open task uses it. */
