@@ -235,8 +235,8 @@ test('T-751: in VS Code the same header: Back and a pager, the title, state chip
 test('T-751: a task opened from the Live tab says "‹ [Live]" and goes through the Live tab\'s tasks', async ($, on) => {
   seedRich(on, 'T-504', undefined, { tab: 'live' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' })
-  // T-846: a task in review keeps a lane (at "you"), so the Live tab has two lanes and T-504 is the second
-  expect(textOf(kids(await header(ui))[0])).toMatch(/^‹ \[Live\] +T-504 · ‹ 2 of 2 ›$/)
+  // T-1228: tasks asking the owner keep their lanes too, so the Live tab has four lanes and T-504 is the last
+  expect(textOf(kids(await header(ui))[0])).toMatch(/^‹ \[Live\] +T-504 · ‹ 4 of 4 ›$/)
   expect(await ui.find({ key: 'next-key' })).toBeDefined()
   await ui.unmount()
 })

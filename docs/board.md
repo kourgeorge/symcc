@@ -434,7 +434,7 @@ the open tasks with a branch, the 5 latest merged ones and the 5 latest dropped 
 
 ### Live tab
 
-The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run, or a task that waits for your review; one that needs you is drawn only under NEEDS YOU).
+The Live tab (`l`) shows the tasks that run now as "railway lanes", one lane per task the board counts as running (a task in doing, or an approved or files-cleared task while its tests and merge run, or a task that waits for your review).
 Each lane shows the path that task really takes: a normal code task goes `work → check → queue → tests → done` (`check` only
 when the checker setting is on); an investigation goes `work → done` only (no check, queue, tests or merge) and leaves the lanes when
 it hands back, then waits under NEEDS YOU as "answer to read"; a docs-only change shows `check` as a dim `–` once it has handed
@@ -471,10 +471,8 @@ words as bold headings with the same spacing):
   list as the band above the prompt and the board's NEEDS YOU. Enter (or a click) on a row opens
   that task's page or the question; the rows are the first stops of the arrow keys. Rows are cut
   to fit the panel.
-- A task that needs you (a question, a file request, more time, a review) is listed only in `NEEDS YOU`:
-  it has no lane in `TASKS`, and the tasks waiting for it (the `└─◇` rows) are not drawn either. They come back
-  once you have answered and it runs again. A task waiting for it and for a drawn lane stays under that lane,
-  without naming the hidden task.
+- A task that needs you (a question, a file request, more time, a review) is listed in `NEEDS YOU` and also keeps its lane in `TASKS`
+  (at the `you` station), with the tasks waiting for it (the `└─◇` rows) under it.
 - Lanes are in the order the tasks started their current try, so a new one joins at the bottom
   and the lanes don't jump around. Each starts with `▶ `, then the task id and its title (cut
   with `…`, wider on a wider panel). The `▶ ` and the id are bold in the accent color and the

@@ -21,8 +21,8 @@ const CASES: { name: string; mode: 'auto' | 'paused'; tasks: unknown[]; lines: s
   {
     name: 'waiting',
     mode: 'auto',
-    tasks: [task('T-6', 'paused'), task('T-7', 'todo', { after: ['T-6'] }), task('T-5', 'waiting', { ask: { by: 'worker', text: 'Which one?', asked_at: iso(2) } })],
-    lines: ['Nothing running · 3 waiting: T-5 needs you, T-6 paused, T-7 waits for T-6'],
+    tasks: [task('T-6', 'paused'), task('T-7', 'todo', { after: ['T-6'] }), task('T-5', 'todo')],
+    lines: ['Nothing running · 3 waiting: T-6 paused, T-7 waits for T-6, T-5 ready'],
   },
   {
     name: 'all done',
@@ -58,7 +58,7 @@ test('T-903: liveIdle picks the line by why nothing runs, and keeps to the width
   expect(liveIdle({ tasks: [], archived_done: ['T-1'], mode: 'auto' }, T0)).toEqual(['All done', "Tell the lead what's next."])
   // narrow: the waiting line names fewer reasons and never goes past the width
   const narrow = liveIdle({ tasks: CASES[1]!.tasks as never[], mode: 'auto' }, T0, 44)
-  expect(narrow).toEqual(['Nothing running · 3 waiting: T-5 needs you'])
+  expect(narrow).toEqual(['Nothing running · 3 waiting: T-6 paused'])
   // a task waiting on several open tasks names the first, plus a count: no ", " inside one reason
   const many = [task('T-1', 'todo', { after: ['T-2', 'T-3', 'T-4', 'T-5'] }), ...['T-2', 'T-3', 'T-4', 'T-5'].map(id => task(id, 'todo'))]
   const line = liveIdle({ tasks: many as never[], mode: 'auto' }, T0, 100)[0]!
@@ -134,7 +134,7 @@ test('T-903: the band line (liveIdleLine) is the first idle line, cut with "…"
   expect([paused, paused.length <= 39, paused.endsWith('…')]).toEqual([paused, true, true])
   expect(liveIdleLine({ tasks: [], mode: 'auto' }, T0, 30).endsWith('…')).toBe(true)
   // the waiting line still drops the reasons that don't fit instead of cutting one
-  expect(liveIdleLine({ tasks: CASES[1]!.tasks as never[], mode: 'auto' }, T0, 44)).toBe('Nothing running · 3 waiting: T-5 needs you')
+  expect(liveIdleLine({ tasks: CASES[1]!.tasks as never[], mode: 'auto' }, T0, 44)).toBe('Nothing running · 3 waiting: T-6 paused')
 })
 
 test('T-903: /symcc-status shows the idle lines under TASKS', () => {

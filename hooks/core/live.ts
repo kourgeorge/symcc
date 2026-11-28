@@ -328,11 +328,12 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
   const retries = view.auto_retries ?? DEFAULT_AUTO_RETRIES
   const lanes = view.tasks
     // T-846: a task in review (tests passed, waits for the owner) keeps its lane, sitting at "you"
-    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing' || (t.status === 'review' && !isInvestigation(t)))
+    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing' || (t.status === 'review' && !isInvestigation(t)) || (t.status === 'waiting' && needsYou(t as BoardTask, nowMs)))
     .map((x): LiveLane => {
       const t = x as BoardTask
       const waiting = shownStatus(t, nowMs) !== 'doing'
-      const stations = laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
+      // an investigation has no "you" station of its own: one that waits for the owner gets one (work, you, done)
+      const stations = isInvestigation(t) && waiting ? (['work', 'you', 'done'] as LiveStation[]) : laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
       let stage: PhaseStage = taskPhase(t, nowMs).stage ?? 'worker'
       if (stage === 'worker' && handedBack(t)) stage = 'prep'
       const investigation = isInvestigation(t)
@@ -438,11 +439,7 @@ export function liveFinishedLanes(view: LiveView, nowMs: number): LiveLane[] {
 
 /** T-771: the ▍Tasks section's lanes: the running ones (liveLanes), then the finished ones under them (liveFinishedLanes). */
 export function liveTaskLanes(view: LiveView, nowMs: number): LiveLane[] {
-  // T-1210: a task that needs the owner is listed in NEEDS YOU, so it has no lane here (nor do its waiting trains)
-  const running = liveLanes(view, nowMs).filter(l => {
-    const t = view.tasks.find(x => x.id === l.id)
-    return !t || !needsYou(t as BoardTask, nowMs)
-  })
+  const running = liveLanes(view, nowMs)
   const ids = new Set(running.map(l => l.id))
   return [...running, ...liveFinishedLanes(view, nowMs).filter(l => !ids.has(l.id))]
 }
@@ -763,8 +760,6 @@ export function liveTrains(view: LiveView, nowMs: number, lanes: readonly LiveLa
   const rank = new Map(todo.map((t, i) => [t.id, i]))
   const open = new Map(todo.map(t => [t.id, openAfter(board, t)]))
   const parent = new Map<string, string>()
-  /** T-1217: "+ also" names only a task drawn in Tasks (a lane or a hung train). */
-  const hidden = (a: string) => !laneOf.has(a) && !parent.has(a)
   /** Whether `id`'s chain of parents (up to a lane) passes `through`. */
   const under = (id: string, through: string) => {
     const seen = new Set<string>()
@@ -791,7 +786,7 @@ export function liveTrains(view: LiveView, nowMs: number, lanes: readonly LiveLa
     }
   }
   const build = (id: string): LiveTrain[] =>
-    todo.filter(t => parent.get(t.id) === id).map(t => ({ id: t.id, title: rowTitle(t), also: open.get(t.id)!.filter(a => a !== id && !hidden(a)), trains: build(t.id) }))
+    todo.filter(t => parent.get(t.id) === id).map(t => ({ id: t.id, title: rowTitle(t), also: open.get(t.id)!.filter(a => a !== id), trains: build(t.id) }))
   const next: NextUp[] = []
   let more = 0
   for (const t of todo) {

@@ -941,7 +941,7 @@ test('T-751: [ and ] (and a click on ‹ or › in the header) go to the previou
   expect(board.state().opened).toBe(names[1])
   await board.press('next', 's')
   expect(board.state().opened).toBe(names[0])
-  // from the Live tab: "‹ [Live]"; T-1 is its only running task, so no place to go to
+  // from the Live tab: "‹ [Live]"
   await board.press('l', 's')
   // T-786: the two ▍Needs you rows (T-3 waiting, T-2 in review) come first
   await board.press('down', 's')
@@ -949,8 +949,8 @@ test('T-751: [ and ] (and a click on ‹ or › in the header) go to the previou
   await board.press('open', 's')
   expect([board.state().tab, board.state().opened]).toEqual(['tasks', 'T-1'])
   const live = panelLines(f, { opened: 'T-1', cursor: 0, from: 'live' }, NOW, 100)
-  // T-846: T-2 (in review) keeps a lane at "you", so Live has two lanes
-  expect(lineText(live.lines[0]!)).toMatch(/^‹ \[Live\] +T-1 · ‹ 1 of 2 ›$/)
+  // T-846, T-1228: T-2 (in review) and T-3 (waiting for the owner) keep lanes, so Live has three
+  expect(lineText(live.lines[0]!)).toMatch(/^‹ \[Live\] +T-1 · ‹ 1 of 3 ›$/)
   await board.press('next', 's')
   expect(board.state().opened).toBe('T-2')
   await board.press('back', 's')
@@ -3165,8 +3165,8 @@ test('T-846: the OpenCode Live tab draws an investigation as work → done, a do
   expect(row('T-803')).toContain('–')
   expect(row('T-806')).not.toContain('–')
   expect(marks(row('T-806'))).toBe('●-●-●-◉-○')
-  // T-1210: T-805 waits for the owner's review: in NEEDS YOU, no lane
-  expect(row('T-805')).toBe(undefined)
+  // T-1228: T-805 waits for the owner's review: it keeps its lane
+  expect(row('T-805') === undefined).toBe(false)
   expect(texts.some(t => /\b(merged|answer)\b/.test(t.split('▶')[0]!) && t.includes('queue'))).toBe(false)
 })
 
@@ -3343,7 +3343,7 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   // its check step gone stale: it only waits for the owner (T-846), so its lane sits at "you"
   const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
   expect(liveLanes({ ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)) }, NOW).map(l => l.station)).toEqual(['you'])
-  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText).some(idleLine)).toBe(true) // T-1210: it needs the owner now, so TASKS has no lane and shows the idle line
+  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText).some(idleLine)).toBe(false)
 })
 
 test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ and Enter, or a click on a lane, open that task\'s page', async () => {
@@ -4486,12 +4486,12 @@ test('T-786: the OpenCode Live tab has ▍Needs you first (above ▍Tasks) with 
   expect(none.lines.map(lineText).some(x => x.includes('Needs you'))).toBe(false)
 })
 
-test('T-786: a doing task that asks for more time has a ▍Needs you row and no lane (T-1210)', () => {
+test('T-786: a doing task that asks for more time has a ▍Needs you row and keeps its lane (T-1228)', () => {
   const f0 = viewFile()
   const f = parseViewFile(viewFileText({ ...f0, view: { ...f0.view, tasks: f0.view.tasks.filter(t => t.id === 'T-1' || t.id === 'T-2').map(t => (t.id === 'T-1' ? { ...t, live: { time_ask: AT }, note: 'time is up' } : t)) } }))
   const d0 = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, 100)
   expect(d0.ids.slice(0, 2)).toEqual(['need:T-2', 'need:T-1'])
-  expect(d0.ids.includes('T-1')).toBe(false)
+  expect(d0.ids.includes('T-1')).toBe(true)
   for (let c = 0; c < 2; c++) {
     const d = panelLines(f, { tab: 'live', opened: '', cursor: c }, NOW, 100)
     expect([c, d.lines.map(lineText).filter(x => x.startsWith('›')).length]).toEqual([c, 1])
@@ -4604,7 +4604,7 @@ test('T-903: with no task running, the OpenCode Live tab says why (paused, waiti
   const task = (id: string, status: string, x: Record<string, unknown> = {}) => ({ id, title: `Task ${id}`, details: '', files: [], status, note: '', priority: 0, after: [], attempts: 1, timeline: [], branch: null, created_at: ago(300), updated_at: ago(1), ...x }) as unknown as SymccTask
   const cases: [SymccMode, SymccTask[], string[]][] = [
     ['paused', [task('T-1', 'todo')], ['Paused: nothing starts. /symcc-mode auto starts work again.']],
-    ['auto', [task('T-6', 'paused'), task('T-7', 'todo', { after: ['T-6'] }), task('T-5', 'waiting', { ask: { by: 'worker', text: 'Which one?', asked_at: ago(2) } })], ['Nothing running · 3 waiting: T-5 needs you, T-6 paused, T-7 waits for T-6']],
+    ['auto', [task('T-6', 'paused'), task('T-7', 'todo', { after: ['T-6'] })], ['Nothing running · 2 waiting: T-6 paused, T-7 waits for T-6']], // T-1228: a task asking the owner has a lane, so the idle line leaves it out,
     ['auto', [task('T-891', 'done', { timeline: [{ kind: 'merged', at: ago(12), text: 'try 1 → merged into main' }] }), task('T-893', 'backlog'), task('T-894', 'backlog')], ['All done · last merged T-891, 12m ago', "Tell the lead what's next, or move one of 2 backlog items to todo.", '  ◇ T-893  Task T-893', '  ◇ T-894  Task T-894']],
     // T-924: the next 3 backlog items (lowest priority first, then oldest), then how many more
     ['auto', [task('T-891', 'done', { timeline: [{ kind: 'merged', at: ago(3), text: 'try 1 → merged into main' }] }), task('T-895', 'backlog', { priority: 1 }), task('T-893', 'backlog', { priority: 9 }), task('T-896', 'backlog', { priority: 1 }), task('T-894', 'backlog', { priority: 2 }), task('T-897', 'backlog', { priority: 19 })], ['All done · last merged T-891, 3m ago', "Tell the lead what's next, or move one of 5 backlog items to todo.", '  ◇ T-895  Task T-895', '  ◇ T-896  Task T-896', '  ◇ T-894  Task T-894', '  … 2 more in the backlog']],
