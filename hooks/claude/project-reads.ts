@@ -1,14 +1,39 @@
 // T-1200: a read of a file inside a project repo (a path from the board's project table, maybe outside the board's own
 // folder) is allowed without a permission prompt, for a scout, worker or checker; edits there stay refused (T-1198).
+// T-1211: each path is judged by where it really leads (symbolic links followed), so a link in a project repo that
+// points elsewhere (say to ~/.ssh) gets no automatic allow.
+import { realPathOf, type PathLookup } from '../core/path-guard'
 
-/** Whether absolute `p` is inside one of `roots` (no `..` anywhere). */
-function inside(p: string, roots: string[]): boolean {
-  if (!p.startsWith('/') || p.includes('..')) return false
-  return roots.some(r => {
+/** Whether clean absolute `p` is `root` or inside it. */
+const under = (p: string, root: string) => root !== '' && (p === root || p.startsWith(`${root}/`))
+
+/** Each of `roots` by both its names: as written, and where its links lead (when it can be looked up). */
+async function rootNames(roots: string[], look: PathLookup): Promise<string[]> {
+  const out: string[] = []
+  for (const r of roots) {
     const root = r.replace(/\/+$/, '')
-    return root !== '' && (p === root || p.startsWith(`${root}/`))
-  })
+    if (!root.startsWith('/')) continue
+    out.push(root)
+    const real = await realPathOf('/', root, look).catch(() => undefined)
+    if (real && real !== '/' && real !== root) out.push(real)
+  }
+  return out
 }
+
+/**
+ * Whether absolute `p` (no `..` anywhere) really lands inside one of `names`: the path as written must be inside one,
+ * and so must where it leads once links are followed (realPathOf; the last part may not exist yet). A path that can't
+ * be looked up, or goes through a link that leads nowhere, is not inside.
+ */
+async function inside(p: string, names: string[], look: PathLookup): Promise<boolean> {
+  if (!p.startsWith('/') || p.includes('..')) return false
+  if (!names.some(n => under(p, n))) return false
+  const real = await realPathOf('/', p, look).catch(() => undefined)
+  return typeof real === 'string' && names.some(n => under(real, n))
+}
+
+/** Shell wildcard characters: the shell would turn such a word into other paths than the ones checked. */
+const GLOB = /[*?[\]]/
 
 type Spec = {
   /** Short flags without a value. */
@@ -30,7 +55,8 @@ const SPECS: Record<string, Spec> = {
   ls: { flags: 'laARh1tr' },
   wc: { flags: 'lwc' },
   grep: {
-    flags: 'rRnilLcvwEFhHs',
+    // no -R: it follows every link it meets inside a folder, to anywhere on disk (T-1211)
+    flags: 'rnilLcvwEFhHs',
     valued: { A: 'num', B: 'num', C: 'num', m: 'num', e: 'any' },
     long: ['include', 'exclude', 'exclude-dir'],
     pattern: true,
@@ -48,10 +74,14 @@ function listedPaths(words: string[]): string[] | null {
   if (cmd === 'find') {
     let i = 0
     while (i < args.length && !args[i]!.startsWith('-')) paths.push(args[i++]!)
+    if (paths.some(p => GLOB.test(p))) return null
     while (i < args.length) {
       const o = args[i]!
       if (!FIND_VALUED.has(o) || i + 1 >= args.length) return null
-      if (o === '-newer') paths.push(args[i + 1]!)
+      if (o === '-newer') {
+        if (GLOB.test(args[i + 1]!)) return null
+        paths.push(args[i + 1]!)
+      }
       i += 2
     }
     return paths
@@ -64,6 +94,8 @@ function listedPaths(words: string[]): string[] | null {
   while (i < args.length) {
     const a = args[i++]!
     if (endOpts || !a.startsWith('-') || a === '-') {
+      // a wildcard in a path or pattern word could turn into more paths (a pattern word into a file to read)
+      if (GLOB.test(a)) return null
       if (needPattern) needPattern = false
       else paths.push(a)
       continue
@@ -90,6 +122,7 @@ function listedPaths(words: string[]): string[] | null {
         val = args[i++]!
       }
       if (kind === 'num' && !/^\d+$/.test(val)) return null
+      if (GLOB.test(val)) return null
       if (ch === 'e') needPattern = false
       break
     }
@@ -102,15 +135,21 @@ function listedPaths(words: string[]): string[] | null {
  * Whether tool call `tool` with `input` only reads, and every path it names is inside one of `roots` (the project
  * paths): the Read tool with a file there, or one plain shell command from a strict list (cat, head, tail, ls, wc,
  * grep, find, each with only its listed options) with no pipe, redirect, `;`, `&`, `$`, backtick, quote or
- * parenthesis, at least one absolute path, all of them in `roots`.
+ * parenthesis or shell wildcard in a path or pattern, at least one absolute path, all of them in `roots`. Every path
+ * and root is also looked up through `look` (T-1211): a path whose links lead outside every root is not allowed.
  */
-export function readInsideProjects(tool: string, input: unknown, roots: string[]): boolean {
+export async function readInsideProjects(tool: string, input: unknown, roots: string[], look: PathLookup): Promise<boolean> {
   const o = input && typeof input === 'object' ? (input as Record<string, unknown>) : {}
   if (!roots.length) return false
-  if (tool === 'Read') return typeof o.file_path === 'string' && o.file_path.startsWith('/') && inside(o.file_path, roots)
-  if (tool !== 'Bash' || typeof o.command !== 'string') return false
-  const cmd = o.command.trim()
-  if (!cmd || /[|&;<>`$()\n\\"']/.test(cmd)) return false
-  const paths = listedPaths(cmd.split(/\s+/))
-  return !!paths && paths.length > 0 && paths.every(p => inside(p, roots))
+  let paths: string[] | null = null
+  if (tool === 'Read') paths = typeof o.file_path === 'string' ? [o.file_path] : null
+  else if (tool === 'Bash' && typeof o.command === 'string') {
+    const cmd = o.command.trim()
+    if (!cmd || /[|&;<>`$()\n\\"']/.test(cmd)) return false
+    paths = listedPaths(cmd.split(/\s+/))
+  }
+  if (!paths || !paths.length || !paths.every(p => p.startsWith('/') && !p.includes('..'))) return false
+  const names = await rootNames(roots, look)
+  for (const p of paths) if (!(await inside(p, names, look))) return false
+  return true
 }

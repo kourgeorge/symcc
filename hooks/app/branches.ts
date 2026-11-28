@@ -109,7 +109,7 @@ export function branchFacts(host: Host, b: Pick<Board, 'tasks'>, into: string, n
   // T-794: the tasks merged in the last 10 minutes keep a row (the same ones ▍Tasks keeps: liveFinishedLanes)
   const recent = liveFinishedLanes({ tasks: b.tasks as SymccTask[] }, nowMs).length > 0
   if (!open.length && !recent) return { facts: undefined }
-  const key = [into, ...open.map(t => `${t.id}:${t.branch}:${t.into}:${t.project}`), ...b.tasks.filter(t => t.status === 'done' && t.merged).map(t => t.merged)].join(' ')
+  const key = [into, ...open.map(t => `${t.id}:${t.branch}:${t.into}:${t.project}:${S.projects[t.project ?? ''] ?? ''}`), ...b.tasks.filter(t => t.status === 'done' && t.merged).map(t => t.merged)].join(' ')
   const fresh = cache.key === key && nowMs - cache.readAt < BRANCH_CACHE_MS
   if (fresh || cache.running) return { facts: cache.facts }
   cache.running = true

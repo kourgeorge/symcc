@@ -92,7 +92,8 @@ export function scoutProjectTable(names: readonly string[] | undefined, table: R
   return out
 }
 
-export function parseScout(name: string, text: string): ScoutDef | null {
+/** `table` (the board's projects, name -> path): when given, a `projects:` name not in it adds a warning. */
+export function parseScout(name: string, text: string, table?: Readonly<Record<string, string>>): ScoutDef | null {
   const fm = splitFrontMatter(text)
   const meta: Record<string, string> = {}
   for (const line of fm.lines ?? []) {
@@ -102,17 +103,19 @@ export function parseScout(name: string, text: string): ScoutDef | null {
   const prompt = fm.body.trim()
   if (!prompt) return null
   const raw = (meta.every_minutes ?? '').trim()
-  const base: Pick<ScoutDef, 'name' | 'model' | 'summary' | 'findings' | 'prompt' | 'projects'> = { name: meta.name || name, model: meta.model || undefined, prompt }
+  const base: Pick<ScoutDef, 'name' | 'model' | 'summary' | 'findings' | 'prompt' | 'projects' | 'warning'> = { name: meta.name || name, model: meta.model || undefined, prompt }
   if (meta.summary?.trim()) base.summary = meta.summary.trim()
   const findings = scoutFindingsChoice(meta.findings)
   if (findings) base.findings = findings
   const projects = scoutProjectNames(meta.projects)
   if (projects.length) base.projects = projects
+  const badProjects = table ? scoutProjectsError(projects, table) : ''
+  if (badProjects) base.warning = badProjects
   // missing: every hour; a whole number (0 = only on demand); anything else: only on demand, with a warning
   if (!raw) return { ...base, every_minutes: 60 }
   const every = everyMinutesOf(raw)
   if (every !== null) return { ...base, every_minutes: every }
-  return { ...base, every_minutes: 0, warning: badEveryWarning(raw), bad_every: raw }
+  return { ...base, every_minutes: 0, warning: [badEveryWarning(raw), base.warning].filter(Boolean).join('; '), bad_every: raw }
 }
 
 /**
@@ -394,6 +397,9 @@ export type ScoutListRow = { icon: string; tone: string; name: string; every: st
 
 /** The short state shown in the Scouts list for a scout whose every_minutes is not valid. */
 export const BAD_EVERY_STATE = 'bad every_minutes'
+/** The short state for a scout whose projects: names an unknown project (its every_minutes is fine). */
+export const BAD_PROJECT_STATE = 'unknown project'
+const badState = (s: { warning?: string }): string => (s.warning?.startsWith('every_minutes ') ? BAD_EVERY_STATE : BAD_PROJECT_STATE)
 
 /** The cells of the Scouts list at `width` columns (`indent` columns before each row): icon, name, how often, state,
  *  "last:", the findings choice (T-912, findingsMark with the board's scout_findings `board`) and model, two spaces
@@ -404,7 +410,7 @@ export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number
   const raw = scouts.map(s => ({
     s,
     every: everyText(s.every_minutes),
-    state: s.warning && !s.running && !s.paused ? BAD_EVERY_STATE : scoutStateText(s, nowMs),
+    state: s.warning && !s.running && !s.paused ? badState(s) : scoutStateText(s, nowMs),
     last: s.running ? { text: '', tone: 'inactive' } : scoutLastText(s),
     findings: findingsMark(s.findings, board),
     model: s.model ?? '',

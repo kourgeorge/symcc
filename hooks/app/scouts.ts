@@ -22,6 +22,8 @@ export const unreadableScoutsText = () => unreadableScouts.map(f => `${f}: can't
 
 /** The scouts in <dir>/scouts/*.md. A file that can't be read is skipped (and kept in unreadableScouts), so one
  *  broken file never stops the other scouts or the session start. */
+const toldProjects = new Set<string>()
+
 export async function loadScouts(host: Host): Promise<ScoutDef[]> {
   const dir = path(S.N.scouts)
   if (!(await host.fs.exists(dir))) return (unreadableScouts = [], [])
@@ -37,8 +39,15 @@ export async function loadScouts(host: Host): Promise<ScoutDef[]> {
       bad.push(f.name)
       continue
     }
-    const s = parseScout(f.name.replace(/\.md$/, ''), text)
-    if (s) out.push(s)
+    const s = parseScout(f.name.replace(/\.md$/, ''), text, S.projects)
+    if (!s) continue
+    out.push(s)
+    // T-1214: the lead hears about a scout naming an unknown project once
+    const badP = scoutProjectsError(s.projects ?? [], S.projects)
+    if (badP && !toldProjects.has(`${s.name}\n${badP}`)) {
+      toldProjects.add(`${s.name}\n${badP}`)
+      tellLead(host, `[${S.N.name}] scout ${s.name} never runs: ${badP}. Fix its projects: line in ${S.N.scouts}/${f.name}.`)
+    }
   }
   unreadableScouts = bad
   return out

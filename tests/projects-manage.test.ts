@@ -7,7 +7,8 @@ import { change, load } from '../hooks/app/store'
 import { saveSettings } from '../hooks/app/tools'
 import { addProject } from '../hooks/app/projects'
 import { readBranches } from '../hooks/app/branches'
-import { S } from '../hooks/app/state'
+import { S, leadQueue } from '../hooks/app/state'
+import { loadScouts } from '../hooks/app/scouts'
 import { addTask, emptyBoard, settingWithProjects } from '../hooks/board'
 import { liveBranchBlocks, segText, LIVE_INDENT } from '../hooks/core/live'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -107,6 +108,26 @@ test('change and remove are refused while open tasks use the project; they work 
   expect((await set(w, { project: 'api', remove: true })).error).toContain('not a project')
 })
 
+// T-1214: a scout naming an unknown project gets a warning and the lead hears once; removing a project a scout names is refused
+test('a scout naming an unknown project warns and tells the lead once; remove is refused while a scout names the project', async () => {
+  const { w, files } = await world({ '/code/api': { top: '/code/api' } })
+  await set(w, { project: 'api', path: '/code/api' })
+  const file = `${S.root}/${S.N.scouts}/bugs.md`
+  files.set(file, '---\nevery_minutes: 30\nprojects: api, nope\n---\nLook.\n')
+  files.set(`${S.root}/${S.N.scouts}`, '')
+  w.host.fs.list = async () => [...files.keys()].filter(f => f.startsWith(`${S.root}/${S.N.scouts}/`)).map(f => ({ name: f.split('/').pop()!, kind: 'file' as const, size: 0, mtimeMs: 0, isLink: false }))
+  leadQueue.splice(0)
+  const first = await loadScouts(w.host)
+  expect(first[0]!.warning).toContain('unknown project "nope"')
+  await loadScouts(w.host)
+  expect(leadQueue.filter(t => t.includes('bugs')).length).toBe(1)
+  files.set(file, '---\nevery_minutes: 30\nprojects: api\n---\nLook.\n')
+  const refused = await set(w, { project: 'api', remove: true })
+  expect(refused.error ?? '').toContain('scout bugs still names project api')
+  files.set(file, '---\nevery_minutes: 30\n---\nLook.\n')
+  expect((await set(w, { project: 'api', remove: true })).error).toBe(undefined)
+})
+
 test('the Settings value lists each project as name -> path with its test commands', () => {
   const b = { ...emptyBoard(), test_commands: ['npm test'], projects: { api: { path: '/code/api', test_commands: ['pytest'] }, web: { path: '/code/web' } } }
   expect(settingWithProjects(b, 'test_commands')).toBe('npm test · api → /code/api: pytest · web → /code/web')
@@ -150,4 +171,13 @@ test('readBranches: a repo block reads its open tasks branch, not an old done ta
   const tasks = [t('T-1', 'client', 'old-feature', { status: 'done', branch: null }), t('T-3', 'client', 'dev'), t('T-4', 'server', 'main')]
   const f = await readBranches(w.host, 'main', { tasks: tasks as never[] }, Date.now())
   expect(f?.repos?.map(r => `${r.project}:${r.into}`)).toEqual(['client:dev', 'server:main'])
+})
+
+test('T-1212: a project with test commands but no path can be given a path', async () => {
+  const { w } = await world({ '/code/api': { top: '/real/api' }, '/real/api': { top: '/real/api' } })
+  await change(w.host, b => ({ ...b, projects: { api: { test_commands: ['pytest'] } } }) as never)
+  const r = await set(w, { project: 'api', path: '/code/api' })
+  expect(r.error).toBe(undefined)
+  expect((await load(w.host)).projects).toEqual({ api: { test_commands: ['pytest'], path: '/real/api' } })
+  expect(S.projects.api).toBe('/real/api')
 })

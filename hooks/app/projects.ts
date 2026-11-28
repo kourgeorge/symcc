@@ -2,6 +2,7 @@
 import { isFinished, isProjectName, type Board } from '../board'
 import type { Host } from '../host'
 import { S } from './state'
+import { loadScouts } from './scouts'
 import { change, load } from './store'
 import { git, repoOf, worktreeDir, taskBranch, branchExists } from './git'
 
@@ -36,7 +37,7 @@ async function checkRepo($: Host, path: string): Promise<{ error: string } | { t
 export async function addProject($: Host, name: string, rawPath: string): Promise<{ error: string } | { text: string }> {
   if (!isProjectName(name)) return { error: `Nothing changed: '${String(name).slice(0, 80)}' is not a project name (letters, digits, . _ - only)` }
   const b = await load($)
-  if (Object.prototype.hasOwnProperty.call(b.projects ?? {}, name)) return { error: `Nothing changed: the project name '${name}' is taken (path ${b.projects?.[name]?.path ?? 'none'})` }
+  if (b.projects?.[name]?.path) return { error: `Nothing changed: the project name '${name}' is taken (path ${b.projects[name]?.path})` }
   const c = await checkRepo($, expand(rawPath))
   if ('error' in c) return c
   const same = Object.entries(b.projects ?? {}).find(([, p]) => p.path === c.top)
@@ -68,6 +69,8 @@ export async function removeProject($: Host, name: string): Promise<{ error: str
   if (!Object.prototype.hasOwnProperty.call(b.projects ?? {}, name)) return { error: `Nothing changed: '${name}' is not a project here` }
   const open = openOf(b, name)
   if (open.length) return { error: `Nothing changed: ${open.map(t => t.id).slice(0, 8).join(', ')} still use${open.length === 1 ? 's' : ''} project ${name}; finish or drop ${open.length === 1 ? 'it' : 'them'} first` }
+  const naming = (await loadScouts($)).filter(x => x.projects?.includes(name)).map(x => x.name)
+  if (naming.length) return { error: `Nothing changed: scout${naming.length === 1 ? '' : 's'} ${naming.join(', ')} still name${naming.length === 1 ? 's' : ''} project ${name}; change ${naming.length === 1 ? 'its' : 'their'} projects: line first` }
   await change($, x => {
     const { [name]: _gone, ...rest } = x.projects ?? {}
     const { projects: _old, ...others } = x

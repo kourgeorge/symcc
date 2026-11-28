@@ -18,10 +18,15 @@ import { timedSync } from './slow-log'
  * Claude Code asks for a permission on a read outside the session folder, which a background agent can't answer, so
  * symcc answers "allow" for these. Edits there stay refused (the edit guard runs first).
  */
-export function readAllowed(agentId: string | undefined, onlyReads: (projectPaths: string[]) => boolean): boolean {
+export async function readAllowed(
+  $: Host,
+  agentId: string | undefined,
+  onlyReads: (projectPaths: string[], look: PathLookup) => Promise<boolean>,
+): Promise<boolean> {
   if (!agentId) return false
   if (!scoutRuns.has(agentId) && !workers.has(agentId) && !checkerRuns.has(agentId)) return false
-  return onlyReads(guardedRoots().slice(1))
+  // T-1211: the paths are looked up on disk, so a link in a project repo is judged by where it leads
+  return onlyReads(guardedRoots().slice(1), diskLook($)).catch(() => false)
 }
 
 /** The git guard check, timed (T-1048). */
