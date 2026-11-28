@@ -7,7 +7,7 @@ import { isFinished, type BoardTask, type Board, liveWorkersFor, intoOf, finishi
 import { type DoctorItem, oldBackups, backupIds, branchId, folderId, PRUNE_ID, parseDoctorArgs, doctorText, fixedText, type DoctorFixed, mergeRunsText, mergeNoteText, pruneLines, STRAY_DIRS, DOCTOR_STUCK_MIN, BACKUP_MARK, MIGRATE_ID } from '../core/doctor'
 import { SIZE_WARN_BYTES, READ_LIMIT_BYTES, PARTS_DIR, mbText } from '../core/board-parts'
 import { type Host, agentState } from '../host'
-import { S, workers, starting, finishing, approving } from './state'
+import { S, finishing, approving, busyHere } from './state'
 import { load, path } from './store'
 import { readLeadText } from './lead'
 import { readArchiveFile } from './archive'
@@ -46,7 +46,7 @@ const agentsNow = (host: Host) => host.agents.list().then(a => a.map(agentState)
 
 /** Whether a worker of this copy (or a live agent) works on task `id` now. */
 function inUse(id: string, t: BoardTask | undefined, agents: ReturnType<typeof agentState>[] | null): boolean {
-  if ([...workers.values()].some(w => w.task === id) || starting.has(id) || finishing.has(id) || approving.has(id)) return true
+  if (busyHere(id)) return true
   if (!agents) return true
   return liveWorkersFor({ id, runs: t?.runs }, agents, S.N.name).length > 0
 }

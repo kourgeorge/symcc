@@ -10,7 +10,7 @@ import { changedFiles, changesText, DIFF_GONE, mergedChanges, mergedDiff } from 
 import { changeRole } from './roles'
 import { changeKind } from './kinds'
 import { scheduleScouts, runScoutNow, setScoutPaused, unreadableScoutsText, leadScouts } from './scouts'
-import { S, workers, scoutState } from './state'
+import { S, scoutState, hasWorker } from './state'
 import { load, findRoot, startingText } from './store'
 import { noteForLead, tellLead, brief } from './tell'
 import { playable } from './voice'
@@ -256,7 +256,7 @@ export async function runCommand(host: Host, command: string, args: string): Pro
       }
       await openPane(host, { tab: 'tasks', task: t.id })
       if (S.chat) return say(chatTaskText(t, await latestReport(host, t), Date.now(), cmd.page))
-      return say(taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport(host, t), b.archived_done))
+      return say(taskText(t, hasWorker(t.id), b.tasks, await latestReport(host, t), b.archived_done))
     }
     case 'task-do': {
       const t = find(b, cmd.id)

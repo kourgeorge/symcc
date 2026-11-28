@@ -9,7 +9,7 @@ import { taskBranch, removeWorktree, worktreeDir, taskWork, resetScratch } from 
 import { addProject, changeProjectPath, removeProject } from './projects'
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
-import { S, heard, workers, starting, toolName } from './state'
+import { S, heard, workers, starting, toolName, hasWorker } from './state'
 import { type Host, type HostFeatures, ALL_FEATURES } from '../host'
 import { load, change, now, path } from './store'
 import { statsHtml, openCommands } from '../core/stats-html'
@@ -722,7 +722,7 @@ export async function runTool($: Host, name: string, a: In): Promise<string> {
       if (!t) throw new Error(`${id} is not on the board or in the archive`)
       const archived = !find(b, id)
       if (S.chat) return archived ? chatArchivedTaskText(t, page) : chatTaskText(t, await latestReport($, t), Date.now(), page)
-      return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, [...workers.values()].some(w => w.task === t.id), b.tasks, await latestReport($, t), b.archived_done)}`
+      return `${archived ? `${t.id} is archived (in ${S.N.archiveFile}; read-only)\n` : ''}${taskText(t, hasWorker(t.id), b.tasks, await latestReport($, t), b.archived_done)}`
     }
     case 'add': {
       priorityIn(a)
@@ -1096,7 +1096,7 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   // its start failed outright (startNow failed the task): say so, not "it starts when there is room"
   if (after?.status === 'failed') return `${t.id} failed: ${after.note ?? "couldn't start"}`
   // another start (e.g. a second Run now at the same moment) has it: it is starting or running
-  const started = claimed || after?.status === 'doing' || starting.has(t.id) || [...workers.values()].some(w => w.task === t.id)
+  const started = claimed || after?.status === 'doing' || starting.has(t.id) || hasWorker(t.id)
   if (!started) return `${t.id} is to do now but couldn't start at once${paused ? ' (the board is paused)' : ''}; ${paused ? `${S.N.name} run ${t.id} again tries once more` : 'it starts when there is room'}`
   const shares = runNowShares((await load($)).tasks, t)
   return [
