@@ -178,6 +178,18 @@ export function withAgentStart(runs: SymccRun[] | undefined, kind: SymccRunAgent
 }
 
 /**
+ * T-1232: the runs with every open checker entry of the last try ended at `at` (its last known moment alive), for a
+ * checker lost on a reload or an app close. Without it the next checker's start would end it, and the closed hours would
+ * count as agent work. `at` not a time, or no open checker: the runs as they are.
+ */
+export function withLostCheckerEnd(runs: SymccRun[] | undefined, at: unknown): SymccRun[] | undefined {
+  const last = runs?.at(-1)
+  if (!runs || !last || !isIso(at) || !agentsOf(last).some(a => a.kind === 'checker' && !a.ended)) return runs
+  const end = (a: SymccRunAgent) => (a.kind === 'checker' && !a.ended ? { ...a, ended: Date.parse(at) > Date.parse(a.started) ? at : a.started } : a)
+  return [...runs.slice(0, -1), { ...last, agents: agentsOf(last).map(end) }]
+}
+
+/**
  * T-884: withAgentStart for the worker `id` that just started (at `now`) on the last try. When it is the first worker
  * since the try (or its latest restart) was claimed, that start moves to `now`: the time the start waited in the queue
  * is not work, so the try's time (runMs), its worker's time limit (workerSince, workerActiveMs) and the board count
