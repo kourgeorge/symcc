@@ -381,4 +381,8 @@ export const changesCache = new Map<string, Promise<string>>()
 
 /** tasks being approved (checked and merged) now in this session, so a second approve waits its turn */
 export const approving = new Set<string>()
+/** a worker of this session works on the task now */
+export const hasWorker = (id: string) => [...workers.values()].some(w => w.task === id)
+/** this session starts, works on, checks or approves the task now */
+export const busyHere = (id: string) => starting.has(id) || finishing.has(id) || approving.has(id) || hasWorker(id)
 export const tmpWarned = new Set<string>()
