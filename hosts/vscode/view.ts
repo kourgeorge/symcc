@@ -275,7 +275,7 @@ export function panelView(v: PaneView, o: { project: string; dir: string; nowMs:
     scouts,
     counts: {
       needs: needs.length,
-      running: lanes.filter(l => l.doneMs === undefined && l.stations[l.at] !== 'you').length,
+      running: lanes.filter(l => l.doneMs === undefined && (l.agent || !needsYou(byId.get(l.id) as BoardTask, nowMs))).length,
       next: next.length,
       doneToday: tasks.filter(t => t.status === 'done' && (ms(t.updated_at) ?? 0) >= startOfDay(nowMs)).length,
       backlog: tasks.filter(t => t.status === 'backlog').length,

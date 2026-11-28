@@ -2,7 +2,7 @@
 // per open board question, task waiting for the owner and task ready for review; Enter on a row opens it.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveNeeds } from '../hooks/core/live'
+import { liveLanes, liveNeeds } from '../hooks/core/live'
 import { LIVE_SECTIONS, segText } from '../hooks/core/live-seg'
 import { textWidth } from '../hooks/core/width'
 import { vsHref } from '../hooks/claude/ui/vscode'
@@ -96,4 +96,10 @@ test('T-786: the VS Code Live tab has no Needs you section when nothing waits', 
   expect(await ui.find({ key: 'live-needs-head' })).toBeUndefined()
   expect(await ui.find({ key: 'live-tasks-head' })).toBeDefined()
   await ui.unmount()
+})
+
+test('T-1228: a waiting task asking the owner has a lane at a station, also an investigation', () => {
+  const ask = { by: 'worker', text: 'Which one?', asked_at: iso(2) }
+  const lanes = liveLanes({ tasks: [task('T-1', 'a', { status: 'waiting', ask }), task('T-2', 'b', { status: 'waiting', kind: 'investigation', ask })] as never[], checker: true, mode: 'auto' }, T0)
+  expect(lanes.map(l => [l.id, l.at >= 0, l.stations[l.at]])).toEqual([['T-1', true, 'you'], ['T-2', true, 'work']])
 })
