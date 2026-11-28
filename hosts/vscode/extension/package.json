@@ -113,6 +113,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "symcc.worktrees",
+          "when": "view == symcc.side",
+          "group": "navigation@3"
+        },
+        {
           "command": "symcc.restart",
           "when": "view == symcc.side",
           "group": "engine@1"
@@ -130,6 +135,12 @@
         "title": "Open the board",
         "category": "symcc",
         "icon": "$(link-external)"
+      },
+      {
+        "command": "symcc.worktrees",
+        "title": "Show the worktrees",
+        "category": "symcc",
+        "icon": "$(repo-forked)"
       },
       {
         "command": "symcc.message",
@@ -220,7 +231,9 @@
     "@types/react": "19.1.12",
     "@types/react-dom": "19.1.9",
     "@types/vscode": "1.90.0",
-    "@vscode/codicons": "0.0.36",
+    "@vscode-elements/elements": "2.5.1",
+    "@vscode-elements/react-elements": "2.4.0",
+    "@vscode/codicons": "0.0.45",
     "esbuild": "^0.25.0",
     "react": "19.1.1",
     "react-dom": "19.1.1",

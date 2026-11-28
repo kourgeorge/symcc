@@ -5,8 +5,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { PanelLane, PanelStep, PanelTask, PanelView, PanelWorktree, WorktreeAction } from '../../protocol'
 import { ask, tell } from './bridge'
-import { Icon, STATION_WORD, Staff, ago, duration, useNow } from './parts'
+import { Icon, STATION_WORD, Stages, ago, duration, useNow } from './parts'
 import { latestStep, stepIcon, stepWords } from './session'
+import { Badge, Button, Collapsible, Textfield, valueOf } from './ui'
 
 export type WorktreeList = { list: PanelWorktree[]; atMs: number; error?: string }
 type Say = (text: string, bad?: boolean) => void
@@ -69,55 +70,51 @@ export function Worktrees({ view, steps, trees, onSay, onTask }: { view: PanelVi
   const workers = rows.filter(r => r.w.kind === 'task').length
   return (
     <div className="page trees">
-      <div className="page-head">
-        <h2>Worktrees</h2>
-        <p className="trees-sum">
+      <div className="toolbar">
+        <Textfield type="search" aria-label="Filter worktrees" placeholder="Filter by task, title, branch or folder" value={filter} onInput={e => setFilter(valueOf(e))}>
+          <span slot="content-before" className="codicon codicon-search" aria-hidden />
+        </Textfield>
+        <p className="trees-sum dim">
           {trees ? (
             <>
               <span>{plural(workers, "worker's folder", "workers' folders")}</span>
-              {!!atWork && <span className="run">{atWork} at work</span>}
+              {!!atWork && <span>{atWork} at work</span>}
               {!!left && <span>{left} left over</span>}
-              <span className="quiet">
-                {reading ? 'reading…' : `read ${ago(trees.atMs, now) === 'now' ? 'just now' : `${ago(trees.atMs, now)} ago`}`}
-              </span>
+              <span>{reading ? 'reading…' : `read ${ago(trees.atMs, now) === 'now' ? 'just now' : `${ago(trees.atMs, now)} ago`}`}</span>
             </>
           ) : (
-            <span className="quiet">Reading the worktrees…</span>
+            <span>Reading the worktrees…</span>
           )}
         </p>
-        <label className="filter">
-          <Icon name="search" />
-          <span className="sr">Filter worktrees</span>
-          <input type="search" placeholder="Filter by task, title, branch or folder" value={filter} onChange={e => setFilter(e.target.value)} />
-        </label>
-        <p className="quiet">
-          Each task gets its own folder under <code>{view.dir}/worktrees</code> on its own branch, so workers never touch your checkout. Open one to look, test or edit before you approve.
-        </p>
       </div>
+      <p className="page-about dim">
+        Each task gets its own folder under <code>{view.dir}/worktrees</code> on its own branch, so workers never touch your checkout. Open one to look, test or edit before you approve.
+      </p>
       {trees?.error && (
-        <p className="trees-error bad" role="alert">
-          <Icon name="error" /> Couldn't read the worktrees: {trees.error}
-          <button type="button" className="btn" onClick={() => tell({ type: 'worktrees' })}>
+        <div className="banner bad" role="alert">
+          <Icon name="error" />
+          <p>Couldn't read the worktrees: {trees.error}</p>
+          <Button secondary onClick={() => tell({ type: 'worktrees' })}>
             Try again
-          </button>
-        </p>
+          </Button>
+        </div>
       )}
-      {trees && !trees.error && !workers && !f && <p className="quiet trees-none">No worker has a folder right now. One is made when a worker starts on a task, and removed once the task merges.</p>}
-      {f && !shown.length && <p className="quiet">No worktree matches “{filter}”.</p>}
+      {trees && !trees.error && !workers && !f && <p className="empty">No worker has a folder right now. One is made when a worker starts on a task, and removed once the task merges.</p>}
+      {f && !shown.length && <p className="empty">No worktree matches “{filter}”.</p>}
       {GROUPS.map(g => {
         const xs = shown.filter(r => r.group === g.key)
         if (!xs.length) return null
         return (
-          <section key={g.key} className={`tree-group is-${g.key}`} aria-label={g.title}>
-            <h3>
-              {g.title} <span className="count">{xs.length}</span>
-            </h3>
-            <ul>
+          <Collapsible key={g.key} heading={g.title} open className={`view is-${g.key}`}>
+            <Badge slot="decorations" variant="counter">
+              {xs.length}
+            </Badge>
+            <ul className="rows">
               {xs.map(r => (
                 <TreeRow key={r.w.path} row={r} step={r.lane?.agentId ? latestStep(steps[r.lane.agentId]) : undefined} now={now} onSay={onSay} onTask={onTask} />
               ))}
             </ul>
-          </section>
+          </Collapsible>
         )
       })}
     </div>
@@ -180,12 +177,12 @@ function TreeRow({ row, step, now, onSay, onTask }: { row: Row; step?: PanelStep
             )}
             {!!w.files.length && (
               <span className="tree-lines">
-                <span className="add">+{added}</span> <span className="del">−{removed}</span> <span className="quiet">in {plural(w.files.length, 'file')}</span>
+                <span className="add">+{added}</span> <span className="del">−{removed}</span> <span className="dim">in {plural(w.files.length, 'file')}</span>
               </span>
             )}
             {!!w.dirty && w.kind === 'task' && (
               <span className="tree-dirty" title={w.untracked ? `${plural(w.untracked, 'new file')} among them` : undefined}>
-                <Icon name="circle-filled" />
+                <Icon name="circle-small-filled" />
                 {w.dirty} not committed
               </span>
             )}
@@ -205,7 +202,7 @@ function TreeRow({ row, step, now, onSay, onTask }: { row: Row; step?: PanelStep
       )}
       {open && (
         <div className="tree-body">
-          {lane && <Staff lane={lane} />}
+          {lane && <Stages lane={lane} />}
           <dl className="tree-dl">
             <dt>Folder</dt>
             <dd>
@@ -219,7 +216,7 @@ function TreeRow({ row, step, now, onSay, onTask }: { row: Row; step?: PanelStep
             </dd>
             <dt>Branch</dt>
             <dd>
-              <code>{w.branch || '(detached)'}</code> <span className="quiet">at</span> <code>{w.head}</code>
+              <code>{w.branch || '(detached)'}</code> <span className="dim">at</span> <code>{w.head}</code>
               {w.locked && <span className="tag">locked</span>}
             </dd>
             {w.base && (
@@ -244,7 +241,7 @@ function TreeRow({ row, step, now, onSay, onTask }: { row: Row; step?: PanelStep
                     {w.task}
                   </button>
                   <span>{task?.word ?? (lane ? 'running' : 'not on the board any more')}</span>
-                  {lane && lane.tries > 1 && <span className="quiet">try {lane.tryNo} of {lane.tries}</span>}
+                  {lane && lane.tries > 1 && <span className="dim">try {lane.tryNo} of {lane.tries}</span>}
                   {lane?.agentId && (
                     <button type="button" className="link" onClick={() => tell({ type: 'session', agent: lane.agentId!, title: `${w.task} ${task?.title ?? ''}: try ${lane.tryNo}`.trim() })}>
                       Open its agent's session
@@ -263,7 +260,7 @@ function TreeRow({ row, step, now, onSay, onTask }: { row: Row; step?: PanelStep
           {!!w.commits.length && (
             <div className="tree-part">
               <h4>
-                Commits {w.base ? `${w.base} doesn't have` : ''} <span className="count">{w.commits.length}</span>
+                Commits {w.base ? `${w.base} doesn't have` : ''} <span className="dim">{w.commits.length}</span>
               </h4>
               <ol className="tree-commits">
                 {w.commits.map(c => (
@@ -279,7 +276,7 @@ function TreeRow({ row, step, now, onSay, onTask }: { row: Row; step?: PanelStep
           {!!w.files.length && (
             <div className="tree-part">
               <h4>
-                {w.kind === 'task' ? 'Changed files' : 'Files not committed'} <span className="count">{w.files.length}</span>
+                {w.kind === 'task' ? 'Changed files' : 'Files not committed'} <span className="dim">{w.files.length}</span>
               </h4>
               <ul className="tree-files">
                 {w.files.slice(0, FILES_SHOWN).map(f => (
@@ -299,20 +296,20 @@ function TreeRow({ row, step, now, onSay, onTask }: { row: Row; step?: PanelStep
               )}
             </div>
           )}
-          <div className="card-actions">
-            <button type="button" className="btn" disabled={!!w.missing} onClick={() => act('window')}>
-              <Icon name="empty-window" /> Open in a new window
-            </button>
-            <button type="button" className="btn" disabled={!!w.missing} onClick={() => act('terminal')}>
-              <Icon name="terminal" /> Terminal here
-            </button>
-            <button type="button" className="btn" disabled={!!w.missing || (!w.files.length && !w.untracked)} onClick={() => act('changes')}>
-              <Icon name="git-compare" /> {w.kind === 'task' ? 'All its changes' : "What isn't committed"}
-            </button>
+          <div className="actions">
+            <Button secondary icon="empty-window" disabled={!!w.missing} onClick={() => act('window')}>
+              Open in a new window
+            </Button>
+            <Button secondary icon="terminal" disabled={!!w.missing} onClick={() => act('terminal')}>
+              Terminal here
+            </Button>
+            <Button secondary icon="git-compare" disabled={!!w.missing || (!w.files.length && !w.untracked)} onClick={() => act('changes')}>
+              {w.kind === 'task' ? 'All its changes' : "What isn't committed"}
+            </Button>
             {group === 'left' && w.kind === 'task' && (
-              <button type="button" className="btn danger" disabled={doing === 'remove'} onClick={() => act('remove')}>
-                {doing === 'remove' ? <Icon name="loading" /> : <Icon name="trash" />} Remove the folder
-              </button>
+              <Button secondary disabled={doing === 'remove'} icon={doing === 'remove' ? 'loading' : 'trash'} iconSpin={doing === 'remove'} onClick={() => act('remove')}>
+                Remove the folder
+              </Button>
             )}
           </div>
         </div>

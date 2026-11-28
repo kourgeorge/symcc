@@ -286,6 +286,7 @@ export function activate(ctx: vscode.ExtensionContext) {
 
   ctx.subscriptions.push(
     vscode.commands.registerCommand('symcc.open', () => openPanel()),
+    vscode.commands.registerCommand('symcc.worktrees', () => openBoard('trees')),
     vscode.commands.registerCommand('symcc.message', async () => {
       if (!copy || problem) return tellProblem()
       const text = await vscode.window.showInputBox({ prompt: 'Message the symcc lead', placeHolder: 'What do you want done next?' })
