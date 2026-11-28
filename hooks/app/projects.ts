@@ -83,8 +83,11 @@ export async function addProject($: Host, name: string | null, rawPath: string, 
     const alt = parts.length > 1 ? cleanName(`${parts[parts.length - 2]}-${base}`) : ''
     return { error: `Nothing changed: the project name '${chosen}' is taken (path ${b.projects[chosen]?.path})${alt && isProjectName(alt) ? `; use the name '${alt}' instead` : ''}` }
   }
-  await change($, x => withTests(chosen)({ ...x, projects: { ...(x.projects ?? {}), [chosen]: { ...(x.projects?.[chosen] ?? {}), path: c.top } } } as Board))
-  return { text: `project ${chosen} added: ${c.top}${tests ? `; tests: ${tests.map(String).join(', ')}` : ''}${await clashWarning($, chosen)}` }
+  const saved = await savePath($, b, chosen, c.top, null)
+  if ('error' in saved) return saved
+  if (tests) await change($, withTests(chosen))
+  const kept = tests ? (await load($)).projects?.[chosen]?.test_commands ?? [] : []
+  return { text: `project ${chosen} added: ${c.top}${kept.length ? `; tests: ${kept.join(', ')}` : ''}${await clashWarning($, chosen)}` }
 }
 
 /** Points project `name` at another repo path, only while no open task of it has a copy or a branch. */

@@ -287,6 +287,16 @@ test('a path alone adds the project named after its folder; clash, tests and rep
   expect(JSON.stringify(again.changes)).toContain('/code/api is already the project api')
 })
 
+test('T-1236: the add answer names only the test commands that were saved', async () => {
+  const { w } = await world({ '/code/api': { top: '/code/api' } })
+  const r = await set(w, { path: '/code/api', test_commands: ['  npm test  ', '', '   ', 'a1', 'a2', 'a3', 'a4', 'a5'] })
+  expect(r.error).toBe(undefined)
+  const text = JSON.stringify(r.changes)
+  expect(text).toContain('tests: npm test, a1, a2, a3, a4')
+  expect(text).not.toContain('a5')
+  expect((await load(w.host)).projects?.api?.test_commands).toEqual(['npm test', 'a1', 'a2', 'a3', 'a4'])
+})
+
 test('T-1235: adding a project warns when org-mem topics start with its name', async () => {
   const { w, files } = await world({ '/code/ui': { top: '/code/ui' }, '/code/api': { top: '/code/api' } })
   files.set(`${S.root}/${S.N.dir}/org-mem.md`, '- 2026-11-24 [ui · surfaces] a\n- 2026-11-24 [ui] b\n- 2026-11-24 [tests] c\n')
