@@ -573,9 +573,7 @@ export const defButtons = (list: DefList, d: ViewDef): PanelButton[] => [
   ...(d.canRemove ? [{ label: 'Remove', hit: { key: 'd' as const } }] : []),
 ]
 
-/** The "+ New role", "+ New task type" and "+ New scout" buttons (n), as on Claude Code's Roles, Kinds and Scouts pages. */
-export const NEW_ROLE_BUTTON: PanelButton = { label: '+ New role', hit: { key: 'n' } }
-export const NEW_KIND_BUTTON: PanelButton = { label: '+ New task type', hit: { key: 'n' } }
+/** The "+ New scout" button (n), as on Claude Code's Scouts page. */
 export const NEW_SCOUT_BUTTON: PanelButton = { label: '+ New scout', hit: { key: 'n' } }
 
 /** The banner's git row (T-706, as Claude Code's): with no git repo or no commit yet, what is wrong and the

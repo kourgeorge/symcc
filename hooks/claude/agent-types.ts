@@ -55,9 +55,6 @@ export function workerTypeSuffix(words: readonly string[] | undefined, prose = f
 /** The last part of a prose-only worker's agent type ("worker-prose", "worker-web-prose"). */
 const PROSE_SUFFIX = 'prose'
 
-/** Whether a worker agent type suffix (from workerAgentTypes) is a prose-only one. */
-export const isProseType = (suffix: string): boolean => suffix.endsWith(`-${PROSE_SUFFIX}`)
-
 /** The agent type a role's task is spawned as: "<name>:worker", "<name>:worker-web" for a role with web tools, "-prose" at the end for a role with code: false. */
 export const workerTypeFor = (r: Pick<RoleDef, 'tools' | 'code'> | undefined, name: string = DEFAULT_NAME): string => `${name}:${workerTypeSuffix(r?.tools, r?.code === false)}`
 
