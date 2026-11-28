@@ -3,7 +3,7 @@
 import type { SymccTask } from '../../types'
 import { type Board, type BoardTask, kindOf, isErrand, kindSection, ASK_TOOL, ASK_LINE, askedMore, roleOf, testCommandsOf } from '../board'
 import { filesBody } from '../core/prompt-sections'
-import { taskBranch } from './git'
+import { taskBranch } from './worktree'
 import { S, toolName } from './state'
 
 /** The placeholders both prompts share. */

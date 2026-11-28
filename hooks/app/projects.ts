@@ -4,7 +4,8 @@ import type { Host } from '../host'
 import { S } from './state'
 import { loadScouts } from './scouts'
 import { change, load } from './store'
-import { git, repoOf, worktreeDir, taskBranch, branchExists } from './git'
+import { git, repoOf, branchExists } from './git'
+import { worktreeDir, taskBranch } from './worktree'
 
 /** The path as given with `~` and a trailing slash dealt with; relative paths are refused by the caller. */
 const expand = (p: string): string => {

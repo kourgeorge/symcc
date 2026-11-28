@@ -32,7 +32,7 @@ export async function readAllowed(
 /** The git guard check, timed (T-1048). */
 const gitWrite = ($: Host, command: unknown, who?: 'reader' | 'worker') => timedSync($, 'gitWriteIn', () => gitWriteIn(command, who))
 import { workerOf, agentOnBoard } from './workers'
-import { scratchOn } from './git'
+import { scratchOn } from './worktree'
 import { logRefusal, logAsked, type Refusal, type Who } from './evidence'
 
 /** Writes `patch` (from the task as it is now) to worker `w`'s task, only while it is still "doing" on the same try. */
