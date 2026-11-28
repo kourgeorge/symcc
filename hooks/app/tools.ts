@@ -4,7 +4,8 @@ import { scoutMemoryFile, scoutFindingsFor, leadScouts, linkTaskToScoutRun, know
 import { checkerReportOf } from '../core/task-sections'
 import { sizeSegs } from '../core/page-header'
 import { archivedText, bringBackArchived, findArchived, readArchiveFile } from './archive'
-import { plainTask, changeNeedsProject, noProjectText, repoOf, taskBranch, taskGitReady, removeWorktree, worktreeDir, setupGit, branchExists, branchList, homeBranch, projectNames, projectGone, projectRefusal, taskWork, resetScratch } from './git'
+import { plainTask, changeNeedsProject, noProjectText, repoOf, taskGitReady, setupGit, branchExists, branchList, homeBranch, projectNames, projectGone, projectRefusal } from './git'
+import { taskBranch, removeWorktree, worktreeDir, taskWork, resetScratch } from './worktree'
 import { addProject, changeProjectPath, removeProject } from './projects'
 import { loadRoles, leadRoles } from './roles'
 import { loadKinds, leadKinds } from './kinds'
@@ -1140,7 +1141,7 @@ export async function saveSettings($: Host, a: SettingsInput, who: string): Prom
       const r = a.remove === true ? await removeProject($, name) : projectNames().includes(name) ? await changeProjectPath($, name, a.path as string) : await addProject($, name, a.path as string)
       if ('error' in r) return { error: r.error, changes: [] }
       // T-1216: a scout's "unknown project" warning follows the project list
-      await scheduleScouts($)
+      await scheduleScouts($).catch(() => undefined)
       void pump($)
       return { changes: [{ name: 'test_commands', value: r.text, said: r.text, cut: '' }] }
     }

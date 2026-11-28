@@ -1,7 +1,8 @@
 // T-755: Approve, Done and Merge now, moved out of workers.ts (imports go one way: this file imports workers.ts, never back).
 import type { SymccTask } from '../../types'
 import { PREP_NOTE, type Board, type BoardTask, patchTask, putTask, find, DEFAULT_AUTO_RETRIES, reviewTask, ownerEditedLine, gitNote, intoOf, emptyBoard, withTimeline, tryEntry, resultEntry, FINISH_BEAT_MS, finishLimitMs, mergeTestCount, testMinutesOf, waitsForFiles, isInvestigation, shortSha } from '../board'
-import { workspaceNow, projectNames, projectGone, taskGitReady, gitStateOfTask, projectNotes, prepareWorktree, worktreeDir } from './git'
+import { workspaceNow, projectNames, projectGone, taskGitReady, gitStateOfTask, projectNotes } from './git'
+import { prepareWorktree, worktreeDir } from './worktree'
 import { type CheckResult, checkAndMerge, recordCommits } from './review'
 import { ownerEdits } from './changes'
 import type { TurnLimit } from './merge-line'

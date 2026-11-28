@@ -2,7 +2,7 @@
 // temp files, and a worker that runs over its time limit (ask the owner, wrap up, time out). Split out of
 // workers.ts (T-603); workers.ts's check() imports it, and it never imports workers.ts.
 import { type Board, type BoardTask, orphanMove, liveWorkersFor, putTask, find, patchTask, tryLabel, liveDriver, emptyBoard, ownedHere, leftoverTmpFiles, withTimeline, tryEntry, endedBy, mergedThisTry, mergedDone, handedBack, timeLimitOf, overtimeQuestion, OVERTIME_OPTIONS, OVERTIME_NOTE, WRAP_UP_TEXT, WRAP_UP_GRACE_MS, parseOvertimeAnswer, outOfTimeNote, shortSha, onTask, restartedAgent, workerIdOf, checkerIdOf, withAgentStart, workerSince } from '../board'
-import { worktreeDir, taskBranch } from './git'
+import { worktreeDir, taskBranch } from './worktree'
 import { alreadyMerged } from './review'
 import { S, type CheckerEnd, workers, starting, finishing, stopped, isOwnAgent, halt, tmpWarned, checkerRuns, adoptedCheckers } from './state'
 import { checkerName } from './checker'

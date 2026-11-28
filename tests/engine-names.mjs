@@ -3,9 +3,9 @@
 // fails the tests. Refresh hooks/engine.ts from these notes when the engine/client split starts.
 // Not a `claude plugin test` file (that runtime can't read files): tests/host-free.sh runs it with node or bun.
 // Usage: node tests/engine-names.mjs [folder]. It reads every static `import ... from '...'` and `export ... from '...'`
-// in the host files (hooks/claude/, hooks/register.tsx, hooks/opencode/ but board-view.ts, hosts/node/, opencode/;
-// not their tests/ folders) that names an engine file (hooks/app/, hooks/core/, hooks/process/, hooks/board.ts,
-// hooks/name.ts, hooks/host.ts, hooks/opencode/board-view.ts, types/), and the `export { ... } from` lines of
+// in the host files (hooks/claude/, hooks/register.tsx, hooks/opencode/ but board-view.ts and its board-view-*.ts
+// parts, hosts/node/, opencode/; not their tests/ folders) that names an engine file (hooks/app/, hooks/core/, hooks/process/, hooks/board.ts,
+// hooks/name.ts, hooks/host.ts, hooks/opencode/board-view(-*).ts, types/), and the `export { ... } from` lines of
 // hooks/engine.ts. It notes (drift, exit 0)
 //   1. a host imports an engine name hooks/engine.ts does not export;
 //   2. a host imports a value (not `type`) that hooks/engine.ts exports only as a type;
@@ -27,11 +27,11 @@ const walk = d => !existsSync(join(root, d)) ? [] : readdirSync(join(root, d)).f
   return /\.tsx?$/.test(n) && !n.endsWith('.d.ts') ? [p] : []
 })
 const hosts = [...walk('hooks/claude'), ...(existsSync(join(root, 'hooks/register.tsx')) ? ['hooks/register.tsx'] : []),
-  ...walk('hooks/opencode').filter(f => f !== 'hooks/opencode/board-view.ts'), ...walk('hosts/node'), ...walk('opencode')]
+  ...walk('hooks/opencode').filter(f => !/^hooks\/opencode\/board-view(-[a-z]+)?\.ts$/.test(f)), ...walk('hosts/node'), ...walk('opencode')]
 
 // a module path from the root, no .ts/.tsx, no /index; is it on the engine side?
 const modOf = (file, spec) => relative(root, resolve(root, dirname(file), spec)).replace(/\.tsx?$/, '').replace(/\/index$/, '')
-const isEngine = m => /^hooks\/(app|core|process)\//.test(m) || /^hooks\/(board|name|host)$/.test(m) || m === 'hooks/opencode/board-view' || m === 'types' || m.startsWith('types/')
+const isEngine = m => /^hooks\/(app|core|process)\//.test(m) || /^hooks\/(board|name|host)$/.test(m) || /^hooks\/opencode\/board-view(-[a-z]+)?$/.test(m) || m === 'types' || m.startsWith('types/')
 
 // `import|export [type] { a, type B, c as d } from '...'` statements, over several lines too
 const STATEMENT = /(?:^|\n)[ \t]*(import|export)[ \t]+(type[ \t]+)?(\{[^}]*\}|\*[ \t]+as[ \t]+\w+|\w+)[ \t]+from[ \t]+['"]([^'"]+)['"]/g

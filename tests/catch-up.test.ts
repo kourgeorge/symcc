@@ -3,7 +3,7 @@
 // fast-forwarded to the tip of the branch it merges into. A small fake git keeps each branch as a list of commits.
 import { expect } from 'claude-code/testing'
 import { type SymccTask } from '../types'
-import { prepareWorktree, worktreeDir } from '../hooks/app/git'
+import { prepareWorktree, worktreeDir } from '../hooks/app/worktree'
 import { behindNote } from '../hooks/app/workers'
 import { S } from '../hooks/app/state'
 import { test } from './reset'

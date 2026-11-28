@@ -163,7 +163,7 @@ export function otherToolDone(host: Host, touch: FileTouch | null) {
   void (async () => {
     // before session start (a plugin reload): learn the project folder first; unknown, change nothing
     if (!(await findRoot(host))) return
-    if (hit.scouts) await scheduleScouts(host)
+    if (hit.scouts) await scheduleScouts(host).catch(() => undefined)
     if (hit.roles) await loadRoles(host).catch(() => undefined)
     if (hit.kinds) await loadKinds(host).catch(() => undefined)
     await publish(host, await load(host))
