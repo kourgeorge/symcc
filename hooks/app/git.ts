@@ -209,6 +209,7 @@ export async function recheckGit($: Host): Promise<string> {
   if (ok && !was && !bad.length) void pump($).catch(() => undefined)
   if (!ok) return gitNotice(S.gitState, S.gitInstall, S.N.name)
   if (bad.length) return projectNotes()
+  if (workspaceNow()) return `git is ready: this folder is a control center with no repo of its own; it works with projects (${S.N.name} setup_git makes it a repo if you want that)`
   return 'git is ready: this folder is a git repo with commits'
 }
 

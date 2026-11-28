@@ -6,7 +6,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { type Board, addTask, emptyBoard, patchTask, BIG_FILE_BYTES } from '../hooks/board'
-import { gitReady, homeBranch, setupGit, plainTask, changeNeedsProject } from '../hooks/app/git'
+import { gitReady, recheckGit, homeBranch, setupGit, plainTask, changeNeedsProject } from '../hooks/app/git'
 import { S, leadQueue, meanwhile } from '../hooks/app/state'
 import { load, saveBoard } from '../hooks/app/store'
 import { fakeHost, memoryFs } from './fake-host'
@@ -579,4 +579,12 @@ test('T-1225: a board folder that is a repo with no commits still gets the "set 
   expect(S.gitState).toBe('no-commits')
   expect([...leadQueue, ...meanwhile].some(x => x.includes('Set it up'))).toBe(true)
   expect(changeNeedsProject([])).toBe('')
+})
+
+test('T-1233: Check again in a plain folder says it is a control center, not a repo with commits', async () => {
+  const w = world()
+  await withProject(w)
+  const said = await recheckGit(w.$)
+  expect(said).toContain('control center')
+  expect(said).not.toContain('git repo with commits')
 })

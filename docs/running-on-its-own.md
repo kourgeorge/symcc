@@ -55,8 +55,9 @@ gets its own git worktree. It checks this when a session starts and before a wor
   notice moves on to the next case.
 - In the two cases below, git is there, so symcc looks again by itself every 2 minutes and
   when the board panel opens: a `git init` and a first commit made by hand clear the notice.
-- **No git repo, or no commits yet**: the board still works, and shows "No git repo here: symcc
-  needs git for task branches. No worker starts until it is set up." with a **Set up git** button. A board with projects in its table is ready as it is, with no repo of its own: see "Projects" above. To work on repos that are elsewhere, add them as projects.
+- **A folder that is not a repo** is a control center: it works with projects (see "Projects" above), and `/symcc-init git` or the settings git setup makes it a repo if you want that. To work on repos that are elsewhere, add them as projects.
+- **A repo with no commits yet**: the board still works, and shows "No commits yet: symcc
+  needs a first commit for task branches. No worker starts until it is set up." with a **Set up git** button.
   The lead asks you too; say yes, or press **g** in the board panel.
   Nothing starts until it's done. The setup:
   - runs `git init -b main` (skipped if a repo is already there);

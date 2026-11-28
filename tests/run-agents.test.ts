@@ -7,7 +7,7 @@ import { test } from './reset'
 import type { SymccRun, SymccTask } from '../types'
 import { type Board, addTask, emptyBoard, patchTask, find, parseBoard } from '../hooks/board'
 import { usedRun } from './agent-fixture'
-import { AGENT_TRIES_KEPT, agentLines, checkerTokensOf, endRun, goOnRun, keepAgentIds, runsSummary, startRun, sumRuns, tokenCount, tryTokens, tryCost, withAgentStart, withAgentUsed, withEnd, withStoppedUsed, workerIdOf, checkerIdOf } from '../hooks/core/runs'
+import { AGENT_TRIES_KEPT, agentLines, checkerTokensOf, endRun, goOnRun, keepAgentIds, runsSummary, startRun, sumRuns, tokenCount, tryTokens, tryCost, withAgentStart, withLostCheckerEnd, agentMs, withAgentUsed, withEnd, withStoppedUsed, workerIdOf, checkerIdOf } from '../hooks/core/runs'
 import { taskSections, type TaskSection } from '../hooks/core/task-sections'
 import { todayMore } from '../hooks/core/live-today'
 import { when } from '../hooks/core/days'
@@ -210,4 +210,19 @@ test('T-785: a checker lost mid-check is ended when the next checker starts, and
   // the task finishes: nothing stays open
   const done = endRun(runsOf(b), iso(5 * MIN))
   expect(done[0]!.agents!.every(a => a.ended)).toBe(true)
+})
+
+// T-1232: a checker lost when the app closed ends at its last heartbeat, so the closed hours are not agent work.
+test('T-1232: a lost checker counts to its last heartbeat, a running one to now, workers unchanged', () => {
+  const t0 = Date.parse('2026-11-20T09:00:00Z')
+  const at = (m: number) => new Date(t0 + m * MIN).toISOString()
+  const base: SymccRun[] = [{ started: at(-60), agents: [{ id: W1, kind: 'worker', started: at(-60), ended: at(-30) }, { id: 'ses_check_lost_1', kind: 'checker', started: at(-30) }] }]
+  const fixed = withAgentStart(withLostCheckerEnd(base, at(-28)), 'checker', 'ses_check_new_2', at(0))!
+  expect(agentMs(fixed[0]!, t0 + 5 * MIN, t0)).toBe(5 * MIN)
+  expect(agentMs(fixed[0]!, t0 + 5 * MIN)).toBe(30 * MIN + 2 * MIN + 5 * MIN)
+  const old = withAgentStart(base, 'checker', 'ses_check_new_2', at(0))!
+  expect(agentMs(old[0]!, t0 + 5 * MIN)).toBe(30 * MIN + 30 * MIN + 5 * MIN)
+  // a checker really running across midnight: still open, counts to now
+  expect(agentMs(base[0]!, t0)).toBe(60 * MIN)
+  expect(fixed[0]!.agents![0]).toEqual(base[0]!.agents![0])
 })

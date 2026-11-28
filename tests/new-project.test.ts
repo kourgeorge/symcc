@@ -479,11 +479,12 @@ test('T-844: /symcc-init is parsed: plain, with git, and a usage line for other 
 test('T-861: the /symcc-init description and help say plain init makes the board and shows the no-git notice (it no longer asks first)', () => {
   const init = COMMANDS().find(c => c.name === `${S.N.name}-init`)!.description
   expect(init.includes('asks first')).toBe(false)
-  expect(init.includes('No git repo here')).toBe(true)
+  expect(init.includes('control center')).toBe(true)
   const help = Object.values(MANUAL()).join('\n')
   expect(help.includes('asked about first')).toBe(false)
   expect(help.includes('asks first, then')).toBe(false)
-  expect(help.includes('No git repo here')).toBe(true)
+  expect(help.includes('No git repo here')).toBe(false)
+  expect(help.includes('control center')).toBe(true)
 })
 
 /** T-968: a new project with no git repo, the lead already told so, and one task ready to start. */

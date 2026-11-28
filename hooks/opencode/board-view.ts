@@ -390,7 +390,7 @@ export const branchIdTask = (id: string): string | null => (id.startsWith('br:')
  *  "[ Set up git (g) ]" button, which asks for a yes before /<name>-settings git setup; no row otherwise. */
 export function gitRowLines(v: Pick<PaneView, 'git_state'> & Partial<Pick<PaneView, 'git_install'>>, w: number, name: string = DEFAULT_NAME): Line[] {
   const missing = v.git_state === 'no-git'
-  if (!missing && v.git_state !== 'no-repo' && v.git_state !== 'no-commits') return []
+  if (!missing && v.git_state !== 'no-commits') return []
   // the panel clips long lines, so the notice wraps; the button goes at the end of the last line when it fits, else on its own line
   const lines: Line[] = wrapSegs([{ text: gitNotice(v.git_state!, v.git_install ?? '', name), color: 'warning' }], w)
   const b = missing ? CHECK_GIT_BUTTON : SETUP_GIT_BUTTON

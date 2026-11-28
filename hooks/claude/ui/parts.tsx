@@ -104,7 +104,7 @@ export async function paneParts($: $, e: PaneEvent) {
   }
   /** The warning row under the banner when there is no git repo or no commit yet, with its "Set up git" button. */
   const gitRow = () =>
-    v.git_state === 'no-repo' || v.git_state === 'no-commits' || v.git_state === 'no-git'
+    v.git_state === 'no-commits' || v.git_state === 'no-git'
       ? [
           <Box key="banner-git" flexDirection="row" {...(vscode ? { flexWrap: 'wrap' as const } : {})}>
             <Text wrap={vscode ? 'wrap' : 'truncate'} color={C('warning')}>{`${gitNotice(v.git_state, v.git_install ?? '', S.N.name)} `}</Text>

@@ -126,7 +126,6 @@ export function gitInstallStep(f: InstallFacts): string {
 /** The notice the board shows at the top for a git state ('' when git is fine); `step` = gitInstallStep when git is missing. */
 export function gitNotice(s: GitState, step = '', name: string = DEFAULT_NAME): string {
   if (s === 'no-git') return `Git is not installed: ${step || 'get it from https://git-scm.com'}. No worker starts until it is.`
-  if (s === 'no-repo') return `No git repo here: ${name} needs git for task branches. No worker starts until it is set up.`
   if (s === 'no-commits') return `No commits yet: ${name} needs a first commit for task branches. No worker starts until it is set up.`
   return ''
 }
@@ -139,8 +138,8 @@ export function noGitText(name: string = DEFAULT_NAME, step = ''): string {
 
 /** The question the lead passes on to the owner when the folder has no repo (or no commits); `setup` = how to say yes. */
 export function setupAskText(s: GitState, name: string = DEFAULT_NAME, setup = `${name} setup_git`): string {
-  const what = s === 'no-commits' ? 'This folder has a git repo but no commits yet' : 'This folder has no git repo'
-  const steps = s === 'no-commits' ? 'a .gitignore, a first commit of the current files' : 'git init, a .gitignore, a first commit of the current files'
+  const what = 'This folder has a git repo but no commits yet'
+  const steps = 'a .gitignore, a first commit of the current files'
   return `${what}. ${name} needs one to give each worker its own copy. Set it up? (${steps}.) Nothing starts until it's done. Ask the owner; only if they say yes, run ${setup} (or they press g in the board panel). It never pushes and adds no remote.`
 }
 
