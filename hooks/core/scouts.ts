@@ -397,6 +397,9 @@ export type ScoutListRow = { icon: string; tone: string; name: string; every: st
 
 /** The short state shown in the Scouts list for a scout whose every_minutes is not valid. */
 export const BAD_EVERY_STATE = 'bad every_minutes'
+/** The short state for a scout whose projects: names an unknown project (its every_minutes is fine). */
+export const BAD_PROJECT_STATE = 'unknown project'
+const badState = (s: { warning?: string }): string => (s.warning?.startsWith('every_minutes ') ? BAD_EVERY_STATE : BAD_PROJECT_STATE)
 
 /** The cells of the Scouts list at `width` columns (`indent` columns before each row): icon, name, how often, state,
  *  "last:", the findings choice (T-912, findingsMark with the board's scout_findings `board`) and model, two spaces
@@ -407,7 +410,7 @@ export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number
   const raw = scouts.map(s => ({
     s,
     every: everyText(s.every_minutes),
-    state: s.warning && !s.running && !s.paused ? BAD_EVERY_STATE : scoutStateText(s, nowMs),
+    state: s.warning && !s.running && !s.paused ? badState(s) : scoutStateText(s, nowMs),
     last: s.running ? { text: '', tone: 'inactive' } : scoutLastText(s),
     findings: findingsMark(s.findings, board),
     model: s.model ?? '',

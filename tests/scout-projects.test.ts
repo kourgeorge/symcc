@@ -3,7 +3,7 @@
 // with no projects gets the same prompts as before. All pure.
 import { expect, test } from 'claude-code/testing'
 import type { SymccScout, SymccTask } from '../types'
-import { parseScout, scoutText, scoutPrompt, scoutProjectsError, scoutProjectTable, leadScoutText } from '../hooks/core/scouts'
+import { parseScout, scoutText, scoutPrompt, scoutProjectsError, scoutProjectTable, leadScoutText, scoutListRows } from '../hooks/core/scouts'
 import { fillPrompt } from '../hooks/core/prompts'
 import { readInsideProjects as ok } from '../hooks/claude/project-reads'
 import { readAllowed } from '../hooks/app/ask'
@@ -65,6 +65,14 @@ test('an unknown project name is refused with a reason', () => {
   expect(why).toContain('unknown project "nope"')
   expect(why).toContain('api, docs, web')
   expect(scoutProjectsError(['x'], {})).toContain('no projects')
+})
+
+test('the Scouts list names the project problem, not every_minutes', () => {
+  const d = parseScout('bugs', '---\nevery_minutes: 30\nprojects: api, nope\n---\nLook.\n', { api: '/code/api' })!
+  const row = scoutListRows([{ name: d.name, every_minutes: d.every_minutes, last_run: null, running: false, prompt: d.prompt, next_run: new Date(Date.now() + 600000).toISOString(), warning: d.warning } as SymccScout], Date.now(), 100)[0]!
+  expect(row.state).toContain('unknown project')
+  expect(row.state).not.toContain('every_minutes')
+  expect(row.stateTone).toBe('warning')
 })
 
 test('the scout prompt lists name: path; projects: limits the list; none named gets every project', () => {
