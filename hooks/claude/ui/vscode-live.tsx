@@ -1,5 +1,5 @@
 // The board panel's Live tab in VS Code's side panel (T-691, T-1003): the same lanes and today as the terminal's Live
-// tab (live.tsx), worked out in core/live.ts (liveTaskLanes, liveLayout, liveTrains, liveTodayRows ...); this file draws
+// tab (live.tsx), worked out in core/live.ts (liveTaskLanes, liveLanes, liveLayout, liveTrains, liveTodayRows ...); this file draws
 // them in VS Code's plain style: bold headings, no folds, no legend, links for what you go to.
 //   Status        Mode (with "change" a link), Scouts, Branch, Tests: one row each
 //   Tasks  17 backlog   what needs you, then the lanes; when nothing runs why, and when all is done "All done", "Up next
@@ -13,7 +13,7 @@
 // up under them. The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code asks for
 // reduced motion. T-715: under a lane hang its waiting trains, one line each, indented by their level.
 import type { RenderChildren } from 'claude-code'
-import { laneLines, liveInner, liveBranchBlocks, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, LIVE_SECTIONS, type LiveLane, type LiveStation, type LiveLayout, type LiveSeg, LIVE_TONE, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLayout, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
+import { laneLines, liveInner, liveBranchBlocks, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, LIVE_SECTIONS, type LiveLane, type LiveStation, type LiveLayout, type LiveSeg, LIVE_TONE, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLanes, liveLayout, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
 import { STATUS_MARK } from '../../core/details'
 import { textWidth } from '../../core/width'
 import { nextMode } from '../../board'
@@ -201,7 +201,7 @@ export function livePageVs($: $, pane: PaneParts, notes: readonly OrgMemNote[]) 
   const segsText = (xs: readonly LiveSeg[], tone?: string) => xs.map(s => <Text tabular color={C(tone ?? LIVE_TONE[s.tone])}>{s.text}</Text>)
 
   // ---- Status: Mode, Scouts, Branch and Tests, one row each (the label column is VS_LABEL_W wide)
-  const nowSegs = liveNowSegs(v, running, nowMs, Infinity).slice(1)
+  const nowSegs = liveNowSegs(v, liveLanes(v, nowMs), nowMs, Infinity).slice(1)
   const driving = v.driving ?? S.driving
   const tv = testsValue(v)
   const modeTo = vsHref('mode', nextMode(mode))

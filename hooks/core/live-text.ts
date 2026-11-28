@@ -5,7 +5,7 @@
 // yesterday and last 7 days lines) and ORGANIZATIONAL MEMORY (the count and the newest notes), then one hint line, then (when lanes show) the ✧ / ⌀ legend
 // as the last lines (T-933: never under the task rows).
 import { DEFAULT_NAME } from '../name'
-import { LIVE_INDENT, LIVE_SECTIONS, liveIdle, laneLines, liveBranchBlocks, liveColumns, liveHeaderSegs, liveHeading, liveNowSegs, liveInner, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveOrgMem, liveTaskLanes, liveTodayLines, liveTrains, segText, trainRows, type LiveSeg, type LiveView } from './live'
+import { LIVE_INDENT, LIVE_SECTIONS, liveIdle, laneLines, liveBranchBlocks, liveColumns, liveHeaderSegs, liveHeading, liveNowSegs, liveInner, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveOrgMem, liveTaskLanes, liveLanes, liveTodayLines, liveTrains, segText, trainRows, type LiveSeg, type LiveView } from './live'
 import type { OrgMemNote } from './org-mem'
 import { localOffset } from './days'
 
@@ -71,7 +71,7 @@ export function liveStatusText(view: StatusView, notes: readonly OrgMemNote[], n
   // TODAY: today's figures, then the yesterday and last 7 days lines
   heading(LIVE_SECTIONS.today)
   // T-938: the first row is "Now:" the mode line (mode, agents, the scouts running and the next one)
-  under(liveNowSegs(view, running, nowMs, inner))
+  under(liveNowSegs(view, liveLanes(view, nowMs), nowMs, inner))
   for (const t of liveTodayLines(view, nowMs, inner, offsetMin, !lanes.length)) under(t)
   // ORGANIZATIONAL MEMORY: the count (in the heading) and the newest notes
   const om = liveOrgMem(notes, w)

@@ -31,7 +31,7 @@ import {
   type SettingName, type SettingPage, type ScoutRunRecord, type RoleDef, type KindDef, type ScoutEditField, type DefAction, type DefEditField, type TaskVerb, settingsKeys, rolesKeys, kindsKeys, roleEditKeys, defEditFields, roleTools, roleFileText, roleSkipReason, roleCodeText, kindFileText, kindSkipReason,
   DEFAULT_ROLE, isCheckerRole, checkerOn, roleNameError, kindNameError, leadScoutNameError, checkStepNow, rowEndText, taskPhase, choiceLines, driveWarning, DRIVE_HERE_LABEL, showsDriveButton,
   searchTasks, showsHeader, type BoardPage, groupLabel,
-  LIVE_TABS, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranchBlocks, liveTaskLanes, liveLayout, liveColumns, liveNowSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
+  LIVE_TABS, liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, liveBold, liveHeading, liveIndented, liveInner, tabRow, LIVE_VIEW_KEYS, liveKeys, liveBranchBlocks, liveTaskLanes, liveLanes, liveLayout, liveColumns, liveNowSegs, liveLabelSegs, liveNeeds, laneLines, liveOrgMem, liveTrains, trainRows, liveTodayLines, searchLine, modeButton, hintLines, roleKeys, rolePromptKeys, ROLE_PROMPTS, ROLE_SLOT, promptsOfRole, type RolePromptKind,
 } from '../board'
 import { notSetUpAnswer } from '../core/settings'
 import { type DefSource, type BrokenDef, defSource, sourceLabel, brokenNamed, brokenLabel, defNamed } from '../core/def-files'
@@ -966,7 +966,7 @@ function liveBody(f: ViewFile, cursor: number, nowMs: number, w: number): Body {
   b.blank()
   // T-938: the first row is "Now:" the mode line; T-770: while scouts run (or one is due) their mark at its end
   // ("⌕ gaps-bot 4m"), a click on it opens the Scouts tab
-  b.add([{ text: LIVE_INDENT, color: 'text' }, ...liveNowSegs(v, running, nowMs, inner).map((x, i) => (i === 0 ? { text: x.text, color: LIVE_TONE.dim } : i === 1 ? { text: x.text, color: 'text', bold: true } : { text: x.text, color: LIVE_TONE[x.tone], hit: { tab: 'scouts' as const } }))])
+  b.add([{ text: LIVE_INDENT, color: 'text' }, ...liveNowSegs(v, liveLanes(v, nowMs), nowMs, inner).map((x, i) => (i === 0 ? { text: x.text, color: LIVE_TONE.dim } : i === 1 ? { text: x.text, color: 'text', bold: true } : { text: x.text, color: LIVE_TONE[x.tone], hit: { tab: 'scouts' as const } }))])
   for (const t of liveTodayLines(v, nowMs, inner, undefined, !lanes.length)) b.add(under(t))
   // T-718: the Organizational memory section, just above the footer
   b.blank()

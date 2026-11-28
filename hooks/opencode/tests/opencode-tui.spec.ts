@@ -3156,8 +3156,8 @@ test('T-846: the OpenCode Live tab draws an investigation as work → done, a do
   expect(row('T-803')).toContain('–')
   expect(row('T-806')).not.toContain('–')
   expect(marks(row('T-806'))).toBe('●-●-●-◉-○')
-  expect(marks(row('T-805'))).toBe('●-●-●-●-◉-○')
-  expect(texts.some(t => t.includes('you') && t.includes('done'))).toBe(true)
+  // T-1210: T-805 waits for the owner's review: in NEEDS YOU, no lane
+  expect(row('T-805')).toBe(undefined)
   expect(texts.some(t => /\b(merged|answer)\b/.test(t.split('▶')[0]!) && t.includes('queue'))).toBe(false)
 })
 
@@ -3334,7 +3334,7 @@ test('T-709: the Live tab shows a lane for an approved task in review while its 
   // its check step gone stale: it only waits for the owner (T-846), so its lane sits at "you"
   const stale: ViewFile = { ...f, view: { ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)).map(t => viewTask(t)) } }
   expect(liveLanes({ ...f.view, tasks: tasks.map(t => (t.id === 'T-630' ? ({ ...t, live: { checking: { step: 'testing', at: ago(3600) } }, } as unknown as SymccTask) : t)) }, NOW).map(l => l.station)).toEqual(['you'])
-  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText).some(idleLine)).toBe(false)
+  expect(panelLines(parseViewFile(viewFileText(stale)), { tab: 'live', opened: '', cursor: 0 }, NOW, 120).lines.map(lineText).some(idleLine)).toBe(true) // T-1210: it needs the owner now, so TASKS has no lane and shows the idle line
 })
 
 test('T-692: in the TUI, l (or a click on the Live tab) shows the Live tab; ↓ and Enter, or a click on a lane, open that task\'s page', async () => {
@@ -4477,20 +4477,16 @@ test('T-786: the OpenCode Live tab has ▍Needs you first (above ▍Tasks) with 
   expect(none.lines.map(lineText).some(x => x.includes('Needs you'))).toBe(false)
 })
 
-test('T-786: a doing task that asks for more time has separate cursor stops for its ▍Needs you row and its lane', () => {
+test('T-786: a doing task that asks for more time has a ▍Needs you row and no lane (T-1210)', () => {
   const f0 = viewFile()
   const f = parseViewFile(viewFileText({ ...f0, view: { ...f0.view, tasks: f0.view.tasks.filter(t => t.id === 'T-1' || t.id === 'T-2').map(t => (t.id === 'T-1' ? { ...t, live: { time_ask: AT }, note: 'time is up' } : t)) } }))
   const d0 = panelLines(f, { tab: 'live', opened: '', cursor: 0 }, NOW, 100)
-  expect(d0.ids.slice(0, 3)).toEqual(['need:T-2', 'need:T-1', 'T-1'])
-  for (let c = 0; c < 3; c++) {
+  expect(d0.ids.slice(0, 2)).toEqual(['need:T-2', 'need:T-1'])
+  expect(d0.ids.includes('T-1')).toBe(false)
+  for (let c = 0; c < 2; c++) {
     const d = panelLines(f, { tab: 'live', opened: '', cursor: c }, NOW, 100)
     expect([c, d.lines.map(lineText).filter(x => x.startsWith('›')).length]).toEqual([c, 1])
   }
-  // a click on the running task's lane ({open:'T-1'}, handled as openLive(hit.open)) lands on the lane's own stop
-  const lane = d0.hits.find(h => h && 'open' in h && h.open === 'T-1')
-  expect(lane).toEqual({ open: 'T-1' })
-  expect(d0.ids.indexOf((lane as { open: string }).open)).toBe(2)
-  expect(d0.ids.indexOf('T-1')).not.toBe(d0.ids.indexOf('need:T-1'))
 })
 
 test('T-855: OpenCode\'s task page draws an agent line of a try with ⌀ before its token count', () => {

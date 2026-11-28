@@ -242,7 +242,9 @@ export function panelView(v: PaneView, o: { project: string; dir: string; nowMs:
   ]
   const view = { tasks, checker: v.checker, auto_retries: v.auto_retries, max_parallel: v.max_parallel, mode: v.mode, ...(v.archived_done ? { archived_done: v.archived_done } : {}) }
   const byId = new Map(tasks.map(t => [t.id, t]))
-  const lanes = [...liveLanes(view, nowMs), ...liveFinishedLanes(view, nowMs)].map(l => panelLane(l, byId.get(l.id)))
+  // T-1210: a task that needs the owner is in `needs`, so it has no lane here
+  const allRunning = liveLanes(view, nowMs).map(l => panelLane(l, byId.get(l.id)))
+  const lanes = [...liveLanes(view, nowMs).filter(l => !needsYou(byId.get(l.id) as BoardTask, nowMs)), ...liveFinishedLanes(view, nowMs)].map(l => panelLane(l, byId.get(l.id)))
   const open = tasks.filter(t => !isFinished(t) || (ms(t.updated_at) ?? 0) >= startOfDay(nowMs))
   const next = tasks.filter(t => t.status === 'todo').sort(byRunOrder)
   const scouts = (v.scouts ?? []).map(
@@ -275,7 +277,8 @@ export function panelView(v: PaneView, o: { project: string; dir: string; nowMs:
     scouts,
     counts: {
       needs: needs.length,
-      running: lanes.filter(l => l.doneMs === undefined && l.stations[l.at] !== 'you').length,
+      // a count, not a drawing: read every running lane, including tasks hidden from `lanes` because they need the owner
+      running: [...allRunning].filter(l => l.doneMs === undefined && l.stations[l.at] !== 'you').length,
       next: next.length,
       doneToday: tasks.filter(t => t.status === 'done' && (ms(t.updated_at) ?? 0) >= startOfDay(nowMs)).length,
       backlog: tasks.filter(t => t.status === 'backlog').length,
