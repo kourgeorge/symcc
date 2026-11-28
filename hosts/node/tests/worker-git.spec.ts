@@ -45,7 +45,9 @@ async function scratchRepo(name: string, sideFile: string, check: string) {
   }
   /** The commits task `t`'s runs saved. */
   const saved = (t: { runs?: { commits?: string[] }[] }) => (t.runs ?? []).flatMap(r => r.commits ?? [])
-  return { repo, git, cli, sha, task, saved }
+  /** The board's own name for task `id`'s branch (symcc/<name>/T-n, T-1218). */
+  const branch = async (id: string) => `symcc/${JSON.parse(await readFile(`${repo}/.symcc/board.json`, 'utf8')).name}/${id}`
+  return { repo, git, cli, sha, task, saved, branch }
 }
 
 test('T-1053: a worker\'s own commit and its merge of another branch pass prep, the scope check, the catch-up and the merge; the try\'s commits list them', async () => {
@@ -146,8 +148,8 @@ test('T-1053: a merged-in file outside the task\'s files fails the scope check; 
     expect(JSON.stringify(t.timeline)).toContain('out.txt')
     expect((await r.git('ls-tree', '-r', '--name-only', 'main')).stdout).not.toContain('out.txt')
     // the undo leaves the branch without the file and without side's commits, so they never reach main later
-    expect((await r.git('ls-tree', '-r', '--name-only', 'symcc/T-1')).stdout).not.toContain('out.txt')
-    expect((await r.git('merge-base', '--is-ancestor', 'side', 'symcc/T-1')).exitCode).toBe(1)
+    expect((await r.git('ls-tree', '-r', '--name-only', await r.branch('T-1'))).stdout).not.toContain('out.txt')
+    expect((await r.git('merge-base', '--is-ancestor', 'side', await r.branch('T-1'))).exitCode).toBe(1)
     // main moves on; the retry starts from the kept branch (brought up to date) and merges
     await r.git('commit', '-q', '--allow-empty', '-m', 'owner: main moved')
     expect((await r.cli({}, 'tool', 'retry', JSON.stringify({ task: 'T-1' }))).stdout).toContain('T-1')
@@ -176,8 +178,8 @@ for (const [name, fakeGit] of [
       const t = await r.task('T-1')
       expect(t.status).toBe('failed')
       expect(JSON.stringify(t.timeline)).toContain('out.txt')
-      expect((await r.git('merge-base', '--is-ancestor', 'side', 'symcc/T-1')).exitCode).toBe(1)
-      expect((await r.git('ls-tree', '-r', '--name-only', 'symcc/T-1')).stdout).not.toContain('out.txt')
+      expect((await r.git('merge-base', '--is-ancestor', 'side', await r.branch('T-1'))).exitCode).toBe(1)
+      expect((await r.git('ls-tree', '-r', '--name-only', await r.branch('T-1'))).stdout).not.toContain('out.txt')
       expect((await r.cli({}, 'tool', 'retry', JSON.stringify({ task: 'T-1' }))).stdout).toContain('T-1')
       expect((await r.cli({}, 'tick')).stdout).toMatch(/T-1 "Say hello" merged into main/)
       expect((await r.git('show', 'main:hello.txt')).stdout).toBe('hello from the fake worker\n')
@@ -207,7 +209,7 @@ test('T-1053: a merged-in commit that only deletes a file outside the task fails
     const t = await r.task('T-1')
     expect(t.status).toBe('failed')
     expect(JSON.stringify(t.timeline)).toContain('out.txt')
-    expect((await r.git('merge-base', '--is-ancestor', 'del', 'symcc/T-1')).exitCode).toBe(1)
+    expect((await r.git('merge-base', '--is-ancestor', 'del', await r.branch('T-1'))).exitCode).toBe(1)
     expect((await r.cli({}, 'tool', 'retry', JSON.stringify({ task: 'T-1' }))).stdout).toContain('T-1')
     expect((await r.cli({}, 'tick')).stdout).toMatch(/T-1 "Say hello" merged into main/)
     expect((await r.git('show', 'main:out.txt')).stdout).toBe('the owner\'s file\n')

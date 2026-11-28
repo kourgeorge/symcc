@@ -13,6 +13,7 @@ import { checkAndMerge, alreadyMerged } from '../../../hooks/app/review'
 import { findMerged } from '../../../hooks/app/merged'
 import { load } from '../../../hooks/app/store'
 import { find, intoOf } from '../../../hooks/board'
+import { S } from '../../../hooks/app/state'
 
 const isThere = (p: string) => access(p).then(() => true, () => false)
 const FAKE = `${PLUGIN_ROOT}/hosts/node/tests/fake-claude.sh`
@@ -68,7 +69,7 @@ test('T-1153: a client task is tested with client\'s command and merged into cli
       expect(await isThere(`${board}/.git`)).toBe(false)
       expect((await git(`${board}/server`, 'rev-parse', 'HEAD')).stdout.trim()).toBe(serverHead)
       expect((await git(`${board}/server`, 'status', '--porcelain')).stdout.trim()).toBe('')
-      expect((await git(`${board}/server`, 'branch', '--list')).stdout).not.toContain('symcc/T-1')
+      expect((await git(`${board}/server`, 'branch', '--list')).stdout).not.toContain(S.N.branch('T-1'))
       await removeWorktree(s.host, 'T-1', made.dir).catch(() => false)
     } finally {
       await closeSession(s).catch(() => undefined)

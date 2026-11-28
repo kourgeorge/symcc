@@ -5,7 +5,7 @@ import { emptyBoard, bannerLines } from '../hooks/board'
 import { pickBoardName, isBoardName } from '../hooks/core/board-name'
 import { load, change } from '../hooks/app/store'
 import { doctor } from '../hooks/app/doctor'
-import { migrateIfOld, forgetMigrationFailure } from '../hooks/app/migrate-data'
+import { migrateIfOld, nameIfMissing, forgetMigrationFailure } from '../hooks/app/migrate-data'
 import { readBranches } from '../hooks/app/branches'
 import { newFriendlyName, useFriendly } from '../hooks/app/board-name'
 import { taskBranch } from '../hooks/app/worktree'
@@ -178,4 +178,32 @@ test('T-1218: the Branches view reads only this board\'s task branches', async (
   expect(Object.keys(f?.tasks ?? {})).toEqual(['T-5'])
   expect(seen.some(s => s.includes('symcc/power-falcon/T-5'))).toBe(true)
   expect(seen.some(s => s.includes('quiet-river'))).toBe(false)
+})
+
+test('T-1218: a board with no name (as /symcc-init writes it) gets one at once, and a named board keeps its name', async () => {
+  const w = world(['symcc/T-5'], { ...emptyBoard() })
+  await nameIfMissing(w.host)
+  const saved = JSON.parse(w.files.get(`${D}/board.json`)!)
+  expect(isBoardName(saved.name)).toBe(true)
+  expect((await load(w.host)).name).toBe(saved.name)
+  expect(S.N.branch('T-5')).toBe(`symcc/${saved.name}/T-5`)
+  await nameIfMissing(w.host)
+  expect(JSON.parse(w.files.get(`${D}/board.json`)!).name).toBe(saved.name)
+  const v = world([], { ...emptyBoard(), name: 'quiet-river' })
+  await nameIfMissing(v.host)
+  expect(JSON.parse(v.files.get(`${D}/board.json`)!).name).toBe('quiet-river')
+})
+
+test('T-1218: the migration also moves a project repo\'s branch when the window has not loaded its projects yet', async () => {
+  const board = { ...emptyBoard(), data_version: 2, projects: { client: { path: '/client' } }, tasks: [{ ...base, id: 'T-5', title: 'five', status: 'review', project: 'client', branch: 'symcc/T-5', runs: [{ started: T }] }] }
+  const w = world([], board)
+  const seen: string[][] = []
+  const inner = w.host.run
+  w.host.run = async (argv, opts) => {
+    if (argv[0] === 'git' && opts?.cwd === '/client') seen.push([...argv])
+    return inner(argv, opts)
+  }
+  S.projects = {}
+  expect(await migrateIfOld(w.host)).toBe('')
+  expect(seen.some(a => a.includes('for-each-ref'))).toBe(true)
 })
