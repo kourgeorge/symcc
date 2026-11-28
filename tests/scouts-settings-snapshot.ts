@@ -13,6 +13,7 @@
 // T-908 added the docs_test_commands row under Checks before merging (after test_commands) on the Settings pages.
 // T-912 added "scout findings by default: ..." on top of the Scouts list, a findings column to its rows, the Findings
 // line (f) under the scout pages' header (no "findings →" in their state any more) and "f findings" to their key hints.
+// T-1219 added the ▍Projects box (and its hint) to the edit page and a "Projects: ..." line under the scout pages' Findings line.
 export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
   "terminal scouts list": {
     "type": "Box",
@@ -1488,6 +1489,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -1692,6 +1694,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -1912,6 +1915,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -2137,6 +2141,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -2335,6 +2340,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -2549,6 +2555,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -2793,6 +2800,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -3003,6 +3011,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -3225,6 +3234,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -3457,6 +3467,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -3654,6 +3665,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -3867,6 +3879,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -4097,6 +4110,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -4291,6 +4305,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},
@@ -4501,6 +4516,7 @@ export const SCOUTS_SETTINGS_BEFORE: Record<string, unknown> = {
           }
         ]
       },
+      {"type":"Text","props":{"color":"inactive"},"children":["Projects: this board's repo"]},
       {
         "type": "Box",
         "props": {"flexDirection":"column"},

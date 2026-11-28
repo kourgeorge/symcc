@@ -1,7 +1,7 @@
 // The board panel's Scouts tab (T-559), as plain data (T-798: split out of board-view.ts): the list of scouts, a
 // scout's page and one run's page.
 import type { SymccScout } from '../../types'
-import { sortScouts, scoutListRows, scoutFindingsOf, findingsLine, findingsDefaultLine, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile } from '../board'
+import { sortScouts, scoutListRows, scoutFindingsOf, findingsLine, findingsDefaultLine, scoutHowTo, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFile, scoutProjectsLine } from '../board'
 import { placeIn, scoutAbout, scoutListNames, scoutStateGroups } from '../core/page-header'
 import { type ViewFile, type PanelChoice, type PanelButton, type Body, bodyMaker, backButton, textLines, scoutNamed, scoutRunsIn, buttonLines, BACK_BUTTON, headerLines, scoutButtons } from './board-view'
 
@@ -88,6 +88,7 @@ function scoutPage(f: ViewFile, sc: SymccScout, choice: PanelChoice, nowMs: numb
   // T-912: its findings choice; f (or a click on the line) moves it on, sent as /<name>-scout <name> findings ...
   const said = findingsLine(sc.findings, scoutFindingsOf(f.view))
   b.add([{ text: 'Findings: ', color: 'text', bold: true }, { text: said.slice('Findings: '.length), color: 'inactive' }, { text: '  (f changes it)', color: 'inactive' }], { key: 'f' })
+  b.add([{ text: scoutProjectsLine((sc as { projects?: string[] }).projects, f.view.projects), color: 'inactive' }])
   // the summary from the file's front matter, if one is set (the instructions show in full below)
   if (sc.warning) b.add([{ text: sc.warning, color: 'warning' }])
   const problem = scoutLastRunProblem([...shown].reverse().map(x => x.run))

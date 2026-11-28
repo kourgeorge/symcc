@@ -162,6 +162,7 @@ ${features.panel ? `  /${S.N.name}                     open the board panel (↑
   /${S.N.name}-scout NAME prompt TEXT  change what it does
   /${S.N.name}-scout NAME findings auto|backlog|default  where its findings go: auto (the lead decides),
                        backlog (they wait for you), default (the scout_findings setting)
+  /${S.N.name}-scout NAME projects a,b  the projects it looks at (none: every project)
   /${S.N.name}-scout NAME new TEXT make a new scout that does TEXT
   /${S.N.name}-mode [paused|review|auto]  set the board mode; no word switches review and auto
                        (from paused, no word goes to review)

@@ -674,7 +674,7 @@ export async function readScoutFile(host: Host, scout: string): Promise<string |
 export async function editScout(host: Host, sc: SymccScout) {
   const text = await readScoutFile(host, sc.name)
   const def = text === null ? null : parseScout(sc.name, text)
-  S.draft = { scout: sc.name, isNew: false, every: def?.bad_every ?? String(def?.every_minutes ?? sc.every_minutes), model: def?.model ?? sc.model ?? '', summary: def?.summary ?? sc.summary ?? '', findings: def?.findings ?? sc.findings ?? '', body: def?.prompt ?? sc.prompt ?? '', error: '' }
+  S.draft = { scout: sc.name, isNew: false, every: def?.bad_every ?? String(def?.every_minutes ?? sc.every_minutes), model: def?.model ?? sc.model ?? '', summary: def?.summary ?? sc.summary ?? '', findings: def?.findings ?? sc.findings ?? '', projects: (def?.projects ?? (sc as { projects?: string[] }).projects ?? []).join(', '), body: def?.prompt ?? sc.prompt ?? '', error: '' }
   host.ui.refresh()
 }
 
@@ -688,7 +688,7 @@ export async function newScout(host: Host, name: string, shown: string[] = []) {
     S.naming = { name: s, error: err }
   } else {
     S.naming = null
-    S.draft = { scout: s, isNew: true, every: '60', model: '', summary: '', findings: '', body: '', error: '' }
+    S.draft = { scout: s, isNew: true, every: '60', model: '', summary: '', findings: '', projects: '', body: '', error: '' }
   }
   host.ui.refresh()
 }
@@ -709,13 +709,21 @@ export async function saveScout(host: Host) {
     host.ui.refresh()
     return
   }
+  const projects = scoutProjectNames(d.projects)
+  if (projects.length) await load(host).catch(() => undefined) // the board's current project list
+  const badProjects = scoutProjectsError(projects, S.projects)
+  if (badProjects) {
+    d.error = badProjects
+    host.ui.refresh()
+    return
+  }
   const old = await readScoutFile(host, d.scout)
   if (d.isNew && old !== null) {
     d.error = `a scout named ${d.scout} already exists`
     host.ui.refresh()
     return
   }
-  const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model, summary: d.summary, findings: findingsOf(d.findings) }, d.body)
+  const text = scoutText(old, { every_minutes: everyMinutesOf(d.every)!, model: d.model, summary: d.summary, findings: findingsOf(d.findings), projects }, d.body)
   await host.run(['mkdir', '-p', path(S.N.scouts)])
   await host.fs.write(path(rel), text)
   S.draft = null
