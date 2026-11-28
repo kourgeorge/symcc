@@ -1,7 +1,8 @@
 // The engine's names the hosts use (T-635, groundwork for the engine/client split in docs/research/standalone-app.md
 // section 12). Re-exports only: every name the hosts (hooks/claude/, hooks/register.tsx, hooks/opencode/ and its
 // opencode/ entries, hosts/node/) import today from the engine side (hooks/app/, hooks/core/, hooks/board.ts,
-// hooks/name.ts, hooks/host.ts, hooks/process/, hooks/opencode/board-view.ts, types/), each from the file it lives in.
+// hooks/name.ts, hooks/host.ts, hooks/process/, hooks/opencode/board-view.ts, types/), each from the file it lives in
+// (T-798: hooks/opencode/board-view.ts re-exports its parts, board-view-band.ts and the others, so their names come from it).
 // Nothing imports this file yet; the hosts still import those files directly.
 // The list may lag behind the hosts (T-645): a host starting or stopping to use an engine name needs no edit here.
 // tests/engine-names.mjs (run by tests/host-free.sh) only prints the differences as notes; refresh this list from
