@@ -11,8 +11,8 @@
 #   4. (hooks/app/ and hooks/core/ only) says "Claude" or "ctrl+x" in its code, not in comments (T-475): the texts the
 #      owner sees take those from the host's words (HostWords.assistant, app, backToBoard; claude/host.ts CLAUDE_WORDS).
 # The engine's other host-free files (T-634, step S1 of docs/research/standalone-app.md section 12): hooks/process/ and
-# the board's view helpers in hooks/opencode/board-view.ts get check 1 only (imports), so a later standalone client can
-# load them too; so does hooks/engine.ts (T-635: it may re-export './opencode/board-view', no other hooks/opencode/
+# the board's view helpers in hooks/opencode/board-view.ts and its parts (board-view-*.ts, T-798) get check 1 only
+# (imports), so a later standalone client can load them too; so does hooks/engine.ts (T-635: it may re-export './opencode/board-view', no other hooks/opencode/
 # file). They may still name Claude Code tools and words (the `claude -p` runner does).
 set -u
 root=${1:-"$(cd "$(dirname "$0")/.." && pwd)"}
@@ -30,8 +30,10 @@ tsc() {
 shared=$(find hooks/app hooks/core -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort)
 files=$(printf '%s\n' $shared; ls hooks/board.ts hooks/name.ts hooks/host.ts types/index.d.ts prompts/*.ts kinds/*.ts 2>/dev/null)
 files=$(echo $files)
-# imports only (T-634): every .ts file under hooks/process/, hooks/opencode/board-view.ts, and hooks/engine.ts (T-635)
-imports_only=$(echo $(find hooks/process -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort; ls hooks/opencode/board-view.ts hooks/engine.ts 2>/dev/null))
+# imports only (T-634): every .ts file under hooks/process/, hooks/opencode/board-view.ts and its parts (T-798), and
+# hooks/engine.ts (T-635)
+board_view=$(echo $(ls hooks/opencode/board-view.ts hooks/opencode/board-view-*.ts 2>/dev/null))
+imports_only=$(echo $(find hooks/process -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null | sort; echo $board_view; ls hooks/engine.ts 2>/dev/null))
 [ -n "$files$imports_only" ] || { echo "host-free: no shared files here, nothing to check"; exit 0; }
 
 # the code without its comment lines (// ..., and the * lines of /** ... */ blocks), as "file:line:text"
@@ -47,9 +49,11 @@ if [ -n "$hits" ]; then
   fails=$((fails + 1))
 fi
 
-# board-view.ts lives inside hooks/opencode/, so a './...' import is an OpenCode file (T-634)
-if [ -f hooks/opencode/board-view.ts ]; then
-  hits=$(grep -nHvE '^[[:space:]]*(//|/?\*)' hooks/opencode/board-view.ts | grep -E "(from|import|require)[[:space:]]*\(?[[:space:]]*['\"]\./")
+# board-view.ts lives inside hooks/opencode/, so a './...' import is an OpenCode file (T-634); only board-view.ts and
+# its parts may import each other (T-798: './board-view', './board-view-band', ...)
+if [ -n "$board_view" ]; then
+  hits=$(grep -nHvE '^[[:space:]]*(//|/?\*)' $board_view | grep -E "(from|import|require)[[:space:]]*\(?[[:space:]]*['\"]\./" |
+    grep -vE "(from|import)[[:space:]]*['\"]\./board-view(-[a-z]+)?['\"]")
   if [ -n "$hits" ]; then
     echo "$hits" | while IFS= read -r hit; do echo "host-free: a host-bound import (board-view.ts may not import hooks/opencode/ files): $hit" >&2; done
     fails=$((fails + 1))

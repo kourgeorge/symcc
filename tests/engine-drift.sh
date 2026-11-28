@@ -12,7 +12,7 @@ fail() { echo "engine-drift: $1" >&2; exit 1; }
 
 # hosts stop using engine names: every host file on the copy is emptied (so it holds whatever names they use today)
 for f in $(find "$tmp/hooks/claude" "$tmp/hooks/opencode" "$tmp/hosts/node" "$tmp/opencode" -type f \( -name '*.ts' -o -name '*.tsx' \) 2>/dev/null) "$tmp/hooks/register.tsx"; do
-  case "$f" in */board-view.ts) ;; *) [ -f "$f" ] && : > "$f" ;; esac
+  case "$f" in */board-view.ts|*/board-view-*.ts) ;; *) [ -f "$f" ] && : > "$f" ;; esac
 done
 # and a host starts to use an engine name hooks/engine.ts does not list
 mkdir -p "$tmp/hooks/claude"
