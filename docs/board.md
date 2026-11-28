@@ -603,8 +603,8 @@ words as bold headings with the same spacing):
   for the tasks merged today, the middle value (median) of their tokens, their work time and the time
   from their first try's start to the merge; then today's share of merged tasks that went through on the first try, the
   average tries per merged task (the same figures `/symcc-stats` shows), and how many times the checker
-  sent a task back (left out when none). The fourth: all agent work today (the tries' time today and the
-  scouts'); then `≈ $N this session`, the whole session's cost (not just today's) as `/cost` says it, only when symcc knows it (never a
+  sent a task back (left out when none). The fourth: all agent work today (the time of every agent that ran today, added up: each worker and each checker on its own start and end, and the
+  scouts'; tests and the merge queue are not counted; the per-task `work` median and the yesterday / last 7 days times use the same rule); then `≈ $N this session`, the whole session's cost (not just today's) as `/cost` says it, only when symcc knows it (never a
   guess); then `busiest hour HH:00 · ⌀ N`; and at the very end the tokens per
   hour as a sparkline that always spans the whole day, `00` to `24`, with a dim `⌀/h` in front (a bare `⌀` when there is little room; the label is never dropped while the sparkline shows, and `00` and `24` always stay) and thin borders (`▕` `▏`) around it: the hours so far are bars, a past hour with no tokens is a dim `▁` (so the floor is one joined line), the current hour's bar is in the accent color, and the hours still to come are dim dots (`·`). A line with nothing to show is left out. A checker's tokens are counted apart from its worker's from now on (older tries count as the
   worker's), and the lead's part shows only where symcc can read the lead's usage. The lead's,
