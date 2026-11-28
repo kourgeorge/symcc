@@ -6,7 +6,8 @@ import { repoOf, taskGitReady, gitStateOfTask, projectNotes, projectGone, branch
 import { prepareWorktree, taskBranch, worktreeDir } from './worktree'
 import { haltChecker } from './checker'
 import { stopWorker } from './board-mode'
-import { checkingNow, mergingNow, MERGING_TEXT, CHECKING_TEXT, stopAsked, mergeFinished, checkAgain, pump } from './workers'
+import { checkingNow, mergingNow, MERGING_TEXT, CHECKING_TEXT, stopAsked, checkAgain, pump } from './workers'
+import { mergeFinished } from './approve'
 
 /** The stages the lead can move a task to (the `stage` of symcc change). */
 export const STAGES = ['work', 'check', 'tests', 'review'] as const
