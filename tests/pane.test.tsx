@@ -1078,7 +1078,8 @@ test('"Edit" on a scout\'s page opens its edit mode, and "Cancel" goes back', as
   expect(await ui.find({ type: 'Text', text: /^in minutes · 0 = only on demand$/ })).toBeDefined()
   // the same section names, in the same order, as the scout's page
   const heads = (await ui.findAll({ type: 'Text', text: /^▍/ })).map(x => x.text)
-  expect(heads).toEqual(['▍Runs every', '▍Model', '▍Findings', '▍Summary', '▍Instructions'])
+  expect(heads).toEqual(['▍Runs every', '▍Model', '▍Projects', '▍Findings', '▍Summary', '▍Instructions'])
+  expect(await ui.find({ type: 'Text', text: /^empty: this board's own repo$/ })).toBeDefined()
   // no summary in the file: its box is empty and says the scouts list uses the first line of the instructions
   const summary = await ui.find({ key: 'scout-summary' })
   expect(summary?.props.value).toBe('')

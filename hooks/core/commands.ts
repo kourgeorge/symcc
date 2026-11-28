@@ -65,7 +65,7 @@ export type Command =
   | { kind: 'bad'; message: string }
 
 /** The parts of a scout's file /<name>-scout <name> <part> <value> changes: how often it runs, its model, its instructions. */
-export const SCOUT_EDIT_FIELDS = ['every', 'model', 'prompt', 'findings'] as const
+export const SCOUT_EDIT_FIELDS = ['every', 'model', 'prompt', 'findings', 'projects'] as const
 export type ScoutEditField = (typeof SCOUT_EDIT_FIELDS)[number]
 
 /** How often a scout made with /<name>-scout <name> new runs, in minutes (the panel's new scout starts with it too). */
@@ -201,7 +201,7 @@ export function parseCommand(command: string, args: string, current: SymccMode =
         const value = s.replace(/^\S+\s+\S+\s*/, '').trim()
         return { kind: 'scout-edit', name: id!, field, value: field === 'model' && value.toLowerCase() === 'none' ? '' : value }
       }
-      return use(`/${name}-scout <name> (run it now), /${name}-scout <name> pause, or /${name}-scout <name> resume; to change it: /${name}-scout <name> every <minutes>, model <model|none>, findings <auto|backlog|default> or prompt <instructions>; a new one: /${name}-scout <name> new <instructions>`)
+      return use(`/${name}-scout <name> (run it now), /${name}-scout <name> pause, or /${name}-scout <name> resume; to change it: /${name}-scout <name> every <minutes>, model <model|none>, findings <auto|backlog|default>, projects <names|none> or prompt <instructions>; a new one: /${name}-scout <name> new <instructions>`)
     }
     case 'mode':
       return parseModeCommand(s, current, name)

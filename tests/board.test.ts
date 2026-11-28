@@ -2927,7 +2927,7 @@ test('/symcc-scout <name> pause and resume', () => {
   for (const args of ['bugs stop', 'bugs pause now', 'pause']) {
     const c = parseCommand('symcc-scout', args)
     if (args === 'pause') expect(c).toEqual({ kind: 'scout', name: 'pause' })
-    else expect(c).toEqual({ kind: 'bad', message: 'Use: /symcc-scout <name> (run it now), /symcc-scout <name> pause, or /symcc-scout <name> resume; to change it: /symcc-scout <name> every <minutes>, model <model|none>, findings <auto|backlog|default> or prompt <instructions>; a new one: /symcc-scout <name> new <instructions>' })
+    else expect(c).toEqual({ kind: 'bad', message: 'Use: /symcc-scout <name> (run it now), /symcc-scout <name> pause, or /symcc-scout <name> resume; to change it: /symcc-scout <name> every <minutes>, model <model|none>, findings <auto|backlog|default>, projects <names|none> or prompt <instructions>; a new one: /symcc-scout <name> new <instructions>' })
   }
 })
 

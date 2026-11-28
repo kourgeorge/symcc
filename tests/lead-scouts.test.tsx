@@ -300,3 +300,80 @@ test('a dotted scout file ("deps.v2.md") works everywhere: lead tool, and the sa
   expect(await runScoutNow($ as never, '..')).toContain('is not a scout name')
   expect(await setScoutPaused($ as never, '..', true)).toContain('is not a scout name')
 })
+
+/** T-1219: the scout page on a board with projects api and web; `named` = what the scout's file says. */
+function projectsBoard(named?: string) {
+  const files: Record<string, string | null> = { ...base(), '/board.json': JSON.stringify({ tasks: [], projects: { api: { path: '/code/api' }, web: { path: '/code/web' } } }) }
+  if (named !== undefined) files['/.symcc/scouts/bugs.md'] = `---\nevery_minutes: 30\nmodel: sonnet\nprojects: ${named}\n---\nLook for crashes.\n`
+  return files
+}
+function projectsState(on: On, withProjects: boolean, named?: string[]) {
+  const seed: Record<string, unknown> = {
+    tab: 'scouts',
+    scout: 'bugs',
+    view: { shape: 'view-1', value: { tasks: [], working: [], scouts: [{ name: 'bugs', every_minutes: 30, last_run: null, running: false, prompt: 'Look for crashes.', ...(named ? { projects: named } : {}) }], mode: 'auto', test_commands: [], ...(withProjects ? { projects: { api: {}, web: {} } } : {}) } },
+  }
+  on('state.get', (_, e, next) => (e.key in seed ? { value: { value: seed[e.key], version: 1 } } : next(e)))
+  on('ui.toast', () => ({ value: undefined }))
+}
+
+for (const surface of ['terminal', 'vscode'] as const)
+  for (const [withProjects, hint] of [[true, 'empty: every project'], [false, "empty: this board's own repo"]] as const)
+    test(`T-1219: ${surface} scout edit page has a Projects box with its hint (${withProjects ? 'board with projects' : 'no projects'})`, async ($, on) => {
+      setup(on, withProjects ? projectsBoard() : base())
+      projectsState(on, withProjects)
+      const ui = await $.ui.mount({ ...PANE, surface } as never)
+      await ui.press({ key: 'scout-edit' })
+      expect(await ui.find({ key: 'scout-projects' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: hint })).toBeDefined()
+      if (surface === 'terminal') expect((await ui.findAll({ type: 'Text', text: /^▍/ })).map(x => x.text)).toEqual(['▍Runs every', '▍Model', '▍Projects', '▍Findings', '▍Summary', '▍Instructions'])
+      await ui.unmount()
+    })
+
+/** Opens scout bugs' edit page on a board with projects api and web (its file names `named`), types `text` in the Projects box and saves. */
+async function saveProjects($: { ui: { mount: (p: never) => Promise<any> } }, on: On, named: string, text: string) {
+  const files = projectsBoard(named)
+  setup(on, files)
+  projectsState(on, true, [named])
+  const ui = await $.ui.mount(PANE as never)
+  await ui.press({ key: 'scout-edit' })
+  await ui.input({ key: 'scout-projects', text })
+  await ui.press({ key: 'scout-save' })
+  return { files, ui }
+}
+
+test('T-1219: saving api writes projects: api and keeps the other keys', async ($, on) => {
+  const { files, ui } = await saveProjects($, on, 'web', 'api')
+  expect(files['/.symcc/scouts/bugs.md']).toContain('projects: api')
+  expect(parseScout('bugs', files['/.symcc/scouts/bugs.md']!)).toMatchObject({ every_minutes: 30, model: 'sonnet', projects: ['api'] })
+  await ui.unmount()
+})
+
+test('T-1219: an unknown project name is refused with the scouts tool reason and the file is unchanged', async ($, on) => {
+  const before = projectsBoard('web')['/.symcc/scouts/bugs.md']
+  const { files, ui } = await saveProjects($, on, 'web', 'api, nope')
+  expect(await ui.find({ type: 'Text', text: "unknown project \"nope\": the board's projects are api, web" })).toBeDefined()
+  expect(files['/.symcc/scouts/bugs.md']).toBe(before)
+  await ui.unmount()
+})
+
+test('T-1219: saving the Projects box empty removes the projects line', async ($, on) => {
+  const { files, ui } = await saveProjects($, on, 'web', '')
+  expect(files['/.symcc/scouts/bugs.md']).not.toContain('projects:')
+  expect(parseScout('bugs', files['/.symcc/scouts/bugs.md']!)).toMatchObject({ every_minutes: 30, model: 'sonnet' })
+  await ui.unmount()
+})
+
+for (const surface of ['terminal', 'vscode'] as const)
+  for (const [name, withProjects, named, line] of [
+    ['names projects', true, ['api', 'web'], 'Projects: api, web'],
+    ['names none on a board with projects', true, undefined, 'Projects: every project'],
+    ['names none on a board without projects', false, undefined, "Projects: this board's repo"],
+  ] as const)
+    test(`T-1219: ${surface} scout page shows "${line}" for a scout that ${name}`, async ($, on) => {
+      setup(on, base())
+      projectsState(on, withProjects, named ? [...named] : undefined)
+      const ui = await $.ui.mount({ ...PANE, surface } as never)
+      expect(await ui.find({ type: 'Text', text: line })).toBeDefined()
+      await ui.unmount()
+    })
