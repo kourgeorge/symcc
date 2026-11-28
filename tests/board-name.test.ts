@@ -6,7 +6,8 @@ import { pickBoardName, isBoardName } from '../hooks/core/board-name'
 import { load, change } from '../hooks/app/store'
 import { doctor } from '../hooks/app/doctor'
 import { migrateIfOld, forgetMigrationFailure } from '../hooks/app/migrate-data'
-import { newFriendlyName } from '../hooks/app/board-name'
+import { readBranches } from '../hooks/app/branches'
+import { newFriendlyName, useFriendly } from '../hooks/app/board-name'
 import { taskBranch } from '../hooks/app/worktree'
 import { branchesToDelete } from '../hooks/core/git-setup'
 import { S } from '../hooks/app/state'
@@ -142,4 +143,39 @@ test('T-1218: the board header shows the name between the version and the folder
   const lines = bannerLines(b, '/home/me/repositories/symcc', '/home/me', true, 100, Date.now(), 'symcc', undefined, '0.6.0')
   const first = JSON.stringify(lines[0])
   expect(first).toContain(' · power-falcon')
+})
+
+test('T-1218: two boards (different names) on one repo each get their own T-5 branch and do not touch the other\'s', () => {
+  const w = world(['symcc/quiet-river/T-5', 'main'])
+  useFriendly('power-falcon')
+  expect(taskBranch({ id: 'T-5', branch: undefined as never })).toBe('symcc/power-falcon/T-5')
+  useFriendly('quiet-river')
+  expect(taskBranch({ id: 'T-5', branch: undefined as never })).toBe('symcc/quiet-river/T-5')
+  const all = ['  symcc/quiet-river/T-5', '  symcc/power-falcon/T-5']
+  const t = [{ id: 'T-5', status: 'done' as const, branch: undefined as never }]
+  expect(branchesToDelete(t, all, 'symcc/quiet-river/')).toEqual(['symcc/quiet-river/T-5'])
+  expect(branchesToDelete(t, all, 'symcc/power-falcon/')).toEqual(['symcc/power-falcon/T-5'])
+  expect(w.refs.has('symcc/quiet-river/T-5')).toBe(true)
+  useFriendly('power-falcon')
+})
+
+test('T-1218: the Branches view reads only this board\'s task branches', async () => {
+  const seen: string[] = []
+  const w = fakeHost({
+    run: async argv => {
+      seen.push(argv.join(' '))
+      const a = argv.slice(1)
+      if (a[0] === 'log') return done({ stdout: `${'a'.repeat(40)} 1700000000\n` })
+      if (a[0] === 'rev-list') return done({ stdout: '0\t1\n' })
+      if (a[0] === 'merge-base') return done({ stdout: `${'a'.repeat(40)}\n` })
+      return done()
+    },
+  })
+  S.root = ROOT
+  S.projects = {}
+  const tasks = [{ ...base, id: 'T-5', title: 'five', status: 'doing', branch: 'symcc/power-falcon/T-5' }]
+  const f = await readBranches(w.host, 'main', { tasks: tasks as never[] }, Date.now())
+  expect(Object.keys(f?.tasks ?? {})).toEqual(['T-5'])
+  expect(seen.some(s => s.includes('symcc/power-falcon/T-5'))).toBe(true)
+  expect(seen.some(s => s.includes('quiet-river'))).toBe(false)
 })

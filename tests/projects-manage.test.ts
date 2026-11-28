@@ -7,6 +7,8 @@ import { change, load } from '../hooks/app/store'
 import { saveSettings } from '../hooks/app/tools'
 import { addProject } from '../hooks/app/projects'
 import { readBranches } from '../hooks/app/branches'
+import { useFriendly } from '../hooks/app/board-name'
+import { taskBranch } from '../hooks/app/worktree'
 import { S, leadQueue, scoutState } from '../hooks/app/state'
 import { loadScouts, scheduleScouts } from '../hooks/app/scouts'
 import { addTask, emptyBoard, settingWithProjects } from '../hooks/board'
@@ -224,4 +226,42 @@ test('T-1218: a repo with a board of its own can be a project now', async () => 
   const r = await set(w, { project: 'own', path: '/code/own' })
   expect(r.error).toBe(undefined)
   expect(S.projects.own).toBe('/code/own')
+  // both boards' T-1 branches in that repo stay apart
+  useFriendly('power-falcon')
+  const a = taskBranch({ id: 'T-1', branch: undefined as never })
+  useFriendly('quiet-river')
+  const b = taskBranch({ id: 'T-1', branch: undefined as never })
+  expect([a, b]).toEqual(['symcc/power-falcon/T-1', 'symcc/quiet-river/T-1'])
+})
+
+// T-1223: a scouts folder that can't be read keeps the old timers and does not fail a project add; a good reschedule replaces them
+test('a failed scouts reload keeps the old timers and the project add still answers added', async () => {
+  const { w, files } = await world({ '/code/api': { top: '/code/api' } })
+  files.set(`${S.root}/${S.N.scouts}/docs.md`, '---\nevery_minutes: 30\n---\nLook.\n')
+  files.set(`${S.root}/${S.N.scouts}`, '')
+  w.host.fs.list = async () => [...files.keys()].filter(f => f.startsWith(`${S.root}/${S.N.scouts}/`)).map(f => ({ name: f.split('/').pop()!, kind: 'file' as const, size: 0, mtimeMs: 0, isLink: false }))
+  const live = new Set<number>()
+  let n = 0
+  const timer = () => {
+    const id = n++
+    live.add(id)
+    return { cancel: () => void live.delete(id) }
+  }
+  w.host.clock.after = () => timer()
+  w.host.clock.every = () => timer()
+  await scheduleScouts(w.host)
+  const before = [...live]
+  expect(before.length > 0).toBe(true)
+  const list = w.host.fs.list
+  w.host.fs.list = async () => {
+    throw new Error('disk gone')
+  }
+  const r = await set(w, { project: 'api', path: '/code/api' })
+  expect(r.error).toBe(undefined)
+  expect(JSON.stringify(r)).toContain('added')
+  expect([...live]).toEqual(before)
+  w.host.fs.list = list
+  await scheduleScouts(w.host)
+  expect(live.size).toBe(before.length)
+  expect(before.some(id => live.has(id))).toBe(false)
 })
