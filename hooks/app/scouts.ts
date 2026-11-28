@@ -20,10 +20,10 @@ export let unreadableScouts: string[] = []
 /** The warning /symcc-scout (with no name) shows for the skipped files, or '' when every scout file could be read. */
 export const unreadableScoutsText = () => unreadableScouts.map(f => `${f}: can't be read, skipped (fix or remove ${S.N.scouts}/${f})`).join('\n')
 
-/** The scouts in <dir>/scouts/*.md. A file that can't be read is skipped (and kept in unreadableScouts), so one
- *  broken file never stops the other scouts or the session start. */
 const toldProjects = new Set<string>()
 
+/** The scouts in <dir>/scouts/*.md. A file that can't be read is skipped (and kept in unreadableScouts), so one
+ *  broken file never stops the other scouts or the session start. */
 export async function loadScouts(host: Host): Promise<ScoutDef[]> {
   const dir = path(S.N.scouts)
   if (!(await host.fs.exists(dir))) return (unreadableScouts = [], [])
@@ -44,8 +44,10 @@ export async function loadScouts(host: Host): Promise<ScoutDef[]> {
     out.push(s)
     // T-1214: the lead hears about a scout naming an unknown project once
     const badP = scoutProjectsError(s.projects ?? [], S.projects)
-    if (badP && !toldProjects.has(`${s.name}\n${badP}`)) {
-      toldProjects.add(`${s.name}\n${badP}`)
+    // keyed by the scout and its unknown names only, so another project coming or going doesn't tell again
+    const told = `${s.name}\n${(s.projects ?? []).filter(n => !Object.prototype.hasOwnProperty.call(S.projects, n)).join(',')}`
+    if (badP && !toldProjects.has(told)) {
+      toldProjects.add(told)
       tellLead(host, `[${S.N.name}] scout ${s.name} never runs: ${badP}. Fix its projects: line in ${S.N.scouts}/${f.name}.`)
     }
   }

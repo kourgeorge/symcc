@@ -7,8 +7,8 @@ import { change, load } from '../hooks/app/store'
 import { saveSettings } from '../hooks/app/tools'
 import { addProject } from '../hooks/app/projects'
 import { readBranches } from '../hooks/app/branches'
-import { S, leadQueue } from '../hooks/app/state'
-import { loadScouts } from '../hooks/app/scouts'
+import { S, leadQueue, scoutState } from '../hooks/app/state'
+import { loadScouts, scheduleScouts } from '../hooks/app/scouts'
 import { addTask, emptyBoard, settingWithProjects } from '../hooks/board'
 import { liveBranchBlocks, segText, LIVE_INDENT } from '../hooks/core/live'
 import { fakeHost, memoryFs, done } from './fake-host'
@@ -126,6 +126,24 @@ test('a scout naming an unknown project warns and tells the lead once; remove is
   expect(refused.error ?? '').toContain('scout bugs still names project api')
   files.set(file, '---\nevery_minutes: 30\n---\nLook.\n')
   expect((await set(w, { project: 'api', remove: true })).error).toBe(undefined)
+})
+
+// T-1216: adding the missing project clears the scout's warning at once; an unrelated project doesn't tell the lead again
+test('adding the missing project clears the scout warning; another project does not tell the lead again', async () => {
+  const { w, files } = await world({ '/code/api': { top: '/code/api' }, '/code/web': { top: '/code/web' }, '/code/nope': { top: '/code/nope' } })
+  await set(w, { project: 'api', path: '/code/api' })
+  files.set(`${S.root}/${S.N.scouts}/docs.md`, '---\nevery_minutes: 30\nprojects: api, nope\n---\nLook.\n')
+  files.set(`${S.root}/${S.N.scouts}`, '')
+  w.host.fs.list = async () => [...files.keys()].filter(f => f.startsWith(`${S.root}/${S.N.scouts}/`)).map(f => ({ name: f.split('/').pop()!, kind: 'file' as const, size: 0, mtimeMs: 0, isLink: false }))
+  leadQueue.splice(0)
+  await scheduleScouts(w.host)
+  expect(scoutState.get('docs')?.warning ?? '').toContain('unknown project "nope"')
+  const told = () => leadQueue.filter(t => t.includes('docs')).length
+  expect(told()).toBe(1)
+  await set(w, { project: 'web', path: '/code/web' })
+  expect(told()).toBe(1)
+  await set(w, { project: 'nope', path: '/code/nope' })
+  expect(scoutState.get('docs')?.warning ?? '').not.toContain('unknown project')
 })
 
 test('the Settings value lists each project as name -> path with its test commands', () => {
