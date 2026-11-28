@@ -995,7 +995,7 @@ ${quote(request)}` : ""].filter(Boolean).join(`
 ${c.commits.map((l) => `- ${l}`).join(`
 `)}` : "";
       const proj = t?.project;
-      const project = proj ? `The task's project is ${proj}: your folder is a copy of that repo, and the task's files are relative to it (\`README.md\`, not \`${proj}/README.md\`).` : "";
+      const project = proj ? `The task's project is ${proj}: your folder is a copy of that repo, and the task's files are relative to it (\`README.md\`, not \`${proj}/README.md\`).${c.values.folder ? ` Before you start, Read ${c.values.folder}/CLAUDE.md and ${c.values.folder}/AGENTS.md (by these full paths) if they exist: they hold the repo's own rules, and are not loaded on their own.` : ""}` : "";
       return [fixed(c, "where"), project, merge, work].filter(Boolean).join(`
 
 `);
@@ -1779,6 +1779,7 @@ var docsTestCommandsOf = (b, t) => {
   const own = projectOf(b, t)?.docs_test_commands;
   return own?.length ? own : b.docs_test_commands ?? [];
 };
+var DATA_VERSION = 2;
 var SOUND_SETS = [1, 2, 3];
 var isSoundSet = (x) => SOUND_SETS.includes(x);
 var NOTIFY_CHOICES = ["voice", "sound 1", "sound 2", "sound 3", "off"];
@@ -1909,7 +1910,7 @@ var BACKLOG_FROM = ["todo", "doing", "paused", "failed"];
 var DEFAULT_AUTO_RETRIES = 2;
 var DEFAULT_ARCHIVE_DAYS = 14;
 function emptyBoard() {
-  return { version: 1, next_id: 1, mode: "auto", test_commands: [], max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, enabled: true, archive_days: DEFAULT_ARCHIVE_DAYS, tasks: [] };
+  return { data_version: DATA_VERSION, next_id: 1, mode: "auto", test_commands: [], max_parallel: 3, max_minutes: 45, auto_retries: DEFAULT_AUTO_RETRIES, open_on_start: true, enabled: true, archive_days: DEFAULT_ARCHIVE_DAYS, tasks: [] };
 }
 var STATUSES = ["backlog", "todo", "doing", "paused", "waiting", "review", "failed", "done", "dropped"];
 var SETTING_OK = {
@@ -1927,7 +1928,7 @@ var SETTING_OK = {
   scout_findings: (v) => isScoutFindings(v),
   tests_with_changes: (v) => isTestsWithChanges(v),
   checker: (v) => typeof v === "boolean",
-  projects: (v) => isObj(v) && Object.values(v).every((p) => isObj(p) && [p.test_commands, p.docs_test_commands].every((l) => l === undefined || Array.isArray(l) && l.every((c) => typeof c === "string")))
+  projects: (v) => isObj(v) && Object.values(v).every((p) => isObj(p) && (p.path === undefined || typeof p.path === "string" && p.path.startsWith("/")) && [p.test_commands, p.docs_test_commands].every((l) => l === undefined || Array.isArray(l) && l.every((c) => typeof c === "string")))
 };
 function cleanArchived(v) {
   if (!isObj(v))
@@ -2066,6 +2067,10 @@ function readBoardValue(raw) {
   if ("tasks" in raw && !Array.isArray(raw.tasks))
     return { board: emptyBoard(), broken: '"tasks" is not a list', skipped: 0, fixed: [] };
   const board = emptyBoard();
+  if (isNum(raw.data_version) && Number.isInteger(raw.data_version) && raw.data_version >= 1)
+    board.data_version = raw.data_version;
+  else if (raw.version === 1)
+    board.data_version = 1;
   const fixed2 = [];
   for (const k of Object.keys(SETTING_OK)) {
     if (!(k in raw))
@@ -2127,13 +2132,14 @@ function cleanFiles(files, dir = DATA_DIR, outside = false) {
     return [];
   return all.map((f) => f.replace(/^\.\//, "")).filter((f) => f && (outside || !f.startsWith("/")) && !f.split("/").includes("..") && !f.startsWith(dir) && !f.startsWith(".git/") && f !== ".git");
 }
-function errandFolders(files, root, home) {
+function errandFolders(files, root, home, projectPaths = []) {
   const norm = (p) => {
     const parts = p.replace(/\\/g, "/").split("/").filter((s) => s && s !== ".");
     return parts.includes("..") ? null : `/${parts.join("/")}`;
   };
   const r = norm(root)?.toLowerCase() ?? "";
   const h = home ? norm(home)?.toLowerCase() ?? "" : "";
+  const inside = projectPaths.map((x) => norm(x)?.toLowerCase() ?? "").filter((x) => x && x !== "/");
   const out = [];
   for (const f0 of files ?? []) {
     const f = f0.startsWith("~/") && home ? `${home}/${f0.slice(2)}` : f0;
@@ -2144,6 +2150,8 @@ function errandFolders(files, root, home) {
       continue;
     const p = n.toLowerCase();
     if (h && p === h || r && r !== "/" && (p === r || p.startsWith(`${r}/`)))
+      continue;
+    if (inside.some((x) => p === x || p.startsWith(`${x}/`)))
       continue;
     out.push(f.endsWith("/") ? `${n}/` : n);
   }
@@ -4566,8 +4574,10 @@ function applyProjectSettings(b, project, a) {
   const all = a.test_commands.map((x) => String(x).trim()).filter(Boolean);
   const cmds = all.slice(0, MAX_TEST_COMMANDS);
   const projects = { ...b.projects ?? {} };
-  if (cmds.length)
-    projects[project] = { ...projects[project] ?? {}, test_commands: cmds };
+  const { test_commands: _gone, ...others } = projects[project] ?? {};
+  const entry = cmds.length ? { ...others, test_commands: cmds } : others;
+  if (Object.keys(entry).length)
+    projects[project] = entry;
   else
     delete projects[project];
   const { projects: _old, ...rest } = b;
@@ -4673,7 +4683,7 @@ function leadSettingsText(b, can, root = "") {
       }),
       ...g.items.some(isSettingPage) ? ["roles and task types: use the roles and kinds tools (the owner sees roles and task types as pages in the Settings view)", "org-mem (organizational memory): change it with the orgmem tool (the owner sees its notes on the Organizational memory page, opened from the Organizational memory section (newest notes and topics) at the bottom of the board's Live tab, and may delete them there)"] : []
     ]),
-    ...Object.entries(b.projects ?? {}).filter(([, v]) => v?.test_commands?.length).map(([name, v]) => `project ${name}: test_commands: ${testCommandsText(v.test_commands ?? [])}`)
+    ...Object.entries(b.projects ?? {}).filter(([, v]) => v?.test_commands?.length || v?.path).map(([name, v]) => `project ${name}${v.path ? ` → ${v.path}` : ""}: test_commands: ${testCommandsText(v.test_commands ?? [])}`)
   ].join(`
 `);
 }
@@ -5126,7 +5136,22 @@ function scoutToolRefusal(tool, name = DEFAULT_NAME, input = {}, who = "scout") 
 var scoutFindingsChoice = (v) => isScoutFindings(typeof v === "string" ? v.trim().toLowerCase() : v) ? v.trim().toLowerCase() : undefined;
 var badEveryWarning = (value) => `every_minutes "${value}" is not valid: runs only on demand until fixed`;
 var onDemand = (s) => !(Number.isFinite(s.every_minutes) && s.every_minutes >= 1);
-function parseScout(name, text) {
+var scoutProjectNames = (v) => [...new Set((typeof v === "string" ? v : "").split(/[\s,]+/).filter(Boolean))];
+function scoutProjectsError(names, table) {
+  const bad = names.filter((n) => !Object.prototype.hasOwnProperty.call(table, n));
+  if (!bad.length)
+    return "";
+  const have = Object.keys(table).sort();
+  return `unknown project ${bad.map((n) => `"${n}"`).join(", ")}: the board's projects are ${have.length ? have.join(", ") : "(none: this board has no projects)"}`;
+}
+function scoutProjectTable(names, table) {
+  const out = {};
+  for (const n of names?.length ? names : Object.keys(table))
+    if (Object.prototype.hasOwnProperty.call(table, n))
+      out[n] = table[n];
+  return out;
+}
+function parseScout(name, text, table) {
   const fm = splitFrontMatter(text);
   const meta = {};
   for (const line of fm.lines ?? []) {
@@ -5144,12 +5169,18 @@ function parseScout(name, text) {
   const findings = scoutFindingsChoice(meta.findings);
   if (findings)
     base.findings = findings;
+  const projects = scoutProjectNames(meta.projects);
+  if (projects.length)
+    base.projects = projects;
+  const badProjects = table ? scoutProjectsError(projects, table) : "";
+  if (badProjects)
+    base.warning = badProjects;
   if (!raw)
     return { ...base, every_minutes: 60 };
   const every = everyMinutesOf(raw);
   if (every !== null)
     return { ...base, every_minutes: every };
-  return { ...base, every_minutes: 0, warning: badEveryWarning(raw), bad_every: raw };
+  return { ...base, every_minutes: 0, warning: [badEveryWarning(raw), base.warning].filter(Boolean).join("; "), bad_every: raw };
 }
 function scoutText(old, set, body) {
   const lines = [];
@@ -5157,6 +5188,8 @@ function scoutText(old, set, body) {
   let modelDone = false;
   let summaryDone = set.summary === undefined;
   let findingsDone = set.findings === undefined;
+  let projectsDone = set.projects === undefined;
+  const projects = (set.projects ?? []).join(", ");
   const model = (set.model ?? "").trim();
   const summary = (set.summary ?? "").replace(/\s+/g, " ").trim();
   for (const line of (old ? splitFrontMatter(old).lines : null) ?? []) {
@@ -5173,6 +5206,10 @@ function scoutText(old, set, body) {
       if (!findingsDone && set.findings)
         lines.push(`findings: ${set.findings}`);
       findingsDone = true;
+    } else if (key === "projects" && set.projects !== undefined) {
+      if (!projectsDone && projects)
+        lines.push(`projects: ${projects}`);
+      projectsDone = true;
     } else if (key === "summary" && set.summary !== undefined) {
       if (!summaryDone && summary)
         lines.push(`summary: ${summary}`);
@@ -5188,6 +5225,8 @@ function scoutText(old, set, body) {
     lines.push(`summary: ${summary}`);
   if (!findingsDone && set.findings)
     lines.push(`findings: ${set.findings}`);
+  if (!projectsDone && projects)
+    lines.push(`projects: ${projects}`);
   return `---
 ${lines.join(`
 `)}
@@ -5227,6 +5266,8 @@ function leadScoutText(s, nowMs, full = false, runs = []) {
   if (s.model)
     parts.push(`model: ${s.model}`);
   parts.push(`findings: ${s.findings ? `${s.findings} (own choice)` : "default (the board setting)"}`);
+  if (s.projects?.length)
+    parts.push(`projects: ${s.projects.join(", ")}`);
   const lines = [`${s.name}: ${parts.join(" · ")}`];
   if (s.warning)
     lines.push(`  warning: ${s.warning}`);
@@ -5314,6 +5355,8 @@ function everyText(minutes) {
   return `every ${m} min`;
 }
 function scoutWhyNot(s, o, name = DEFAULT_NAME) {
+  if (o.newerData)
+    return `this board's data is newer than this symcc (shape ${o.newerData}); no scout runs. Update symcc (claude plugin update symcc@symcc) and reload.`;
   if (s.running)
     return `${s.name} is already running`;
   if (!o.driving)
@@ -5390,7 +5433,7 @@ function scoutPrompt(o) {
   const runAt = typeof o.lastRun === "string" && Number.isFinite(Date.parse(o.lastRun)) ? o.lastRun : "";
   const since = runAt ? `You last ran at ${runAt}. Start with what changed since then, since new code is where new bugs are:
   git log --since=${runAt} --stat` : "This is your first run (or the time of your last run is not known). Look at the whole project, starting with the most recent changes (git log --stat -n 20).";
-  return `You are the ${name} scout "${o.scout}". The project is in ${o.root}.${o.projects?.length ? ` That folder is not a repo itself: it holds several projects, each its own git repo, in these folders: ${o.projects.map((p) => `${o.root.replace(/\/+$/, "")}/${p}`).join(", ")}. Look in each (run git commands inside a project folder), and for a suggested task name its project (the folder name) and give its files relative to that repo.` : ""} Your job, from your scout file:
+  return `You are the ${name} scout "${o.scout}". The project is in ${o.root}.${Object.keys(o.projects ?? {}).length ? ` The board's projects, each its own git repo (name: path), are: ${Object.entries(o.projects ?? {}).map(([n, p]) => `${n}: ${p}`).join(", ")}. Look in each (run git commands inside a project folder). Read each project's own rules first: Read its CLAUDE.md and AGENTS.md by full path (<path>/CLAUDE.md) if they exist, as they are not loaded on their own. For a suggested task name its project (the project name) and give its files relative to that repo.` : ""} Your job, from your scout file:
 
 ${o.instructions.trim()}
 
@@ -8885,20 +8928,21 @@ function branchState(t, nowMs) {
   const word = shown === "doing" && step ? STEP_WORD[step] : BRANCH_STATE_WORD[shown] ?? shown;
   return { mark: rowMark(t, nowMs), word, tone: BRANCH_STATE_TONE[shown] ?? "dim" };
 }
-function branchItems(view, facts, nowMs) {
+function branchItems(view, facts, nowMs, project) {
   const open = [];
+  const mine = (id) => project === undefined || (view.tasks.find((t) => t.id === id)?.project ?? "") === project;
   for (const t of view.tasks) {
-    if (t.status === "done")
+    if (t.status === "done" || !mine(t.id))
       continue;
     const fig = facts.tasks[t.id];
     if (BRANCH_STATUSES.includes(t.status) && t.branch && fig)
       open.push({ id: t.id, kind: "branch", fig, state: branchState(t, nowMs) });
   }
-  const merged = liveFinishedLanes(view, nowMs).map((l) => {
+  const merged = liveFinishedLanes(view, nowMs).filter((l) => mine(l.id)).map((l) => {
     const sha = view.tasks.find((t) => t.id === l.id)?.merged;
     return { id: l.id, kind: "merged", ...sha ? { merged: sha } : {}, atMs: l.done?.atMs ?? nowMs };
   });
-  const next = liveTrains(view, nowMs).next.filter((x) => !x.stuck.length && !view.tasks.find((t) => t.id === x.id)?.branch).slice(0, BRANCH_NEW_MAX).map((x) => ({ id: x.id, kind: "new" }));
+  const next = liveTrains(view, nowMs).next.filter((x) => mine(x.id) && !x.stuck.length && !view.tasks.find((t) => t.id === x.id)?.branch).slice(0, BRANCH_NEW_MAX).map((x) => ({ id: x.id, kind: "new" }));
   const byId2 = (a, b) => num(a.id) - num(b.id);
   return [...open.sort(byId2), ...merged, ...next];
 }
@@ -8932,13 +8976,26 @@ function branchLabels(x, nowMs) {
   ];
 }
 var LABEL_ROOM = textWidth(" T-000 ‖ +0 · 0 behind");
-function liveBranches(view, nowMs, width) {
+function liveBranchBlocks(view, nowMs, width) {
   const facts = view.branches;
-  if (!facts || !facts.commits.length)
+  if (!facts)
+    return [];
+  if (!facts.repos)
+    return [branchBlock(view, facts, nowMs, width)].flatMap((x) => x ? [x] : []);
+  return facts.repos.flatMap((r) => {
+    const x = branchBlock(view, r, nowMs, width, r.project);
+    if (!x)
+      return [];
+    const head = [{ text: ` ${r.name}`, tone: "title" }, { text: ` · merges into ${r.into}`, tone: "dim" }];
+    return [{ ...x, repoHead: head }];
+  });
+}
+function branchBlock(view, facts, nowMs, width, project) {
+  if (!facts.commits.length)
     return null;
   const full = Math.max(1, Math.floor(width));
   const w = liveInner(full);
-  const items = branchItems(view, facts, nowMs);
+  const items = branchItems(view, facts, nowMs, project);
   if (!items.length)
     return null;
   const kept = items.slice(0, BRANCH_ROWS_MAX);
@@ -9417,7 +9474,8 @@ var SYMCC_WORDS = {
   askPopup: "",
   assistant: "the assistant",
   app: "the app",
-  backToBoard: ""
+  backToBoard: "",
+  updateSteps: ""
 };
 var wordsOf2 = (words) => ({ ...SYMCC_WORDS, ...Object.fromEntries(Object.entries(words).filter(([, v]) => v !== undefined)) });
 var ALL_FEATURES = { panel: true, band: true, wakeLead: "now", planMode: true, leadUsage: true, startQueue: true };
@@ -9535,6 +9593,7 @@ var startS = () => ({
   driving: false,
   chat: "",
   guardOnly: false,
+  newerData: 0,
   boardMtime: null,
   readMtime: null,
   beat: null,
@@ -9544,8 +9603,8 @@ var startS = () => ({
   gitState: "ok",
   gitRoot: "ok",
   repoGit: new Map,
+  projects: {},
   gitInstall: "",
-  gitWorkspace: "",
   lastDigest: 0,
   toldGit: "ok",
   toldLoose: "",
@@ -10291,13 +10350,19 @@ function upgradeArchiveTask(t0) {
   const { question: _q, options: _o, asked_files: _a, question_lead: _l, options_lead: _p, ...kept } = out;
   return kept;
 }
-function upgradeBoard(raw, root) {
+function upgradeBoard(raw, root, repoFolders = []) {
   if (!isObj(raw))
     return raw;
   const out = { ...raw };
+  const projects = withProjectPaths(raw.projects, root, repoFolders);
+  if (projects)
+    out.projects = projects;
   if (out.notify === "sound")
     out.notify = soundNotify(isSoundSet(out.sound_set) ? out.sound_set : soundSetFor(root));
   delete out.sound_set;
+  delete out.version;
+  if (!(isNum(raw.data_version) && raw.data_version >= DATA_VERSION))
+    out.data_version = DATA_VERSION;
   if (out.mode === "off")
     out.mode = "paused";
   const into = typeof raw.target_branch === "string" && raw.target_branch.trim() ? raw.target_branch.trim() : "main";
@@ -10307,6 +10372,20 @@ function upgradeBoard(raw, root) {
   if (Array.isArray(out.tasks))
     out.tasks = out.tasks.map((t) => isObj(t) ? upgradeTask(t, into) ?? t : t);
   return out;
+}
+function withProjectPaths(projects, root, repoFolders) {
+  if (isObj(projects) && Object.values(projects).some((e) => isObj(e) && typeof e.path === "string"))
+    return null;
+  const table = isObj(projects) ? { ...projects } : {};
+  let changed = false;
+  for (const name of repoFolders) {
+    const e = table[name];
+    if (isObj(e) && typeof e.path === "string")
+      continue;
+    table[name] = { ...isObj(e) ? e : {}, path: `${root.replace(/\/+$/, "")}/${name}` };
+    changed = true;
+  }
+  return changed ? table : null;
 }
 function upgradeScoutUsage(text) {
   let raw;
@@ -10460,6 +10539,10 @@ function oldDataRows(i) {
   const unsafe = (i.unsafeScouts ?? []).filter((name) => isObj(memory[name]) && typeof memory[name].last_report === "string");
   const scoutFile2 = upgradeScoutFile(JSON.stringify(i.scouts ?? null), (n) => !(i.unsafeScouts ?? []).includes(n), i.nowMs ?? Date.now(), false) !== null;
   const settings2 = (b.mode === "off" ? 1 : 0) + (b.notify === "sound" || "sound_set" in b ? 1 : 0) + ("target_branch" in b ? 1 : 0);
+  const used = Array.isArray(b.tasks) && b.tasks.length > 0 || isNum(b.next_id) && b.next_id > 1;
+  const hasPath = isObj(b.projects) && Object.values(b.projects).some((e) => isObj(e) && typeof e.path === "string");
+  const moveFolders = isObj(i.board) && used && !hasPath ? (i.repoFolders ?? []).length : 0;
+  const shape = isObj(i.board) && (("version" in b) || isNum(b.data_version) && b.data_version < DATA_VERSION) ? 1 : 0;
   const rows = [
     { n: c.unsplit, text: "tries with `unsplit` tokens (counts saved before the kinds were kept apart; shown as they are)", fix: false },
     { n: c.numTok, text: "tries with tokens saved as one number", fix: true },
@@ -10488,7 +10571,9 @@ function oldDataRows(i) {
     { n: settings2, text: "old board settings (mode off, notify sound / sound_set, target_branch)", fix: true },
     { n: lastReport, text: "scouts whose last report is not yet in a runs file", fix: true },
     { n: unsafe.length, text: `scouts whose name can't be a file name; rename them (${unsafe.join(", ")})`, fix: false },
-    { n: i.fieldGuide && !i.orgMem ? 1 : 0, text: "field-guide.md not yet moved to org-mem.md", fix: true }
+    { n: i.fieldGuide && !i.orgMem ? 1 : 0, text: "field-guide.md not yet moved to org-mem.md", fix: true },
+    { n: shape, text: "board files saved with an old data shape number (version instead of data_version)", fix: true },
+    { n: moveFolders, text: "project folders below the board with no path in the project table", fix: true }
   ];
   return rows.filter((r) => r.n > 0);
 }
@@ -11057,6 +11142,7 @@ async function deleteOrgMem(host, n, expect, key) {
 var unreadableScouts = [];
 var unreadableScoutsText = () => unreadableScouts.map((f) => `${f}: can't be read, skipped (fix or remove ${S.N.scouts}/${f})`).join(`
 `);
+var toldProjects = new Set;
 async function loadScouts(host) {
   const dir = path(S.N.scouts);
   if (!await host.fs.exists(dir))
@@ -11071,9 +11157,17 @@ async function loadScouts(host) {
       bad.push(f.name);
       continue;
     }
-    const s = parseScout(f.name.replace(/\.md$/, ""), text);
-    if (s)
-      out.push(s);
+    const s = parseScout(f.name.replace(/\.md$/, ""), text, S.projects);
+    if (!s)
+      continue;
+    out.push(s);
+    const badP = scoutProjectsError(s.projects ?? [], S.projects);
+    if (badP && !toldProjects.has(`${s.name}
+${badP}`)) {
+      toldProjects.add(`${s.name}
+${badP}`);
+      tellLead(host, `[${S.N.name}] scout ${s.name} never runs: ${badP}. Fix its projects: line in ${S.N.scouts}/${f.name}.`);
+    }
   }
   unreadableScouts = bad;
   return out;
@@ -11218,15 +11312,18 @@ async function queueScout(host, s, misses = 0, byHand = false) {
   if (!st.running)
     await pausedNow(host, st);
   const b = await load(host);
-  const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === "ok", mode: modeOf(b), on: onHere(b), plan: inPlan(S.plan) }, S.N.name);
+  const why = scoutWhyNot(st, { driving: S.driving, gitOk: S.gitState === "ok", mode: modeOf(b), on: onHere(b), plan: inPlan(S.plan), newerData: S.newerData }, S.N.name);
   if (why)
     return why;
+  const badProject = scoutProjectsError(s.projects ?? [], S.projects);
+  if (badProject)
+    return `scout ${s.name} didn't start: ${badProject}`;
   const lastRun = st.last_run;
   const lastReport = st.last_report;
   st.running = true;
   await publish(host, b);
   const open = b.tasks.filter((t) => OPEN.includes(t.status) || t.status === "backlog").map((t) => `${t.id} ${t.title}${t.status === "backlog" ? " (backlog)" : ""}`);
-  const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await orgMemText(host), projects: await projectNames(host).catch(() => []) });
+  const prompt = scoutPrompt({ scout: s.name, root: S.root, instructions: s.prompt, open, closed: recentClosed(b.tasks), lastReport, lastRun, name: S.N.name, guide: await orgMemText(host), projects: scoutProjectTable(s.projects, S.projects) });
   if (!await drivesHere(host)) {
     st.running = false;
     await load(host).then((x) => publish(host, x)).catch(() => {
@@ -11319,6 +11416,8 @@ async function migrateScoutOrigins(host) {
 function changeScoutMemory(host, fn) {
   const file = scoutMemoryFile();
   return oneAtATime(file, async () => {
+    if (S.newerData)
+      return;
     const old = await host.fs.read(file).catch(() => null);
     const next = fn(typeof old === "string" ? old : null);
     if (next === null)
@@ -11513,6 +11612,8 @@ async function scheduleScouts(host) {
       st.summary = s.summary;
     if (s.findings)
       st.findings = s.findings;
+    if (s.projects?.length)
+      st.projects = s.projects;
     if (s.warning)
       st.warning = s.warning;
     if (old?.last_report !== undefined)
@@ -11538,7 +11639,7 @@ async function runScoutNow(host, name) {
   if (st)
     await pausedNow(host, st);
   const cur = await load(host);
-  const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === "ok", mode: modeOf(cur), on: onHere(cur), plan: inPlan(S.plan) }, S.N.name);
+  const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === "ok", mode: modeOf(cur), on: onHere(cur), plan: inPlan(S.plan), newerData: S.newerData }, S.N.name);
   if (why)
     return why;
   const q = await queueScout(host, s, 0, true);
@@ -11626,12 +11727,19 @@ async function leadScouts(host, a) {
   if (a.findings !== undefined && a.findings !== null && !/^(auto|backlog|default|)$/i.test(String(a.findings).trim()))
     return "findings must be auto, backlog or default (default: follow the board setting)";
   const findings = a.findings === undefined || a.findings === null ? def?.findings ?? "" : findingsOf(String(a.findings));
+  const given = a.projects === undefined || a.projects === null ? undefined : scoutProjectNames(Array.isArray(a.projects) ? a.projects.join(" ") : String(a.projects)).filter((n) => n.toLowerCase() !== "none");
+  const projects = given ?? def?.projects ?? [];
+  if (given?.length) {
+    const bad = scoutProjectsError(given, S.projects);
+    if (bad)
+      return `projects refused: ${bad}`;
+  }
   await host.run(["mkdir", "-p", path(S.N.scouts)]);
-  await host.fs.write(path(file), scoutText(old, { every_minutes: every, model, findings }, prompt));
+  await host.fs.write(path(file), scoutText(old, { every_minutes: every, model, findings, projects }, prompt));
   await scheduleScouts(host);
   await publish(host, await load(host));
   host.ui.refresh();
-  return `${action === "add" ? "added" : "saved"} scout ${name} (${file}): runs ${everyText(every)}${model ? `, model ${model}` : ""}${findings ? `, findings → ${findings}` : ""}`;
+  return `${action === "add" ? "added" : "saved"} scout ${name} (${file}): runs ${everyText(every)}${model ? `, model ${model}` : ""}${findings ? `, findings → ${findings}` : ""}${projects.length ? `, projects ${projects.join(", ")}` : ""}`;
 }
 
 // hooks/app/migrate-data.ts
@@ -11662,9 +11770,41 @@ async function boardForCount(host) {
     return raw;
   return { ...b, tasks: b.tasks.filter((t) => !(t && typeof t === "object" && isStubbed(String(t.id)))) };
 }
+async function repoFolders(host) {
+  if (await host.fs.exists(`${S.root}/.git`).catch(() => false))
+    return [];
+  const dirs = (await host.fs.list(S.root).catch(() => [])).filter((e) => e.kind === "dir" && !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== S.N.dir).map((e) => e.name);
+  const found = [];
+  for (const d of dirs)
+    if (isProjectName(d) && await host.fs.exists(`${S.root}/${d}/.git`).catch(() => false))
+      found.push(d);
+  return found.sort();
+}
+async function boardDataVersion(host) {
+  const raw = jsonOf(await host.fs.read(path(S.N.boardFile)).catch(() => null));
+  if (!isObj(raw))
+    return null;
+  if (typeof raw.data_version === "number")
+    return raw.data_version;
+  return raw.version === 1 ? 1 : null;
+}
+var toldNewer = 0;
+async function newerDataText(host) {
+  const v = await boardDataVersion(host);
+  if (v === null || v <= DATA_VERSION)
+    return S.newerData = 0, "";
+  S.newerData = v;
+  const msg = `This board's data is newer than this symcc (shape ${v}, this window knows ${DATA_VERSION}). Update symcc (claude plugin update symcc@symcc) and reload.`;
+  if (toldNewer !== v) {
+    toldNewer = v;
+    host.ui.toast(S.N.toast(msg));
+    tellLead(host, msg);
+  }
+  return msg;
+}
 async function oldInput(host, all = true) {
   if (!all)
-    return { board: await boardForCount(host), archive: [], scouts: null, withRuns: new Set, fieldGuide: false, orgMem: false };
+    return { board: await boardForCount(host), archive: [], scouts: null, withRuns: new Set, fieldGuide: false, orgMem: false, repoFolders: await repoFolders(host), root: S.root };
   const scoutsText = await host.fs.read(scoutMemoryFile()).catch(() => null);
   const scouts2 = jsonOf(scoutsText);
   const names = Object.keys(scouts2?.scouts ?? {});
@@ -11680,7 +11820,9 @@ async function oldInput(host, all = true) {
     withRuns,
     unsafeScouts,
     fieldGuide: await host.fs.exists(path(`${S.N.dir}/field-guide.md`)).catch(() => false),
-    orgMem: await host.fs.exists(path(orgMemFile(S.N.dir))).catch(() => false)
+    orgMem: await host.fs.exists(path(orgMemFile(S.N.dir))).catch(() => false),
+    repoFolders: await repoFolders(host),
+    root: S.root
   };
 }
 async function oldDataFound(host) {
@@ -11694,6 +11836,9 @@ async function migrateIfOld(host, all = true) {
   try {
     if (S.guardOnly || !S.root)
       return "";
+    const newer = await newerDataText(host);
+    if (newer)
+      return newer;
     const input = await oldInput(host, all);
     if (!oldDataRows(input).some((r2) => r2.fix))
       return "";
@@ -11843,7 +11988,7 @@ async function migrateData(host, reuseBackup) {
   const failed2 = await locked(host, async () => {
     const raw = await readBoardRaw(host);
     if (raw !== null) {
-      const read = readBoardValue(upgradeBoard(raw, S.root));
+      const read = readBoardValue(upgradeBoard(raw, S.root, await repoFolders(host)));
       if (read.broken)
         return `board.json: ${read.broken}`;
       await saveBoard(host, read.board);
@@ -12274,6 +12419,7 @@ async function load(host) {
   if (!exists) {
     const b = emptyBoard();
     S.enabledNow = onHere(b);
+    S.projects = {};
     return b;
   }
   const { text, read: r, missing, missingFiles } = await readJoined(host);
@@ -12290,8 +12436,10 @@ async function load(host) {
   if (r.skipped || fixed2.length)
     await keepCopy(host, text, "before-fix", (c) => `${S.N.boardFile}: ${fixText2(r.skipped, fixed2)}${c ? `. The file as it was is kept in ${c}` : ""}.`);
   S.enabledNow = onHere(r.board);
+  S.projects = projectPaths(r.board);
   return r.board;
 }
+var projectPaths = (b) => Object.fromEntries(Object.entries(b.projects ?? {}).flatMap(([n, p]) => p?.path ? [[n, p.path]] : []));
 async function saveMigrated(host) {
   if (!await host.fs.exists(path(S.N.boardFile)).catch(() => false))
     return;
@@ -12449,6 +12597,9 @@ async function safeWriteIn(host, file, text, what) {
   }
 }
 async function saveBoard(host, b) {
+  const newer = await newerDataText(host);
+  if (newer)
+    throw new Error(newer);
   const hold = new Set(b.tasks.filter((t) => !stubbed.has(t.id) && missingParts.has(partsFileOf(t.id))).map((t) => t.id));
   const { board: slim, parts } = splitBoard(b, hold);
   const want = new Map;
@@ -12472,6 +12623,7 @@ async function saveBoard(host, b) {
   }
   await safeWrite(host, path(S.N.boardFile), JSON.stringify(slim, null, 2) + `
 `, "the board");
+  S.projects = projectPaths(b);
   for (const [file, tasks] of want) {
     const text = partsText(tasks);
     if (text !== first.get(file))
@@ -13095,6 +13247,8 @@ var testsSkippedText = (tree) => `tests: this exact code already passed (tree ${
 // hooks/app/review.ts
 var diffRange = (target, t) => `${target}...${taskBranch(t)}`;
 function gitDiff($, target, t, opts, file = "") {
+  if (projectGone(t))
+    return Promise.reject(new Error(projectGone(t)));
   const key = `${t.id}|${t.updated_at}|${target}|${opts.join(" ")}|${file}`;
   let p = changesCache.get(key);
   if (!p) {
@@ -13575,7 +13729,7 @@ async function mergedBefore($, t, merged) {
 }
 var mergedMemo = new Map;
 async function mergedChanges($, t) {
-  if (!hasMergedChanges(t))
+  if (!hasMergedChanges(t) || projectGone(t))
     return null;
   const merged = t.merged;
   const key = `${t.id}:${merged}`;
@@ -14286,6 +14440,90 @@ function sizeSegs(t) {
 }
 var EDIT_WORD = "Edit ".trim();
 
+// hooks/app/projects.ts
+var expand = (p) => {
+  const t = p.trim();
+  const home = S.home.replace(/\/+$/, "");
+  const x = t === "~" ? home : t.startsWith("~/") ? `${home}/${t.slice(2)}` : t;
+  return x.length > 1 ? x.replace(/\/+$/, "") : x;
+};
+var openOf = (b, name) => b.tasks.filter((t) => !isFinished(t) && t.project === name);
+async function checkRepo($, path2) {
+  if (!path2.startsWith("/"))
+    return { error: `Nothing changed: the path must be a full path (starting with / or ~), got '${path2.slice(0, 200)}'` };
+  if (!await $.fs.exists(path2).catch(() => false))
+    return { error: `Nothing changed: ${path2} does not exist` };
+  const r = await git($, ["rev-parse", "--show-toplevel", "--show-prefix"], path2, 15000).catch(() => null);
+  if (!r || r.exitCode !== 0)
+    return { error: `Nothing changed: ${path2} is not a git repo` };
+  const [top, prefix] = r.stdout.split(`
+`);
+  if (!top)
+    return { error: `Nothing changed: ${path2} is not a git repo` };
+  if ((prefix ?? "").trim() !== "")
+    return { error: `Nothing changed: ${path2} is a folder inside the repo ${top}, not the repo's top folder; give ${top}` };
+  const real = top.trim();
+  if (real.split("/").includes(S.N.dir))
+    return { error: `Nothing changed: ${path2} is inside a ${S.N.dir} folder` };
+  const head = await git($, ["rev-parse", "--verify", "-q", "HEAD"], real, 15000).catch(() => null);
+  if (!head || head.exitCode !== 0)
+    return { error: `Nothing changed: the repo ${real} has no commits yet` };
+  if (await $.fs.exists(`${real}/${S.N.boardFile.replace(/^\/+/, "")}`).catch(() => false))
+    return { error: `Nothing changed: the repo ${real} has a ${S.N.name} board of its own (${S.N.boardFile}); a project can't be a repo with its own board` };
+  return { top: real };
+}
+async function addProject($, name, rawPath) {
+  if (!isProjectName(name))
+    return { error: `Nothing changed: '${String(name).slice(0, 80)}' is not a project name (letters, digits, . _ - only)` };
+  const b = await load($);
+  if (b.projects?.[name]?.path)
+    return { error: `Nothing changed: the project name '${name}' is taken (path ${b.projects[name]?.path})` };
+  const c = await checkRepo($, expand(rawPath));
+  if ("error" in c)
+    return c;
+  const same2 = Object.entries(b.projects ?? {}).find(([, p]) => p.path === c.top);
+  if (same2)
+    return { error: `Nothing changed: ${c.top} is already the project '${same2[0]}'` };
+  await change($, (x) => [{ ...x, projects: { ...x.projects ?? {}, [name]: { ...x.projects?.[name] ?? {}, path: c.top } } }, null]);
+  return { text: `project ${name} added: ${c.top}` };
+}
+async function changeProjectPath($, name, rawPath) {
+  const b = await load($);
+  if (!Object.prototype.hasOwnProperty.call(b.projects ?? {}, name))
+    return { error: `Nothing changed: '${name}' is not a project here; add it with project and path` };
+  const c = await checkRepo($, expand(rawPath));
+  if ("error" in c)
+    return c;
+  const same2 = Object.entries(b.projects ?? {}).find(([n, p]) => n !== name && p.path === c.top);
+  if (same2)
+    return { error: `Nothing changed: ${c.top} is already the project '${same2[0]}'` };
+  for (const t of openOf(b, name)) {
+    const old = S.projects[name];
+    const has2 = await $.fs.exists(`${worktreeDir(t.id)}/.git`).catch(() => false) || !!old && await branchExists($, taskBranch(t), repoOf(t)).catch(() => false);
+    if (has2)
+      return { error: `Nothing changed: ${t.id} of project ${name} already has a copy or a branch in ${S.projects[name] ?? "its repo"}; finish or drop it first` };
+  }
+  await change($, (x) => [{ ...x, projects: { ...x.projects ?? {}, [name]: { ...x.projects?.[name] ?? {}, path: c.top } } }, null]);
+  return { text: `project ${name} now points at ${c.top}` };
+}
+async function removeProject($, name) {
+  const b = await load($);
+  if (!Object.prototype.hasOwnProperty.call(b.projects ?? {}, name))
+    return { error: `Nothing changed: '${name}' is not a project here` };
+  const open = openOf(b, name);
+  if (open.length)
+    return { error: `Nothing changed: ${open.map((t) => t.id).slice(0, 8).join(", ")} still use${open.length === 1 ? "s" : ""} project ${name}; finish or drop ${open.length === 1 ? "it" : "them"} first` };
+  const naming = (await loadScouts($)).filter((x) => x.projects?.includes(name)).map((x) => x.name);
+  if (naming.length)
+    return { error: `Nothing changed: scout${naming.length === 1 ? "" : "s"} ${naming.join(", ")} still name${naming.length === 1 ? "s" : ""} project ${name}; change ${naming.length === 1 ? "its" : "their"} projects: line first` };
+  await change($, (x) => {
+    const { [name]: _gone, ...rest } = x.projects ?? {};
+    const { projects: _old, ...others } = x;
+    return [Object.keys(rest).length ? { ...others, projects: rest } : others, null];
+  });
+  return { text: `project ${name} removed` };
+}
+
 // hooks/core/stats-html.ts
 var escapeHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 var E = escapeHtml;
@@ -14524,14 +14762,14 @@ async function mergeRuns(host, b) {
   const mine = [...finishing, ...approving][0];
   if (mine)
     return { id: mine };
-  for (const repo of await repoList(host)) {
+  for (const repo of repoList()) {
     const m = await git(host, ["rev-parse", "-q", "--verify", "MERGE_HEAD"], repo).catch(() => null);
     if (m?.exitCode === 0 && m.stdout.trim())
       return {};
   }
   return null;
 }
-var repoList = async (host) => [S.root, ...(await projectNames(host).catch(() => [])).map((p) => `${S.root}/${p}`)];
+var repoList = () => [S.root, ...Object.values(S.projects)];
 var agentsNow = (host) => host.agents.list().then((a) => a.map(agentState), () => null);
 function inUse(id, t, agents2) {
   if ([...workers.values()].some((w) => w.task === id) || starting.has(id) || finishing.has(id) || approving.has(id))
@@ -14604,6 +14842,9 @@ async function findAll(host, b, mergingId) {
     };
     data.push(item);
   }
+  const fileShape = await boardDataVersion(host);
+  if (fileShape !== null && fileShape !== DATA_VERSION)
+    data.push({ kind: "data", fixable: false, text: `the board's data shape is ${fileShape}, this symcc knows ${DATA_VERSION}${fileShape > DATA_VERSION ? ": it is newer, update symcc (claude plugin update symcc@symcc) and reload" : " (older data is moved on the next start or save)"}` });
   const isBackup = (e) => (e.kind === "file" || e.kind === "dir") && e.name.includes(BACKUP_MARK);
   const ids = backupIds(top.filter(isBackup).map((e) => e.name));
   for (const f of oldBackups(top.filter((e) => e.kind === "file" || isBackup(e)))) {
@@ -14677,6 +14918,11 @@ async function findAll(host, b, mergingId) {
       keptDirs.set(wt, "has uncommitted changes");
       continue;
     }
+    if (projectGone(t)) {
+      listed.push({ kind: "worktree", fixable: false, bytes, text: `folder ${shown(wt)}/ (${why}): ${projectGone(t)}, kept` });
+      keptDirs.set(wt, "its project is not in the project table");
+      continue;
+    }
     if (!await headKept(host, wt, into, repoOf(t))) {
       listed.push({ kind: "worktree", fixable: false, bytes, text: `folder ${shown(wt)}/ (${why}) holds commits on no branch, kept` });
       keptDirs.set(wt, "holds commits on no branch");
@@ -14706,7 +14952,7 @@ async function findAll(host, b, mergingId) {
       }
     });
   }
-  const repos = await repoList(host);
+  const repos = repoList();
   const staleIn = [];
   let stale = 0;
   for (const repo of repos) {
@@ -14754,7 +15000,7 @@ ${dry.stderr}`).length : 0;
         listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is being merged), left alone` });
         continue;
       }
-      if (!t || !isFinished(t) || repoOf(t) !== repo)
+      if (!t || !isFinished(t) || projectGone(t) || repoOf(t) !== repo)
         continue;
       if (inUse(id, t, agents2)) {
         listed.push({ kind: "branch", fixable: false, text: `branch ${br} (${id} is ${t.status}): an agent may still use it, kept` });
@@ -15225,10 +15471,12 @@ async function moveStage($, id, word) {
   if (stage !== "work") {
     if (isInvestigation(t))
       throw new Error(`${t.id} is an investigation: it has no work to check, test or review`);
+    if (projectGone(t))
+      throw new Error(`${t.id} can't be moved to ${stage} now: ${projectGone(t)}`);
     if (!await branchExists($, taskBranch(t), repoOf(t)))
       throw new Error(`${t.id} has no branch yet (no worker has made work for it); move it to work instead`);
     if (!await taskGitReady($, await load($), t))
-      throw new Error(`${t.id} can't be moved to ${stage} now: ${gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`);
+      throw new Error(`${t.id} can't be moved to ${stage} now: ${projectGone(t) || gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`);
   }
   const why = `moved to ${stage} by the lead`;
   let said = false;
@@ -15362,7 +15610,7 @@ async function markMerged($, id, by) {
   if (checkingNow(t.id))
     throw new Error(`${CHECKING_TEXT(t.id)}; try again when that ends`);
   if (!await taskGitReady($, b, t))
-    throw new Error(`${t.id} was not marked as merged: ${gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`);
+    throw new Error(`${t.id} was not marked as merged: ${projectGone(t) || gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`);
   const found = await findMerged($, t);
   const into = intoOf(t);
   const wasDoing = t.status === "doing";
@@ -15497,13 +15745,17 @@ function liveStatusText(view, notes, nowMs, name = DEFAULT_NAME, width2 = 80, of
         under(r.segs);
     }
   }
-  const br = liveBranches(view, nowMs, w);
-  if (br) {
+  const blocks = liveBranchBlocks(view, nowMs, w);
+  if (blocks.length) {
     out.push("");
-    line(br.head);
-    under(br.main);
-    for (const r of br.rows)
-      under(r.segs);
+    line(blocks[0].head);
+    for (const br of blocks) {
+      if (br.repoHead)
+        under(br.repoHead);
+      under(br.main);
+      for (const r of br.rows)
+        under(r.segs);
+    }
   }
   heading2(LIVE_SECTIONS.today);
   under(liveNowSegs(view, running, nowMs, inner));
@@ -15885,7 +16137,7 @@ The project has a shared task board (${S.N.dir}/board.json) that you and the own
 - Pick the task type by the result wanted: project files to merge → change (or bug, feature, refactor, docs); an answer to read → investigation; anything else, including work outside the project or "don't merge" / "just make it on my Desktop" → errand. Never use a plain background agent for work the board can do as an errand.
 - Turn what the owner wants into tasks with ${S.N.name} add (title, details = what to build and how we know it works, files = the narrowest files/folders the worker may change incl. tests, after = tasks that must be done first). Keep tasks small; split big wishes. Every change task's details say how the change will be tested, e.g. "Done when: tests show …" (the test that will check it). A change task whose commit edits code but no test file is flagged before merging (setting tests_with_changes: ask, the default, merges it and tells you "T-5 changed code but no test", so follow up with a test task or ask the owner; review makes it wait for the owner's review; off does nothing). Test files: in a test/, tests/, __tests__/, spec/, e2e/ or cypress/ folder (or a folder ending .Test/.Tests), or with test/spec/e2e/cy as a name part split by . _ or - (a.test.ts, a-test.ts, a.cy.ts), or a name ending in Test/Tests (FooTest.java); latest.ts and run-tests.sh are not tests. Docs: .md/.mdx, README/CHANGELOG/LICENSE names, images/video/audio/fonts, non-code files under docs/ (not docs/build.ts or Notice.tsx). A docs-only change is never flagged.
 - Every ${S.N.name} add must say where the task came from, so it can be traced back: why (one line, required), origin_by, and: for an owner request, request = the owner's words quoted exactly (when those words are a short reply like "yes", quote “<the owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<the reply>”); for a scout finding, scout = the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs"); for a split or follow-up, from_task = that task's id (and how: split or follow-up); for something a worker reported, origin_by worker with from_task; for your own idea, origin_by lead. ${S.N.name} also notes what it saw itself (the last owner prompt, the last scout or worker report).
-- On a workspace board (the board folder holds several repos, each in its own folder, and is no repo itself), give every change task its project (an investigation or errand may have none: it then runs in a plain folder, with no repo, and may read all the projects): the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A change task with no project is refused on a workspace board; an investigation or errand with none works in a plain folder, reads any project and writes into none (an errand may name outside folders).
+- Projects are repos anywhere on disk, listed by name and path in the board's project table. Add one only when the owner says yes (like doctor fix): ${S.N.name} settings with project (a plain name) and path (the repo's top folder; it needs commits, no board of its own, and not inside a ${S.N.dir} folder). Moving its path works only while none of its open tasks has a copy or branch; project with remove: true is refused while open tasks use it. On a board with projects, give every change task its project (an investigation or errand may have none: it then runs in a plain folder, with no repo, and may read all the projects): the folder name of the repo it changes (project on ${S.N.name} add). The task's files are then relative to that repo (README.md, not client/README.md), and it is worked on, tested and merged in that repo with that project's own test commands. A change across two repos is two tasks, linked with after. A change task with no project is refused on a workspace board; an investigation or errand with none works in a plain folder, reads any project and writes into none (an errand may name outside folders).
 - When two tasks may change the same files, make the later one wait for the earlier one (after), so they don't clash when merging. If the add answer says a task waits for one on another branch, that task's change won't be in it: tell the owner if it matters. Tasks with different files can run in parallel. Decide this yourself; don't ask the owner.
 - Workers can't read the board or ${S.N.dir}/ (no board tool, and their folder is their own copy). To hand a worker an earlier task's answer, give its task from_task (that task's latest report is copied into the worker's folder and its prompt names it), or name the report file (${S.N.dir}/reports/T-n-try-N.md, or T-n-try-*.md for the latest), or paste the key facts into the details.
 - A task waits until every task in its after list is done; if one of those is dropped or failed, change the waiting task's after (or drop it), or it waits forever.
@@ -15951,12 +16203,12 @@ var TOOLS = () => [
   {
     name: "add",
     description: `Add a task to the ${S.N.name} board. A worker starts on it when it is ready.`,
-    inputSchema: { type: "object", required: ["title", "details", "why", "origin_by"], properties: { title: { type: "string" }, details: { type: "string", description: "What to build and how we know it works." }, files: { type: "array", items: { type: "string" }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: "array", items: { type: "string" }, description: "Task IDs that must be done first." }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Like Unix nice: lower runs first. Every task starts at 0; give urgent work -1, -2…, later work 1, 2… A whole number from -20 to 19." }, project: { type: "string", description: "The project (a folder below the board folder that holds its own .git) the task belongs to; only on a board over several repos. Empty on a change clears it." }, needs_review: { type: "boolean", description: "Wait for the owner to approve before merging, even when the board merges on its own (mode auto)." }, backlog: { type: "boolean", description: "Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo." }, role: { type: "string", description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, kind: KIND_PARAM(), why: { type: "string", description: "Required. One line: why this task exists." }, origin_by: { type: "string", enum: ["owner", "scout", "worker", "lead"], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: "string", description: `For an owner request: the owner's words, quoted exactly. When they are a short reply ("yes"), write: “<owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<reply>”.` }, scout: { type: "string", description: `For a scout finding: the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs").` }, from_task: { type: "string", description: "For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12." }, how: { type: "string", enum: ["split", "follow-up"], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } }
+    inputSchema: { type: "object", required: ["title", "details", "why", "origin_by"], properties: { title: { type: "string" }, details: { type: "string", description: "What to build and how we know it works." }, files: { type: "array", items: { type: "string" }, description: 'Files/folders the worker may change, e.g. ["src/search.js", "test/"]. Empty = anywhere.' }, after: { type: "array", items: { type: "string" }, description: "Task IDs that must be done first." }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Like Unix nice: lower runs first. Every task starts at 0; give urgent work -1, -2…, later work 1, 2… A whole number from -20 to 19." }, project: { type: "string", description: "The project (a name in the board's project table: a repo anywhere on disk) the task belongs to; only on a board with projects. Empty on a change clears it." }, needs_review: { type: "boolean", description: "Wait for the owner to approve before merging, even when the board merges on its own (mode auto)." }, backlog: { type: "boolean", description: "Put it straight into the backlog: an idea or not-yet-clear work that never starts until moved to todo." }, role: { type: "string", description: 'The worker role that fits the task (see your instructions for the list): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.' }, kind: KIND_PARAM(), why: { type: "string", description: "Required. One line: why this task exists." }, origin_by: { type: "string", enum: ["owner", "scout", "worker", "lead"], description: "Who it came from: the owner's request, a scout's report, a worker's report, or your own idea (lead)." }, request: { type: "string", description: `For an owner request: the owner's words, quoted exactly. When they are a short reply ("yes"), write: “<owner's earlier ask, trimmed>” → lead: “<your question, short>” → “<reply>”.` }, scout: { type: "string", description: `For a scout finding: the scout's name as on the board (e.g. "bugs", not its agent name "${S.N.name}-scout-bugs").` }, from_task: { type: "string", description: "For a split or follow-up, or a worker report: the task id it comes from, e.g. T-12." }, how: { type: "string", enum: ["split", "follow-up"], description: 'With from_task: "split" (part of a bigger task) or "follow-up" (more work after it).' } } }
   },
   {
     name: "change",
     description: "Rewrite a task. details replaces the whole text; add_details adds a note to the end and keeps the rest (not both at once). A running task restarts on the new version (except when only priority, after or needs_review change: those are saved and its worker keeps running); a waiting, failed or in-review one goes back to work; a paused one stays paused with the change saved (only resume or retry starts it again); a backlog one stays in the backlog. Changing only needs_review (wait for the owner before merging) just sets that flag. backlog: true stashes the task in the backlog (a running one is stopped first); backlog: false moves it from the backlog to todo.",
-    inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, title: { type: "string" }, stage: { type: "string", enum: ["work", "check", "tests", "review"], description: "Move the task, with its branch as it is, to this stage of its run (only on its own, nothing else changes): work = a new worker try; check = a fresh checker now, then the merge line; tests = the merge line now, no checker (merges if its tests pass); review = ready for the owner (approve then runs the tests). A running worker or checker is stopped first. Works from todo, doing, failed, waiting and review; uses no automatic retry." }, details: { type: "string", description: "The new details: replaces the whole text. To add a line, use add_details instead." }, add_details: { type: "string", description: `A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task's timeline too. Not together with details.` }, files: { type: "array", items: { type: "string" } }, after: { type: "array", items: { type: "string" } }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Lower runs first; 0 is normal (urgent: -1, -2…; later: 1, 2…). A whole number from -20 to 19." }, project: { type: "string", description: "The project (a folder below the board folder that holds its own .git) the task belongs to; only on a board over several repos. Empty on a change clears it." }, needs_review: { type: "boolean" }, backlog: { type: "boolean", description: "true: stash in the backlog (never starts); false: move from the backlog to todo." }, role: { type: "string", description: `The worker role for the task (${BUILT_IN_ROLES.join(", ")} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: "string", description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's timeline." }, merge_into: { type: "string", description: "Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made)." } } }
+    inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, title: { type: "string" }, stage: { type: "string", enum: ["work", "check", "tests", "review"], description: "Move the task, with its branch as it is, to this stage of its run (only on its own, nothing else changes): work = a new worker try; check = a fresh checker now, then the merge line; tests = the merge line now, no checker (merges if its tests pass); review = ready for the owner (approve then runs the tests). A running worker or checker is stopped first. Works from todo, doing, failed, waiting and review; uses no automatic retry." }, details: { type: "string", description: "The new details: replaces the whole text. To add a line, use add_details instead." }, add_details: { type: "string", description: `A note added to the end of the details as a new paragraph ("Note (lead, <date>): ..."), keeping the old text; it is written in the task's timeline too. Not together with details.` }, files: { type: "array", items: { type: "string" } }, after: { type: "array", items: { type: "string" } }, priority: { type: "integer", minimum: -20, maximum: 19, description: "Lower runs first; 0 is normal (urgent: -1, -2…; later: 1, 2…). A whole number from -20 to 19." }, project: { type: "string", description: "The project (a name in the board's project table: a repo anywhere on disk) the task belongs to; only on a board with projects. Empty on a change clears it." }, needs_review: { type: "boolean" }, backlog: { type: "boolean", description: "true: stash in the backlog (never starts); false: move from the backlog to todo." }, role: { type: "string", description: `The worker role for the task (${BUILT_IN_ROLES.join(", ")} or a project role): researcher for "find out whether / how ..." tasks whose result is a note, not code; general when unsure.` }, kind: KIND_PARAM(), answer: { type: "string", description: "The owner's answer to a waiting task's question, in their words: it is added to the details and the task's timeline." }, merge_into: { type: "string", description: "Move the task to another existing local branch: it merges into that one (a task merges into the branch the owner was on when it was made)." } } }
   },
   { name: "approve", description: 'Approve a task that is ready for review: its work is merged into its branch (the one the owner was on when it was made) by the same checked merge as always (brought up to date, scope checked, tests run again if it had to merge). Only for a task in "review". For an answered investigation it is Done: the task ends done, nothing is merged, its folder is removed, and its branch too unless it has commits from earlier tries, which are kept (the reply says so); with keep_note: true (Keep as a note) a new small docs task is added too that writes docs/research/<topic>.md from the saved answer and merges as usual.', inputSchema: { type: "object", required: ["task"], properties: { task: { type: "string" }, keep_note: { type: "boolean", description: "Only for an answered investigation: also add a docs task that keeps its answer as docs/research/<topic>.md." } } } },
   { name: "reject", description: 'Reject a task that is ready for review: nothing is merged, it goes back to "todo" with the reason in its timeline, and a fresh worker picks it up. Only for a task in "review". For an answered investigation it is Ask more: the reason is the follow-up question; it goes back to "todo" and the fresh try gets the question and the earlier answer in its details.', inputSchema: { type: "object", required: ["task", "reason"], properties: { task: { type: "string" }, reason: { type: "string", description: "What is wrong and what to change, for the next worker (for an answered investigation: the follow-up question)." } } } },
@@ -15975,7 +16227,7 @@ var TOOLS = () => [
   {
     name: "scouts",
     description: `List, add, edit, remove or run the ${S.N.name} scouts (files in ${S.N.dir}/scouts/). action "list" (the default): every scout with how often it runs (e.g. "every 2 days", "on demand"), paused or not, running or not, its next and last run and the first lines of its last report; with name, that one scout in full (its prompt, whole last report and its last few runs: when, outcome, findings, tasks made from it and its report file). "add" / "edit": writes ${S.N.dir}/scouts/<name>.md (name: lowercase letters, digits and dashes; every_minutes: 0 = only on demand; optional model; optional findings: auto = you decide where its tasks go, backlog = every task from its findings goes to the backlog, default (or left out) = follow the board's scout_findings setting; prompt = what it looks for); edit keeps what you leave out. "remove" deletes the scout's file (confirm with the owner first). "run": runs it now, like the owner's "run now" (a paused scout runs too, once, and stays paused; refused with the reason when it is already running, or git isn't set up). The board shows every change at once. Pause and resume are for the owner only.`,
-    inputSchema: { type: "object", properties: { action: { type: "string", enum: ["list", "add", "edit", "remove", "run"], description: "What to do; list when left out." }, name: { type: "string", description: "The scout, e.g. docs-check (lowercase letters, digits and dashes)." }, every_minutes: { type: "number", description: "For add / edit: how often it runs, in minutes (60 = every hour, 2880 = every 2 days); 0 = only on demand." }, model: { type: "string", description: "For add / edit: optional model, e.g. sonnet; an empty text removes it." }, findings: { type: "string", enum: ["auto", "backlog", "default"], description: "For add / edit: where the tasks from this scout's findings go: auto (you decide), backlog (always the backlog), or default (follow the board's scout_findings setting)." }, prompt: { type: "string", description: "For add / edit: what the scout looks for, in plain words." } } }
+    inputSchema: { type: "object", properties: { action: { type: "string", enum: ["list", "add", "edit", "remove", "run"], description: "What to do; list when left out." }, name: { type: "string", description: "The scout, e.g. docs-check (lowercase letters, digits and dashes)." }, every_minutes: { type: "number", description: "For add / edit: how often it runs, in minutes (60 = every hour, 2880 = every 2 days); 0 = only on demand." }, model: { type: "string", description: "For add / edit: optional model, e.g. sonnet; an empty text removes it." }, projects: { type: "string", description: 'For add / edit, on a board with projects: the project names the scout looks at, e.g. "api, web" (front matter projects:); left out keeps them, "none" or empty means every project.' }, findings: { type: "string", enum: ["auto", "backlog", "default"], description: "For add / edit: where the tasks from this scout's findings go: auto (you decide), backlog (always the backlog), or default (follow the board's scout_findings setting)." }, prompt: { type: "string", description: "For add / edit: what the scout looks for, in plain words." } } }
   },
   {
     name: "roles",
@@ -16001,7 +16253,7 @@ var TOOLS = () => [
   {
     name: "settings",
     description: "Read or change how the team works. Called with no params it lists every setting with its current value and default, one per line, under the same category headings as the Settings view (Work, Checks before merging, Workers, Scouts, Board and alerts; notify also lists the choices this machine can play). Give one or more of these to change them (there is no branch setting: each task merges into the branch you were on when it was made): test_commands (shell commands that must pass before merging), docs_test_commands (shell commands, same shape and limit as test_commands, default none: run instead of test_commands when a task of a prose-only role (code: false) changed only prose, e.g. a docs link check; none: such a change runs no test), test_minutes (how many minutes each test command may run before merging, a whole number 1-120, default 10; a test command past it fails like a failing test: a new worker try starts with the output, using one of the auto_retries; anything else is refused), max_parallel (workers at once), max_minutes (a worker running longer makes symcc ask the owner for more time: +N min or Stop it), auto_retries (new tries a task gets on its own after failing tests, 0-10, default 2), archive_days (done and dropped tasks older than this many days move to archive.json, 0 = never), open_on_start (open the board panel by itself when a session starts, default true), notify (\"voice\", \"sound 1\", \"sound 2\", \"sound 3\" or \"off\": what plays when a task is merged or a question from a worker waits for the owner: \"voice\" says \"symcc: T-3 done\" / \"symcc: T-5 needs you\" out loud (the project name first), \"sound N\" a short chime from sound set N, each set with its own \"done\" and \"needs you\" chime so the owner can tell which project chimed (on macOS 1: Glass / Ping, 2: Hero / Pop, 3: Submarine / Funk); only the session driving the board plays; default sound 2 where this machine can play sounds, else voice where it can only speak, else off; a choice this machine cannot play is refused with the reason; there is no sound_set setting), scout_findings (\"auto\", the default: you decide, and a scout finding you add goes to todo and runs; \"backlog\": every task added with origin_by scout goes to the backlog, whatever you ask, and starts only when the owner moves it to todo), tests_with_changes (\"ask\", the default: a change task whose commit edits code but no test file still merges and you are told \"T-3 changed code but no test\"; \"review\": such a task waits for the owner to review it instead of merging; \"off\": not checked; docs-only changes are never flagged), checker (\"off\", the default, or \"on\": after the prep step and before a change task joins the merge queue (its tests run once in the queue, after the checker), a fresh checker agent tries to break it; OK goes on as usual, a list of problems sends the task back to its worker with the report, using one of its auto_retries (no test run for that try); after 2 send-backs the task waits for the owner with Merge as is / Keep fixing / Drop instead of a new try; investigations and docs-only changes skip it), mode (\"paused\": stop every running worker and scout now and start nothing new, tasks in review can still be approved or rejected; \"review\": work runs and every finished task that passes waits for the owner to approve or reject it; \"auto\", the default: work runs and finished work that passes merges on its own; going from paused to review or auto starts work again, and going from review to auto does not merge tasks already in review).",
-    inputSchema: { type: "object", properties: { project: { type: "string", description: "A project folder name: with test_commands, sets that project's own test commands (a task of that project merges with them instead of the board's); nothing else is set per project." }, test_commands: { type: "array", items: { type: "string" } }, docs_test_commands: { type: "array", items: { type: "string" }, description: "Run instead of test_commands when a prose-only role (code: false) changed only prose; [] for none (such a change then runs no test)." }, test_minutes: { type: "number", description: "Minutes each test command may run before merging: a whole number 1-120 (default 10)." }, max_parallel: { type: "number" }, max_minutes: { type: "number" }, auto_retries: { type: "number" }, archive_days: { type: "number", description: "Done and dropped tasks older than this many days move to archive.json; 0 = never." }, open_on_start: { type: "boolean" }, notify: { type: "string", enum: ["voice", "sound 1", "sound 2", "sound 3", "off"] }, scout_findings: { type: "string", enum: ["auto", "backlog"], description: "auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog." }, tests_with_changes: { type: "string", enum: ["off", "ask", "review"], description: "A change task that edits code but no test file: ask (default) merges and tells you; review waits for the owner; off does nothing." }, checker: { type: "string", enum: ["off", "on"], description: "on: a fresh checker tries to break each change before it joins the merge queue, where its tests run; off (default): no checker." }, mode: { type: "string", enum: ["paused", "review", "auto"] } } }
+    inputSchema: { type: "object", properties: { project: { type: "string", description: "A project name: with test_commands, sets that project's own test commands (a task of that project merges with them instead of the board's); with path, adds the project (a repo's top folder anywhere on disk) or moves it; with remove, takes it out. Add, move and remove only after the owner said yes." }, path: { type: "string", description: "With project: the full path of the repo (~ allowed). A new name adds the project; an existing one moves it (only while none of its open tasks has a copy or branch)." }, remove: { type: "boolean", description: "With project: true removes the project (refused while open tasks use it)." }, test_commands: { type: "array", items: { type: "string" } }, docs_test_commands: { type: "array", items: { type: "string" }, description: "Run instead of test_commands when a prose-only role (code: false) changed only prose; [] for none (such a change then runs no test)." }, test_minutes: { type: "number", description: "Minutes each test command may run before merging: a whole number 1-120 (default 10)." }, max_parallel: { type: "number" }, max_minutes: { type: "number" }, auto_retries: { type: "number" }, archive_days: { type: "number", description: "Done and dropped tasks older than this many days move to archive.json; 0 = never." }, open_on_start: { type: "boolean" }, notify: { type: "string", enum: ["voice", "sound 1", "sound 2", "sound 3", "off"] }, scout_findings: { type: "string", enum: ["auto", "backlog"], description: "auto (default): you decide where a scout finding goes; backlog: every task added with origin_by scout goes to the backlog." }, tests_with_changes: { type: "string", enum: ["off", "ask", "review"], description: "A change task that edits code but no test file: ask (default) merges and tells you; review waits for the owner; off does nothing." }, checker: { type: "string", enum: ["off", "on"], description: "on: a fresh checker tries to break each change before it joins the merge queue, where its tests run; off (default): no checker." }, mode: { type: "string", enum: ["paused", "review", "auto"] } } }
   },
   {
     name: "doctor",
@@ -16097,7 +16349,7 @@ async function projectIn($, a) {
   const name = str(a.project)?.trim() ?? "";
   if (!name)
     return "";
-  const refusal = projectRefusal(name, await projectNames($));
+  const refusal = projectRefusal(name, projectNames());
   if (refusal)
     throw new Error(`Nothing changed: ${refusal}`);
   return name;
@@ -16166,7 +16418,7 @@ async function runTool($, name, a) {
       const kind = await kindIn($, a);
       const project = await projectIn($, a);
       if (!project && !isInvestigation(kind ?? kindFor(undefined, role))) {
-        const needs = changeNeedsProject(await projectNames($).catch(() => []));
+        const needs = changeNeedsProject(projectNames());
         if (needs)
           throw new Error(`Nothing added: ${needs}`);
       }
@@ -16246,12 +16498,12 @@ Note: ${n}.`).join("") + (reviewMode ? REVIEW_ADD_REMINDER : "");
       const role = str(a.role)?.trim() ? checkRole(await loadRoles($), str(a.role)) : undefined;
       const project = await projectIn($, a);
       const projectMoves = project !== undefined && project !== (t.project ?? "");
-      if (projectMoves && (await $.fs.exists(`${worktreeDir(t.id)}/.git`) || await branchExists($, taskBranch(t), repoOf(t)))) {
+      if (projectMoves && (await $.fs.exists(`${worktreeDir(t.id)}/.git`) || !projectGone(t) && await branchExists($, taskBranch(t), repoOf(t)))) {
         throw new Error(`Nothing changed: ${t.id} already has a copy in ${t.project || "the board folder"}; drop and re-add it, or finish it first`);
       }
       const kind = await kindIn($, a) ?? (role && role !== t.role && isInvestigation(kindFor(undefined, role)) ? kindFor(undefined, role) : undefined);
       if ((project !== undefined || kind !== undefined) && !(project ?? t.project) && !isInvestigation(kind ?? t)) {
-        const needs = changeNeedsProject(await projectNames($).catch(() => []));
+        const needs = changeNeedsProject(projectNames());
         if (needs)
           throw new Error(`Nothing changed: ${needs}`);
       }
@@ -16510,7 +16762,7 @@ Owner's answer${t.ask?.text ? ` to "${t.ask.text}"` : ""}: ${answer}`;
         return SOUND_SET_GONE;
       if (a.project !== undefined && typeof a.project !== "string")
         return "Nothing changed: project must be a project folder name (text)";
-      if (!SETTING_NAMES.some((k) => a[k] !== undefined))
+      if (!SETTING_NAMES.some((k) => a[k] !== undefined) && !(a.project !== undefined && (a.path !== undefined || a.remove === true)))
         return leadSettingsText(await load($), await playable($), S.root);
       const r = await saveSettings($, a, "the lead");
       if (r.error)
@@ -16543,6 +16795,8 @@ async function runNowTool($, id, anyway) {
     return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`;
   if (S.gitState === "ok" && S.gitRoot === "no-repo" && !isProjectName(t.project ?? "") && !isInvestigation(t))
     return `${noProjectText({ ...b, tasks: [t] })}; nothing started`;
+  if (projectGone(t))
+    return `${t.id} didn't start: ${projectGone(t)}`;
   if (S.gitState === "no-git" || !plainTask(t) && !await taskGitReady($, b, t))
     return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : "here"} yet`;
   const busy = workers.size + starting.size;
@@ -16595,7 +16849,20 @@ async function saveSettings($, a, who) {
   }
   if (a.project !== undefined) {
     const name = str(a.project)?.trim() ?? "";
-    const refusal = projectRefusal(name, await projectNames($));
+    if (a.remove === true || a.path !== undefined) {
+      if (a.remove === true && a.path !== undefined)
+        return { error: "Nothing changed: give path or remove, not both", changes: [] };
+      if (a.path !== undefined && typeof a.path !== "string")
+        return { error: "Nothing changed: path must be a full path (text)", changes: [] };
+      if (SETTING_NAMES.some((k) => a[k] !== undefined))
+        return { error: "Nothing changed: with project and path (or remove) give no other setting", changes: [] };
+      const r = a.remove === true ? await removeProject($, name) : projectNames().includes(name) ? await changeProjectPath($, name, a.path) : await addProject($, name, a.path);
+      if ("error" in r)
+        return { error: r.error, changes: [] };
+      pump($);
+      return { changes: [{ name: "test_commands", value: r.text, said: r.text, cut: "" }] };
+    }
+    const refusal = projectRefusal(name, projectNames());
     if (refusal)
       return { error: refusal, changes: [] };
     const other = SETTING_NAMES.filter((k) => k !== "test_commands" && a[k] !== undefined);
@@ -16750,6 +17017,8 @@ async function pump(host) {
     return;
   if (inPlan(S.plan))
     return;
+  if (S.newerData)
+    return;
   const b = await load(host);
   if (modeOf(b) === "paused" || !onHere(b))
     return;
@@ -16766,6 +17035,8 @@ async function pump(host) {
     if (workers.size + starting.size >= b.max_parallel)
       break;
     if (starting.has(t.id) || checkingNow(t.id) || [...workers.values()].some((w) => w.task === t.id))
+      continue;
+    if (projectGone(t))
       continue;
     const repo = repoOf(t);
     if (!plainTask(t) && (repo === S.root ? S.gitRoot !== "ok" : !(repoOk.get(repo) ?? (repoOk.set(repo, await gitReady(host, b, repo)), repoOk.get(repo)))))
@@ -16809,6 +17080,8 @@ async function queueWorker(host, id) {
     if (!mayStart(t0, agents2.map(agentState), S.N.name))
       return null;
     const plain2 = plainTask(t0);
+    if (projectGone(t0))
+      return null;
     if (!plain2 && (repoOf(t0) === S.root ? S.gitRoot !== "ok" : !await taskGitReady(host, b, t0)))
       return null;
     if (!plain2 && await mergedBeforeStart(host, t0))
@@ -16850,8 +17123,8 @@ async function queueWorker(host, id) {
     };
     const plainNote = plain2 ? `
 
-You work in a plain folder (no git, no branch). The board's projects are folders you may read, but never write into: ${(await projectNames(host)).map((n) => `${S.root}/${n}`).join(", ")}. Read them with your file tools. Nothing you leave here is kept: put what the owner needs in your report.` : "";
-    const errandOut = (x) => isErrand(x) ? errandFolders(x.files, S.root, S.home) : [];
+You work in a plain folder (no git, no branch). The board's projects are folders you may read, but never write into: ${Object.entries(S.projects).map(([n, p]) => `${n}: ${p}`).join(", ")}. Read them with your file tools. Nothing you leave here is kept: put what the owner needs in your report.` : "";
+    const errandOut = (x) => isErrand(x) ? errandFolders(x.files, S.root, S.home, Object.values(S.projects)) : [];
     const spawn = startAgent(host, { kind: "worker", prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince2(host, t, dir, Date.parse(now()))) + plainNote + (errandOut(t).length ? `
 
 You may write here (outside the project): ${errandOut(t).join(", ")}` : "") + reportsNote(reports2, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...role?.tools ? { tools: role.tools } : {}, ...isProseRole(role) && !isInvestigation(t) ? { prose: true } : {}, ...errandOut(t).length || !isInvestigation(t) && t.files?.length ? { files: isErrand(t) ? errandOut(t) : t.files } : {}, cwd: dir, ...role?.model ? { model: role.model } : {} }, still);
@@ -16925,6 +17198,8 @@ async function mergedBeforeStart(host, t) {
   return done;
 }
 async function waitIfBranchGone(host, b, t, when3) {
+  if (projectGone(t))
+    return false;
   const into = intoOf(t);
   if (await branchExists(host, into, repoOf(t)))
     return false;
@@ -17782,6 +18057,8 @@ async function retryFileWaits(host) {
   const current = new Map;
   const status = new Map;
   for (const t of waiting2) {
+    if (projectGone(t))
+      continue;
     const repo = repoOf(t);
     if (!current.has(repo))
       current.set(repo, (await git(host, ["symbolic-ref", "--short", "-q", "HEAD"], repo)).stdout.trim());
@@ -17913,7 +18190,7 @@ async function approve(host, id, keepNote = false) {
   const b = await load(host);
   const t = reviewTask(b, id, "approve");
   if (isInvestigation(t) && keepNote && workspaceNow() && !t.project)
-    throw new Error(`${t.id} has no project, and a note is a docs task that needs one on a board over several repos (${(await projectNames(host)).join(", ")}): give ${t.id} a project (${S.N.name} change project), then keep it as a note`);
+    throw new Error(`${t.id} has no project, and a note is a docs task that needs one on a board over several repos (${projectNames().join(", ")}): give ${t.id} a project (${S.N.name} change project), then keep it as a note`);
   if (isInvestigation(t))
     return endInvestigation(host, t, keepNote);
   if (keepNote)
@@ -17928,7 +18205,7 @@ async function fullAnswer(host, t) {
 var everyReport = (t, latest) => [...new Set([...taskReports(t).sort((a, b) => a.try - b.try).map((r) => r.file), ...latest ? [latest] : []])];
 async function endInvestigation(host, t, keepNote, handBackFrom) {
   const full = keepNote ? await fullAnswer(host, t) : { text: "" };
-  const merge_into = keepNote && !plainTask(t) ? await homeBranch(host, repoOf(t)) : undefined;
+  const merge_into = keepNote && !plainTask(t) && !projectGone(t) ? await homeBranch(host, repoOf(t)) : undefined;
   const notes = keepNote ? (await Promise.resolve().then(() => host.fs.list(path("docs/research"))).catch(() => [])).map((f) => `docs/research/${f.name}`) : [];
   const added = await change(host, (x) => {
     if (!keepNote)
@@ -17944,7 +18221,7 @@ async function endInvestigation(host, t, keepNote, handBackFrom) {
   const keep = commits2 !== 0;
   const what = commits2 === null ? `git could not tell whether it has commits ${intoOf(t)} doesn't have` : `it has ${plural(commits2, "commit")} from an earlier change try that ${intoOf(t)} doesn't have`;
   const kept = keep ? ` Its branch ${branch} was kept: ${what}. Delete it by hand once that work is not needed.` : "";
-  if (await removeWorktree(host, t.id, worktreeDir(t.id), handBackFrom, handBackFrom !== undefined).catch(() => false) && !keep && !plainTask(t))
+  if (await removeWorktree(host, t.id, worktreeDir(t.id), handBackFrom, handBackFrom !== undefined).catch(() => false) && !keep && !plainTask(t) && !projectGone(t))
     await git(host, ["branch", "-D", branch], repoOf(t));
   if (kept)
     tellLead(host, `${t.id} "${t.title}" is done.${kept}`);
@@ -17970,7 +18247,7 @@ async function mergeFinished(host, b, t, kind, force = false) {
   if (approving.has(t.id))
     return `${t.id} is already being merged`;
   if (!await taskGitReady(host, b, t))
-    return `${t.id} ${stays}: ${gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`;
+    return `${t.id} ${stays}: ${projectGone(t) || gitNote(gitStateOfTask(t)) || projectNotes() || gitNote(S.gitState)}`;
   if (await waitIfBranchGone(host, b, t, "merge"))
     return `${t.id} was not merged: the branch it merges into, ${intoOf(t)}, is gone; it now waits for your answer`;
   approving.add(t.id);
@@ -18350,13 +18627,20 @@ async function gitOk($, args, cwd = S.root, timeoutMs = 120000) {
     throw new Error(`git ${args.join(" ")}: ${(r.stderr || r.stdout).trim().slice(0, 300)}`);
   return r.stdout.trim();
 }
+var projectPath = (p) => typeof p === "string" && Object.prototype.hasOwnProperty.call(S.projects, p) ? S.projects[p] : undefined;
+var projectNames = () => Object.keys(S.projects).sort();
+var projectGone = (t) => {
+  const p = t?.project;
+  return p === undefined || p === null || p === "" || projectPath(p) ? "" : `project '${String(p).slice(0, 80)}' is not in this board's project table`;
+};
 var repoOf = (t) => {
   const p = t?.project;
   if (p === undefined || p === null || p === "")
     return S.root;
-  if (!isProjectName(p))
-    throw new Error(`'${String(p).slice(0, 80)}' is not a project folder name`);
-  return `${S.root}/${p}`;
+  const path2 = projectPath(p);
+  if (!path2)
+    throw new Error(`'${String(p).slice(0, 80)}' is not in this board's project table`);
+  return path2;
 };
 async function currentBranch($, cwd = S.root) {
   if (!S.root)
@@ -18443,12 +18727,22 @@ async function installStepOf($) {
 var isOpenTask = (t) => !isFinished(t) && t.status !== "backlog";
 var openProjects = (b) => [...new Set(b.tasks.filter((t) => isOpenTask(t)).map((t) => t.project).filter((p) => !!p && isProjectName(p)))].sort();
 var gitStateOfTask = (t) => {
+  if (projectGone(t))
+    return "ok";
   const repo = repoOf(t);
   return repo === S.root ? S.gitRoot : S.repoGit.get(repo) ?? "ok";
 };
-var projectNotes = (names) => [...S.repoGit].map(([r, s]) => [r.slice(S.root.length + 1), s]).filter(([p, s]) => s !== "ok" && (!names || names.includes(p))).map(([p, s]) => `${p}: ${s === "no-git" ? "git is not installed" : s === "no-repo" ? "no git repo" : "no commits yet"}`).join("; ");
+var projectNotes = (names) => {
+  const byPath = new Map(Object.entries(S.projects).map(([n, p]) => [p, n]));
+  return [
+    ...[...S.repoGit].map(([r, s]) => [byPath.get(r) ?? r, s]).filter(([p, s]) => s !== "ok" && (!names || names.includes(p))).map(([p, s]) => `${p}: ${s === "no-git" ? "git is not installed" : s === "no-repo" ? "no git repo" : "no commits yet"}`),
+    ...(names ?? []).filter((p) => !projectPath(p)).map((p) => `${p}: not in the project table`)
+  ].join("; ");
+};
 var allGitReady = () => S.gitState === "ok" && [...S.repoGit.values()].every((s) => s === "ok");
 async function taskGitReady($, b, t) {
+  if (projectGone(t))
+    return false;
   const repo = repoOf(t);
   if (repo === S.root) {
     await gitReady($, b);
@@ -18459,7 +18753,7 @@ async function taskGitReady($, b, t) {
   return gitReady($, b, repo);
 }
 function forgetClosedRepos(b) {
-  const open = new Set(b.tasks.filter((t) => isOpenTask(t)).map((t) => t.project).filter((p) => !!p && isProjectName(p)).map((p) => `${S.root}/${p}`));
+  const open = new Set(b.tasks.filter((t) => isOpenTask(t)).map((t) => t.project).filter((p) => !!p && isProjectName(p)).flatMap((p) => projectPath(p) ?? []));
   for (const r of [...S.repoGit.keys()])
     if (!open.has(r))
       S.repoGit.delete(r);
@@ -18468,8 +18762,11 @@ async function checkProjects($, b) {
   forgetClosedRepos(b);
   if (S.gitState === "no-git")
     return;
-  for (const p of openProjects(b))
-    await gitReady($, b, `${S.root}/${p}`).catch(() => false);
+  for (const p of openProjects(b)) {
+    const repo = projectPath(p);
+    if (repo)
+      await gitReady($, b, repo).catch(() => false);
+  }
 }
 async function recheckGit($) {
   forgetClosedRepos(await load($));
@@ -18501,15 +18798,13 @@ async function gitReady($, b, repo = S.root) {
   const real = await probeGit($);
   S.gitRoot = real;
   const board = b ?? await load($);
-  const s = real === "no-repo" && (await projectNames($).catch(() => [])).length ? "ok" : real;
+  const s = real === "no-repo" && projectNames().length ? "ok" : real;
   if (s === "no-git" && (s !== S.gitState || !S.gitInstall))
     S.gitInstall = await installStepOf($).catch(() => "");
   if (s !== "no-git")
     S.gitInstall = "";
-  const ws = (s === "no-repo" || s === "no-commits") && await holdsRepos($) ? workspaceText() : "";
-  if (s !== S.gitState || ws !== S.gitWorkspace) {
+  if (s !== S.gitState) {
     S.gitState = s;
-    S.gitWorkspace = ws;
     await publish($, b ?? await load($));
   }
   const loose = noProjectText(board);
@@ -18524,7 +18819,7 @@ async function gitReady($, b, repo = S.root) {
     S.toldGit = "ok";
   } else if (S.driving && S.toldGit !== s) {
     S.toldGit = s;
-    tellLead($, s === "no-git" ? noGitText(S.N.name, S.gitInstall) : ws ? ws : setupAskText(s, S.N.name));
+    tellLead($, s === "no-git" ? noGitText(S.N.name, S.gitInstall) : setupAskText(s, S.N.name));
   }
   return s === "ok";
 }
@@ -18553,7 +18848,7 @@ function noProjectText(b) {
   const many = ids.length > 1;
   return `${ids.join(", ")} ${many ? "have" : "has"} no project, so ${many ? "they can't" : "it can't"} start on a board over several repos (a change task needs a project); give ${many ? "each" : "it"} a project (${S.N.name} change project)`;
 }
-var workspaceText = () => `This looks like a workspace of several repos; ${S.N.name} can't run a board over several repos yet. Open ${S.W.app} in one repo instead.`;
+var workspaceText = () => `This folder holds several repos, so ${S.N.name} won't set up one git repo over them. Add each repo as a project (${S.N.name} settings with project and path), or open ${S.W.app} in one repo.`;
 async function holdsRepos($) {
   const dirs = async (path2) => (await $.fs.list(path2).catch(() => [])).filter((e) => e.kind === "dir" && !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== S.N.dir).map((e) => e.name);
   for (const a of await dirs(S.root)) {
@@ -18565,17 +18860,7 @@ async function holdsRepos($) {
   }
   return false;
 }
-async function projectNames($) {
-  if (await $.fs.exists(`${S.root}/.git`))
-    return [];
-  const dirs = (await $.fs.list(S.root).catch(() => [])).filter((e) => e.kind === "dir" && !e.name.startsWith(".") && e.name !== "node_modules" && e.name !== S.N.dir).map((e) => e.name);
-  const found = [];
-  for (const d of dirs)
-    if (isProjectName(d) && await $.fs.exists(`${S.root}/${d}/.git`))
-      found.push(d);
-  return found.sort();
-}
-var projectRefusal = (name, names) => names.includes(name) ? "" : names.length ? `'${name}' is not a project here. The project folders are: ${names.join(", ")}.` : `'${name}' is not a project: this board has no project folders (a project is a folder below the board folder with its own .git).`;
+var projectRefusal = (name, names) => names.includes(name) ? "" : names.length ? `'${name}' is not a project here. The projects are: ${names.join(", ")}.` : `'${name}' is not a project: this board has no projects in its project table.`;
 async function setupGit($, who) {
   if (S.settingUp)
     return "git is being set up already";
@@ -18950,12 +19235,13 @@ async function cleanupMerged($, b) {
       keptDirty.add(id);
       continue;
     }
-    if ((await git($, ["worktree", "remove", dir], repoOf(t))).exitCode === 0)
+    if (!projectGone(t) && (await git($, ["worktree", "remove", dir], repoOf(t))).exitCode === 0)
       dirs++;
   }
-  const repoTasks = (repo) => b.tasks.filter((t) => repoOf(t) === repo);
+  const known = b.tasks.filter((t) => !projectGone(t));
+  const repoTasks = (repo) => known.filter((t) => repoOf(t) === repo);
   const rootNeeded = S.gitRoot === "ok";
-  const repos = [...new Set(b.tasks.map((t) => repoOf(t)))].filter((r) => r !== S.root || rootNeeded);
+  const repos = [...new Set(known.map((t) => repoOf(t)))].filter((r) => r !== S.root || rootNeeded);
   if (!repos.includes(S.root) && rootNeeded)
     repos.push(S.root);
   for (const repo of repos)
@@ -19045,12 +19331,37 @@ var GIT_MS = 15000;
 var cache = { facts: undefined, key: "", readAt: -Infinity, running: false };
 var safe = (name) => !!name && !name.startsWith("-") && !/\s/.test(name);
 function openBranches(b) {
-  return b.tasks.filter((t) => BRANCH_STATUSES.includes(t.status) && typeof t.branch === "string" && safe(t.branch)).map((t) => ({ id: t.id, branch: t.branch, into: intoOf(t) }));
+  return b.tasks.filter((t) => BRANCH_STATUSES.includes(t.status) && typeof t.branch === "string" && safe(t.branch)).map((t) => ({ id: t.id, branch: t.branch, into: intoOf(t), project: projectOfTask(t) }));
 }
+var projectOfTask = (t) => {
+  const p = t.project;
+  return typeof p === "string" ? p : "";
+};
 async function readBranches(host, into, b, nowMs) {
+  const projectBoard = b.tasks.some((t) => projectOfTask(t)) && Object.keys(S.projects).length > 0;
+  if (!projectBoard)
+    return readRepo(host, S.root, into, b, nowMs);
+  const merged = liveFinishedLanes({ tasks: b.tasks }, nowMs).map((l) => l.id);
+  const keys = new Set([...openBranches(b).map((t) => t.project), ...b.tasks.filter((t) => merged.includes(t.id)).map(projectOfTask)]);
+  const repos = [];
+  for (const project of [...keys].sort((x, y) => x === "" ? -1 : y === "" ? 1 : x.localeCompare(y))) {
+    const cwd = project ? projectPath(project) : S.root;
+    if (!cwd)
+      continue;
+    const mine = b.tasks.filter((t) => projectOfTask(t) === project);
+    const live2 = [...openBranches({ tasks: mine }).map((t) => t.into), ...mine.filter((t) => merged.includes(t.id)).map((t) => intoOf(t))];
+    const repoInto = project ? live2.find((i) => i && safe(i)) ?? "" : into;
+    const f = repoInto ? await readRepo(host, cwd, repoInto, { tasks: mine }, nowMs) : null;
+    if (f)
+      repos.push({ project, name: project || S.root.split("/").filter(Boolean).pop() || "board", into: f.into, commits: f.commits, tasks: f.tasks });
+  }
+  const first = repos[0];
+  return first ? { into: first.into, commits: first.commits, tasks: first.tasks, at: nowMs, repos } : null;
+}
+async function readRepo(host, cwd, into, b, nowMs) {
   if (!safe(into))
     return null;
-  const run2 = (args) => git(host, args, S.root, GIT_MS).catch(() => null);
+  const run2 = (args) => git(host, args, cwd, GIT_MS).catch(() => null);
   const log = await run2(["log", `-${BRANCH_COMMITS}`, "--format=%H %ct", into, "--"]);
   if (!log || log.exitCode !== 0)
     return null;
@@ -19081,7 +19392,7 @@ function branchFacts(host, b, into, nowMs = Date.now()) {
   const recent = liveFinishedLanes({ tasks: b.tasks }, nowMs).length > 0;
   if (!open.length && !recent)
     return { facts: undefined };
-  const key = [into, ...open.map((t) => `${t.id}:${t.branch}:${t.into}`), ...b.tasks.filter((t) => t.status === "done" && t.merged).map((t) => t.merged)].join(" ");
+  const key = [into, ...open.map((t) => `${t.id}:${t.branch}:${t.into}:${t.project}:${S.projects[t.project ?? ""] ?? ""}`), ...b.tasks.filter((t) => t.status === "done" && t.merged).map((t) => t.merged)].join(" ");
   const fresh = cache.key === key && nowMs - cache.readAt < BRANCH_CACHE_MS;
   if (fresh || cache.running)
     return { facts: cache.facts };
@@ -19221,7 +19532,7 @@ async function readTaskBranch(host, t, into, nowMs, status) {
 }
 var hasTaskBranch = (t) => t.status === "done" ? isSha(t.merged) : typeof t.branch === "string" && safe(t.branch);
 function taskBranchFacts(host, t, into, nowMs = Date.now(), onRead) {
-  if (S.gitState !== "ok" || !S.root || !hasTaskBranch(t) || gitStateOfTask(t) !== "ok")
+  if (S.gitState !== "ok" || !S.root || !hasTaskBranch(t) || projectGone(t) || gitStateOfTask(t) !== "ok")
     return { facts: undefined };
   const finished = isFinished(t);
   const key = [into, t.status, t.branch ?? "", t.merged ?? "", t.attempts, finished ? mainTips.get(tipKey(repoOf(t), into)) ?? "" : ""].join(" ");
@@ -19278,7 +19589,7 @@ function taskBranchesView(host, b, nowMs = Date.now()) {
         facts[t.id] = got.facts;
     }
   }
-  const tipsRead = S.gitState === "ok" && S.root ? readTips(host, [...new Map(finished.map((t) => [tipKey(repoOf(t), intoOf(t)), { repo: repoOf(t), into: intoOf(t) }])).values()], nowMs) : undefined;
+  const tipsRead = S.gitState === "ok" && S.root ? readTips(host, [...new Map(finished.filter((t) => !projectGone(t)).map((t) => [tipKey(repoOf(t), intoOf(t)), { repo: repoOf(t), into: intoOf(t) }])).values()], nowMs) : undefined;
   const done = (async () => {
     if (tipsRead)
       await tipsRead;
@@ -19691,7 +20002,9 @@ async function readTodayTeam(host, scouts2, nowMs) {
 async function branchLine(host, b, own) {
   const parts = own ? [own] : [];
   for (const p of openProjects(b)) {
-    const repo = `${S.root}/${p}`;
+    const repo = projectPath(p);
+    if (!repo)
+      continue;
     if (S.repoGit.get(repo) && S.repoGit.get(repo) !== "ok")
       continue;
     const br = await homeBranch(host, repo).catch(() => "");
@@ -19710,12 +20023,12 @@ async function publishView(host, b) {
   const branch = await branchLine(host, b, own);
   const size_note = [...sizeNotes.values()].join("; ");
   const projectNote = projectNotes(openProjects(b));
-  const branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, noProjectText(b), size_note].filter(Boolean).join("; ");
+  const branch_note = [gitNote(S.gitState), projectNote, noProjectText(b), size_note].filter(Boolean).join("; ");
   const can = await playable(host);
   const branches = branchFacts(host, b, own || "main").facts;
   const team = todayTeam(host, [...scoutState.keys()]).team;
   const task_branches = taskBranchesView(host, b).facts;
-  const v = { tasks: b.tasks, working, scouts: [...scoutState.values()].map((s) => s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s), mode: modeOf(b), test_commands: b.test_commands, ...b.projects && Object.keys(b.projects).length ? { projects: b.projects } : {}, ...b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}, home_branch: own, ...branch !== own ? { branch_line: branch } : {}, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...b.archived ? { archived: b.archived } : {}, ...b.archived_done?.length ? { archived_done: b.archived_done } : {}, open_on_start: openOnStart(b), notify_now: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...!S.driving && S.driver ? { driver: S.driver } : {}, ...S.offHere ? { off_here: "off" } : S.fresh ? { off_here: "new" } : {}, driving: S.driving, branch_note, ...size_note ? { size_note } : {}, git_state: S.gitState, ...S.gitInstall ? { git_install: S.gitInstall } : {}, ...S.gitWorkspace ? { git_workspace: S.gitWorkspace } : {}, plan_mode: inPlan(S.plan), ...branches ? { branches } : {}, ...team ? { today_team: team } : {}, ...Object.keys(task_branches).length ? { task_branches } : {}, ...openQuestions(b).length ? { questions: openQuestions(b) } : {} };
+  const v = { tasks: b.tasks, working, scouts: [...scoutState.values()].map((s) => s.running && [...scoutRuns.values()].includes(s.name) ? { ...s, started: true } : s), mode: modeOf(b), test_commands: b.test_commands, ...b.projects && Object.keys(b.projects).length ? { projects: b.projects } : {}, ...b.docs_test_commands?.length ? { docs_test_commands: b.docs_test_commands } : {}, home_branch: own, ...branch !== own ? { branch_line: branch } : {}, max_parallel: b.max_parallel, max_minutes: b.max_minutes, auto_retries: b.auto_retries, test_minutes: testMinutesOf(b), archive_days: b.archive_days, ...b.archived ? { archived: b.archived } : {}, ...b.archived_done?.length ? { archived_done: b.archived_done } : {}, open_on_start: openOnStart(b), notify_now: notifyOf(b, can), scout_findings: b.scout_findings, tests_with_changes: b.tests_with_changes, checker: b.checker, notify_choices: notifyChoices(can), on_here: onHere(b), ...!S.driving && S.driver ? { driver: S.driver } : {}, ...S.offHere ? { off_here: "off" } : S.fresh ? { off_here: "new" } : {}, driving: S.driving, branch_note, ...size_note ? { size_note } : {}, git_state: S.gitState, ...S.gitInstall ? { git_install: S.gitInstall } : {}, plan_mode: inPlan(S.plan), ...branches ? { branches } : {}, ...team ? { today_team: team } : {}, ...Object.keys(task_branches).length ? { task_branches } : {}, ...openQuestions(b).length ? { questions: openQuestions(b) } : {} };
   const fit = fitView(host, v);
   if (fit.note)
     sizeNotes.set("the board view", fit.note);
@@ -19724,7 +20037,7 @@ async function publishView(host, b) {
   const size_now = [...sizeNotes.values()].join("; ");
   if (size_now !== size_note) {
     for (const x of new Set([v, fit.view])) {
-      x.branch_note = [S.gitWorkspace ? "" : gitNote(S.gitState), projectNote, noProjectText(b), size_now].filter(Boolean).join("; ");
+      x.branch_note = [gitNote(S.gitState), projectNote, noProjectText(b), size_now].filter(Boolean).join("; ");
       if (size_now)
         x.size_note = size_now;
       else
@@ -19843,24 +20156,32 @@ async function bothNames(look, dir) {
   });
   return real && real !== dir ? [dir, real] : [dir];
 }
-async function realEdit($, path2, worktree, root) {
-  const asIs = { path: path2, worktree: [worktree], root: [root] };
+async function realEdit($, path2, worktree, roots) {
+  const asIs = { path: path2, worktree: [worktree], root: [...roots] };
   const p = editTarget(path2);
+  const root = roots[0] ?? "";
   if (!p || !worktree.startsWith("/") || !root.startsWith("/"))
     return asIs;
   const look = diskLook($);
-  const [file, wt, top] = await Promise.all([realPathOf(worktree, p, look), realPathOf("/", worktree, look), realPathOf("/", root, look)]);
+  const [file, wt, top, others] = await Promise.all([realPathOf(worktree, p, look), realPathOf("/", worktree, look), realPathOf("/", root, look), Promise.all(roots.slice(1).map((r) => bothNames(look, r)))]);
   if (file === null)
     return null;
   if (!file || !wt || !top)
     return asIs;
-  return { path: file, worktree: [wt, worktree], root: [top, root] };
+  return { path: file, worktree: [wt, worktree], root: [top, root, ...others.flat()] };
 }
-async function bashOutside($, command, worktree, root) {
-  if (!root)
+var guardedRoots = () => {
+  const out = [S.root];
+  for (const p of Object.values(S.projects ?? {}))
+    if (typeof p === "string" && p.startsWith("/") && p.replace(/\/+$/, "") !== "" && !out.includes(p))
+      out.push(p);
+  return out;
+};
+async function bashOutside($, command, worktree, roots) {
+  if (!roots[0])
     return;
   const look = diskLook($);
-  const [wts, tops] = await Promise.all([bothNames(look, worktree), bothNames(look, root)]);
+  const [wts, tops] = await Promise.all([bothNames(look, worktree), Promise.all(roots.map((r) => bothNames(look, r))).then((x) => x.flat())]);
   const rel = bashOutsideFolder(command, wts, tops, S.home || undefined);
   if (rel === undefined)
     return;
@@ -19904,7 +20225,7 @@ async function judgeEdit($, agentId, touch, who, cwd, kindOf3) {
   Object.assign(who, { role: "worker", task: w.task });
   if ("command" in touch)
     return await outsideOwnFolder($, touch, w.worktree) ?? workerGitWrite($, w, touch.command, cwd);
-  const real = await realEdit($, touch.path, w.worktree, S.root);
+  const real = await realEdit($, touch.path, w.worktree, guardedRoots());
   if (real === null)
     return { text: brokenLinkText(editTarget(touch.path)), guard: "link" };
   const outside = real.root.length ? editOutsideFolder(real.path, real.worktree, real.root) : undefined;
@@ -19969,7 +20290,7 @@ async function scoutCheck($, touch) {
     const git2 = gitWrite($, touch.command);
     return git2 ? { text: scoutGitWriteText(git2), guard: "git", what: git2 } : undefined;
   }
-  const real = await realEdit($, touch.path, S.root, S.root);
+  const real = await realEdit($, touch.path, S.root, guardedRoots());
   if (real === null)
     return { text: brokenLinkText(editTarget(touch.path)), guard: "link" };
   const rel = editInProject(real.path, real.root);
@@ -19977,8 +20298,8 @@ async function scoutCheck($, touch) {
 }
 async function outsideOwnFolder($, touch, worktree) {
   if ("command" in touch)
-    return bashOutside($, touch.command, worktree, S.root);
-  const real = await realEdit($, touch.path, worktree, S.root);
+    return bashOutside($, touch.command, worktree, guardedRoots());
+  const real = await realEdit($, touch.path, worktree, guardedRoots());
   if (real === null)
     return { text: brokenLinkText(editTarget(touch.path)), guard: "link" };
   const outside = real.root.length ? editOutsideFolder(real.path, real.worktree, real.root) : undefined;
@@ -20088,6 +20409,51 @@ async function digestTick(host, nowMs = Date.now()) {
   return true;
 }
 
+// hooks/app/update-check.ts
+var PLUGIN_URL = "https://raw.githubusercontent.com/kourgeorge/symcc/main/.claude-plugin/plugin.json";
+var TIMEOUT_MS = 5000;
+var minorOf = (v) => {
+  const m = /^\s*v?(\d+)\.(\d+)(?:\.\d+)?/.exec(typeof v === "string" ? v : "");
+  return m ? [Number(m[1]), Number(m[2])] : null;
+};
+function newerMinor(own, published) {
+  const a = minorOf(own);
+  const b = minorOf(published);
+  if (!a || !b)
+    return false;
+  return b[0] > a[0] || b[0] === a[0] && b[1] > a[1];
+}
+function updateLine(own, published, steps) {
+  const head = `symcc ${published} is out (you have ${own})`;
+  return steps ? `${head}. To update: ${steps}.` : `${head}; update it.`;
+}
+var checked = false;
+async function checkForUpdate(host) {
+  let timer;
+  try {
+    if (checked || !S.version || S.guardOnly || S.fresh || !S.driving)
+      return;
+    checked = true;
+    const g = globalThis.fetch;
+    const f = host.httpFetch ? async (url) => {
+      const r = await host.httpFetch(url);
+      return r.ok ? r.text : "";
+    } : typeof g === "function" ? (url) => g(url).then((r) => r.ok ? r.text() : "") : undefined;
+    if (!f)
+      return;
+    const timeout = new Promise((_, no) => {
+      timer = host.clock.after(TIMEOUT_MS, () => no(new Error("slow")));
+    });
+    const answer = await Promise.race([f(PLUGIN_URL), timeout]);
+    const published = JSON.parse(answer).version;
+    if (typeof published !== "string" || !newerMinor(S.version, published))
+      return;
+    tellLead(host, updateLine(S.version, published, S.W.updateSteps));
+  } catch {} finally {
+    timer?.cancel();
+  }
+}
+
 // hooks/app/session-start.ts
 var starts = 0;
 function sessionStarting() {
@@ -20177,6 +20543,7 @@ async function sessionStart(host) {
       if (run2 !== starts)
         return;
       S.startupDone = true;
+      checkForUpdate(host);
       pump(host).catch(() => {
         return;
       });
@@ -20459,7 +20826,7 @@ ${skipped}` : text;
 every_minutes: 30
 ---
 Look for missing tests around risky code.` };
-      return { text: defs.map((d) => `${d.name}: ${everyText(d.every_minutes)}${d.warning ? ` (${d.warning})` : ""}${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name).last_run.slice(11, 16)}` : ""}${scoutState.get(d.name)?.running ? " (running now)" : ""}${scoutState.get(d.name)?.paused ? " (paused)" : ""}`).join(`
+      return { text: defs.map((d) => `${d.name}: ${everyText(d.every_minutes)}${d.projects?.length ? ` (projects: ${d.projects.join(", ")})` : ""}${d.warning ? ` (${d.warning})` : ""}${scoutState.get(d.name)?.last_run ? `, last ran ${scoutState.get(d.name).last_run.slice(11, 16)}` : ""}${scoutState.get(d.name)?.running ? " (running now)" : ""}${scoutState.get(d.name)?.paused ? " (paused)" : ""}`).join(`
 `) + (skipped ? `
 ${skipped}` : "") };
     }

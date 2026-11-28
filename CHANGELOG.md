@@ -2,6 +2,25 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here. Before a release, rerun `bun scripts/site-stats.ts` and commit `docs/data/symcc-stats.json`: it feeds the "Built with symcc" numbers on the website.
 
+## 0.6.0 (2026-11-27)
+
+0.6 turns symcc into one board over several repos: each task works, is tested and merges in its own repo, and some tasks need no repo at all. Projects can now live anywhere on disk, and agents' reports no longer wake the lead.
+
+### Added
+- Projects anywhere: projects are a table of repo paths anywhere on disk. You add, change or remove them on your yes, and they are guarded like the main folder.
+- The Branches view shows each repo's branches on its own.
+- Scouts name the repos they look at, and a timed scout naming an unknown project says so. Removing a project a scout names is refused.
+- Workers read their repo's CLAUDE.md.
+- On start, symcc checks GitHub for a newer 0.x.0 version and offers to update.
+
+### Changed
+- The board records its data shape number, so an older symcc will not write over newer board data.
+- Project reads are safer: links are resolved before a read is allowed, and a grep with `-e` checks every plain word as a path.
+
+### Fixed
+- When the board data is newer than symcc understands, scouts no longer start either.
+- Small project edge cases: entries without a path, the Branches cache, "run now" wording and errand folders.
+
 ## 0.5.51 (2026-11-27)
 
 ### Added
