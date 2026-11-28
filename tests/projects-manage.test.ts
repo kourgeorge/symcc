@@ -286,3 +286,12 @@ test('a path alone adds the project named after its folder; clash, tests and rep
   expect(again.error).toBe(undefined)
   expect(JSON.stringify(again.changes)).toContain('/code/api is already the project api')
 })
+
+test('T-1235: adding a project warns when org-mem topics start with its name', async () => {
+  const { w, files } = await world({ '/code/ui': { top: '/code/ui' }, '/code/api': { top: '/code/api' } })
+  files.set(`${S.root}/${S.N.dir}/org-mem.md`, '- 2026-11-24 [ui · surfaces] a\n- 2026-11-24 [ui] b\n- 2026-11-24 [tests] c\n')
+  const r = await addProject(w.host, null, '/code/ui')
+  expect('text' in r && r.text).toContain('2 org-mem notes have topic ui')
+  const q = await addProject(w.host, null, '/code/api')
+  expect('text' in q && q.text).toBe('project api added: /code/api')
+})

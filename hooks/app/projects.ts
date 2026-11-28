@@ -7,6 +7,8 @@ import { change, load } from './store'
 import { applyProjectSettings } from '../core/settings'
 import { git, repoOf, branchExists } from './git'
 import { worktreeDir, taskBranch } from './worktree'
+import { path } from './store'
+import { orgMemFile, orgMemNotes, orgMemProjectWord } from '../core/org-mem'
 
 /** The path as given with `~` and a trailing slash dealt with; relative paths are refused by the caller. */
 const expand = (p: string): string => {
@@ -51,6 +53,15 @@ async function savePath($: Host, b: Board, name: string, rawPath: string, skip: 
 /** A folder name as a project name: lowercased, other characters turned into `-`. */
 const cleanName = (s: string): string => s.toLowerCase().replace(/[^a-z0-9._-]/g, '-').replace(/^[.]+/, '-')
 
+/** T-1235: a warning (with a leading "; ") when existing org-mem topics start with the new project's name: they now go only to its agents. */
+async function clashWarning($: Host, name: string): Promise<string> {
+  const guide = await $.fs.read(path(orgMemFile(S.N.dir))).catch(() => null)
+  const w = orgMemProjectWord(name)
+  const hit = orgMemNotes(guide).filter(x => x.topic === w || x.topic.startsWith(`${w} `))
+  if (!hit.length) return ''
+  return `; warning: ${hit.length} org-mem note${hit.length === 1 ? ' has' : 's have'} topic ${hit[0]!.topic}…; they now go only to agents on ${name}. Rename those topics (orgmem topic) or remove the project and add it under another name.`
+}
+
 /** T-1226: adds a repo in one call. `name` null = the folder's name (cleaned); `tests` are its test commands.
  *  A path that is already a project answers with its name (no error); a taken name is refused with `<parent>-<name>`. */
 export async function addProject($: Host, name: string | null, rawPath: string, tests?: unknown[]): Promise<{ error: string } | { text: string }> {
@@ -73,7 +84,7 @@ export async function addProject($: Host, name: string | null, rawPath: string, 
     return { error: `Nothing changed: the project name '${chosen}' is taken (path ${b.projects[chosen]?.path})${alt && isProjectName(alt) ? `; use the name '${alt}' instead` : ''}` }
   }
   await change($, x => withTests(chosen)({ ...x, projects: { ...(x.projects ?? {}), [chosen]: { ...(x.projects?.[chosen] ?? {}), path: c.top } } } as Board))
-  return { text: `project ${chosen} added: ${c.top}${tests ? `; tests: ${tests.map(String).join(', ')}` : ''}` }
+  return { text: `project ${chosen} added: ${c.top}${tests ? `; tests: ${tests.map(String).join(', ')}` : ''}${await clashWarning($, chosen)}` }
 }
 
 /** Points project `name` at another repo path, only while no open task of it has a copy or a branch. */
