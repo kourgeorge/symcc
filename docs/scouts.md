@@ -128,7 +128,7 @@ last run ended on an API error, so nothing was reported."). Each scout keeps its
 You can also make and change scouts right in the board panel: on the Scouts view, "New
 scout" asks for a name, and "Edit" on a scout's page opens its edit page. It shows the same
 header line, then the same names in the same order, one box each: **Runs every** (in
-minutes, 0 = only on demand), **Model**, **Findings** (a pick list: board default, `auto` or `backlog`), **Summary** (empty: the first line of the
+minutes, 0 = only on demand), **Model**, **Projects** (names separated by commas, like `api, web`; empty: every project, or this board's own repo on a board with no projects; an unknown name is refused and nothing is saved), **Findings** (a pick list: board default, `auto` or `backlog`), **Summary** (empty: the first line of the
 instructions is used) and **Instructions**. The name is the file's name, so the edit page
 can't change it: to rename a scout, rename its file. Save writes the file (other front
 matter keys are kept) and the new timing applies at once. `/symcc-scout <name>` runs a scout now.
@@ -162,6 +162,8 @@ only on demand, so a typo never makes a scout run more often than you meant. Its
 refuses such a value.
 
 ### Choosing projects
+
+The scout's page shows a line "Projects: api, web" (or "Projects: every project", or "Projects: this board's repo" on a board with no projects), and the Scouts list adds `, projects api, web` after how often it runs, only for a scout that names projects. You can change the names in the **Projects** box of its edit page.
 
 A scout file can have a `projects: api, web` line naming the board's projects the scout
 looks at. With no `projects:` line the scout gets every project. A name the board doesn't

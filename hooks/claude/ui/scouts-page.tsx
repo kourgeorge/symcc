@@ -1,5 +1,5 @@
 // The board panel's Scouts view: the list, one scout's page, and its edit mode.
-import { scoutRow, scoutFile, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFindingsOf, findingsLine, findingsDefaultLine, FINDINGS_PICKS } from '../../board'
+import { scoutRow, scoutFile, scoutKeys, scoutListRows, scoutHowTo, scoutListKeys, scoutEditKeys, boxHint, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFindingsOf, findingsLine, findingsDefaultLine, FINDINGS_PICKS, scoutProjectsHint, scoutProjectsLine } from '../../board'
 import { saveScout, cancelScoutEdit, runScoutNow, editScout, cycleScoutFindings, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlace, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -52,6 +52,12 @@ export function scoutEditPage($: $, pane: PaneParts) {
       <Box flexDirection="column">
         {heading('Model')}
         <Input key="scout-model" value={d.model} placeholder="empty: the session's model" submitLabel="keep" onInput={value => void (d.model = value)} onSubmit={value => void (d.model = value)} />
+      </Box>
+
+      <Box flexDirection="column">
+        {heading('Projects')}
+        <Input key="scout-projects" value={d.projects} placeholder="names separated by commas, e.g. api, web" submitLabel="keep" onInput={value => void (d.projects = value)} onSubmit={value => void (d.projects = value)} />
+        <Text color={C('inactive')}>{scoutProjectsHint(pane.v.projects)}</Text>
       </Box>
 
       <Box flexDirection="column">
@@ -164,6 +170,7 @@ export async function scoutsPage($: $, pane: PaneParts) {
             <Text color={C('inactive')}>{'  (f changes it)'}</Text>
           </Text>
         </Button>
+        <Text color={C('inactive')}>{scoutProjectsLine((sc as { projects?: string[] }).projects, pane.v.projects)}</Text>
         {sc.warning || (problem && !sc.running) ? (
           <Box flexDirection="column">
             {sc.warning ? <Text color={C('warning')}>{sc.warning}</Text> : null}

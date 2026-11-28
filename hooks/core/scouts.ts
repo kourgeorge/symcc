@@ -85,6 +85,13 @@ export function scoutProjectsError(names: readonly string[], table: Readonly<Rec
   return `unknown project ${bad.map(n => `"${n}"`).join(', ')}: the board's projects are ${have.length ? have.join(', ') : '(none: this board has no projects)'}`
 }
 
+/** T-1219: the hint under the edit page's Projects box. */
+export const scoutProjectsHint = (table: Readonly<Record<string, unknown>> | undefined): string => (Object.keys(table ?? {}).length ? 'empty: every project' : "empty: this board's own repo")
+
+/** T-1219: the scout page's Projects line. */
+export const scoutProjectsLine = (names: readonly string[] | undefined, table: Readonly<Record<string, unknown>> | undefined): string =>
+  `Projects: ${names?.length ? names.join(', ') : Object.keys(table ?? {}).length ? 'every project' : "this board's repo"}`
+
 /** T-1200: the projects a scout looks at: the ones it names, else every project of the table (name -> path). */
 export function scoutProjectTable(names: readonly string[] | undefined, table: Readonly<Record<string, string>>): Record<string, string> {
   const out: Record<string, string> = {}
@@ -409,7 +416,7 @@ const badState = (s: { warning?: string }): string => (s.warning?.startsWith('ev
 export function scoutListRows(scouts: SymccScout[], nowMs: number, width: number, indent = 2, board: ScoutFindings = 'auto'): ScoutListRow[] {
   const raw = scouts.map(s => ({
     s,
-    every: everyText(s.every_minutes),
+    every: everyText(s.every_minutes) + ((s as { projects?: string[] }).projects?.length ? `, projects ${(s as { projects?: string[] }).projects!.join(', ')}` : ''),
     state: s.warning && !s.running && !s.paused ? badState(s) : scoutStateText(s, nowMs),
     last: s.running ? { text: '', tone: 'inactive' } : scoutLastText(s),
     findings: findingsMark(s.findings, board),

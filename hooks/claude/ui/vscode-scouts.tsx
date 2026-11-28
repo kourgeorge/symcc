@@ -7,7 +7,7 @@
 // it does, its state as chips, Run now / Edit / Pause as buttons, a divider), then the instructions, and its Runs (newest first; a press opens that run's full report, with a "← <scout>" button back;
 // the page itself shows no report text). It says when its last run ended on an API error or a refusal. No key hints.
 import type { SymccScout } from '../../../types'
-import { scoutRow, scoutFile, scoutHowTo, scoutListRows, type ScoutListRow, isNothing, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFindingsOf, findingsLine, findingsDefaultLine, FINDINGS_PICKS } from '../../board'
+import { scoutRow, scoutFile, scoutHowTo, scoutListRows, type ScoutListRow, isNothing, scoutRunTasks, scoutRunLine, scoutOutcomeTone, scoutLastRunProblem, scoutFindingsOf, findingsLine, findingsDefaultLine, FINDINGS_PICKS, scoutProjectsHint, scoutProjectsLine } from '../../board'
 import { cancelScoutEdit, saveScout, runScoutNow, editScout, cycleScoutFindings, setScoutPaused, newScout, loadScoutRunHistory, loadScoutResults, readScoutRunReport, scoutPlaceValue } from '../../app/scouts'
 import { S } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -184,6 +184,7 @@ export async function scoutPageVs($: $, pane: PaneParts, sc: SymccScout, run: st
         {plain('vs-scout-findings-line', findingsLine(sc.findings, board), 'text')}
         {vsLink(vs, 'scout-findings', mdLink('Change', findingsHref), [[findingsHref, cycleFindings]])}
       </Box>
+      {plain('vs-scout-projects-line', scoutProjectsLine((sc as { projects?: string[] }).projects, pane.v.projects), 'text')}
       {sc.warning || problem ? (
         <Box key="vs-scout-top" flexDirection="column">
           {sc.warning ? plain('vs-scout-warning', sc.warning, 'warning') : null}
@@ -239,7 +240,7 @@ export function scoutEditPageVs($: $, pane: PaneParts) {
   )
   const cancelHref = vsHref('do', 'scout-edit/cancel')
   const { Select } = vs
-  const box = (key: 'every' | 'model' | 'summary' | 'body', label: string, placeholder: string, more: Record<string, unknown> = {}) => (
+  const box = (key: 'every' | 'model' | 'projects' | 'summary' | 'body', label: string, placeholder: string, more: Record<string, unknown> = {}) => (
     <Input key={`scout-${key}`} label={label} value={d[key]} placeholder={placeholder} submitLabel="Keep" {...more} onInput={value => void (d[key] = value)} onSubmit={value => void (d[key] = value)} />
   )
   return (
@@ -261,6 +262,8 @@ export function scoutEditPageVs($: $, pane: PaneParts) {
       {box('every', 'Runs every', 'minutes: a whole number, 0 or more', { autoFocus: true })}
       {plain('vs-every-about', 'in minutes · 0 = only on demand')}
       {box('model', 'Model', "empty: the session's model")}
+      {box('projects', 'Projects', 'names separated by commas, e.g. api, web')}
+      {plain('vs-projects-about', scoutProjectsHint(pane.v.projects))}
       {/* T-912: a pick list of the three choices ('' = the board's scout_findings) */}
       <Select key="scout-findings" label="Findings" options={FINDINGS_PICKS.map(o => ({ value: o.value || 'default', label: o.value ? o.label : `${o.label} (now ${scoutFindingsOf(pane.v)})` }))} value={d.findings || 'default'} onSelect={value => ((d.findings = value === 'default' ? '' : value), $.ui.invalidate('ui.render'))} />
       {plain('vs-findings-about', "auto: the lead decides where its tasks go · backlog: they all go to the backlog · board default: the board's scout_findings setting")}
