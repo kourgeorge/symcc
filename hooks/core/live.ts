@@ -328,13 +328,11 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
   const retries = view.auto_retries ?? DEFAULT_AUTO_RETRIES
   const lanes = view.tasks
     // T-846: a task in review (tests passed, waits for the owner) keeps its lane, sitting at "you"
-    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing' || (t.status === 'review' && !isInvestigation(t)) || (t.status === 'waiting' && needsYou(t as BoardTask, nowMs)))
+    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing' || (t.status === 'review' && !isInvestigation(t)))
     .map((x): LiveLane => {
       const t = x as BoardTask
       const waiting = shownStatus(t, nowMs) !== 'doing'
-      const base = laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
-      // an investigation that asks the owner something also sits at "you" (its lane needs a station to mark)
-      const stations: LiveStation[] = waiting && isInvestigation(t) ? ['work', 'you', 'done'] : base
+      const stations = laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
       let stage: PhaseStage = taskPhase(t, nowMs).stage ?? 'worker'
       if (stage === 'worker' && handedBack(t)) stage = 'prep'
       const investigation = isInvestigation(t)
