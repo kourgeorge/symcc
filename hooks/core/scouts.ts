@@ -92,7 +92,8 @@ export function scoutProjectTable(names: readonly string[] | undefined, table: R
   return out
 }
 
-export function parseScout(name: string, text: string): ScoutDef | null {
+/** `table` (the board's projects, name -> path): when given, a `projects:` name not in it adds a warning. */
+export function parseScout(name: string, text: string, table?: Readonly<Record<string, string>>): ScoutDef | null {
   const fm = splitFrontMatter(text)
   const meta: Record<string, string> = {}
   for (const line of fm.lines ?? []) {
@@ -102,17 +103,19 @@ export function parseScout(name: string, text: string): ScoutDef | null {
   const prompt = fm.body.trim()
   if (!prompt) return null
   const raw = (meta.every_minutes ?? '').trim()
-  const base: Pick<ScoutDef, 'name' | 'model' | 'summary' | 'findings' | 'prompt' | 'projects'> = { name: meta.name || name, model: meta.model || undefined, prompt }
+  const base: Pick<ScoutDef, 'name' | 'model' | 'summary' | 'findings' | 'prompt' | 'projects' | 'warning'> = { name: meta.name || name, model: meta.model || undefined, prompt }
   if (meta.summary?.trim()) base.summary = meta.summary.trim()
   const findings = scoutFindingsChoice(meta.findings)
   if (findings) base.findings = findings
   const projects = scoutProjectNames(meta.projects)
   if (projects.length) base.projects = projects
+  const badProjects = table ? scoutProjectsError(projects, table) : ''
+  if (badProjects) base.warning = badProjects
   // missing: every hour; a whole number (0 = only on demand); anything else: only on demand, with a warning
   if (!raw) return { ...base, every_minutes: 60 }
   const every = everyMinutesOf(raw)
   if (every !== null) return { ...base, every_minutes: every }
-  return { ...base, every_minutes: 0, warning: badEveryWarning(raw), bad_every: raw }
+  return { ...base, every_minutes: 0, warning: [badEveryWarning(raw), base.warning].filter(Boolean).join('; '), bad_every: raw }
 }
 
 /**

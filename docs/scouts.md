@@ -161,6 +161,15 @@ only on demand, so a typo never makes a scout run more often than you meant. Its
 `every_minutes "-5" is not valid: runs only on demand until fixed`. The panel's editor
 refuses such a value.
 
+### Choosing projects
+
+A scout file can have a `projects: api, web` line naming the board's projects the scout
+looks at. With no `projects:` line the scout gets every project. A name the board doesn't
+have (a typo, or a project that was removed) shows a warning on the scout's page and in
+`/symcc-scout`, and the lead is told once. That scout can't run until the name is fixed.
+Removing a project with `settings project=<name> remove:true` is refused while a scout
+names it.
+
 ### Pausing a scout
 
 To stop one scout for a while without deleting it, press `p` on its page in the panel, or
