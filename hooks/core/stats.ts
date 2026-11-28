@@ -1,18 +1,18 @@
 // /<name>-stats and the lead's stats tool: time and token figures built only from what the board
 // already keeps (tasks, their tries in runs[], their timeline), plus the archived tasks.
-// Every function here is pure (but statsReport remembering the figures of its last texts, see statsDataOf); the plugin
-// reads board.json and archive.json and passes the tasks in.
+// Every function here is pure; the plugin reads board.json and archive.json and passes the tasks in. The text report
+// is in ./stats-text, the scouts.json usage format in ./scout-usage.
 import type { SymccTimelineEntry, SymccRun, SymccStatus, SymccTask, SymccTokens } from '../../types'
 import { type FailReason, onPurposeStop } from './timeline'
 import { DEFAULT_NAME } from '../name'
 import { INVESTIGATION, isErrand, isInvestigation, kindOf, STATUS_WORD } from './board-file'
 import { dayLabel, dayOf } from './days'
 import { ORIGIN_MARK } from './origin'
-import { isObj, jsonObj, plural } from './text'
-import { cutTitle, padWidth, wrapLine } from './width'
+import { plural } from './text'
 // hooks/claude/stats-lines.ts still reads these two from here.
 export { cutTitle, textWidth } from './width'
-import { gapsOf, addTokens, billedTokens, cleanTokens, fmtCost, fmtDuration, fmtTokenKinds, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount, tryTokens } from './runs'
+import { gapsOf, billedTokens, fmtDuration, fmtTokens, isAnsweredRun, PRICE_WEIGHT, runMs, sumTokens, tokenCount, tryTokens } from './runs'
+import { scoutTotals, type ScoutUsage, type ScoutUsageFigures } from './scout-usage'
 
 // ---------------- the range ----------------
 
@@ -351,7 +351,6 @@ export function countingText(r: StatsRange, counting: StatsCounting, asked: bool
 const pct = (a: number, b: number) => (b ? `${Math.round((a / b) * 100)}%` : '-')
 const avgDur = (xs: number[]) => (xs.length ? fmtDuration(mean(xs)!) : '-')
 const avgTok = (xs: number[]) => (xs.length ? fmtTokens(mean(xs)!) : '-')
-const row = (label: string, text: string, w = 12) => `  ${label.padEnd(w)} ${text}`
 
 /** The widest a bar may be, in blocks. */
 export const BAR_WIDTH = 16
@@ -368,9 +367,6 @@ export function bar(value: number, max: number, width = BAR_WIDTH): string {
   return '▇'.repeat(Math.floor(thirds / 3)) + (r === 1 ? '▂' : r === 2 ? '▅' : '')
 }
 
-/** One bar row: "  label  ▇▇▇▇  81  39%" plus any `rest`; the bar padded so the numbers line up. */
-const barRow = (label: string, w: number, value: number, max: number, total: number | null, rest = '') =>
-  `  ${label.padEnd(w)} ${bar(value, max).padEnd(BAR_WIDTH)} ${String(value).padStart(4)}${total === null ? '' : ` ${pct(value, total).padStart(4)}`}${rest ? `  ${rest}` : ''}`
 
 /** How the billed-equivalent figure is made, said next to it in the full view. */
 export const BILLED_NOTE = `an estimate: each kind weighed by its usual price compared with input (input ${PRICE_WEIGHT.input}, cache write ${PRICE_WEIGHT.cache_write}, cache read ${PRICE_WEIGHT.cache_read}, output ${PRICE_WEIGHT.output})`
@@ -390,8 +386,6 @@ export function tokensText(t: SymccTokens | undefined): string {
   return `${fmtTokens(tokenCount(t))} in all, about ${fmtTokens(billedTokens(t))} billed*${un ? ` (leaves out ${fmtTokens(un)} unsplit)` : ''}`
 }
 
-/** The kinds of `t` on their own line under a figure, e.g. "               input 1k · output 2k · ..."; none for no tokens. */
-const kindsRow = (t: SymccTokens | undefined, w = 12): string[] => (tokenCount(t) ? [row('', fmtTokenKinds(t), w)] : [])
 
 const STATUS_ORDER: SymccStatus[] = ['done', 'dropped', 'doing', 'todo', 'review', 'waiting', 'paused', 'failed', 'backlog']
 
@@ -721,42 +715,14 @@ function spreadOf(title: string, items: { id: string; value: number }[], fmt: (n
   return { title, n: items.length, median: m, medianText: fmt(m), rows }
 }
 
-/** The text lines of a spread chart (same bars and columns as the other bar rows). */
-export function spreadLines(sp: Spread): string[] {
-  if (!sp.rows) return [`  ${sp.tooFew}`]
-  const w = Math.max(...sp.rows.map(r => r.label.length))
-  const max = Math.max(...sp.rows.map(r => r.n))
-  const line = (r: SpreadRow) => `  ${r.label.padEnd(w)} ${bar(r.n, max).padEnd(BAR_WIDTH)} ${String(r.n).padStart(4)}${r.note ? `  ${r.note}` : ''}`
-  const mid = `median ${sp.medianText}`
-  const width = w + 1 + BAR_WIDTH + 5
-  const dash = Math.max(3, Math.floor((width - mid.length - 2) / 2))
-  return [`${sp.title} · median ${sp.medianText} · ${plural(sp.n, 'task')}`, ...sp.rows.slice(0, 3).map(line), `  ${'─'.repeat(dash)} ${mid} ${'─'.repeat(dash)}`, ...sp.rows.slice(3).map(line)]
-}
-
 /** A percentage in words: "39%", "-" out of nothing. */
 export const pctText = (a: number, b: number) => pct(a, b)
 /** An average in words, "-" for none. */
 export const durOr = (x: number | undefined) => (x === undefined ? '-' : fmtDuration(x))
 export const tokOr = (x: number | undefined) => (x === undefined ? '-' : fmtTokens(x))
 
-/** The one-line summary figures, in the order both reports show them: "12 done", "3 answered", "4h 10m of work", "1.2M tokens", "75% right first try". */
-export function headlineParts(d: StatsData): string[] {
-  return [`${d.done} done`, ...(d.invCount ? [`${d.answered} answered`] : []), `${fmtDuration(d.workMs)} of work`, ...(d.tokKnown ? [`${fmtTokens(tokenCount(d.tokens))} tokens`] : []), ...(d.doneWithData ? [`${pct(d.first, d.doneWithData)} right first try`] : [])]
-}
-
 /** T-721: the short report lists only the latest this many failed tries, and the top this many failing tests. */
 export const FAILED_TRIES_SHORT = 10
-/**
- * T-735: when "Each failed try" (each try's own end) and "Failed tries" (timeline lines) count differently, why; '' when
- * they agree. Both leave out tries stopped on purpose (onPurposeStop). T-736: "Failed tries" now has every failed end
- * (checker send-backs, time-outs, no result, no change, not merged ...); what still differs is a try rejected by the
- * owner or restarted by a change (its own end is "ready for review" or "restarted"). T-743: a restart symcc did itself
- * (a reopen, a reload) is counted in neither: the same try goes on.
- */
-export function failedCountsNote(d: Pick<StatsData, 'failedTries' | 'failedTotal'>): string {
-  if (d.failedTries.length === d.failedTotal) return ''
-  return `${d.failedTries.length} here, ${d.failedTotal} under "Failed tries": this list reads each saved try's own end; that count reads the timeline lines, which also count tries rejected by you and restarts by a change, whose own end is a review or a restart`
-}
 export const FAILED_TESTS_SHORT = 5
 /** The failed tries and failing tests a report lists: all of them when full, else the latest tries and the top tests. */
 export const failedShown = (d: Pick<StatsData, 'full' | 'failedTries' | 'failedTests'>) => ({
@@ -767,242 +733,13 @@ export const failedShown = (d: Pick<StatsData, 'full' | 'failedTries' | 'failedT
 /** The report's first line: "symcc stats · all tasks (12 tasks, incl. 2 archived)". */
 export const statsTitle = (d: StatsData) => `${d.name} stats · ${rangeText(d.range)} (${plural(d.total, 'task')}${d.archivedIn ? `, incl. ${d.archivedIn} archived` : ''})`
 
-/**
- * The whole /<name>-stats report as plain text, every line at most 80 columns. The summary view
- * keeps every figure, with bars; `full` adds the long explanations (how billed is weighed,
- * where the lead's tokens come from, how the stage times, waiting included, are read).
- */
-export function statsReport(input: StatsInput & { full?: boolean }): string {
-  const d = statsData(input)
-  const { full, name } = d
-  const out: string[] = []
-  const done$ = () => remember(out.flatMap(l => wrapLine(l)).join('\n'), d)
-  out.push(`${statsTitle(d)}${full ? ' · full' : ''}`)
-  const counting = countingText(d.range, d.counting, d.insideAsked, name)
-  if (counting) out.push(counting)
-  if (d.archiveProblem) out.push(`Archived tasks are not counted: ${d.archiveProblem}`)
-  if (!d.total) {
-    out.push('', d.range.kind === 'all' ? 'No tasks yet.' : 'No tasks in this range.')
-    return done$()
-  }
-
-  // The one-line summary
-  out.push('', headlineParts(d).join(' · '))
-  if (d.noData) out.push(`(${plural(d.noData, 'task')} with no try data ${d.noData === 1 ? 'is' : 'are'} left out of averages)`)
-
-  // Tasks by status
-  const maxCount = Math.max(...d.states.map(s => s.n))
-  out.push('', 'Tasks')
-  for (const s of d.states) out.push(barRow(s.label, 12, s.n, maxCount, d.total))
-
-  // Worker totals
-  out.push('', 'Work')
-  out.push(row('worker time', fmtDuration(d.workMs)))
-  out.push(row('tokens', d.tokKnown ? `${tokensText(d.tokens)}${d.tokKnown < d.withData ? ` (${d.tokKnown} of ${d.withData} tasks report tokens)` : ''}` : '-'))
-  if (d.tokKnown) out.push(...kindsRow(d.tokens))
-  if (full && d.tokKnown) out.push(row('billed-eq.', billedText(d.tokens)))
-  out.push(row('with data', `${d.withData} of ${d.total} tasks`))
-
-  // Investigations: how many, how many answered, their time and tokens
-  const v = d.inv
-  out.push('', `Investigations (${d.invCount}, ${d.answered} answered; not in done, first-try or merge figures)`)
-  if (d.invCount) {
-    out.push(row('answered', `${d.answered} of ${d.invCount} (${v.readByOwner} read by you, ${v.waiting} waiting to be read)`))
-    out.push(row('time', v.withData ? `${fmtDuration(v.ms)} in all · avg ${durOr(v.avgMs)} per investigation` : '-'))
-    out.push(row('tokens', v.tokKnown ? `${fmtTokens(tokenCount(v.tokens))} in all · avg ${tokOr(v.avgTok)} per investigation` : '-'))
-    if (v.tokKnown) out.push(...kindsRow(v.tokens))
-    out.push(row('tries', v.withData ? `${v.tries} in all · avg ${(v.avgTries ?? 0).toFixed(1)} per investigation` : '-'))
-  } else out.push('  none')
-  if (d.errandsDone) out.push('', `Errands: ${d.errandsDone} errand done`)
-
-  // Whole team: the lead and the scouts too, not only the workers
-  if (d.team) {
-    out.push('', `Whole team (${d.team.label})`)
-    out.push(...teamDataLines(d.team.data, name, full))
-  }
-
-  // Per done task, per try, lead time
-  const p = d.perDone
-  out.push('', `Per done task (${plural(d.doneWithData, 'done task')} with data${d.invCount ? ', investigations left out' : ''})`)
-  if (d.doneWithData) {
-    out.push(row('time', `avg ${durOr(p.avgMs)} · median ${durOr(p.medianMs)} · total ${durOr(p.sumMs)}`))
-    out.push(row('tokens', p.avgTok !== undefined ? `avg ${tokOr(p.avgTok)} · median ${tokOr(p.medianTok)} · total ${tokOr(p.sumTok)} (in all)` : '-'))
-    out.push(row('tries', `avg ${(p.avgTries ?? 0).toFixed(1)} per task`))
-    out.push(row('first try', `${pct(d.first, d.doneWithData)} of done tasks (${d.first} of ${d.doneWithData})`))
-    out.push('', ...spreadLines(d.spreadTime), '', ...spreadLines(d.spreadTok))
-  } else out.push('  no done tasks with data')
-  out.push(row('lead time', d.leadTime.n ? `avg ${durOr(d.leadTime.avgMs)} · median ${durOr(d.leadTime.medianMs)} · total ${durOr(d.leadTime.sumMs)} (made to done, ${plural(d.leadTime.n, 'task')})` : '-'))
-  out.push('', `Per try (${plural(d.perTry.n, 'try', 'tries')})`)
-  out.push(row('time', `avg ${durOr(d.perTry.avgMs)} · total ${durOr(d.perTry.sumMs)}`))
-  out.push(row('tokens', `avg ${tokOr(d.perTry.avgTok)} in all · total ${tokOr(d.perTry.sumTok)}`))
-
-  // Time per stage (T-719): where the done tasks' lifetime went, from their tries and timed timeline
-  out.push('', ...stageLines(d.stages, full))
-
-  // The biggest tasks
-  const top = (title: string, ts: StatsTop[], fmt: (n: number) => string) => {
-    if (!ts.length) return
-    const max = ts[0]!.value
-    out.push('', title, ...ts.map(t => `  ${t.id.padEnd(6)} ${padWidth(cutTitle(t.title), 35)} ${bar(t.value, max).padEnd(BAR_WIDTH)} ${fmt(t.value).padStart(7)}`))
-  }
-  top('Most tokens', d.topTokens, fmtTokens)
-  top('Most time', d.topTime, fmtDuration)
-
-  // How tasks ended: merged changes, and investigations answered (read by the owner)
-  out.push('', `How tasks ended (${plural(d.finished, 'done task')})`)
-  const maxEnd = Math.max(...d.ended.map(e => e.n))
-  for (const e of d.ended) out.push(barRow(e.label, 24, e.n, maxEnd, d.finished))
-  const maxFail = Math.max(0, ...d.failed.map(f => f.n))
-  out.push(`  Failed tries (${d.failedTotal}, from timeline)`)
-  for (const f of d.failed) out.push(barRow(`  ${f.label}`, 24, f.n, maxFail, null, f.folded ? `(${f.folded})` : ''))
-
-  // T-721: each failed try (short: the latest FAILED_TRIES_SHORT), and the tests that failed most (short: the top FAILED_TESTS_SHORT)
-  const differ = failedCountsNote(d)
-  const failed = failedShown(d)
-  if (d.failedTries.length || differ) {
-    const shown = failed.tries
-    out.push('', `Each failed try (${d.failedTries.length}${d.failedTries.length ? ': task · try · reason · failing command · first failing test' : ''})`)
-    if (shown.length < d.failedTries.length) out.push(`  (the latest ${shown.length}; every one: /${name}-stats full)`)
-    if (differ) out.push(`  (${differ})`)
-    for (const f of shown) out.push(`  ${f.id.padEnd(6)} try ${String(f.try).padEnd(2)} ${[f.reason, f.command && `\`${cutTitle(f.command, 40)}\``, f.test && cutTitle(f.test, 60)].filter(Boolean).join(' · ')}`)
-  }
-  if (d.failedTests.length) {
-    const shown = failed.tests
-    out.push('', `Tests that failed most (tries · tasks${shown.length < d.failedTests.length ? `; top ${shown.length} of ${d.failedTests.length}` : ''})`)
-    for (const x of shown) out.push(`  ${padWidth(cutTitle(x.name, 50), 50)} ${plural(x.tries, 'try', 'tries').padStart(9)} · ${plural(x.tasks, 'task')}`)
-  }
-
-  // By role and by origin: tasks, share, avg tokens and avg time per group
-  const figsOf = (g: StatsGroup) => `avg ${tokOr(g.avgTok).padStart(6)} tok · ${durOr(g.avgMs).padStart(7)}`
-  const totalOf = (g: StatsGroup, pad: number) => (g.sumTok === undefined && g.sumMs === undefined ? [] : [`${' '.repeat(pad)}total ${tokOr(g.sumTok)} tok · ${durOr(g.sumMs)}`])
-  const roleW = Math.max(12, ...d.roles.map(g => g.key.length))
-  out.push('', 'By role (tasks · share · avg tokens · avg time; total under it)')
-  for (const g of d.roles) out.push(barRow(g.label, roleW, g.n, d.roles[0]!.n, d.total, figsOf(g)), ...totalOf(g, 4))
-
-  const scouts = d.origins.find(o => o.key === 'scout')?.scouts ?? []
-  const originW = Math.max(14, ...scouts.map(s => s.key.length + 4))
-  const maxOrigin = d.origins[0]!.n
-  out.push('', 'Where tasks came from (tasks · share · avg tokens · avg time; total under it)')
-  for (const o of d.origins) {
-    out.push(barRow(o.label, originW, o.n, maxOrigin, d.total, o.n ? figsOf(o) : ''), ...(o.n ? totalOf(o, 4) : []))
-    for (const s of o.scouts ?? []) {
-      out.push(s.idle ? barRow(`    ${s.label}`, originW, 0, maxOrigin, d.total) : barRow(`    ${s.label}`, originW, s.n, maxOrigin, d.total, figsOf(s)), `        ${scoutResultsText(s.results)}`, ...(s.idle ? [] : totalOf(s, 8)))
-      if (s.unlinked !== undefined && !s.idle) out.push(`        ${unlinkedText(s.unlinked)}`)
-    }
-  }
-
-  // Done per day
-  const maxDay = Math.max(0, ...d.days.map(x => x.done))
-  out.push('', 'Done per day (the last 7 days with activity: done · work · tokens)')
-  if (!d.days.length) out.push('  no activity')
-  for (const x of d.days) out.push(barRow(x.label, 12, x.done, maxDay, null, `${fmtDuration(x.ms).padStart(7)} · ${fmtTokens(x.tokens).padStart(6)} tokens`))
-
-  // Footnotes
-  out.push('')
-  if (full) out.push(`Stages: ${STAGES_NOTE}`, `Tokens "in all" add every kind up; billed is ${BILLED_NOTE}.`)
-  else out.push(BILLED_FOOTNOTE, `Every detail: /${name}-stats full`)
-  return done$()
-}
-
-/** T-768: how many of the latest report texts keep their figures (see statsDataOf). */
-const REMEMBERED_MAX = 20
-const remembered = new Map<string, StatsData>()
-/** Keeps the figures `d` of report text `text` (the latest REMEMBERED_MAX texts), and gives the text back. */
-function remember(text: string, d: StatsData): string {
-  remembered.delete(text)
-  remembered.set(text, d)
-  while (remembered.size > REMEMBERED_MAX) remembered.delete(remembered.keys().next().value!)
-  return text
-}
-/**
- * T-768: the figures a report text (from statsReport) was made from, so a client can draw that report its own way
- * (Claude Code's chat, claude/ui/stats-output.tsx) without reading the text back; undefined for a text it didn't make
- * (or one made before the plugin was loaded again), which is then shown as it is.
- */
-export function statsDataOf(text: string): StatsData | undefined {
-  const t = String(text ?? '').trim()
-  // Claude Code puts "<name>: " (e.g. "symcc: ") before a command's text (T-788)
-  return remembered.get(text) ?? remembered.get(t) ?? remembered.get(t.replace(/^[\w.-]+: /, ''))
-}
-
 /** "2 tasks not linked to a run": a scout's tasks its runs file doesn't list (T-719). */
 export const unlinkedText = (n: number) => `${plural(n, 'task')} not linked to a run`
 
 /** How the stage times are read, said in the full view. */
 export const STAGES_NOTE = 'read from each done task\'s tries (work) and its timed timeline lines ("prep started", "checker started", "waits in the merge queue", "tests started", "merge started", "merged", questions, answers and results); a task whose timeline has an entry with no time (older boards) or no stage line is left out and counted as lacking data.'
 
-/** The "Time per stage" lines for figures `f`: per stage the total, the average per done task and its share of the lifetime; then active, waiting and the lifetime. */
-export function stageLines(f: StageFigures, full = false): string[] {
-  const out = [`Time per stage (${plural(f.n, 'done task')}${f.lacking ? `; ${f.lacking} without timed timeline, left out` : ''})`]
-  if (!f.n) return [...out, '  no done tasks with timed timeline']
-  const shown = f.stages.filter(s => s.ms > 0 || (s.stage !== 'backlog' && s.stage !== 'blocked'))
-  const max = Math.max(...shown.map(s => s.ms))
-  const w = 16
-  const line = (label: string, ms: number, avg: number, b = '') => `  ${label.padEnd(w)} ${b.padEnd(BAR_WIDTH)} ${fmtDuration(ms).padStart(8)} · avg ${fmtDuration(avg).padStart(7)} ${pct(ms, f.lifetime).padStart(4)}`
-  out.push(`  ${''.padEnd(w)} ${''.padEnd(BAR_WIDTH)} ${'total'.padStart(8)} · ${'per task'.padStart(11)} share`)
-  for (const s of shown) out.push(line(s.label, s.ms, s.avgMs, bar(s.ms, max)))
-  out.push(line('active', f.active, f.active / f.n), line('waiting', f.waiting, f.waiting / f.n), line('lifetime', f.lifetime, f.avgLifetime))
-  if (full) out.push('  active: work, prep, check, tests and merge; waiting: the rest (to start, on tasks, merge queue, you)')
-  return out
-}
-
 // ---------------- the whole team: scouts and the lead ----------------
-
-/** One scout's tokens and time: runs, tokens (each kind apart) and ms in all, and the same per day (UTC "YYYY-MM-DD") for the range. */
-export type ScoutUsageFigures = { runs: number; tokens: SymccTokens; ms: number }
-export type ScoutUsage = ScoutUsageFigures & { days: Record<string, ScoutUsageFigures> }
-
-const num = (x: unknown) => (typeof x === 'number' && Number.isFinite(x) && x >= 0 ? x : 0)
-const figs = (v: unknown): ScoutUsageFigures | null => {
-  if (!isObj(v)) return null
-  const o = v as Record<string, unknown>
-  // a total saved before the kinds were kept apart (one number) is kept as `unsplit` until /<name>-doctor fix migrate-data saves it so
-  return { runs: num(o.runs), tokens: cleanTokens(typeof o.tokens === 'number' ? { unsplit: o.tokens } : o.tokens) ?? {}, ms: num(o.ms) }
-}
-
-/** The scouts' tokens and time kept in scouts.json under "usage" (scout name → totals); {} for a missing or broken file. */
-export function parseScoutUsage(text: string | null | undefined): Record<string, ScoutUsage> {
-  const u = jsonObj(text)?.usage
-  const out: Record<string, ScoutUsage> = Object.create(null)
-  if (!isObj(u)) return out
-  for (const [name, v] of Object.entries(u as Record<string, unknown>)) {
-    const f = figs(v)
-    if (!name || !f) continue
-    const days: Record<string, ScoutUsageFigures> = {}
-    const d = (v as { days?: unknown }).days
-    if (isObj(d))
-      for (const [k, x] of Object.entries(d as Record<string, unknown>)) {
-        const g = figs(x)
-        if (g && /^\d{4}-\d{2}-\d{2}$/.test(k)) days[k] = g
-      }
-    out[name] = { ...f, days }
-  }
-  return out
-}
-
-/** scouts.json's text `text` with one more run of scout `name` added to its usage (ended at `endMs`, `ms` long, `tokens` when reported); the rest kept as it is. */
-export function addScoutRun(text: string | null | undefined, name: string, run: { endMs: number; ms: number; tokens?: SymccTokens }): string {
-  const raw = jsonObj(text) ?? { scouts: {} }
-  const usage = parseScoutUsage(text)
-  const ms = num(run.ms)
-  const add = (f: ScoutUsageFigures | undefined): ScoutUsageFigures => ({ runs: (f?.runs ?? 0) + 1, tokens: addTokens(f?.tokens, run.tokens), ms: (f?.ms ?? 0) + ms })
-  const cur = usage[name]
-  const day = dayOf(run.endMs, 0)
-  const days = { ...(cur?.days ?? {}), ...(day ? { [day]: add(cur?.days[day]) } : {}) }
-  // T-808: only the last year's days are kept (the totals above stay whole)
-  const from = dayOf(run.endMs - 365 * 86_400_000, 0)
-  for (const k of Object.keys(days)) if (from && k < from) delete days[k]
-  usage[name] = { ...add(cur), days }
-  return JSON.stringify({ ...raw, usage }, null, 2) + '\n'
-}
-
-/** New scouts.json text `next` with the "usage" of the file's text before (`prev`) kept, when `next` carries none. */
-export function keepScoutUsage(next: string, prev: string | null | undefined): string {
-  const n = jsonObj(next)
-  const usage = jsonObj(prev)?.usage
-  if (!n || n.usage !== undefined || usage === undefined) return next
-  return JSON.stringify({ ...n, usage }, null, 2) + '\n'
-}
 
 /** One API call of the lead, as the host's adapter reads it (for Claude Code, see claude/lead-usage.ts): its message id,
  *  when, its tokens (each kind apart), and where it was read from (shown by /<name>-stats full). */
@@ -1016,23 +753,6 @@ export function rangeSpan(r: StatsRange, tasks: Pick<SymccTask, 'created_at' | '
   const changed = tasks.map(t => Date.parse(t.updated_at || t.created_at || '')).filter(Number.isFinite)
   if (!made.length) return { from: Infinity }
   return { from: Math.min(...made), to: Math.max(...changed) }
-}
-
-/** The scouts' runs, tokens and time within span `s` (all of it when the span is open on both ends; by whole UTC days otherwise). */
-export function scoutTotals(usage: Record<string, ScoutUsage>, s: { from?: number; to?: number }): ScoutUsageFigures {
-  const out: ScoutUsageFigures = { runs: 0, tokens: {}, ms: 0 }
-  const open = s.from === undefined && s.to === undefined
-  const lo = s.from === undefined ? '' : s.from === Infinity ? '9999' : dayOf(s.from, 0)
-  const hi = s.to === undefined ? '9999' : dayOf(s.to, 0)
-  for (const u of Object.values(usage)) {
-    const parts = open ? [u] : Object.entries(u.days).filter(([d]) => d >= lo && d <= hi).map(([, f]) => f)
-    for (const f of parts) {
-      out.runs += f.runs
-      out.tokens = addTokens(out.tokens, f.tokens)
-      out.ms += f.ms
-    }
-  }
-  return out
 }
 
 // ---------------- a scout's results (T-622) ----------------
@@ -1106,36 +826,4 @@ export function teamData(team: TeamInput, span: { from?: number; to?: number }, 
   const lead = lt ? { ...lt, ...(team.leadSessions !== undefined ? { sessions: team.leadSessions } : {}), ...(from ? { from } : {}) } : null
   const sc = scoutTotals(team.scouts ?? {}, span)
   return { lead, ...(lead ? {} : { leadProblem: team.leadProblem ?? 'no session logs' }), ...(team.leadUnread ? { leadUnread: team.leadUnread } : {}), workers, scouts: sc, total: sumTokens([lead?.tokens, workers.tokens, sc.tokens]), merged, ...(team.sessionUsd !== undefined ? { sessionUsd: team.sessionUsd } : {}) }
-}
-
-/**
- * The "Whole team" lines: lead · workers · scouts with bars, each with its kinds apart on the next
- * line, the total with its billed-equivalent, the tokens per merged task and the dollar line.
- * `full` adds where the lead's tokens come from and how billed is weighed.
- */
-export function teamLines(team: TeamInput, span: { from?: number; to?: number }, workers: { tokens: SymccTokens; tries: number }, merged: number, name: string = DEFAULT_NAME, full = false): string[] {
-  return teamDataLines(teamData(team, span, workers, merged), name, full)
-}
-
-/** T-762: the note after the lead's row when some session logs couldn't be read, so its figure is never silently low ("" when all were read). */
-export const unreadText = (n: number | undefined) => n ? ` · ${plural(n, 'session log')} too big to read` : ''
-
-/** The "Whole team" lines for figures `d` (see teamLines). */
-export function teamDataLines(d: TeamData, name: string = DEFAULT_NAME, full = false): string[] {
-  const { lead, workers, merged, total } = d
-  const sc = d.scouts
-  const max = Math.max(tokenCount(lead?.tokens), tokenCount(workers.tokens), tokenCount(sc.tokens))
-  const n = (t: SymccTokens) => fmtTokens(tokenCount(t)).padStart(6)
-  const w = 12
-  const part = (label: string, t: SymccTokens, what: string) => [`  ${label.padEnd(w)} ${bar(tokenCount(t), max).padEnd(BAR_WIDTH)} ${n(t)} tokens · ${what}`, ...kindsRow(t, w)]
-  const out: string[] = []
-  if (lead) out.push(...part(`${ORIGIN_MARK.lead} lead`, lead.tokens, `${plural(lead.calls, 'call')}${lead.sessions !== undefined ? ` · ${plural(lead.sessions, 'session')}` : ''}${full && lead.from ? `, from ${lead.from}` : ''}${unreadText(d.leadUnread)}`))
-  else out.push(row(`${ORIGIN_MARK.lead} lead`, `not counted: ${d.leadProblem ?? 'no session logs'}${unreadText(d.leadUnread)}`))
-  out.push(...part(`${ORIGIN_MARK.worker} workers`, workers.tokens, plural(workers.tries, 'try', 'tries')))
-  out.push(...part(`${ORIGIN_MARK.scout} scouts`, sc.tokens, `${plural(sc.runs, 'run')}${sc.runs ? ` · ${fmtDuration(sc.ms)}` : ''}`))
-  out.push(row('total', `${tokensText(total)}${lead ? '' : ' (without the lead)'}`), ...kindsRow(total))
-  if (full) out.push(row('billed-eq.', billedText(total)))
-  out.push(row('per merged', merged ? `${fmtTokens(tokenCount(total) / merged)} in all, about ${fmtTokens(billedTokens(total) / merged)} billed per merged task (${merged} merged)` : '- no merged tasks'))
-  out.push(row('dollars', `not shown: ${name} doesn't know the model prices${d.sessionUsd !== undefined ? ` (this session so far, as /cost says: ${fmtCost(d.sessionUsd)}, all of it, not split by range)` : ''}`))
-  return out
 }

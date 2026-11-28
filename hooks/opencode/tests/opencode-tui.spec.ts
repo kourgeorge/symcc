@@ -1041,6 +1041,14 @@ test('opencode/tui.ts imports solid-js and @opentui/solid by their written-out n
   expect(server).not.toContain('/tui')
 })
 
+test('T-815: the parts split from hooks/opencode/tui.ts load no module by import(), so only opencode/tui.ts loads solid-js and @opentui/solid', async () => {
+  for (const f of ['tui', 'tui-draw', 'tui-dialogs', 'tui-keys']) {
+    const src = await readFile(`${PLUGIN_ROOT}/hooks/opencode/${f}.ts`, 'utf8')
+    const code = src.split('\n').filter((l: string) => !/^\s*(\/\/|\/?\*)/.test(l)).join('\n')
+    expect(code.match(/import\(/g)?.length ?? 0).toBe(0)
+  }
+})
+
 /** A fake tui context for the T-505 tests: records toasts, layers and slot claims; ui.panel.open answers `opens`. */
 function fakeCtx(theme: unknown, opens = true) {
   const toasts: { message: string; variant?: string }[] = []

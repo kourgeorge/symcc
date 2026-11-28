@@ -2,7 +2,7 @@
 // in place of its plain text. The text stays what the row keeps; the engine draws it as it is when the figures are not
 // known (a text made before the plugin was loaded again), for "full", and when it refuses this tree.
 import type { MatchedHook } from 'claude-code'
-import { statsDataOf } from '../../core/stats'
+import { statsDataOf } from '../../core/stats-text'
 import { S } from '../../app/state'
 import { statsLines } from '../stats-lines'
 import type { $ } from '../panel'
