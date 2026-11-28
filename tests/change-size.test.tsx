@@ -2,7 +2,8 @@
 // worker's report): the pure parts, a finished Live row, and the task page on the terminal, desktop, mobile and VS Code.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { liveFinishedLanes, laneLines, liveLayout, liveStations, segText } from '../hooks/core/live'
+import { liveFinishedLanes, laneLines, liveLayout, liveStations } from '../hooks/core/live'
+import { segText } from '../hooks/core/live-seg'
 import { parseShortstat, sizeText, commitMessage } from '../hooks/core/commits'
 import { doneLine } from '../hooks/core/reports'
 import { sizeSegs } from '../hooks/core/page-header'

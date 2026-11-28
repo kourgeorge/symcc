@@ -14,7 +14,7 @@ import { checkStepNow } from './lead'
 import { STEP_WORD } from './panel'
 import { fromText } from './origin'
 import { timelineLineText } from './timeline'
-import { liveToday, todayMore, type TodayTeam } from './live'
+import { liveToday, todayMore, type TodayTeam } from './live-today'
 import { fmtDuration, fmtTokens } from './runs'
 import type { OrgMemNote } from './org-mem'
 

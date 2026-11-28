@@ -3,7 +3,7 @@
 // and the terminal (desktop, mobile) and VS Code task pages draw it under Details (OpenCode's: hooks/opencode/tests).
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { LIVE_INDENT } from '../hooks/core/live'
+import { LIVE_INDENT } from '../hooks/core/live-seg'
 import { textWidth } from '../hooks/core/width'
 import { branchTime, taskBranchLines, taskBranchTitle, type TaskBranchFacts } from '../hooks/core/task-branch'
 import { readTaskBranch, taskBranchFacts, viewBranchTasks, BRANCH_CACHE_MS } from '../hooks/app/branches'
