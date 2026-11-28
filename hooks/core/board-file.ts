@@ -38,12 +38,14 @@ export const docsTestCommandsOf = (b: { docs_test_commands?: string[]; projects?
  * changes the data shape (a new or renamed field, anything an older copy would drop or misread when it saves), together
  * with a step in core/old-data.ts that moves old data. The move writes it; a normal save keeps the number it read; a
  * symcc that finds a higher number in the file does not write (it is older than the data). Shape 1 is the board's old
- * `version: 1`; 2 is the shape after the history -> timeline move (T-1192).
+ * `version: 1`; 2 is the shape after the history -> timeline move (T-1192); 3 adds the board's `name` (T-1218).
  */
-export const DATA_VERSION = 2
+export const DATA_VERSION = 3
 
 export type Board = {
   data_version: number
+  /** T-1218: the board's own friendly name ("power-falcon"), picked once; its task branches are symcc/<name>/T-n */
+  name?: string
   next_id: number
   /** paused: nothing runs; review: work runs and finished work waits for the owner; auto (the default): finished work that passes merges on its own */
   mode: SymccMode
@@ -412,6 +414,7 @@ const STATUSES: SymccStatus[] = ['backlog', 'todo', 'doing', 'paused', 'waiting'
 
 /** Each setting with the test its value must pass; a value that fails is replaced by the default. */
 const SETTING_OK: { [K in Exclude<keyof Board, 'data_version' | 'tasks' | 'next_id' | 'archived' | 'archived_done' | 'questions' | 'next_question'>]: (v: unknown) => boolean } = {
+  name: v => typeof v === 'string' && /^[a-z]+-[a-z]+$/.test(v),
   mode: v => isMode(v),
   test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),
   docs_test_commands: v => Array.isArray(v) && v.every(c => typeof c === 'string'),

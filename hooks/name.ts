@@ -39,7 +39,7 @@ export function cleanName(raw: unknown): string {
 export const dataDir = (name: string = DEFAULT_NAME) => `.${name}`
 
 /** Everything made from the plugin's name. */
-export function namesFor(raw: string = DEFAULT_NAME) {
+export function namesFor(raw: string = DEFAULT_NAME, friendly: string = '') {
   const name = cleanName(raw)
   const dir = dataDir(name)
   return {
@@ -53,8 +53,10 @@ export function namesFor(raw: string = DEFAULT_NAME) {
     leadFile: `${dir}/lead.json`,
     worktrees: `${dir}/worktrees`,
     scouts: `${dir}/scouts`,
-    /** a task's branch: "<name>/T-1" */
-    branch: (id: string) => `${name}/${id}`,
+    /** T-1218: this board's own friendly name ("power-falcon"); '' until the board has one */
+    friendly: friendly,
+    /** a task's branch: "<name>/<friendly>/T-1" ("<name>/T-1" while the board has no friendly name yet) */
+    branch: (id: string) => `${name}/${friendly ? `${friendly}/` : ''}${id}`,
     /** who the plugin's own commits and merges are by */
     author: { name, email: `${name}@localhost` },
     /** the board panel's id */

@@ -639,7 +639,7 @@ The board has one mode, set with `/symcc-mode`, `/symcc-settings mode …` or by
 Going from `paused` to `review` or `auto` starts work again. In `auto` you can still mark one
 task: "T-5 needs review" (`needs_review` on `symcc add` / `symcc change`); that task waits.
 
-The lead tells you "T-5 is ready for review". The task's branch (`symcc/T-5`) and copy
+The lead tells you "T-5 is ready for review". The task's branch (`symcc/power-falcon/T-5`) and copy
 (`.symcc/worktrees/T-5`) are kept so you can look at the change. Then:
 
 - **Approve** ("approve T-5", tool `symcc approve`): symcc runs the same merge steps as
@@ -958,7 +958,7 @@ skills: [code-review]
   | `{{task_id}}`, `{{title}}` | the task's id and title |
   | `{{files}}` | change tasks only: the "Files you may change" lines |
   | `{{test_command}}` | change tasks only: the "these must pass" line with your test commands |
-  | `{{folder}}`, `{{branch}}` | the worker's own folder and its branch (`symcc/T-3`) |
+  | `{{folder}}`, `{{branch}}` | the worker's own folder and its branch (`symcc/power-falcon/T-3`) |
   | `{{kind}}` | the task's type and what it is for |
   | `{{name}}` | the plugin's name (`symcc`) |
   | `{{task.<path>}}` | any field of the task, by its path, e.g. `{{task.origin.request}}` or `{{task.files}}`: text as it is, a list one item per line, an object as `key: value` lines, a missing field as nothing |

@@ -709,7 +709,7 @@ export function oldDataRows(i: OldInput): OldRow[] {
     { n: lastReport, text: 'scouts whose last report is not yet in a runs file', fix: true },
     { n: unsafe.length, text: `scouts whose name can't be a file name; rename them (${unsafe.join(', ')})`, fix: false },
     { n: i.fieldGuide && !i.orgMem ? 1 : 0, text: 'field-guide.md not yet moved to org-mem.md', fix: true },
-    { n: shape, text: 'board files saved with an old data shape number (version instead of data_version)', fix: true },
+    { n: shape, text: 'board files saved with an old data shape number (an old board also gets its name, and its symcc/T-n branches move to symcc/<name>/T-n)', fix: true },
     { n: moveFolders, text: 'project folders below the board with no path in the project table', fix: true },
   ]
   return rows.filter(r => r.n > 0)

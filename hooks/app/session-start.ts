@@ -4,7 +4,7 @@
 import { type Board, settingShown, LEAD_BEAT_MS, openOnStart, modeText, modeOf, emptyBoard } from '../board'
 import type { Host } from '../host'
 import { moveOldOrgMem } from './org-mem'
-import { migrateIfOld } from './migrate-data'
+import { migrateIfOld, nameIfMissing } from './migrate-data'
 import { gitReady, checkProjects, allGitReady, initGitIn, recheckGit } from './git'
 import { claimLead, carryDriver, publish, handOver, releaseLead, startHere, offHereBeat } from './lead'
 import { loadRoles } from './roles'
@@ -100,6 +100,7 @@ export async function sessionStart(host: Host) {
       await saveMigrated(host).catch(() => undefined)
       await scoutOriginsFixed(host).catch(() => undefined)
       await moveOldOrgMem(host).catch(() => undefined)
+      await nameIfMissing(host)
     }
     // T-1041: with another live window driving, this one starts on and follows it (startHere), before it can claim the lead
     if (wasDriving && oldMe !== S.me) await carryDriver(host, oldMe).catch(() => undefined)
@@ -213,6 +214,7 @@ export async function initProject(host: Host, tell: (text: string) => void, with
   S.root = own
   S.fresh = false
   S.enabledNow = true
+  await nameIfMissing(host)
   await startHere(host).catch(() => undefined)
   S.startupDone = false
   try {

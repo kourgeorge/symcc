@@ -282,7 +282,7 @@ test('T-880: turning enabled on from Settings in an off-here window works like /
 test('a second live window starts as a follower: on, a lead, not driving, with the follower notice; board.json is unchanged', async () => {
   S.root = ROOT
   const w = world('b')
-  await saveBoard(w.host, { ...emptyBoard(), open_on_start: true })
+  await saveBoard(w.host, { ...emptyBoard(), name: 'quiet-river', open_on_start: true })
   w.files.set(w.lead, leadText('a', Date.now()))
   const before = w.files.get(w.board)
   await sessionStart(w.host)

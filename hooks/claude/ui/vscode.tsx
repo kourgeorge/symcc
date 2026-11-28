@@ -127,6 +127,7 @@ export function vsBanner(k: VsKit, v: PaneView, mode: SymccMode, gitRow: RenderC
           <Text key="vs-title" wrap="wrap">
             <Text bold color={C('ide')}>{name.name}</Text>
             {S.version ? <Text color={C('inactive')}>{versionMark(S.version)}</Text> : null}
+            {v.board_name ? <Text color={C('inactive')}>{` · ${v.board_name}`}</Text> : null}
             {folder ? <Text color={C('inactive')}>{` · ${folder}`}</Text> : null}
           </Text>
           <Box key="vs-mode" flexDirection="row" flexShrink={0}>

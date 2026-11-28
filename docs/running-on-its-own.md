@@ -17,7 +17,7 @@ A **project** is a repo at any path on disk (`~/repositories/client`, `~/code/se
 table as a name and a path. The Settings page shows each one as `name → path` with its test commands. You add one by
 asking the lead (the lead only does it after your yes): `settings` with `project` (a plain name) and `path` (the repo's top
 folder, `~` allowed). symcc refuses, with a plain reason, a path that does not exist, is not a repo's top folder, has no
-commits, is inside a `.symcc/` folder, or is a repo with a board of its own, and a name that is taken. The path is stored
+commits, is inside a `.symcc/` folder, and a name that is taken. The path is stored
 as its real path. A project's path can be changed only while none of its open tasks has a copy or branch, and a project
 can be removed (`project` plus `remove: true`) only while no open task uses it. A task can name its project (`project` on `symcc add` / `symcc change`, for
 example "add this to client"). A wrong name is refused, and the answer lists the projects there are. Rows and task
@@ -217,7 +217,7 @@ sizes. It changes nothing until you say so.
   and `data.before-migrate-<time>/` folders
   (the newest one is kept); folders in `.symcc/worktrees/` of done or dropped tasks with no
   uncommitted changes; git worktree entries whose folder is gone (`git worktree prune`);
-  `symcc/T-<n>` branches of done or dropped tasks whose work is all in the branch they merge
+  `symcc/<board-name>/T-<n>` branches of done or dropped tasks whose work is all in the branch they merge
   into. For a **dropped** task it also offers its folder with uncommitted changes and its
   branch with commits not in the target branch, and says what is lost ("deletes 3 uncommitted
   changed files", "deletes 8 commits not in main"); `fix` removes them (the folder with
