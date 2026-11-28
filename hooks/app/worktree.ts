@@ -35,7 +35,38 @@ export const taskBranch = (t: Pick<SymccTask, 'id' | 'branch'>) => t.branch ?? S
  * With `catchUp` (a new try starts, T-482), an old branch is first brought to `target`'s tip when that is safe (see
  * catchUpBranch); `behind` then says how many of `target`'s commits it still lacks, and `why` why it was not moved.
  */
-export async function prepareWorktree($: Host, t: SymccTask, target: string, catchUp = false) {
+export function prepareWorktree($: Host, t: SymccTask, target: string, catchUp = false) {
+  // T-1238: two starts of the same task (the pump and a direct call) run one after the other, never interleaved
+  const dir = worktreeDir(t.id)
+  const before = preparing.get(dir) ?? Promise.resolve()
+  const run = before.then(() => prepareNow($, t, target, catchUp))
+  const tail = run.then(() => undefined, () => undefined)
+  preparing.set(dir, tail)
+  void tail.then(() => { if (preparing.get(dir) === tail) preparing.delete(dir) })
+  return run
+}
+
+/** T-1238: the prepareWorktree running (or last run) for each folder, so a second one waits for it. */
+const preparing = new Map<string, Promise<void>>()
+
+/**
+ * T-1238: adds the worktree `dir` on `branch`, making the branch from `target` when it does not exist. When the branch
+ * appears between the check and the add (another start of this task, in this or another process), the existing branch
+ * is reused; when that other start already made the folder too, it is kept. Answers whether this call made the branch.
+ */
+export async function addWorktree($: Host, dir: string, branch: string, target: string, repo: string): Promise<boolean> {
+  if (await branchExists($, branch, repo)) {
+    await gitOk($, ['worktree', 'add', dir, branch], repo)
+    return false
+  }
+  const r = await git($, ['worktree', 'add', '-b', branch, dir, target], repo)
+  if (r.exitCode === 0) return true
+  if (!(await branchExists($, branch, repo))) throw new Error(`git worktree add -b ${branch} ${dir} ${target}: ${(r.stderr || r.stdout).trim().slice(0, 300)}`)
+  if (!(await $.fs.exists(`${dir}/.git`))) await gitOk($, ['worktree', 'add', dir, branch], repo)
+  return false
+}
+
+async function prepareNow($: Host, t: SymccTask, target: string, catchUp: boolean) {
   const dir = worktreeDir(t.id)
   const repo = repoOf(t)
   // T-1218: an old-style branch (symcc/T-n) the one-time move could not rename is renamed now, at the try start
@@ -56,12 +87,7 @@ export async function prepareWorktree($: Host, t: SymccTask, target: string, cat
       await $.run(['rm', '-rf', dir])
     }
     await git($, ['worktree', 'prune'], repo)
-    const has = (await git($, ['rev-parse', '--verify', '-q', `refs/heads/${branch}`], repo)).exitCode === 0
-    if (has) await gitOk($, ['worktree', 'add', dir, branch], repo)
-    else {
-      await gitOk($, ['worktree', 'add', '-b', branch, dir, target], repo)
-      made = true
-    }
+    made = await addWorktree($, dir, branch, target, repo)
   }
   const kept: CatchUp = catchUp && !made ? await catchUpBranch($, dir, branch, target, t).catch(() => ({ behind: 0 })) : { behind: 0 }
   await copyTypes($, dir, repo).catch(() => false)
