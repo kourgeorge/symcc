@@ -16,7 +16,7 @@
 // branch (commits ahead, how far behind), each task row a row Button that opens its task.
 // T-747, T-789: each section (Tasks, Today, Branches, Organizational memory) starts with a bold UPPERCASE heading (core's
 // liveHeading; no bar, no rule), one empty line above it (none above the first) and one under it, its lines indented by LIVE_INDENT.
-import { liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranchBlocks, liveNowSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
+import { liveIdle, LIVE_INDENT, liveLegend, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, laneLines, liveBold, liveHeading, liveIndented, liveInner, liveBranchBlocks, liveNowSegs, liveKeys, liveLabelSegs, liveNeeds, liveTaskLanes, liveLanes, liveLayout, liveOrgMem, liveColumns, liveTodayLines, liveTrains, trainRows } from '../../core/live'
 import { footerRule } from '../../board'
 import { S, workers } from '../../app/state'
 import { type $, panelValues } from '../panel'
@@ -119,7 +119,7 @@ export function livePage($: $, pane: PaneParts, notes: readonly OrgMemNote[]) {
     else $.ui.toast(S.N.toast(target ? `${target.id} has no worker running now.` : 'No worker is running now.'))
   })
   const today = liveTodayLines(v, nowMs, inner, undefined, !lanes.length)
-  const nowSegs = liveNowSegs(v, running, nowMs, inner)
+  const nowSegs = liveNowSegs(v, liveLanes(v, nowMs), nowMs, inner)
   const needs = liveNeeds(v, nowMs, inner)
   const om = liveOrgMem(notes, width)
   const blocks = liveBranchBlocks(v, nowMs, width)

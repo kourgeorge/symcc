@@ -118,7 +118,7 @@ test('T-1210: a task that needs the owner and the tasks waiting on it are not dr
   expect(back).toContain('+ also')
 })
 
-test('T-1210: a running task with a pending worker question is in NEEDS YOU, not in TASKS, and its trains go too', () => {
+test('T-1210: a running task asking for more time is in NEEDS YOU, not in TASKS, and its trains go too', () => {
   const now = Date.now()
   const iso = new Date(now).toISOString()
   let b = emptyBoard()
@@ -127,7 +127,7 @@ test('T-1210: a running task with a pending worker question is in NEEDS YOU, not
   const ask = { by: 'worker', text: 'Which one?', asked_at: iso }
   const board = {
     ...b,
-    tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? { status: 'doing', runs: [run], live: { ask } } : t.id === 'T-3' ? { status: 'doing', runs: [run] } : {}) }) as BoardTask),
+    tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? { status: 'doing', runs: [run], live: { time_ask: iso } } : t.id === 'T-3' ? { status: 'doing', runs: [run] } : {}) }) as BoardTask),
   } as Board
   const text = liveStatusText(board as never, [], now)
   const tasks = statusSection(text, 'TASKS').join('\n')
@@ -136,6 +136,21 @@ test('T-1210: a running task with a pending worker question is in NEEDS YOU, not
   expect(tasks).not.toContain('T-2')
   expect(tasks).toMatch(/└─◇ T-4 Waits on both {2}waits$/m)
   expect(tasks).not.toContain('also')
+})
+
+test('T-1210: a hidden asking task still counts as a busy agent, and the idle line says needs you', () => {
+  const now = Date.now()
+  const iso = new Date(now).toISOString()
+  let b = emptyBoard()
+  for (const title of ['Asks', 'Runs']) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'] }, iso)[0]
+  const run = { started: iso, agents: [{ id: 'a', role: 'worker', started: iso }] }
+  const ask = { by: 'worker', text: 'Which one?', asked_at: iso }
+  const board = { ...b, tasks: b.tasks.map(t => ({ ...t, status: 'doing' as const, runs: [run], ...(t.id === 'T-1' ? { live: { time_ask: iso } } : {}) }) as unknown as BoardTask) } as Board
+  const text = liveStatusText(board as never, [], now)
+  expect(statusSection(text, 'TASKS').join('\n')).not.toContain('T-1 ')
+  expect(text).toMatch(/agents 2\/\d+ busy/)
+  const alone = { ...board, tasks: board.tasks.filter(t => t.id === 'T-1') }
+  expect(statusSection(liveStatusText(alone as never, [], now), 'TASKS').join('\n')).not.toContain('stopped')
 })
 
 test('T-1210: when every open task needs the owner, TASKS shows the nothing running line', () => {

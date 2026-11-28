@@ -463,15 +463,13 @@ export function liveFinishedLanes(view: LiveView, nowMs: number): LiveLane[] {
     })
 }
 
-/** T-1210: whether task `t` holds the owner up: it needs the owner (needsYou), or a running worker has a question open (live.ask). */
-const holdsOwner = (t: BoardTask, nowMs: number): boolean => needsYou(t, nowMs) || (t.status === 'doing' && !!t.live?.ask)
 
 /** T-771: the ▍Tasks section's lanes: the running ones (liveLanes), then the finished ones under them (liveFinishedLanes). */
 export function liveTaskLanes(view: LiveView, nowMs: number): LiveLane[] {
   // T-1210: a task that needs the owner is listed in NEEDS YOU, so it has no lane here (nor do its waiting trains)
   const running = liveLanes(view, nowMs).filter(l => {
     const t = view.tasks.find(x => x.id === l.id)
-    return !t || !holdsOwner(t as BoardTask, nowMs)
+    return !t || !needsYou(t as BoardTask, nowMs)
   })
   const ids = new Set(running.map(l => l.id))
   return [...running, ...liveFinishedLanes(view, nowMs).filter(l => !ids.has(l.id))]
@@ -587,7 +585,7 @@ export type LiveNeed = { id: string; segs: LiveSeg[] }
  *  (the same list as the band and the board's NEEDS YOU: needsYou), newest first. Empty while nothing waits. */
 export function liveNeeds(view: LiveView & { questions?: readonly { id: string; text: string; answered_at?: string; dropped?: boolean }[] }, nowMs: number, inner: number): LiveNeed[] {
   const open = (view.questions ?? []).filter(q => isOpenQuestion(q))
-  const tasks = (view.tasks as BoardTask[]).filter(t => holdsOwner(t, nowMs)).sort(newestFirst)
+  const tasks = (view.tasks as BoardTask[]).filter(t => needsYou(t, nowMs)).sort(newestFirst)
   const idW = Math.max(0, ...open.map(q => q.id.length), ...tasks.map(t => t.id.length))
   const row = (id: string, rest: string): LiveNeed => ({ id, segs: [{ text: cutTitle(`⚠ ${id.padEnd(idW)} ${rest.replace(/\s+/g, ' ').trim()}`, Math.max(1, inner)), tone: 'warning' }] })
   const qs = open.map(q => row(q.id, q.text))
@@ -861,7 +859,7 @@ export function liveTrains(view: LiveView, nowMs: number, lanes: readonly LiveLa
   /** T-1210: a task that needs the owner and has no lane here: never named in "+ also". */
   const hidden = (a: string) => {
     const t = byId.get(a)
-    return !!t && !laneOf.has(a) && t.status !== 'todo' && holdsOwner(t as BoardTask, nowMs)
+    return !!t && !laneOf.has(a) && t.status !== 'todo' && needsYou(t as BoardTask, nowMs)
   }
   /** Whether `id`'s chain of parents (up to a lane) passes `through`. */
   const under = (id: string, through: string) => {
