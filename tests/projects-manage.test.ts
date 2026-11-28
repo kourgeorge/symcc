@@ -109,6 +109,25 @@ test('change and remove are refused while open tasks use the project; they work 
   expect((await set(w, { project: 'api', remove: true })).error).toContain('not a project')
 })
 
+// T-1215: changeProjectPath shares savePath with addProject: its own path is not "another project", the path checks
+// come before the open-task copy check, and a refused change saves nothing
+test('a path change: its own path is fine, path errors come before the copy check, a refusal saves nothing', async () => {
+  const { w, files } = await world({ '/code/api': { top: '/code/api' }, '/code/web': { top: '/code/web' } })
+  await set(w, { project: 'api', path: '/code/api' })
+  await set(w, { project: 'web', path: '/code/web' })
+  expect((await set(w, { project: 'api', path: '/code/api' })).error).toBe(undefined)
+  expect((await set(w, { project: 'api', path: '/code/web' })).error ?? '').toContain("already the project 'web'")
+  await change(w.host, b => {
+    const [y, t] = addTask(b, { origin: { why: 'a test' }, title: 'Work', details: 'x', files: ['a'] }, new Date().toISOString())
+    return [{ ...y, tasks: y.tasks.map(x => (x.id === t.id ? { ...x, project: 'api' } : x)) }, t]
+  })
+  files.set(`/ws/.symcc/worktrees/${(await load(w.host)).tasks[0]!.id}/.git`, '')
+  expect((await set(w, { project: 'api', path: '/nowhere' })).error ?? '').toContain('does not exist')
+  expect((await set(w, { project: 'api', path: '/code/web' })).error ?? '').toContain("already the project 'web'")
+  expect((await set(w, { project: 'api', path: '/code/api' })).error ?? '').toContain('already has a copy')
+  expect((await load(w.host)).projects).toEqual({ api: { path: '/code/api' }, web: { path: '/code/web' } })
+})
+
 // T-1214: a scout naming an unknown project gets a warning and the lead hears once; removing a project a scout names is refused
 test('a scout naming an unknown project warns and tells the lead once; remove is refused while a scout names the project', async () => {
   const { w, files } = await world({ '/code/api': { top: '/code/api' } })
