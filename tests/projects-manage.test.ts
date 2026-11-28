@@ -151,3 +151,12 @@ test('readBranches: a repo block reads its open tasks branch, not an old done ta
   const f = await readBranches(w.host, 'main', { tasks: tasks as never[] }, Date.now())
   expect(f?.repos?.map(r => `${r.project}:${r.into}`)).toEqual(['client:dev', 'server:main'])
 })
+
+test('T-1212: a project with test commands but no path can be given a path', async () => {
+  const { w } = await world({ '/code/api': { top: '/real/api' }, '/real/api': { top: '/real/api' } })
+  await change(w.host, b => ({ ...b, projects: { api: { test_commands: ['pytest'] } } }) as never)
+  const r = await set(w, { project: 'api', path: '/code/api' })
+  expect(r.error).toBe(undefined)
+  expect((await load(w.host)).projects).toEqual({ api: { test_commands: ['pytest'], path: '/real/api' } })
+  expect(S.projects.api).toBe('/real/api')
+})

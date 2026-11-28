@@ -242,7 +242,7 @@ async function queueWorker(host: Host, id: string): Promise<{ started: Promise<v
       return cur?.status === 'doing' && cur.live?.session === S.me && cur.attempts === t.attempts
     }
     const plainNote = plain ? `\n\nYou work in a plain folder (no git, no branch). The board's projects are folders you may read, but never write into: ${Object.entries(S.projects).map(([n, p]) => `${n}: ${p}`).join(', ')}. Read them with your file tools. Nothing you leave here is kept: put what the owner needs in your report.` : ''
-    const errandOut = (x: BoardTask) => (isErrand(x) ? errandFolders(x.files, S.root, S.home) : [])
+    const errandOut = (x: BoardTask) => (isErrand(x) ? errandFolders(x.files, S.root, S.home, Object.values(S.projects)) : [])
     const spawn = startAgent(host, { kind: 'worker', prompt: WORKER_PROMPT(t, b, dir, role, await orgMemText(host), learnedAsk(host), await earlierCommits(host, t, dir), await changedSince(host, t, dir, Date.parse(now()))) + plainNote + (errandOut(t).length ? `\n\nYou may write here (outside the project): ${errandOut(t).join(', ')}` : '') + reportsNote(reports, t.details) + behindNote(behind, intoOf(t), why), name: workerName(S.N.name, t.id), description: workerDescription(t.title), ...(role?.tools ? { tools: role.tools } : {}), ...(isProseRole(role) && !isInvestigation(t) ? { prose: true as const } : {}), ...(errandOut(t).length || (!isInvestigation(t) && t.files?.length) ? { files: isErrand(t) ? errandOut(t) : t.files } : {}), cwd: dir, ...(role?.model ? { model: role.model } : {}) }, still)
     queued = true
     queuedWorkers.set(id, { task: id, worktree: dir, branch, since: Date.now() })

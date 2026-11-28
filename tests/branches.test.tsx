@@ -391,3 +391,15 @@ test('T-1004: the VS Code branch figures keep their colors: far behind is the wa
   expect(dim).toBeDefined()
   expect(texts[0]!.props.color).not.toBe(dim!.props.color)
 })
+
+test('T-1212: the figures are read again when a project path moves', async () => {
+  S.root = '/repo'
+  S.gitState = 'ok'
+  S.projects = { api: '/r/one' }
+  const g = fakeHost({ run: fakeGit([], 'symcc/none') })
+  const board = { ...emptyBoard(), tasks: branchTasks(T0).map(t => ({ ...t, project: 'api' })) as never[] }
+  await branchFacts(g.host, board, 'main', T0).done
+  expect(branchFacts(g.host, board, 'main', T0 + 1000).done).toBe(undefined)
+  S.projects = { api: '/r/two' }
+  expect(branchFacts(g.host, board, 'main', T0 + 2000).done).toBeDefined()
+})

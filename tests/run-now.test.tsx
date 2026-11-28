@@ -294,3 +294,14 @@ test('T-964: run now is refused, the task unchanged, when git is not set up', as
   await w.clock.settle()
   expect(JSON.stringify(w.task('T-1'))).toBe(before)
 })
+
+test('T-1212: run now on a task whose project is gone says so, not "git isn\'t set up"', async ($, on) => {
+  const w = world(on)
+  const b = patchTask(todo(1, 1, 'paused'), 'T-1', { project: 'gone' } as never, ISO)
+  w.files.set(BOARD, JSON.stringify(b))
+  await $.session.start({ cwd: '/repo' } as never)
+  await w.clock.settle()
+  const said = await runTool($, 'T-1')
+  expect(said).toContain("T-1 didn't start: project 'gone' is not in this board's project table")
+  expect(said).not.toContain("git isn't set up")
+})

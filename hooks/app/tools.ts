@@ -1079,6 +1079,7 @@ export async function runNowTool($: Host, id: string, anyway: boolean): Promise<
   const waits = runNowWaits(b, t)
   if (waits.length && !anyway) return `${runNowQuestion(t.id, waits)} Nothing started. To start it without waiting: ${S.N.name} run with anyway: true (the owner: /${S.N.name}-task ${t.id} run anyway).`
   if (S.gitState === 'ok' && S.gitRoot === 'no-repo' && !isProjectName(t.project ?? '') && !isInvestigation(t)) return `${noProjectText({ ...b, tasks: [t] })}; nothing started`
+  if (projectGone(t)) return `${t.id} didn't start: ${projectGone(t)}`
   if (S.gitState === 'no-git' || (!plainTask(t) && !(await taskGitReady($, b, t)))) return `${t.id} didn't start: git isn't set up ${t.project ? `in ${t.project}` : 'here'} yet`
   const busy = workers.size + starting.size
   const over = busy >= b.max_parallel ? { busy, max: b.max_parallel } : undefined
