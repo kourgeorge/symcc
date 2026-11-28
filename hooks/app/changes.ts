@@ -1,6 +1,7 @@
 import type { SymccTask } from '../../types'
 import { parseNumstat, hasMergedChanges, type BoardTask, type DiffFile, parseDiffStat, parseStatusZ, reviewedCommit, YOUR_EDITS, isTaskCommit, shortSha, secretFiles } from '../board'
-import { gitOk, git, worktreeDir, taskBranch, repoOf, projectGone } from './git'
+import { gitOk, git, repoOf, projectGone } from './git'
+import { worktreeDir, taskBranch } from './worktree'
 import { S, changesCache } from './state'
 import type { Host } from '../host'
 

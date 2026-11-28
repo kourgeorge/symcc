@@ -602,9 +602,19 @@ function armScout(host: Host, s: ScoutDef, st: SymccScout) {
  * (kept in scouts.json): last_run + every_minutes, or soon after start when that is past or it never ran. A scout
  * already known with the same every_minutes keeps its next run, so editing one scout doesn't move the others.
  */
+let reloadFailLogged = false
 export async function scheduleScouts(host: Host) {
+  // T-1223: load first; when that fails the old timers stay (a failed read must not silence every timed scout)
+  let defs: ScoutDef[]
+  try {
+    defs = await loadScouts(host)
+  } catch (err) {
+    if (!reloadFailLogged) host.ui.log(`${S.N.name}: couldn't read the scouts folder (${(err as Error)?.message ?? err}); the scout timers stay as they were`, { to: 'debug' })
+    reloadFailLogged = true
+    throw err
+  }
+  reloadFailLogged = false
   for (const t of timers.splice(0)) t.cancel()
-  const defs = await loadScouts(host)
   for (const k of [...scoutState.keys()]) if (!defs.some(d => d.name === k)) scoutState.delete(k)
   // after a restart the map is empty: take each scout's last run and report from scouts.json
   const saved = defs.some(d => !scoutState.has(d.name)) ? await loadScoutMemory(host) : {}

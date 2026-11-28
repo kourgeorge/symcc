@@ -4,7 +4,8 @@ import { type BoardTask, find, putTask, intoOf, isInvestigation, isSha, isTaskCo
 import { S } from './state'
 import { type Host } from '../host'
 import { load, change, now } from './store'
-import { git, taskGitReady, gitStateOfTask, projectNotes, projectGone, branchExists, taskBranch, worktreeDir, removeWorktree, deleteMergedBranch, repoOf } from './git'
+import { git, taskGitReady, gitStateOfTask, projectNotes, projectGone, branchExists, repoOf } from './git'
+import { taskBranch, worktreeDir, removeWorktree, deleteMergedBranch } from './worktree'
 import { pump, checkingNow, mergingNow, CHECKING_TEXT, MERGING_TEXT } from './workers'
 import { stopWorker } from './board-mode'
 
