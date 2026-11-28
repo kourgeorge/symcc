@@ -1,7 +1,7 @@
 // The board panel's page for one task: details, actions, and for a task in review its changes.
 import type { SymccTask } from '../../../types'
 import { cutDiff, DIFF_LINES, diffKinds, DIFF_COLOR, diffKeys, roleChoices, roleOf, findRole, type DiffFile, type Seg, detailRows, taskKeys, YOUR_EDITS, intoOf, rowTitle, taskReports, type BoardTask, boxHint, pickHint, taskCopyText, copyToast, fileWaitText, isAnswered, showsAnswer, answerText, whyFailed, taskActions, taskAsks, canPickRole as canPickRoleOf, canMarkMerged as canMarkMergedOf, type TaskActionId, type TaskAction, type KeyHint, failNext, failAsks, answeredLeadLine, sessionNote, hasMergedChanges } from '../../board'
-import { folderDiff, changedFiles, mergedChanges, mergedDiff } from '../../app/review'
+import { folderDiff, changedFiles, mergedChanges, mergedDiff } from '../../app/changes'
 import { loadRoles } from '../../app/roles'
 import { loadKinds } from '../../app/kinds'
 import { type PaneView, S, workers } from '../../app/state'

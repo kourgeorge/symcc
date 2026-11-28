@@ -645,12 +645,7 @@ export async function runScoutNow(host: Host, name: string): Promise<string> {
   const defs = await scheduleScouts(host)
   const s = defs.find(d => d.name === name)
   if (!s) return `no scout named ${name} (have: ${defs.map(d => d.name).join(', ') || 'none'})`
-  const st = scoutState.get(s.name)
-  if (st) await pausedNow(host, st)
-  const cur = await load(host)
-  const why = scoutWhyNot(st ?? { name: s.name, running: false }, { driving: S.driving, gitOk: S.gitState === 'ok', mode: modeOf(cur), on: onHere(cur), plan: inPlan(S.plan), newerData: S.newerData }, S.N.name)
-  if (why) return why
-  // not waited for: it is asked from a tool call, a slash command or the panel, and starts at the next turn's start or end (see starts.ts)
+  // queueScout checks whether it may run (and says why not); not waited for: it is asked from a tool call, a slash command or the panel, and starts at the next turn's start or end (see starts.ts)
   const q = await queueScout(host, s, 0, true)
   if (typeof q === 'string') return q
   void q.started.catch(() => undefined)
