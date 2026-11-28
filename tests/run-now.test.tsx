@@ -33,7 +33,8 @@ function world(on: On, o: { failWorktree?: boolean; noRepo?: boolean } = {}) {
   on('process.run', (_, e) => {
     const [cmd, ...rest] = (e as unknown as { argv: string[] }).argv
     if (cmd === 'git' && o.failWorktree && rest.includes('worktree') && rest.includes('add')) return { value: ran({ exitCode: 1, stderr: 'boom worktree' }) }
-    if (cmd === 'git' && o.noRepo && rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree') return { value: ran({ exitCode: 128, stderr: 'not a git repository' }) }
+    // T-1225: a folder with no repo is a control center and starts things; a repo with no commit is what is not set up
+    if (cmd === 'git' && o.noRepo && rest[0] === 'rev-parse' && rest.includes('--verify')) return { value: ran({ exitCode: 128, stderr: 'no commits' }) }
     if (cmd === 'git') return { value: rest[0] === 'rev-parse' && rest[1] === '--is-inside-work-tree' ? ran({ stdout: 'true\n' }) : ran({}) }
     if (cmd === 'ln') {
       if (files.has(key(rest[1]!))) return { value: ran({ exitCode: 1, stderr: 'File exists' }) }

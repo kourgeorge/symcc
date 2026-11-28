@@ -6,7 +6,7 @@
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
 import { type Board, addTask, emptyBoard, patchTask, BIG_FILE_BYTES } from '../hooks/board'
-import { gitReady, homeBranch, setupGit } from '../hooks/app/git'
+import { gitReady, homeBranch, setupGit, plainTask, changeNeedsProject } from '../hooks/app/git'
 import { S, leadQueue, meanwhile } from '../hooks/app/state'
 import { load, saveBoard } from '../hooks/app/store'
 import { fakeHost, memoryFs } from './fake-host'
@@ -554,4 +554,29 @@ test('T-1056: homeBranch makes one call on a branch and three on a detached HEAD
   expect(calls.length).toBe(3)
   answers['symbolic-ref --short -q refs/remotes/origin/HEAD'] = 'origin/trunk\n'
   expect(await homeBranch(host)).toBe('trunk')
+})
+
+// ---------------- T-1225: a board in a plain folder, no projects yet ----------------
+
+test('T-1225: a plain folder with no repo and no projects is a control center: ready, no "set up git" message, investigations run there, a change task needs a project', async () => {
+  const w = world()
+  await withProject(w)
+  S.driving = true
+  S.toldGit = 'ok'
+  expect(await gitReady(w.$)).toBe(true)
+  expect(S.gitState).toBe('ok')
+  expect([...leadQueue, ...meanwhile].filter(x => x.includes('Set it up'))).toEqual([])
+  expect(plainTask({ kind: 'investigation' })).toBe(true)
+  expect(changeNeedsProject([])).toContain("this board's folder is not a repo")
+})
+
+test('T-1225: a board folder that is a repo with no commits still gets the "set up git" message', async () => {
+  const w = world({ repo: true, hasCommit: false })
+  await withProject(w)
+  S.driving = true
+  S.toldGit = 'ok'
+  expect(await gitReady(w.$)).toBe(false)
+  expect(S.gitState).toBe('no-commits')
+  expect([...leadQueue, ...meanwhile].some(x => x.includes('Set it up'))).toBe(true)
+  expect(changeNeedsProject([])).toBe('')
 })

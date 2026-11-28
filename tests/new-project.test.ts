@@ -31,6 +31,7 @@ function world(id: string, root = ROOT, repoRoot = root, machine: { uname?: stri
       if (cmd === 'sh' && machine.uname) return done({ exitCode: (machine.noBrew ? ['apt-get'] : ['brew', 'apt-get']).includes(rest[rest.length - 1]!) ? 0 : 1 })
       if (cmd === 'git' && machine.noGit) return done({ exitCode: 127, stderr: 'git: command not found' })
       if (cmd === 'git' && machine.macStub) return done({ exitCode: 1, stderr: 'xcrun: error: invalid active developer path (/Library/Developer/CommandLineTools), missing xcrun at: /Library/Developer/CommandLineTools/usr/bin/xcrun\n' })
+      if (cmd === 'git' && machine.noCommit && rest.includes('commit')) machine.noCommit = false
       if (cmd === 'git' && machine.noCommit && rest[0] === 'rev-parse' && rest.includes('--verify')) return done({ exitCode: 1 })
       if (cmd === 'git' && machine.repo?.on && rest[0] === 'rev-parse') return done({ stdout: rest.includes('--show-toplevel') ? `${root}\n` : rest.includes('--show-cdup') ? '\n' : rest.includes('HEAD') ? 'abc\n' : 'true\n' })
       if (cmd === 'git' && rest[0] === 'init') machine.repo = { on: true }
@@ -150,7 +151,7 @@ test('T-844: /symcc-init in a folder with its own .git makes .symcc there, not i
 })
 
 test('T-861: /symcc-init in a folder with no .git still makes the board (symcc on, lead, panel open), shows the no-git notice, starts no worker; the Set up git action sets up git here, clears the notice and lets work start', async () => {
-  const w = world('a', '/home/me/proj', '/home/me', { uname: 'Darwin' })
+  const w = world('a', '/home/me/proj', '/home/me', { uname: 'Darwin', repo: { on: true }, noCommit: true })
   w.files.set('/home/me/.git', '')
   await sessionStart(w.host)
   const r = await runCommand(w.host, 'symcc-init', '')
@@ -161,16 +162,15 @@ test('T-861: /symcc-init in a folder with no .git still makes the board (symcc o
   expect(w.opened.length).toBe(1)
   expect(w.ran.filter(x => x.args.startsWith('init')).length).toBe(0)
   // the board says so: no repo here, nothing starts
-  expect(S.gitState).toBe('no-repo')
-  expect(w.panel.view()).toMatchObject({ on_here: true, git_state: 'no-repo', branch_note: expect.stringContaining('no git repo here') })
-  expect(gitNotice('no-repo', '', 'symcc')).toContain('No git repo here')
-  expect(gitNotice('no-repo', '', 'symcc')).toContain('No worker starts')
-  expect(w.toLead.join('\n') + (takeBoardUpdate() ?? '')).toContain('no git repo')
+  expect(S.gitState).toBe('no-commits')
+  expect(w.panel.view()).toMatchObject({ on_here: true, git_state: 'no-commits', branch_note: expect.stringContaining('no commits yet') })
+  expect(gitNotice('no-commits', '', 'symcc')).toContain('No commits yet')
+  expect(gitNotice('no-commits', '', 'symcc')).toContain('No worker starts')
+  expect(w.toLead.join('\n') + (takeBoardUpdate() ?? '')).toContain('no commits yet')
   // the button: git init here, the first commit, the notice goes
   const out = await setupGit(w.host, 'you')
   const inits = w.ran.filter(x => x.args.startsWith('init'))
-  expect(inits.length).toBe(1)
-  expect(inits[0]!.cwd).toBe('/home/me/proj')
+  expect(inits.length).toBe(0)
   expect(w.ran.some(x => x.args.includes('commit'))).toBe(true)
   expect(w.files.get('/home/me/proj/.gitignore')).toContain('.symcc/')
   expect(out).toBeTruthy()
@@ -225,7 +225,7 @@ test('T-861: on a Mac without the command-line tools, the /usr/bin/git stub (exi
 })
 
 test('T-861, T-887: git missing is looked at again only on Check again, never by the regular check or a panel open (the Mac stand-in opens an install pop-up); no repo here is looked at by the regular check', async () => {
-  const machine: { uname?: string; macStub?: boolean; repo?: { on: boolean } } = { uname: 'Darwin', macStub: true }
+  const machine: { uname?: string; macStub?: boolean; noCommit?: boolean; repo?: { on: boolean } } = { uname: 'Darwin', macStub: true, repo: { on: true }, noCommit: true }
   const w = world('a', '/home/me/proj', '/home/me', machine)
   await sessionStart(w.host)
   await runCommand(w.host, 'symcc-init', '')
@@ -241,12 +241,12 @@ test('T-861, T-887: git missing is looked at again only on Check again, never by
   expect(w.gits.n - before).toBe(0)
   expect(S.gitState).toBe('no-git')
   // Check again does look
-  expect((await runCommand(w.host, 'symcc-settings', 'git check'))?.text).toContain('No git repo here')
+  expect((await runCommand(w.host, 'symcc-settings', 'git check'))?.text).toContain('No commits yet')
   expect(w.gits.n > before).toBe(true)
-  expect(S.gitState).toBe('no-repo')
-  expect(w.panel.view()).toMatchObject({ git_state: 'no-repo' })
+  expect(S.gitState).toBe('no-commits')
+  expect(w.panel.view()).toMatchObject({ git_state: 'no-commits' })
   // git init and a first commit by hand: the next regular check (git is there, so no pop-up) clears it
-  machine.repo = { on: true }
+  machine.noCommit = false
   before = w.gits.n
   watchdogTick(w.host)
   await wait()
@@ -488,17 +488,17 @@ test('T-861: the /symcc-init description and help say plain init makes the board
 
 /** T-968: a new project with no git repo, the lead already told so, and one task ready to start. */
 async function noRepoWithTask() {
-  const machine: { uname?: string; repo?: { on: boolean } } = { uname: 'Darwin' }
+  const machine: { uname?: string; repo?: { on: boolean }; noCommit?: boolean } = { uname: 'Darwin', repo: { on: true }, noCommit: true }
   const w = world('a', '/home/me/proj', '/home/me', machine)
   w.files.set('/home/me/.git', '')
   await sessionStart(w.host)
   await runCommand(w.host, 'symcc-init', '')
-  expect(S.gitState).toBe('no-repo')
+  expect(S.gitState).toBe('no-commits')
   await change(w.host, b => addTask(b, { origin: { why: 'a test' }, title: 'Do it', details: 'Do it.\nDone when: done.', files: ['src/'] }, new Date().toISOString()))
   const wait = async () => { for (let i = 0; i < 300; i++) await Promise.resolve() }
   await wait()
   // the lead heard "no git repo" (and asks the owner); nothing started
-  expect(w.toLead.join('\n') + (takeBoardUpdate() ?? '')).toContain('no git repo')
+  expect(w.toLead.join('\n') + (takeBoardUpdate() ?? '')).toContain('no commits yet')
   w.toLead.splice(0)
   expect((await load(w.host)).tasks.map(t => t.status)).toEqual(['todo'])
   return { w, machine, wait }
@@ -530,7 +530,7 @@ test("T-968: the lead's own setup_git sends no extra board update (its tool answ
 
 test('T-968: Check again finds git the owner set up by hand: the lead gets one board update at once saying so, and the ready task starts', async () => {
   const { w, machine, wait } = await noRepoWithTask()
-  machine.repo = { on: true }
+  machine.noCommit = false
   expect((await runCommand(w.host, 'symcc-settings', 'git check'))?.text).toContain('git is ready')
   await wait()
   const update = takeBoardUpdate() ?? ''

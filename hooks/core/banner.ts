@@ -358,6 +358,10 @@ export type BannerLine = { art: string; parts: BannerPart[] }
 const projectTestsList = (b: { projects?: Record<string, { test_commands?: string[] }> }): string[] =>
   Object.entries(b.projects ?? {}).filter(([, x]) => x?.test_commands?.length).map(([p, x]) => `${p}: ${testsShort(x.test_commands ?? [])}`)
 
+/** T-1229: the projects with no test command of their own (a project never runs the board's), for a warning each. */
+export const projectsWithoutTests = (b: { projects?: Record<string, { test_commands?: string[] }> }): string[] =>
+  Object.entries(b.projects ?? {}).filter(([, x]) => !x?.test_commands?.length).map(([p]) => p)
+
 export type BannerBoard = Pick<Board, 'test_commands' | 'max_parallel' | 'max_minutes' | 'auto_retries'> & Partial<Pick<Board, 'archived' | 'projects'>> & { tasks: (Pick<SymccTask, 'status' | 'runs'> & Partial<Pick<SymccTask, 'note' | 'updated_at'>> & Pick<BoardTask, 'live'>)[]; home_branch?: string; /** T-1218: the board's friendly name, shown after the version */ board_name?: string; branch_line?: string; branch_note?: string; mode?: SymccMode; on_here?: boolean; off_here?: OffHere; /** T-952: the driving window (from lead.json) when this one doesn't drive */ driver?: DriverFacts }
 
 /** "2 doing", "1 to do", ... for each status in `order` that has tasks, in that order. */
@@ -435,7 +439,8 @@ export function bannerLines(b: BannerBoard, root: string, home: string, driving:
     fact(driving ? 'this session drives' : 'driven by another session'),
   ])
   const l3 = join([
-    b.test_commands.length || projectTestsList(b).length ? fact(`tests: ${[b.test_commands.length ? testsShort(b.test_commands) : '', ...projectTestsList(b)].filter(Boolean).join(' · ')}`) : [{ text: 'no test command', tone: 'warning' as const }],
+    ...(b.test_commands.length || projectTestsList(b).length ? [fact(`tests: ${[b.test_commands.length ? testsShort(b.test_commands) : '', ...projectTestsList(b)].filter(Boolean).join(' · ')}`)] : projectsWithoutTests(b).length ? [] : [[{ text: 'no test command', tone: 'warning' as const }]]),
+    ...projectsWithoutTests(b).map(p => [{ text: `${p}: no test command`, tone: 'warning' as const }]),
     fact(`${b.max_parallel} at once`),
     fact(`${b.max_minutes} min`),
     fact(`${b.auto_retries} ${b.auto_retries === 1 ? 'retry' : 'retries'}`),

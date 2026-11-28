@@ -3,7 +3,7 @@
 // T-656) and a report's "Learned:" lines (a host with no debrief) are only suggestions: they are kept on the task (keepSuggestions) and listed in the lead's board update when the task is
 // done (a dropped task's are thrown away; see the task event listener below). Only the lead changes org-mem, with its
 // orgmem tool (orgMemTool); the owner may delete notes on the org-mem page (its button is at the bottom of the Live tab) or edit the file by hand.
-import { addSuggestions, cleanTopic, deleteOrgMemNote, dropTaskIds, orgMemAdd, orgMemFile, orgMemList, orgMemNotes, orgMemRemove, orgMemReplace, orgMemSection, orgMemSetTopic, suggestedText, BAD_TOPIC, ORG_MEM_MAX_LINES, type OrgMemNewNote, type OrgMemNote } from '../core/org-mem'
+import { addSuggestions, cleanTopic, deleteOrgMemNote, dropTaskIds, orgMemAdd, orgMemFile, orgMemForProjects, orgMemList, orgMemNotes, orgMemRemove, orgMemReplace, orgMemSection, orgMemSetTopic, suggestedText, BAD_TOPIC, ORG_MEM_MAX_LINES, type OrgMemNewNote, type OrgMemNote } from '../core/org-mem'
 import { find, isFinished, type Board, type BoardTask } from '../core/board-file'
 import { patchTask } from '../core/task'
 import type { Host } from '../host'
@@ -22,8 +22,9 @@ async function readGuide(host: Host): Promise<string | null> {
 }
 
 /** Org-mem as a new agent's prompt shows it (see orgMemSection): '' when the file is missing, empty or can't be read. */
-export async function orgMemText(host: Host): Promise<string> {
-  return orgMemSection(await readGuide(host), orgMemFile(S.N.dir))
+export async function orgMemText(host: Host, project?: string | readonly string[]): Promise<string> {
+  const keep = typeof project === 'string' ? [project] : project
+  return orgMemSection(orgMemForProjects(await readGuide(host), Object.keys(S.projects), keep), orgMemFile(S.N.dir))
 }
 
 /**

@@ -417,6 +417,23 @@ export function dropTaskIds(guide: string | null | undefined): { text: string; c
   return { text: next, changed: next !== text }
 }
 
+/** T-1230: a project's name as a topic starts with it: lower case, "." and "_" turned into "-" (a topic can't hold them). */
+export const orgMemProjectWord = (name: string): string => String(name ?? '').toLowerCase().replace(/[._]/g, '-')
+
+/**
+ * T-1230: org-mem `guide` with only the lines that suit an agent on `keep` (project names): the general notes (a topic
+ * that starts with no project's name, `all`: every project of the board) plus the notes whose topic starts with a kept
+ * project's name ("api" or "api · tests"). No kept projects (an agent with no project): `guide` whole.
+ */
+export function orgMemForProjects(guide: string | null | undefined, all: readonly string[], keep: readonly string[] | undefined): string | null | undefined {
+  if (!keep?.length || !all.length) return guide
+  const starts = (topic: string, p: string) => topic === p || topic.startsWith(`${p} `)
+  const names = all.map(orgMemProjectWord)
+  const mine = keep.map(orgMemProjectWord)
+  const ok = new Set(orgMemNotes(guide).filter(x => mine.some(p => starts(x.topic, p)) || !names.some(p => starts(x.topic, p))).map(x => x.n))
+  return orgMemLines(guide).filter((_, i) => ok.has(i + 1)).join('\n')
+}
+
 /**
  * Org-mem as a prompt shows it: a short heading, then its last ORG_MEM_MAX_LINES lines (each cut, so a hand-edited
  * file can't flood the prompt). `file`: where it is, named in the heading. '' when org-mem is missing or empty.
