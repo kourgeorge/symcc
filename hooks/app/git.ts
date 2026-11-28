@@ -28,10 +28,16 @@ export const projectPath = (p: unknown): string | undefined => (typeof p === 'st
 /** T-1196: the project names of this board (its table), sorted. */
 export const projectNames = (): string[] => Object.keys(S.projects).sort()
 
+/** T-1205: task `t`'s project as written on it; undefined when it has none (no field, null or ''). */
+export const taskProject = (t?: object | null): unknown => {
+  const p = (t as { project?: unknown } | null | undefined)?.project
+  return p === null || p === '' ? undefined : p
+}
+
 /** T-1196: the sentence for a task whose project is not in the board's project table; '' when it is (or it has none). */
 export const projectGone = (t?: object | null): string => {
-  const p = (t as { project?: unknown } | null | undefined)?.project
-  return p === undefined || p === null || p === '' || projectPath(p) ? '' : `project '${String(p).slice(0, 80)}' is not in this board's project table`
+  const p = taskProject(t)
+  return p === undefined || projectPath(p) ? '' : `project '${String(p).slice(0, 80)}' is not in this board's project table`
 }
 
 /**
@@ -40,8 +46,8 @@ export const projectGone = (t?: object | null): string => {
  * from here. A project that is not in the table is refused.
  */
 export const repoOf = (t?: object | null): string => {
-  const p = (t as { project?: unknown } | null | undefined)?.project
-  if (p === undefined || p === null || p === '') return S.root
+  const p = taskProject(t)
+  if (p === undefined) return S.root
   const path = projectPath(p)
   if (!path) throw new Error(`'${String(p).slice(0, 80)}' is not in this board's project table`)
   return path
@@ -133,7 +139,7 @@ export async function installStepOf($: Host): Promise<string> {
 
 /** T-1154: the projects (folders below the board) that open tasks (not backlog, done or dropped) work in, sorted. */
 const isOpenTask = (t: { status?: unknown }) => !isFinished(t) && t.status !== 'backlog'
-export const openProjects = (b: Board): string[] => [...new Set(b.tasks.filter(t => isOpenTask(t)).map(t => (t as { project?: string }).project).filter((p): p is string => !!p && isProjectName(p)))].sort()
+export const openProjects = (b: Board): string[] => [...new Set(b.tasks.filter(t => isOpenTask(t)).map(t => taskProject(t)).filter(isProjectName))].sort()
 
 /** T-1154: what the last check found in the repo task `t` works in (the board's own repo when it has no project). */
 export const gitStateOfTask = (t?: object | null): GitState => {
@@ -174,7 +180,7 @@ export async function taskGitReady($: Host, b: Board, t: object | null | undefin
 
 /** T-1165: forgets the repos of projects with no open (todo/doing/waiting/review/failed/paused) task: they no longer count. */
 function forgetClosedRepos(b: Board): void {
-  const open = new Set(b.tasks.filter(t => isOpenTask(t)).map(t => (t as { project?: string }).project).filter((p): p is string => !!p && isProjectName(p)).flatMap(p => projectPath(p) ?? []))
+  const open = new Set(openProjects(b).flatMap(p => projectPath(p) ?? []))
   for (const r of [...S.repoGit.keys()]) if (!open.has(r)) S.repoGit.delete(r)
 }
 
@@ -266,7 +272,7 @@ async function removePlain($: Host, id: string, dir: string): Promise<boolean> {
 }
 
 /** T-1182: a task that runs in a plain folder (no git copy, no branch): an investigation or errand with no project on a workspace board. */
-export const plainTask = (t: object | null | undefined): boolean => workspaceNow() && !(t as { project?: string } | null | undefined)?.project && isInvestigation(t as { kind?: unknown })
+export const plainTask = (t: object | null | undefined): boolean => workspaceNow() && taskProject(t) === undefined && isInvestigation(t as { kind?: unknown })
 
 /** T-1182: why a change task can't have no project on a board over several repos; '' when there are no project folders. */
 export const changeNeedsProject = (names: readonly string[]): string =>
@@ -275,7 +281,7 @@ export const changeNeedsProject = (names: readonly string[]): string =>
 /** T-1178: on a workspace board, the open change tasks with no project (they can't start there; investigations and errands may have none, T-1182); '' when none or not a workspace. */
 export function noProjectText(b: Board): string {
   if (!workspaceNow()) return ''
-  const ids = b.tasks.filter(t => isOpenTask(t) && !isProjectName((t as { project?: string }).project ?? '') && !isInvestigation(t)).map(t => t.id)
+  const ids = b.tasks.filter(t => isOpenTask(t) && !isProjectName(taskProject(t)) && !isInvestigation(t)).map(t => t.id)
   if (!ids.length) return ''
   const many = ids.length > 1
   return `${ids.join(', ')} ${many ? 'have' : 'has'} no project, so ${many ? "they can't" : "it can't"} start on a board over several repos (a change task needs a project); give ${many ? 'each' : 'it'} a project (${S.N.name} change project)`
