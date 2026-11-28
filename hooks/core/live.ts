@@ -599,7 +599,6 @@ export function liveNeeds(view: LiveView & { questions?: readonly { id: string; 
     if (t.status === 'failed') return row(t.id, `failed: ${whyFailed(t)}`)
     const files = fileWaitText(t)
     if (files) return row(t.id, `asks: ${files}`)
-    if (t.status === 'doing' && t.live?.ask?.text) return row(t.id, `asks: ${t.live.ask.text}`)
     return row(t.id, `asks: ${taskAsks(t)?.text ?? t.title}`)
   })
   return [...qs, ...ts]
@@ -856,11 +855,8 @@ export function liveTrains(view: LiveView, nowMs: number, lanes: readonly LiveLa
   const rank = new Map(todo.map((t, i) => [t.id, i]))
   const open = new Map(todo.map(t => [t.id, openAfter(board, t)]))
   const parent = new Map<string, string>()
-  /** T-1210: a task that needs the owner and has no lane here: never named in "+ also". */
-  const hidden = (a: string) => {
-    const t = byId.get(a)
-    return !!t && !laneOf.has(a) && t.status !== 'todo' && needsYou(t as BoardTask, nowMs)
-  }
+  /** T-1217: "+ also" names only a task drawn in Tasks (a lane or a hung train). */
+  const hidden = (a: string) => !laneOf.has(a) && !parent.has(a)
   /** Whether `id`'s chain of parents (up to a lane) passes `through`. */
   const under = (id: string, through: string) => {
     const seen = new Set<string>()

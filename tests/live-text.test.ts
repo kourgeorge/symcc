@@ -118,6 +118,24 @@ test('T-1210: a task that needs the owner and the tasks waiting on it are not dr
   expect(back).toContain('+ also')
 })
 
+test('T-1217: "+ also" leaves out a task that is not drawn, and keeps a drawn one', () => {
+  const now = Date.now()
+  const iso = new Date(now).toISOString()
+  let b = emptyBoard()
+  const afters: Record<number, string[]> = { 2: ['T-1'], 4: ['T-2', 'T-3'], 6: ['T-3', 'T-5'] }
+  for (const [i, title] of ['Asks', 'Waits on asks', 'Runs', 'Waits on two', 'Runs too', 'Waits on lanes'].entries()) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'], after: afters[i + 1] ?? [] }, iso)[0]
+  const run = { started: iso, agents: [] }
+  const ask = { by: 'worker', text: 'Which one?', options: ['a', 'b'], asked_at: iso }
+  const board = {
+    ...b,
+    tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? { status: 'waiting', ask } : t.id === 'T-3' || t.id === 'T-5' ? { status: 'doing', runs: [run] } : {}) }) as BoardTask),
+  } as Board
+  const tasks = statusSection(liveStatusText(board as never, [], now), 'TASKS').join('\n')
+  expect(tasks).not.toContain('T-2')
+  expect(tasks).toMatch(/T-4 Waits on two {2}waits$/m)
+  expect(tasks).toMatch(/T-6 Waits on lanes.*\+ also T-[35]/)
+})
+
 test('T-1210: a running task asking for more time is in NEEDS YOU, not in TASKS, and its trains go too', () => {
   const now = Date.now()
   const iso = new Date(now).toISOString()
