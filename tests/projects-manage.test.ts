@@ -7,6 +7,8 @@ import { change, load } from '../hooks/app/store'
 import { saveSettings } from '../hooks/app/tools'
 import { addProject } from '../hooks/app/projects'
 import { readBranches } from '../hooks/app/branches'
+import { useFriendly } from '../hooks/app/board-name'
+import { taskBranch } from '../hooks/app/worktree'
 import { S, leadQueue, scoutState } from '../hooks/app/state'
 import { loadScouts, scheduleScouts } from '../hooks/app/scouts'
 import { addTask, emptyBoard, settingWithProjects } from '../hooks/board'
@@ -68,7 +70,6 @@ test('each add check refuses with a plain reason; a good add stores the real pat
   expect(await err({ project: 'api', path: '/code/notrepo' })).toContain('not a git repo')
   expect(await err({ project: 'api', path: '/code/api/src' })).toContain("not the repo's top folder")
   expect(await err({ project: 'api', path: '/code/empty' })).toContain('no commits')
-  expect(await err({ project: 'api', path: '/code/own' })).toContain('board of its own')
   expect(await err({ project: 'api', path: '/code/.symcc/x' })).toContain('inside a .symcc folder')
   expect(await err({ project: 'a/b', path: '/code/api' })).toContain('not a project name')
   expect(await err({ project: 'api', path: '/code/api', test_commands: ['x'] })).toContain('no other setting')
@@ -218,6 +219,19 @@ test('T-1212: a project with test commands but no path can be given a path', asy
   expect(r.error).toBe(undefined)
   expect((await load(w.host)).projects).toEqual({ api: { test_commands: ['pytest'], path: '/real/api' } })
   expect(S.projects.api).toBe('/real/api')
+})
+
+test('T-1218: a repo with a board of its own can be a project now', async () => {
+  const { w } = await world({ '/code/own': { top: '/code/own' } }, ['/code/own/.symcc/board.json'])
+  const r = await set(w, { project: 'own', path: '/code/own' })
+  expect(r.error).toBe(undefined)
+  expect(S.projects.own).toBe('/code/own')
+  // both boards' T-1 branches in that repo stay apart
+  useFriendly('power-falcon')
+  const a = taskBranch({ id: 'T-1', branch: undefined as never })
+  useFriendly('quiet-river')
+  const b = taskBranch({ id: 'T-1', branch: undefined as never })
+  expect([a, b]).toEqual(['symcc/power-falcon/T-1', 'symcc/quiet-river/T-1'])
 })
 
 // T-1223: a scouts folder that can't be read keeps the old timers and does not fail a project add; a good reschedule replaces them

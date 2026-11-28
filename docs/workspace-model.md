@@ -15,7 +15,7 @@ may have moved.
 |---|---|
 | Workspace | A folder that holds a symcc board (`.symcc/`), for example `~/repositories`. |
 | Project | A git repo at any path on disk, listed by name and path in the board's project table, for example `rubrica` → `~/repositories/rubrica`. |
-| Worker copy | A git worktree (a second checkout of a repo, sharing its history) where one worker does one task, on branch `symcc/T-n`. |
+| Worker copy | A git worktree (a second checkout of a repo, sharing its history) where one worker does one task, on branch `symcc/<board-name>/T-n`. |
 | Lead | The agent you talk to. It plans tasks and runs the board. |
 | Scout | An agent that looks for work on a schedule and suggests tasks. |
 
@@ -27,7 +27,7 @@ may have moved.
 2. **Repos stay where they are.** symcc copies nothing. The board keeps a table of projects,
    each a name and the path of a repo anywhere on disk (this replaces "folders below the
    workspace"). The lead adds one only on your yes. A task names its project (for example `rubrica`). The worker
-   copy is a git worktree of that repo, on a `symcc/T-n` branch, merged into that repo's own
+   copy is a git worktree of that repo, on a `symcc/<board-name>/T-n` branch, merged into that repo's own
    branch. symcc also stores optional per-project settings, such as a test command when it
    can't be guessed. The Live tab's Branches section has one block per repo with open tasks.
 3. **A task need not belong to a project.** Research runs in a plain scratch folder and its

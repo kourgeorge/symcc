@@ -206,7 +206,8 @@ test('a task sent back to todo because its worker was stopped gets a fresh worke
   }
   // (the test kit can't hand the plugin the new agent's id, so the start itself then counts as failed)
   expect(w.spawned).toEqual(['symcc-T-1'])
-  expect(w.task('T-1').branch).toBe('symcc/T-1')
+  // (the unnamed board got its name at the start)
+  expect(w.task('T-1').branch).toMatch(/^symcc\/[a-z]+-[a-z]+\/T-1$/)
 })
 
 test('a worker stopped on purpose (pause) does not make the regular check send its task back, even while the stop is slow', async ($, on) => {

@@ -30,7 +30,6 @@ async function checkRepo($: Host, path: string): Promise<{ error: string } | { t
   if (real.split('/').includes(S.N.dir)) return { error: `Nothing changed: ${path} is inside a ${S.N.dir} folder` }
   const head = await git($, ['rev-parse', '--verify', '-q', 'HEAD'], real, 15_000).catch(() => null)
   if (!head || head.exitCode !== 0) return { error: `Nothing changed: the repo ${real} has no commits yet` }
-  if (await $.fs.exists(`${real}/${S.N.boardFile.replace(/^\/+/, '')}`).catch(() => false)) return { error: `Nothing changed: the repo ${real} has a ${S.N.name} board of its own (${S.N.boardFile}); a project can't be a repo with its own board` }
   return { top: real }
 }
 

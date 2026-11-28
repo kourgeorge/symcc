@@ -10,6 +10,7 @@ import { repoOf } from '../../../hooks/app/git'
 import { prepareWorktree, removeWorktree, worktreeDir } from '../../../hooks/app/worktree'
 import { load } from '../../../hooks/app/store'
 import { find, intoOf } from '../../../hooks/board'
+import { S } from '../../../hooks/app/state'
 
 const FAKE = `${PLUGIN_ROOT}/hosts/node/tests/fake-claude.sh`
 
@@ -41,10 +42,10 @@ test('T-1152: a task with project client gets its copy as a worktree of client, 
       expect(made.dir).toBe(worktreeDir('T-1'))
       expect(made.dir).toBe(`${board}/.symcc/worktrees/T-1`)
       // the copy is a worktree of client, on symcc/T-1, with client's files
-      expect((await git(made.dir, 'rev-parse', '--abbrev-ref', 'HEAD')).stdout.trim()).toBe('symcc/T-1')
+      expect((await git(made.dir, 'rev-parse', '--abbrev-ref', 'HEAD')).stdout.trim()).toBe(S.N.branch('T-1'))
       expect((await git(made.dir, 'rev-parse', '--git-common-dir')).stdout.trim()).toBe(`${board}/client/.git`)
       expect((await git(`${board}/client`, 'worktree', 'list')).stdout).toContain('.symcc/worktrees/T-1')
-      expect((await git(`${board}/client`, 'rev-parse', 'symcc/T-1')).stdout).toBe((await git(`${board}/client`, 'rev-parse', 'dev')).stdout)
+      expect((await git(`${board}/client`, 'rev-parse', S.N.branch('T-1'))).stdout).toBe((await git(`${board}/client`, 'rev-parse', 'dev')).stdout)
       expect((await git(`${board}/server`, 'worktree', 'list')).stdout).not.toContain('T-1')
       // removing it cleans up in client
       expect(await removeWorktree(s.host, 'T-1', made.dir)).toBe(true)

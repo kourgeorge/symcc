@@ -255,7 +255,7 @@ To rename it:
    you, and nothing tells you: until you move it, the plugin starts a new, empty board.
 4. Update `.gitignore` to ignore the new folder (`.crew/`).
 
-Old task branches keep their old names (`symcc/T-1`); they still work.
+Task branches are `symcc/<board-name>/T-n`; a board from before board names has its open `symcc/T-n` branches renamed once.
 
 ### Adding a blog post to the site
 

@@ -1,6 +1,6 @@
 import type { SymccTask, SymccTokens } from '../../types'
 import { doneLine, PREP_NOTE, makeAsk, type Board, type BoardTask, type RoleDef, roleSection, mayStart, modeOf, ready, patchTask, putTask, find, startRun, findRole, roleOf, workerName, workerDescription, onNotReady, endRun, tryLabel, needFilesQuestion, DEFAULT_AUTO_RETRIES, onTestFail, intoOf, goneBranchQuestion, goneBranchOptions, liveDriver, emptyBoard, ownedHere, backToTodo, stoppedEntry, withTimeline, timelineEntry, type TimelineAdd, type TimelineFacts, tryEntry, resultEntry, notUsedEntry, taskWasResult, type TimelineKind, cutLine, reportFile, reportText, endedBy, withEnd, finishedNote, inPlan, mergedThisTry, mergedDone, handedBack, addCommits, FINISH_BEAT_MS, finishLimitMs, mergeTestCount, testMinutesOf, ranOverNote, waitsForFiles, waitFilesNote, timeLimitOf, WRAP_UP_TEXT, outOfTimeNote, checkerOn, docsOnly, checkerOutput, checkerLine, checkerProblems, problemsBlockLines, CHECKER_PROBLEMS_MAX, isInvestigation, isErrand, errandFolders, ANSWER_MAX_CHARS, addTask, taskReports, investigationDone, keepNoteTask, noteFilesInUse, ANSWERED, fillPrompt, shortSha, secretsLeftText, gaveUpTestsText, endedEarlyLine, endedEarlyNote, ENDED_EARLY_NOTE, isUsageLimit, workerStartedEntry, workerHandedBackEntry, withFailedTests, withAgentUsed, goOnRun, undoGoOn, restartsOf, restartedAgent, workerIdOf, checkerIdOf, onTask, withWorkerStart, DEFAULT_ROLE, workerSince, isProseRole, checkerSendBacks, CHECKER_SEND_BACKS, checkerAskText, CHECKER_ASK_OPTIONS, firstProblemOf, CHECKER_MARK } from '../board'
-import { repoOf, plainTask, projectGone, gitReady, taskGitReady, branchExists, homeBranch, git } from './git'
+import { repoOf, plainTask, projectGone, gitReady, taskGitReady, branchExists, homeBranch, git, gitLines } from './git'
 import { prepareWorktree, removeWorktree, worktreeDir, taskWork, resetScratch, clearScratch, taskBranch, copyReports, deleteMergedBranch, type BehindWhy } from './worktree'
 import { publish, drivesHere, drivenElsewhere, readLeadText } from './lead'
 import { type BeforeLine, type CheckResult, checkAndMerge, recordCommits, alreadyMerged, RELOAD_AGAIN, noteAgain } from './review'
@@ -47,10 +47,7 @@ export async function changedSince(host: Host, t: BoardTask, dir: string, nowMs 
   if (!mayBeStale(t, nowMs)) return null
   let tracked: string[] = []
   const named = t.files?.length ? [] : pathsNamed(`${t.title ?? ''}\n${t.details ?? ''}`)
-  if (named.length) {
-    const r = await git(host, ['ls-files', '--', ...named], dir).catch(() => null)
-    tracked = r && r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trim()).filter(Boolean) : []
-  }
+  if (named.length) tracked = await gitLines(host, ['ls-files', '--', ...named], dir)
   const { paths, scope } = changedSincePaths(t, tracked)
   // --no-merges: the "bring up to date with main" merges would fill the lines
   const range = ['--no-merges', `--since=${t.created_at}`, `refs/heads/${intoOf(t)}`, ...(paths.length ? ['--', ...paths] : [])]
@@ -58,10 +55,7 @@ export async function changedSince(host: Host, t: BoardTask, dir: string, nowMs 
   const total = count && count.exitCode === 0 ? Number(count.stdout.trim()) : NaN
   if (!Number.isFinite(total) || total <= 0) return null
   let commits: string[] = []
-  if (scope !== 'none') {
-    const r = await git(host, ['log', '--format=%h %s', '-n', String(CHANGED_SINCE_MAX), ...range], dir).catch(() => null)
-    commits = r && r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trim()).filter(Boolean) : []
-  }
+  if (scope !== 'none') commits = await gitLines(host, ['log', '--format=%h %s', '-n', String(CHANGED_SINCE_MAX), ...range], dir)
   return { created: t.created_at, nowMs, commits, total, scope }
 }
 
@@ -71,8 +65,7 @@ export async function changedSince(host: Host, t: BoardTask, dir: string, nowMs 
  */
 export async function earlierCommits(host: Host, t: BoardTask, dir: string): Promise<string[]> {
   if (!t.runs?.some(r => r.commits?.length)) return []
-  const r = await git(host, ['log', '--format=%h %s', '-n', '10', `refs/heads/${intoOf(t)}..HEAD`], dir).catch(() => null)
-  return r && r.exitCode === 0 ? r.stdout.split('\n').map(l => l.trim()).filter(Boolean) : []
+  return gitLines(host, ['log', '--format=%h %s', '-n', '10', `refs/heads/${intoOf(t)}..HEAD`], dir)
 }
 
 /**

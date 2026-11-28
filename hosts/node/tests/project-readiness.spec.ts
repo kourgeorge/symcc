@@ -70,7 +70,7 @@ test('T-1154: readiness, Changes, Branch facts and the doctor look at each task\
       const files = await changedFiles(s.host, intoOf(t1), t1)
       expect(files.map(f => f.file)).toEqual(['new.txt'])
       const facts = await readTaskBranch(s.host, { ...t1, branch: m1.branch }, intoOf(t1), Date.now())
-      expect(facts?.branch).toBe('symcc/T-1')
+      expect(facts?.branch).toBe(S.N.branch('T-1'))
       expect(facts?.into).toBe('dev')
       expect(facts?.ahead).toBe(1)
 
@@ -80,14 +80,14 @@ test('T-1154: readiness, Changes, Branch facts and the doctor look at each task\
       await writeFile(`${m2.dir}/s.txt`, 's\n')
       await git(m2.dir, 'add', '.')
       await git(m2.dir, 'commit', '-qm', 'server change')
-      await git(`${board}/server`, 'merge', '-q', '--ff-only', 'symcc/T-2')
+      await git(`${board}/server`, 'merge', '-q', '--ff-only', S.N.branch('T-2'))
       await git(`${board}/server`, 'worktree', 'remove', '--force', m2.dir)
       await change(s.host, b => patchTask(b, 'T-2', { status: 'done' }, now()))
-      expect(await leadTool(s, 'doctor', {})).toContain('symcc/T-2')
+      expect(await leadTool(s, 'doctor', {})).toContain(S.N.branch('T-2'))
       expect(await leadTool(s, 'doctor', { fix: 'all' })).not.toContain('could not')
-      expect((await git(`${board}/server`, 'branch', '--list', 'symcc/T-2')).stdout.trim()).toBe('')
+      expect((await git(`${board}/server`, 'branch', '--list', S.N.branch('T-2'))).stdout.trim()).toBe('')
       // the client branch is untouched
-      expect((await git(`${board}/client`, 'branch', '--list', 'symcc/T-1')).stdout).toContain('symcc/T-1')
+      expect((await git(`${board}/client`, 'branch', '--list', S.N.branch('T-1'))).stdout).toContain(S.N.branch('T-1'))
 
       // a project change: refused while a copy exists; with none yet, merge_into follows the new repo's branch
       expect(await msg(leadTool(s, 'change', { task: 'T-1', project: 'server' }))).toContain('already has a copy in client; drop and re-add it, or finish it first')

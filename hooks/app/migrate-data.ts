@@ -12,6 +12,8 @@ import { safeScoutFile, scoutRunReportFile, scoutRunsText } from '../core/scouts
 import { type OldInput, migratedScoutRun, oldDataRows, upgradeArchiveTask, upgradeBoard, upgradeScoutFile, upgradeScoutUsage } from '../core/old-data'
 import { BACKUP_MARK } from '../core/doctor'
 import { isObj } from '../core/text'
+import { isBoardName } from '../core/board-name'
+import { newFriendlyName, renameOldBranches, useFriendly } from './board-name'
 import type { Host } from '../host'
 import { S, loadVersion } from './state'
 import { fileName, isStubbed, locked, now, path, readBoardRaw, readWhole, safeWrite, saveBoard } from './store'
@@ -295,11 +297,25 @@ async function backUp(host: Host): Promise<string> {
 }
 
 /**
+ * T-1218: a board with no name (whatever made it: an empty new board, an old shape, a hand-written file) gets one now:
+ * the migration names it, moves its open branches and saves it. Nothing happens for a named board. Never throws.
+ */
+export async function nameIfMissing(host: Host): Promise<void> {
+  try {
+    if (S.guardOnly || !S.root) return
+    const raw = await readBoardRaw(host)
+    if (isObj(raw) && !isBoardName(raw.name)) await migrateData(host, undefined, true)
+  } catch {
+    // the board stays as it is; the next start tries again
+  }
+}
+
+/**
  * Saves every data file once in today's shape, after a backup: board.json and its parts, the archive files, scouts.json
  * (usage totals, each scout's last report into its runs file) and field-guide.md as org-mem.md. Answers '' failed and
  * the lines of what it changed in `done`; a failure before the backup is complete changes nothing.
  */
-export async function migrateData(host: Host, reuseBackup?: string): Promise<{ failed: string; done: string[]; backup?: string }> {
+export async function migrateData(host: Host, reuseBackup?: string, nameIt = false): Promise<{ failed: string; done: string[]; backup?: string }> {
   if (S.guardOnly) return { failed: 'this window only guards a worker folder', done: [] }
   lastFailure = null // the owner (or a changed file) asks for it: try again
   const done: string[] = []
@@ -316,8 +332,24 @@ export async function migrateData(host: Host, reuseBackup?: string): Promise<{ f
     // 1. board.json and its parts files
     const raw = await readBoardRaw(host)
     if (raw !== null) {
-      const read = readBoardValue(upgradeBoard(raw, S.root, await repoFolders(host)))
+      // T-1218: a board without a name gets one (a name no repo of the board has branches under)
+      // (an old shape here; any other unnamed board is named by nameIfMissing)
+      const unnamed = isObj(raw) && !isBoardName(raw.name) && (nameIt || (typeof raw.data_version === 'number' ? raw.data_version < 3 : raw.version === 1))
+      const upgraded = upgradeBoard(raw, S.root, await repoFolders(host))
+      // the project repos count too (the window's table is not loaded yet when the migration runs at session start)
+      if (isObj(upgraded) && isObj(upgraded.projects))
+        S.projects = Object.fromEntries(Object.entries(upgraded.projects).flatMap(([n, p]) => (isObj(p) && typeof p.path === 'string' && p.path ? [[n, p.path] as const] : [])))
+      const named = unnamed && isObj(upgraded) ? { ...upgraded, name: await newFriendlyName(host) } : upgraded
+      const read = readBoardValue(named)
       if (read.broken) return `board.json: ${read.broken}`
+      if (read.board.name) {
+        useFriendly(read.board.name)
+        if (unnamed) done.push(`board.json: the board is named ${read.board.name}`)
+        // and its open symcc/T-n branches (this board's tasks only) move to symcc/<name>/T-n
+        const moved = await renameOldBranches(host, read.board, read.board.name)
+        read.board = moved.board
+        for (const l of moved.lines) done.push(l)
+      }
       await saveBoard(host, read.board)
       done.push(`board.json: ${read.board.tasks.length} tasks saved in the current shape`)
       if (read.skipped || read.fixed.length) done.push(`board.json: ${read.skipped} entries skipped, fixed: ${read.fixed.join('; ') || 'none'}`)

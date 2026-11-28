@@ -310,7 +310,7 @@ function orgMem(): PanelOrgMem {
 }
 
 const ROOT = '/home/dana/src/billing-service'
-const tree = (task: string, more: Partial<PanelWorktree>): PanelWorktree => ({ path: `${ROOT}/.symcc/worktrees/${task}`, where: `.symcc/worktrees/${task}`, kind: 'task', task, branch: `symcc/${task}`, head: 'a1b2c3d4e', base: 'main', ahead: 0, behind: 0, files: [], dirty: 0, untracked: 0, commits: [], lastCommitMs: m(12), ...more })
+const tree = (task: string, more: Partial<PanelWorktree>): PanelWorktree => ({ path: `${ROOT}/.symcc/worktrees/${task}`, where: `.symcc/worktrees/${task}`, kind: 'task', task, branch: `symcc/power-falcon/${task}`, head: 'a1b2c3d4e', base: 'main', ahead: 0, behind: 0, files: [], dirty: 0, untracked: 0, commits: [], lastCommitMs: m(12), ...more })
 let worktrees: PanelWorktree[] = [
   tree('T-42', { ahead: 2, behind: 1, dirty: 3, untracked: 1, files: [{ file: 'src/invoices/csv.ts', added: 148, removed: 0 }, { file: 'src/invoices/routes.ts', added: 31, removed: 6 }, { file: 'test/invoices/csv.test.ts', added: 33, removed: 2 }], commits: [{ sha: '9f1c2ab', subject: 'Add the CSV writer for invoices', atMs: m(9) }, { sha: '4d7e0aa', subject: 'Route GET /invoices.csv', atMs: m(3) }] }),
   tree('T-43', { ahead: 1, files: [{ file: 'test/dates.test.ts', added: 6, removed: 4 }], commits: [{ sha: '17bd2e0', subject: 'Build “today” from UTC in the date test', atMs: m(1) }] }),
