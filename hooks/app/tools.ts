@@ -1139,7 +1139,7 @@ export async function saveSettings($: Host, a: SettingsInput, who: string): Prom
       const r = a.remove === true ? await removeProject($, name) : projectNames().includes(name) ? await changeProjectPath($, name, a.path as string) : await addProject($, name, a.path as string)
       if ('error' in r) return { error: r.error, changes: [] }
       // T-1216: a scout's "unknown project" warning follows the project list
-      await scheduleScouts($)
+      await scheduleScouts($).catch(() => undefined)
       void pump($)
       return { changes: [{ name: 'test_commands', value: r.text, said: r.text, cut: '' }] }
     }
