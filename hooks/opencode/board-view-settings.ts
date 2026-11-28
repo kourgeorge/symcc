@@ -140,9 +140,6 @@ export const defButtons = (list: DefList, d: ViewDef): PanelButton[] => [
   ...(d.canRemove ? [{ label: 'Remove', hit: { key: 'd' as const } }] : []),
 ]
 
-/** The "+ New role" and "+ New task type" buttons (n), as on Claude Code's Roles and Kinds pages (+ New scout: board-view-scouts.ts). */
-export const NEW_ROLE_BUTTON: PanelButton = { label: '+ New role', hit: { key: 'n' } }
-export const NEW_KIND_BUTTON: PanelButton = { label: '+ New task type', hit: { key: 'n' } }
 /** What a role's or kind's Remove asks before it sends the command (Claude Code's words). */
 export const removeAsk = (list: DefList, d: ViewDef) => `Remove ${list === 'roles' ? 'role' : 'task type'} ${d.name} and delete ${d.file}?`
 
