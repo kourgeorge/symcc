@@ -1,7 +1,7 @@
 // T-600, T-632: organizational memory (org-mem) (core/org-mem.ts): "Learned:" suggestions from a report, cleaned and kept once; the
 // lead's add / remove / replace / list; the limit; and org-mem shown in prompts.
 import { expect, test } from 'claude-code/testing'
-import { addSuggestions, suggestedText, orgMemAdd, orgMemRemove, orgMemReplace, orgMemList, dropTaskIds, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, DEBRIEF_TEXT, debriefLines, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemAbout, deleteOrgMemNote, orgMemNoteKey, ORG_MEM_EMPTY, cleanTopic, orgMemSetTopic, orgMemTopics, TOPIC_MAX_CHARS } from '../hooks/core/org-mem'
+import { orgMemForProjects, addSuggestions, suggestedText, orgMemAdd, orgMemRemove, orgMemReplace, orgMemList, dropTaskIds, cleanLearned, orgMemSection, sameLesson, splitLearned, ORG_MEM_MAX_LINES, LEARNED_LINE_CHARS, LEARNED_ASK, DEBRIEF_TEXT, debriefLines, orgMemNotes, orgMemNoteHead, orgMemCount, orgMemAbout, deleteOrgMemNote, orgMemNoteKey, ORG_MEM_EMPTY, cleanTopic, orgMemSetTopic, orgMemTopics, TOPIC_MAX_CHARS } from '../hooks/core/org-mem'
 import { parseCommand } from '../hooks/core/commands'
 import { checkerVerdict, fillPrompt, scoutPrompt, PROMPT_KINDS, BUILT_IN_PROMPTS } from '../hooks/board'
 import { checkerPrompt } from '../hooks/core/checker'
@@ -345,4 +345,20 @@ test('T-717: list shows each note with its number and topic, then the topics wit
   expect(orgMemList(g, '.symcc/org-mem.md')).toBe(`.symcc/org-mem.md: 3 notes (at most ${ORG_MEM_MAX_LINES}), oldest first:\n#1 2026-11-18 [unsorted] a\n#2 ${D} [git] b\n#3 ${D} [git] c\nTopics (2): git 2, unsorted 1`)
   // a topic disappears when its last note goes
   expect(orgMemList(orgMemRemove(g, 1).text, '.symcc/org-mem.md')).toContain('Topics (1): git 2')
+})
+
+test('T-1230: org-mem notes follow their repo: a topic starting with the project name', () => {
+  const g = `- ${D} [tests] general\n- ${D} [api · tests] api one\n- ${D} [web · ui] web one\n- ${D} [my-app] dotted\n- ${D}: old line\n`
+  const all = ['api', 'web', 'my_app']
+  const lines = (s: string | null | undefined) => String(s ?? '').split('\n').filter(Boolean).map(l => l.replace(/^- \S+:? (\[[^\]]*\] )?/, ''))
+  // a worker on api: general notes and api's, not web's
+  expect(lines(orgMemForProjects(g, all, ['api']))).toEqual(['general', 'api one', 'old line'])
+  // "." and "_" in a project name read as "-"
+  expect(lines(orgMemForProjects(g, all, ['my_app']))).toEqual(['general', 'dotted', 'old line'])
+  // a scout on two repos
+  expect(lines(orgMemForProjects(g, all, ['api', 'web']))).toEqual(['general', 'api one', 'web one', 'old line'])
+  // no project, or a board with no projects: everything, as written
+  expect(orgMemForProjects(g, all, undefined)).toBe(g)
+  expect(orgMemForProjects(g, all, [])).toBe(g)
+  expect(orgMemForProjects(g, [], ['api'])).toBe(g)
 })
