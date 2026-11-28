@@ -2,7 +2,7 @@
 import type { SymccTask } from '../../types'
 import { median, taskFigures } from './stats'
 import { padWidth, textWidth, wrapLine } from './width'
-import { gapsOf, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, tokenCount, TOKEN_SIGN, fmtTok } from './runs'
+import { agentMs, checkerTokensOf, tryCost, tryTokens, fmtCost, fmtDuration, fmtTokens, tokenCount, TOKEN_SIGN, fmtTok } from './runs'
 import { dayOf, localOffset } from './days'
 import { TOKENS_NOTE, type LiveView } from './live'
 import { marksOf, sentBackOf, type LiveSeg, segs, segText, fitText, ms, type TodayWho } from './live-seg'
@@ -131,11 +131,7 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
     for (const r of t.runs ?? []) {
       const start = ms(r.started)
       const end = ms(r.ended)
-      if (start !== undefined) {
-        const from = Math.max(start, dayStart)
-        const to = Math.min(end ?? nowMs, nowMs)
-        if (to > from) workMs += to - from - gapsOf(r).reduce((n, g) => n + Math.max(0, Math.min(g.to, to) - Math.max(g.from, from)), 0)
-      }
+      workMs += agentMs(r, nowMs, dayStart)
       const at = end ?? start
       if (!tryTokens(r) || !isToday(at)) continue
       const all = tokenCount(tryTokens(r))
@@ -153,7 +149,7 @@ export function todayMore(tasks: readonly SymccTask[], team: TodayTeam | undefin
     const f = taskFigures(t)
     if (f.tok !== undefined) tok.push(f.tok)
     if (f.hasData) {
-      work.push(f.ms)
+      work.push((t.runs ?? []).reduce((s, r) => s + agentMs(r, nowMs), 0))
       tries.push(f.tries)
     }
     const first = ms(t.runs?.[0]?.started)
@@ -378,9 +374,7 @@ export function pastDays(tasks: readonly SymccTask[], nowMs: number, days: numbe
       const end = ms(r.ended)
       if (tryTokens(r) && inside(end ?? start)) tokens += tokenCount(tryTokens(r))
       if (start === undefined) continue
-      const a = Math.max(start, from)
-      const b = Math.min(end ?? nowMs, to)
-      if (b > a) workMs += b - a - gapsOf(r).reduce((n, g) => n + Math.max(0, Math.min(g.to, b) - Math.max(g.from, a)), 0)
+      workMs += agentMs(r, nowMs, from, to)
     }
   }
   return { merged, tokens, workMs: Math.max(0, workMs) }

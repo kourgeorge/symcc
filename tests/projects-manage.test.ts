@@ -72,7 +72,7 @@ test('each add check refuses with a plain reason; a good add stores the real pat
   expect(await err({ project: 'api', path: '/code/empty' })).toContain('no commits')
   expect(await err({ project: 'api', path: '/code/.symcc/x' })).toContain('inside a .symcc folder')
   expect(await err({ project: 'a/b', path: '/code/api' })).toContain('not a project name')
-  expect(await err({ project: 'api', path: '/code/api', test_commands: ['x'] })).toContain('no other setting')
+  expect(await err({ project: 'api', path: '/code/api', max_parallel: 3 })).toContain('no other setting')
   expect((await load(w.host)).projects).toBe(undefined)
   const ok = await set(w, { project: 'api', path: '/code/api/' })
   expect(ok.error).toBe(undefined)
@@ -80,8 +80,8 @@ test('each add check refuses with a plain reason; a good add stores the real pat
   expect(S.projects).toEqual({ api: '/real/api' })
   // the name is taken; the same repo can't be two projects; ~ is the home folder
   expect(await err({ project: 'api', path: '/code/api' })).toBe('')
-  expect('error' in (await addProject(w.host, 'api', '/code/api'))).toBe(true)
-  expect(await err({ project: 'api2', path: '/code/api' })).toContain("already the project 'api'")
+  expect('text' in (await addProject(w.host, 'api', '/code/api'))).toBe(true)
+  expect(await err({ project: 'api2', path: '/code/api' })).toBe('')
   expect((await set(w, { project: 'web', path: '~/web' })).error).toBe(undefined)
   expect(S.projects.web).toBe('/real/web')
 })
@@ -264,4 +264,25 @@ test('a failed scouts reload keeps the old timers and the project add still answ
   await scheduleScouts(w.host)
   expect(live.size).toBe(before.length)
   expect(before.some(id => live.has(id))).toBe(false)
+})
+
+// T-1226: add a repo in one call: a path alone, the folder's name, a clash suggestion, test commands along, an old path answers.
+test('a path alone adds the project named after its folder; clash, tests and repeats', async () => {
+  const { w } = await world({ '/code/api': { top: '/code/api' }, '/work/api': { top: '/work/api' }, '/code/My App': { top: '/code/My App' } })
+  expect((await set(w, { path: '/code/api' })).error).toBe(undefined)
+  expect(S.projects.api).toBe('/code/api')
+  // the same folder name from another place is refused with a <parent>-<name> suggestion
+  const clash = await set(w, { path: '/work/api' })
+  expect(clash.error ?? '').toContain("use the name 'work-api'")
+  expect((await load(w.host)).projects).toEqual({ api: { path: '/code/api' } })
+  // project + path + test_commands are saved together
+  expect((await set(w, { project: 'work-api', path: '/work/api', test_commands: ['npm test'] })).error).toBe(undefined)
+  expect((await load(w.host)).projects?.['work-api']).toEqual({ path: '/work/api', test_commands: ['npm test'] })
+  // a bad folder name is cleaned
+  expect((await set(w, { path: '/code/My App' })).error).toBe(undefined)
+  expect(S.projects['my-app']).toBe('/code/My App')
+  // a path already added answers with its name, not an error
+  const again = await set(w, { path: '/code/api' })
+  expect(again.error).toBe(undefined)
+  expect(JSON.stringify(again.changes)).toContain('/code/api is already the project api')
 })

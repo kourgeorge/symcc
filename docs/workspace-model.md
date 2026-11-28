@@ -26,7 +26,7 @@ may have moved.
    need not be a git repo. One board and one lead per workspace.
 2. **Repos stay where they are.** symcc copies nothing. The board keeps a table of projects,
    each a name and the path of a repo anywhere on disk (this replaces "folders below the
-   workspace"). The lead adds one only on your yes. A task names its project (for example `rubrica`). The worker
+   workspace"). The lead adds one only on your yes, in one call (path, name from the folder, test commands). A task names its project (for example `rubrica`). The worker
    copy is a git worktree of that repo, on a `symcc/<board-name>/T-n` branch, merged into that repo's own
    branch. symcc also stores optional per-project settings, such as a test command when it
    can't be guessed. The Live tab's Branches section has one block per repo with open tasks.
