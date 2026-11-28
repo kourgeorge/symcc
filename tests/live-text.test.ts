@@ -232,3 +232,22 @@ test('T-915: liveHeading at 80 columns and narrow, and the /symcc-status heading
     for (const h of heads) expect([h, h.startsWith('─── ❯ '), textWidth(h)]).toEqual([h, true, w])
   }
 })
+
+test('T-1228: a waiting task with a worker question keeps its lane at the you station, with its train', () => {
+  const now = Date.now()
+  const iso = new Date(now).toISOString()
+  let b = emptyBoard()
+  for (const [i, title] of ['Asks', 'Waits on asks', 'Runs', 'Waits on both'].entries()) b = addTask(b, { origin: { why: 'a test' }, title, files: ['src/'], after: i === 1 ? ['T-1'] : i === 3 ? ['T-1', 'T-3'] : [] }, iso)[0]
+  const run = { started: iso, ended: iso, agents: [] }
+  const ask = { by: 'worker', text: 'Which one?', options: ['a', 'b'], asked_at: iso }
+  const board = {
+    ...b,
+    tasks: b.tasks.map(t => ({ ...t, ...(t.id === 'T-1' ? { status: 'waiting', ask, runs: [run] } : t.id === 'T-3' ? { status: 'doing', runs: [{ started: iso, agents: [] }] } : {}) }) as BoardTask),
+  } as Board
+  const text = liveStatusText(board as never, [], now)
+  const tasks = statusSection(text, 'TASKS').join('\n')
+  expect(statusSection(text, 'NEEDS YOU').join('\n')).toContain('T-1')
+  expect(tasks).toContain('T-1 ')
+  expect(tasks).toContain('T-2 Waits on asks')
+  expect(tasks).toMatch(/T-4 Waits on both.*\+ also T-[13]/)
+})

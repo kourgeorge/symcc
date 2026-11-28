@@ -328,7 +328,7 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
   const retries = view.auto_retries ?? DEFAULT_AUTO_RETRIES
   const lanes = view.tasks
     // T-846: a task in review (tests passed, waits for the owner) keeps its lane, sitting at "you"
-    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing' || (t.status === 'review' && !isInvestigation(t)))
+    .filter(t => shownStatus(t as BoardTask, nowMs) === 'doing' || (t.status === 'review' && !isInvestigation(t)) || (t.status === 'waiting' && needsYou(t as BoardTask, nowMs)))
     .map((x): LiveLane => {
       const t = x as BoardTask
       const waiting = shownStatus(t, nowMs) !== 'doing'
