@@ -8,7 +8,7 @@ import { withStarts, turnNow } from './starts'
 import { queuedStarts } from '../hooks/app/starts'
 import { emptyBoard, leadText, handRequest, parseLead, scoutsRunning, liveScoutMark } from '../hooks/board'
 import { claimLead } from '../hooks/app/lead'
-import { runScout, runScoutNow, scoutFinished, loadScoutRunHistory, scheduleScouts, stopAnswer } from '../hooks/app/scouts'
+import { runScout, runScoutNow, scoutFinished, loadScoutRunHistory, scheduleScouts, stopAnswer, changeScoutMemory } from '../hooks/app/scouts'
 import { checkEdit, movedText, unknownAgentText } from '../hooks/app/ask'
 import { toolCall, notLeadText } from '../hooks/app/symcc'
 import { S, scoutState, scoutRuns, timers, leadQueue, stopped, movedAgents, movedRefused, DRIVING_MOVED } from '../hooks/app/state'
@@ -74,6 +74,23 @@ test('(a) after the owner moves driving to another session, the old session star
   await withStarts(w.host, runScout(w.host, { name: 'gaps', every_minutes: 0, prompt: 'Look for gaps.' }))
   expect(w.spawns.length).toBe(0)
   expect(scoutState.get('gaps')?.running).toBe(false)
+})
+
+test('T-1206: a board with newer data starts no scout (timed or run now), and scouts.json stays as it is', async () => {
+  const w = world()
+  await scheduleScouts(w.host)
+  const before = new Map(w.files)
+  S.newerData = 99
+  const now = await runScoutNow(w.host, 'gaps')
+  expect(now).toContain('Update symcc')
+  const timed = await withStarts(w.host, runScout(w.host, { name: 'gaps', every_minutes: 0, prompt: 'Look for gaps.' }))
+  expect(timed).toContain('Update symcc')
+  expect(w.spawns.length).toBe(0)
+  expect(scoutState.get('gaps')?.running).toBe(false)
+  await changeScoutMemory(w.host, () => '{"scouts":{}}')
+  for (const [f, text] of before) expect(w.files.get(f)).toBe(text)
+  expect([...w.files.keys()]).toEqual([...before.keys()])
+  S.newerData = 0
 })
 
 test('(a) a copy whose S.driving is out of date starts no scout run once lead.json says another session drives, nor while a hand-over is asked', async () => {
