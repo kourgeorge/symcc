@@ -2,6 +2,26 @@
 
 When a set of user-facing changes is ready to release, bump the version in both `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json` and add an entry here. Before a release, rerun `bun scripts/site-stats.ts` and commit `docs/data/symcc-stats.json`: it feeds the "Built with symcc" numbers on the website.
 
+## 0.6.1 (2026-11-28)
+
+### Added
+- Each board gets a friendly name like power-falcon. Its task branches become `symcc/<name>/T-n`, open branches are renamed once, and two boards can share a repo.
+- A board in a plain folder works as a control center before any repo is added.
+- A repo is added in one call on first use, named after its folder, with its test commands.
+- Organizational memory (org-mem) notes are kept per repo, and symcc warns when a new project's name matches existing topics.
+- The scout edit page has a Projects box.
+- New blog post: "One board, many repos".
+
+### Changed
+- A project runs only its own test commands, and warns "name: no test command" when it has none. This also holds in VS Code.
+- "Agent work" now counts every worker's and checker's time.
+
+### Fixed
+- A task waiting on the owner stays in Live > Tasks (0.6.0 had hidden it by mistake).
+- A scout's unknown-project warning clears once the project is added.
+- A failed scout reschedule keeps the timers.
+- The project add answer names only what was saved.
+
 ## 0.6.0 (2026-11-27)
 
 0.6 turns symcc into one board over several repos: each task works, is tested and merges in its own repo, and some tasks need no repo at all. Projects can now live anywhere on disk, and agents' reports no longer wake the lead.
