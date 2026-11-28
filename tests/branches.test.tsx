@@ -405,3 +405,23 @@ test('T-1212: the figures are read again when a project path moves', async () =>
   S.projects = { api: '/r/two' }
   expect(branchFacts(g.host, board, 'main', T0 + 2000).done).toBeDefined()
 })
+
+// T-1234: the VS Code Live tab's Tests row uses the banner's facts: the board's commands, then each project's, a warning per
+// project with none; the board-wide warning only when the board and every project have none.
+const TESTS_CASES: [string, Record<string, unknown>, (t: string) => void][] = [
+  ['two projects with tests: no warning', { api: { test_commands: ['go test'] }, web: { test_commands: ['pytest'] } }, t => { expect(t).toContain('api: go test'); expect(t).not.toContain('no test command') }],
+  ['a project without tests: its own warning', { api: {}, web: { test_commands: ['pytest'] } }, t => { expect(t).toContain('api: no test command'); expect(t).toContain('web: pytest') }],
+  ['no projects: the board-wide warning', {}, t => { expect(t).toContain('no test command'); expect(t).not.toContain(': no test command') }],
+]
+for (const cols of [40, 64, 100])
+  for (const [name, projects, check] of TESTS_CASES)
+    test(`T-1234: the VS Code Tests row, ${name}, at ${cols} columns`, async ($, on) => {
+      const view = liveView()
+      Object.assign(view.value as Record<string, unknown>, { test_commands: [], projects })
+      seedBoard(on, { view })
+      const ui = await $.ui.mount({ ...PANE, props: { ...PANE.props, bodyColumns: cols }, surface: 'vscode' })
+      await ui.press({ key: 'tab-live' })
+      check(String((await ui.find({ key: 'live-status-rows-tests-value' }))?.text))
+      await ui.press({ key: 'tab-tasks' })
+      await ui.unmount()
+    })
