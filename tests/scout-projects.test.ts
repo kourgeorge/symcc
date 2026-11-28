@@ -126,7 +126,17 @@ test('only the strict list of shell words and options is allowed', async () => {
   ]) expect([c, await ok('Bash', { command: c }, R)]).toEqual([c, true])
 })
 
-const TABLE = { api: '/code/api', web: '/code/web', docs: '/code/docs' }
+test('T-1213: once grep has -e anywhere, every plain word is checked as a path', async () => {
+  const R = ['/code/api']
+  for (const c of [
+    'grep /etc/hosts -e x /code/api/f', 'grep foo /code/api/f -e bar', 'grep -r /etc/hosts -e x /code/api',
+    'grep -- /etc/hosts -e x /code/api/f', 'grep --regexp=x /etc/hosts', 'grep -f /etc/hosts /code/api/f', 'grep -e',
+  ]) expect([c, await ok('Bash', { command: c }, R)]).toEqual([c, false])
+  for (const c of ['grep /code/api/a -e x /code/api/f', 'grep -e x /code/api/f', 'grep /code/api/a -ex /code/api/f'])
+    expect([c, await ok('Bash', { command: c }, R)]).toEqual([c, true])
+})
+
+const TABLE = { api:'/code/api', web: '/code/web', docs: '/code/docs' }
 const base = { scout: 'bugs', root: '/board', instructions: 'Find bugs.', open: [] as string[], name: 'symcc' }
 
 test('projects: in the front matter is read, and left out means none named', () => {

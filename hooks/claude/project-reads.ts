@@ -44,7 +44,7 @@ type Spec = {
   long?: string[]
   /** Allow `-N` (digits) alone. */
   digits?: boolean
-  /** The first plain argument is a pattern, not a path (unless -e is given). */
+  /** The first plain argument is a pattern, not a path (unless -e is given anywhere: then every plain word is a path). */
   pattern?: boolean
 }
 
@@ -88,7 +88,10 @@ function listedPaths(words: string[]): string[] | null {
   }
   const spec = SPECS[cmd]
   if (!spec) return null
-  let needPattern = !!spec.pattern
+  // T-1213: grep treats every plain word as a file once -e appears anywhere (before or after it), so the plain words
+  // are collected first and only after the whole line is read is the first one dropped as the pattern
+  const plain: string[] = []
+  let patternGiven = false
   let i = 0
   let endOpts = false
   while (i < args.length) {
@@ -96,8 +99,7 @@ function listedPaths(words: string[]): string[] | null {
     if (endOpts || !a.startsWith('-') || a === '-') {
       // a wildcard in a path or pattern word could turn into more paths (a pattern word into a file to read)
       if (GLOB.test(a)) return null
-      if (needPattern) needPattern = false
-      else paths.push(a)
+      plain.push(a)
       continue
     }
     if (a === '--') {
@@ -123,12 +125,15 @@ function listedPaths(words: string[]): string[] | null {
       }
       if (kind === 'num' && !/^\d+$/.test(val)) return null
       if (GLOB.test(val)) return null
-      if (ch === 'e') needPattern = false
+      if (ch === 'e') patternGiven = true
       break
     }
   }
-  if (needPattern) return null
-  return paths
+  if (spec.pattern && !patternGiven) {
+    if (!plain.length) return null
+    plain.shift()
+  }
+  return plain
 }
 
 /**
