@@ -332,14 +332,13 @@ export function liveLanes(view: LiveView, nowMs: number): LiveLane[] {
     .map((x): LiveLane => {
       const t = x as BoardTask
       const waiting = shownStatus(t, nowMs) !== 'doing'
-      const stations = laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
+      // an investigation has no "you" station of its own: one that waits for the owner gets one (work, you, done)
+      const stations = isInvestigation(t) && waiting ? (['work', 'you', 'done'] as LiveStation[]) : laneStations(t, checker, waiting || t.status === 'review' || needsReview(view, t))
       let stage: PhaseStage = taskPhase(t, nowMs).stage ?? 'worker'
       if (stage === 'worker' && handedBack(t)) stage = 'prep'
       const investigation = isInvestigation(t)
       // an approve running on a task with a "you" station: the owner said yes, so it sits at done, never back at tests
       let station: LiveStation = waiting ? 'you' : investigation ? (stage === 'worker' ? 'work' : 'done') : t.status !== 'doing' && stations.includes('you') ? 'done' : stationOf(stage, checker)
-      // an investigation has no "you" station: a waiting one sits at work
-      if (!stations.includes(station)) station = stations[0]!
       const skipped = checker && !investigation && checkSkipped(t, stage, waiting)
       // a docs-only change has no check to sit at: in prep it is already waiting for the queue
       if (skipped && station === 'check') station = 'queue'
