@@ -24,18 +24,23 @@
 // row and the panel, as OpenCode's own sidebar and panels use them; OpenCode turns the mouse on unless its tui
 // config says mouse: false). OpenCode's TUI
 // modules (Solid and OpenTUI's Solid renderer) are passed in (TuiRuntime), so this file type-checks and its tests
-// run without them. The names and shapes below are @opencode/plugin 2.3.0's tui Context (only what is used).
+// run without them. The names and shapes in tui-draw.ts are @opencode/plugin 2.3.0's tui Context (only what is used).
+// T-815 split it in four: tui-draw.ts (the types and the OpenTUI drawing helpers), tui-dialogs.ts (the
+// ctx.ui.dialog prompts), tui-keys.ts (the key and mouse handlers); this file keeps the panel's signals (handed to
+// the other two as one TuiState object), the two slots, the timer, startTui and loadTuiRuntime.
 import { DEFAULT_NAME, dataDir } from '../name'
-import { reportPickId, reportPickOf, VIEW_FILE, parseViewFile, bandDraw, panelLines, pagePlace, panelKeys, panelTaskActions, approveInProgress, panelRoleChoices, TASK_ACTION_COMMANDS, LETTER_KEYS, type LetterKey, hasPage, answerOptions, actionCommand, PANEL_MARK, moveCursor, OWN_ANSWER, GROUPS_OPEN, groupOf, groupId, BACKLOG_MORE_ID, dayOfId, dayId, scoutRunsIn, settingsPlace, orgMemNoteOf, ORG_MEM_PAGE, orgMemPageId, orgMemPageTopic, LIVE_OM_ALL_ID, liveNoteId, liveTopicId, branchIdTask, orgMemIn, defPageId, rolePromptId, SETTINGS_OPEN, settingGroupOf, settingGroupId, PANEL_TABS, CHOICE_KEYS, approveSent, editOf, defDraftOf, draftChanges, draftError, editBoxId, boardPageOf, removeAsk, resetAsk, DEF_EDIT_BOXES, SETUP_GIT_ASK, newNameError, NEW_OPEN_MS, EDIT_SAVE_ID, EDIT_CANCEL_ID, EDIT_FIRST_BOX, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
-import { SETTING_GROUPS, isScoutRunReport, taskReports, taskActions, type TaskAction, type TaskActionId, parseSettingValue, settingChoices, settingInfo, settingShown, settingValue, viewAsBoard, isSettingPage, everyText, nextFindings, everyMinutesOf, nextMode, modeOf, promptsOfRole, SEARCH_WORDS, NEW_SCOUT_EVERY, showsHeader, showsDriveButton, defEditFields, type SettingName, type ScoutEditField, type DefEditField } from '../board'
+import { bandDraw, panelLines, LETTER_KEYS, type LetterKey, hasPage, actionCommand, PANEL_MARK, GROUPS_OPEN, scoutRunsIn, settingsPlace, SETTINGS_OPEN, CHOICE_KEYS, approveSent, NEW_OPEN_MS, type DefDraft, type ApproveSent, type ChoiceKey, type ViewFile, type Line, type PanelAction, type PanelHit, type PanelKey, type PanelGroup, type PanelTab, type BandHit } from './board-view'
+import { SETTING_GROUPS, isScoutRunReport, type SettingName } from '../board'
 import { resolveReport, type ReportPick } from '../core/task-sections'
-import { choiceNote, settingAbout } from '../core/setting-notes'
-import type { SymccScout } from '../../types'
-import { orgMemDeleteAsk, orgMemFile, orgMemNoteKey, orgMemTopicCounts } from '../core/org-mem'
 import { PARTS_KEY, safePartsFile, viewStubFilled, withViewParts } from '../core/board-parts'
 import { searchParts } from '../core/search-parts'
-import { runNowQuestion, runNowWaits, RUN_NOW_NO, RUN_NOW_YES } from '../core/run-now'
+import { panelRows, drawLines, drawPanel, readViewFile, type TuiBoard, type TuiContext, type TuiDeps, type TuiMouseEvent, type TuiRuntime, type TuiRuntimeLoaders, type TuiState } from './tui-draw'
+import { makeDialogs } from './tui-dialogs'
+import { makeKeys } from './tui-keys'
 
+// what moved to tui-draw.ts (T-815), still exported from here
+export { colorOf, drawLines, drawPanel, FOOTER_LINES, panelRows, readViewFile, SCREEN_ROWS_AROUND, viewPaths, WHEEL_LINES } from './tui-draw'
+export type { TuiBoard, TuiContext, TuiDeps, TuiKeyCommand, TuiKeyLayer, TuiMouseEvent, TuiNode, TuiPanelInput, TuiRuntime, TuiRuntimeLoaders, TuiState } from './tui-draw'
 export type { PanelKey, PanelHit, PanelTab }
 
 /** The panel's name for ui.panel.open (OpenCode shows the session.panel claims for the open name). */
@@ -43,24 +48,6 @@ export const BOARD_PANEL = 'symcc.board'
 
 /** How often the view file is read again (and the times redrawn), in ms. */
 export const REFRESH_MS = 1000
-
-/** A node of OpenTUI's Solid renderer (a box or a text). */
-export type TuiNode = unknown
-
-/** The modules of OpenCode's TUI that this part uses: Solid's signals, and OpenTUI's Solid renderer's element calls
- *  (the calls compiled JSX makes: createElement, setProp, insert). */
-export type TuiRuntime = {
-  createSignal: <T>(value: T) => [() => T, (value: T) => void]
-  createElement: (tag: string) => TuiNode
-  setProp: (node: TuiNode, name: string, value: unknown) => void
-  insert: (parent: TuiNode, value: unknown) => void
-}
-
-/** How opencode/tui.ts loads the two modules of OpenCode's TUI (T-500): each loader is `() => import('<name>')`
- *  with the name written out. OpenCode 2.3 gives a TUI plugin its own copies (the same Solid its TUI uses) by
- *  rewriting those plain names in the plugin's files; a name kept in a variable is not rewritten, so Bun looks for it
- *  next to the plugin, where nothing is installed ("Cannot find package 'solid-js'"). */
-export type TuiRuntimeLoaders = { solid: () => Promise<unknown>; opentui: () => Promise<unknown> }
 
 /** The two packages, and what is taken from each. */
 export const TUI_PACKAGES = { solid: { name: 'solid-js', uses: ['createSignal'] }, opentui: { name: '@opentui/solid', uses: ['createElement', 'setProp', 'insert'] } } as const
@@ -105,200 +92,6 @@ export function setupFailed(ctx: Pick<TuiContext, 'ui'>, e: unknown, name: strin
   return err
 }
 
-/** The session.panel slot's input (PanelInput): the panel's session, width and focus. */
-export type TuiPanelInput = { readonly name: string; readonly sessionID: string; readonly width: number; readonly focused: boolean; readonly close: () => void; readonly focus?: () => void }
-
-/** An OpenTUI mouse event, as far as symcc uses it: the button (0 = left) and, for the wheel, its direction. */
-export type TuiMouseEvent = { readonly type?: string; readonly button?: number; readonly scroll?: { readonly direction?: string }; stopPropagation?: () => void }
-
-/** How many lines one turn of the mouse wheel scrolls (as OpenTUI's own scroll boxes). */
-export const WHEEL_LINES = 3
-
-/** How many rows of OpenCode's screen are surely not the panel's (its own header and status lines): the panel is
- *  never taken to be taller than the terminal less these. */
-export const SCREEN_ROWS_AROUND = 2
-
-/** The panel's height in rows (T-627, T-649): the panel box's own height once OpenTUI has laid it out, but never more
- *  than the terminal's height less OpenCode's lines around the panel. Before the layout it is not known (undefined):
- *  a guess from the terminal's height was too tall when the prompt area sits below the panel, and the padding pushed
- *  the footer with the buttons out of sight, so with no height the panel is drawn with no padding. */
-export function panelRows(boxHeight: unknown, screenHeight: unknown): number | undefined {
-  if (typeof boxHeight !== 'number' || !(boxHeight > 0)) return undefined
-  const box = Math.floor(boxHeight)
-  return typeof screenHeight === 'number' && screenHeight > SCREEN_ROWS_AROUND ? Math.min(box, Math.floor(screenHeight) - SCREEN_ROWS_AROUND) : box
-}
-
-/** One keymap command (KeymapCommand), as far as symcc uses it. */
-export type TuiKeyCommand = {
-  readonly id?: string
-  readonly title?: string
-  readonly description?: string
-  readonly group?: string
-  readonly bind?: false | string
-  readonly palette?: true
-  readonly slash?: { readonly name: string; readonly aliases?: string[] }
-  readonly run: (input?: string) => void | false | Promise<void>
-}
-
-/** One keymap layer (KeymapLayer). `mode` is the input mode it works in: OpenCode 2.3 defaults to "base", and a
- *  base layer's commands are not in the command palette (it opens in its own mode) nor in the prompt's slash list, so
- *  the command that opens the board uses "global" (as OpenCode's own plugins do, T-505). */
-export type TuiKeyLayer = { readonly mode?: string; readonly enabled?: boolean | (() => boolean); readonly priority?: number; readonly commands?: readonly TuiKeyCommand[] }
-
-/** The parts of the tui Context (@opencode/plugin/tui's Context) symcc uses. */
-export type TuiContext = {
-  readonly location: { readonly directory: string } | undefined
-  readonly theme: unknown
-  readonly renderer: { readonly width?: number; readonly height?: number }
-  readonly client: { readonly session: { readonly command: (input: { sessionID: string; name: string; text: string }) => Promise<void> } }
-  readonly keymap: { readonly layer: (factory: () => TuiKeyLayer) => void }
-  readonly ui: {
-    readonly toast: { show: (o: { readonly title?: string; readonly message: string; readonly variant?: 'info' | 'success' | 'warning' | 'error' }) => void }
-    readonly dialog: {
-      prompt: (o: { readonly title: string; readonly description?: string; readonly placeholder?: string }) => Promise<string | undefined>
-      select: <V>(o: { readonly title: string; readonly options: readonly { readonly title: string; readonly description?: string; readonly value: V }[] }) => Promise<V | undefined>
-    }
-    readonly panel: { open: (name: string) => boolean; close: () => void; current: () => { readonly name: string; readonly sessionID: string } | undefined }
-    readonly slot: (claim: { readonly append: 'session.panel'; readonly render: (input: TuiPanelInput) => TuiNode } | { readonly append: 'session.composer.top'; readonly render: (input: { readonly sessionID: string }) => TuiNode }) => () => void
-  }
-}
-
-/** What the TUI part needs besides its context: the runtime, reading a file, a timer and the clock (tests fake them). */
-export type TuiDeps = {
-  runtime: TuiRuntime
-  /** a file's text; rejects when it can't be read */
-  readText: (path: string) => Promise<string>
-  every: (ms: number, fn: () => void) => () => void
-  now: () => number
-  /** the plugin's name (default: symcc) */
-  name?: string
-}
-
-/** Where the OpenCode theme keeps the color for one of core's color names, and a plain fallback. OpenCode 2.3's theme
- *  (ResolvedTheme) is nested: text.base, text.muted, text.feedback.warning.base, border.base, and hue.<color>.<100..900>
- *  scales; its leaves are OpenTUI colors (RGBA). Before T-505 symcc read flat names (theme.text, theme.warning...), so
- *  it got whole groups of colors as a text color, and OpenCode drew neither the band nor the panel. */
-const THEME_KEY: Record<string, [string, string]> = {
-  ide: ['hue.blue.200', '#5c9cf5'],
-  claude: ['hue.orange.200', '#d7875f'],
-  text: ['text.base', '#d0d0d0'],
-  inactive: ['text.muted', '#808080'],
-  subtle: ['border.base', '#555555'],
-  warning: ['text.feedback.warning.base', '#e5c07b'],
-  yellow: ['text.feedback.warning.base', '#e5c07b'],
-  error: ['text.feedback.error.base', '#e06c75'],
-  red: ['text.feedback.error.base', '#e06c75'],
-  success: ['text.feedback.success.base', '#98c379'],
-  green: ['text.feedback.success.base', '#98c379'],
-  cyan: ['text.feedback.info.base', '#56b6c2'],
-  suggestion: ['hue.purple.200', '#c678dd'],
-  permission: ['hue.purple.200', '#c678dd'],
-  autoAccept: ['text.feedback.success.base', '#98c379'],
-}
-
-/** Whether a theme value is one color (a color string, or an OpenTUI RGBA), not a group of colors. */
-const isColor = (v: unknown) => typeof v === 'string' || (!!v && typeof v === 'object' && 'buffer' in v)
-
-/** The fg color for a core color name in theme `theme`: the theme's color at its path, else the plain fallback (a
- *  theme may lack a field, and anything that isn't one color is never passed on as a text color). */
-export function colorOf(theme: unknown, name: string): unknown {
-  const [path, fallback] = THEME_KEY[name] ?? THEME_KEY.text!
-  let v: unknown = theme
-  for (const k of path.split('.')) v = v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined
-  return isColor(v) ? v : fallback
-}
-
-/** OpenTUI's bold text attribute (TextAttributes.BOLD). */
-const BOLD = 1
-
-/** Lines as OpenTUI elements: a column box with one row box per line, a text per colored piece. With `onHit`, a left
- *  click on a line with a hit (`hits`, by line) or on a piece with its own hit (a key hint) calls it. */
-export function drawLines<H = PanelHit>(r: TuiRuntime, theme: unknown, lines: Line[], hits: (H | null)[] = [], onHit?: (hit: H) => void): TuiNode {
-  const clicked = (hit: H) => (e?: TuiMouseEvent) => {
-    if (e?.button !== undefined && e.button !== 0) return
-    e?.stopPropagation?.()
-    onHit?.(hit)
-  }
-  const col = r.createElement('box')
-  r.setProp(col, 'flexDirection', 'column')
-  r.insert(
-    col,
-    lines.map((line, i) => {
-      const row = r.createElement('box')
-      r.setProp(row, 'flexDirection', 'row')
-      // a line too long for its place is cut at the edge, not wrapped piece by piece (each piece is its own text)
-      r.setProp(row, 'overflow', 'hidden')
-      const hit = onHit ? hits[i] : null
-      if (hit) r.setProp(row, 'onMouseUp', clicked(hit))
-      r.insert(
-        row,
-        line.map(seg => {
-          const text = r.createElement('text')
-          r.setProp(text, 'flexShrink', 0)
-          r.setProp(text, 'wrapMode', 'none')
-          r.setProp(text, 'fg', colorOf(theme, seg.color))
-          if (seg.bold) r.setProp(text, 'attributes', BOLD)
-          if (seg.hit && onHit) r.setProp(text, 'onMouseUp', clicked(seg.hit as H))
-          r.insert(text, seg.text)
-          return text
-        }),
-      )
-      return row
-    }),
-  )
-  return col
-}
-
-/** How many lines at the end of the panel's drawing are its footer when it doesn't say (the rule and the key hints). */
-export const FOOTER_LINES = 2
-
-/** The panel's lines as OpenTUI elements (T-649): a column with the body (every line but the last `footer`, the
- *  footer: its rule, the list's mode row and the key hints, T-685) in a box that shrinks and cuts what does not fit,
- *  and the footer in a box that never shrinks, so the footer stays in sight. */
-export function drawPanel<H = PanelHit>(r: TuiRuntime, theme: unknown, lines: Line[], hits: (H | null)[] = [], onHit?: (hit: H) => void, footer = FOOTER_LINES): TuiNode {
-  const cut = Math.max(0, lines.length - footer)
-  const col = r.createElement('box')
-  r.setProp(col, 'flexDirection', 'column')
-  r.setProp(col, 'flexGrow', 1)
-  r.setProp(col, 'minHeight', 0)
-  const body = drawLines<H>(r, theme, lines.slice(0, cut), hits.slice(0, cut), onHit)
-  r.setProp(body, 'flexGrow', 1)
-  r.setProp(body, 'flexShrink', 1)
-  r.setProp(body, 'minHeight', 0)
-  r.setProp(body, 'overflow', 'hidden')
-  const foot = drawLines<H>(r, theme, lines.slice(cut), hits.slice(cut), onHit)
-  r.setProp(foot, 'flexShrink', 0)
-  r.insert(col, [body, foot])
-  return col
-}
-
-/** The view file's folder to look in (T-860): `dir` only, never a folder above it. */
-export function viewPaths(dir: string, name: string = DEFAULT_NAME): string[] {
-  const d = dir.replace(/\/+$/, '') || '/'
-  return [`${d === '/' ? '' : d}/${dataDir(name)}/${VIEW_FILE}`]
-}
-
-/** The view file in `dir`, read and parsed; null when there is none. */
-export async function readViewFile(dir: string, readText: TuiDeps['readText'], name?: string): Promise<ViewFile | null> {
-  for (const p of viewPaths(dir, name)) {
-    const text = await readText(p).catch(() => null)
-    if (text !== null) return parseViewFile(text)
-  }
-  return null
-}
-
-/** What a started TUI part holds, for its cleanup and the tests. */
-export type TuiBoard = {
-  /** reads the view file again now */
-  refresh: () => Promise<void>
-  /** the panel's state: the tab, the open task or scout ('' = the list), the open run of that scout, the cursor, the
-   *  open groups, the open Settings groups (their titles) and the scroll */
-  state: () => { tab: PanelTab; opened: string; run: string; cursor: number; groups: Record<PanelGroup, boolean>; backlogAll: boolean; openDays: string[]; settingsOpen: string[]; scroll: number }
-  /** runs one of the panel's keys, as the keymap does */
-  press: (key: PanelKey, sessionID: string) => Promise<void>
-  stop: () => void
-}
-
 /** The keymap bindings of the panel's keys: k and j always move (as ↑ and ↓), on every page; no action has them.
  *  [ and ] go to the previous and the next task or scout of the list a page was opened from (T-751). */
 export const KEY_BINDS: Record<PanelKey, string> = {
@@ -306,9 +99,6 @@ export const KEY_BINDS: Record<PanelKey, string> = {
   ...(Object.fromEntries(LETTER_KEYS.map(k => [k, k])) as Record<LetterKey, string>),
   ...(Object.fromEntries(CHOICE_KEYS.map(k => [k, k])) as Record<ChoiceKey, string>),
 }
-
-/** The tab each tab key goes to. */
-const TAB_OF: Partial<Record<PanelKey, PanelTab>> = Object.fromEntries(PANEL_TABS.map(t => [t.key, t.tab]))
 
 /** Starts the TUI part: the band and the board panel, the keys, and the timer that reads the view file. */
 export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
@@ -327,7 +117,6 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const [scroll, setScroll] = r.createSignal(0)
   // the Settings groups open (T-585), and the setting whose pick list or box is open ('' = none)
   const [settingsOpen, setSettingsOpen] = r.createSignal<string[]>([...SETTINGS_OPEN])
-  let asking = ''
   const [tab, setTab] = r.createSignal<PanelTab>('live')
   // the open run of the open scout ('' = the scout's page), the cursor over its page's runs, and the run's report
   // (undefined while it is read, null when it can't be)
@@ -353,8 +142,6 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const searchChoice = () => (search() ? { search: search(), searchMore: (searchSeen(), searchCache.more) } : {})
   // the open role's or kind's edit mode (T-706, Claude Code's Edit page; undefined = none)
   const [edit, setEdit] = r.createSignal<DefDraft | undefined>(undefined)
-  // a role, kind or scout just made from this panel: its page opens once the view file has it (T-706)
-  let pendingOpen: { tab: PanelTab; id: string; edit: boolean; at: number } | undefined
   let width = 80
   // the panel's height in rows (panelRows): it bounds the scroll, and the panel is drawn exactly that high, so the
   // footer stays at the bottom and no row of a longer page is left over; OpenTUI says when the box's size changes
@@ -450,12 +237,12 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   /** Opens the page of the role, kind or scout just made here once the view file has it (a new role or task type in its
    *  edit mode, as Claude Code's New role does). */
   const openMade = () => {
-    const p = pendingOpen
+    const p = s.pendingOpen
     if (!p) return
     // the engine refused it after all (or it never came): stop waiting, so it doesn't open later
-    if (tab() !== p.tab || d.now() - p.at > NEW_OPEN_MS) return void (pendingOpen = undefined)
+    if (tab() !== p.tab || d.now() - p.at > NEW_OPEN_MS) return void (s.pendingOpen = undefined)
     if (!hasPage(file(), p.id, p.tab)) return
-    pendingOpen = undefined
+    s.pendingOpen = undefined
     openPage(p.id)
     const place = p.edit ? settingsPlace(file(), p.id) : null
     if (place?.def) openEdit(place.list, place.def)
@@ -481,11 +268,10 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   // T-700: a task opened from the Live tab goes back there (to its lane) on b, as on the terminal panel and VS Code;
   // T-751: its page says "‹ Live" then (fromLive), and [ and ] go through the Live tab's tasks
-  let backTo: { tab: PanelTab; cursor: number } | undefined
   const [fromLive, setFromLive] = r.createSignal(false)
   /** Opens a page ('' = back to the list), from its top. */
   const openPage = (id: string) => {
-    backTo = undefined
+    s.backTo = undefined
     setFromLive(false)
     setEdit(undefined)
     setOpened(id)
@@ -500,7 +286,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   }
   /** Shows another tab, at its list's top. */
   const showTab = (t: PanelTab) => {
-    pendingOpen = undefined
+    s.pendingOpen = undefined
     setTab(t)
     openPage('')
     setCursor(0)
@@ -527,7 +313,7 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
   const toggleSettingGroup = (title: string) => {
     const open = settingsOpen().includes(title)
     setSettingsOpen(open ? settingsOpen().filter(t => t !== title) : [...settingsOpen(), title])
-    if (open && SETTING_GROUPS.find(g => g.title === title)?.items.includes(asking as SettingName)) asking = ''
+    if (open && SETTING_GROUPS.find(g => g.title === title)?.items.includes(s.asking as SettingName)) s.asking = ''
   }
   const say = (message: string, variant: 'info' | 'error' = 'info') => ctx.ui.toast.show({ title: name, message, variant })
   /** Runs `a`'s slash command; false (and a toast) when it failed. */
@@ -554,469 +340,11 @@ export function startTui(ctx: TuiContext, d: TuiDeps): TuiBoard {
     setScroll(0)
     loadSearch()
   }
-  /** f on the list ([f] search, [f] change search): asks for the search words; Enter on an empty box clears it, Esc
-   *  keeps it as it was. */
-  const askSearch = async () => {
-    const now = search()
-    const text = await ctx.ui.dialog.prompt({ title: now ? `Search the tasks (now: ${now})` : 'Search the tasks', description: `words, or ${SEARCH_WORDS} · Enter on empty clears`, placeholder: `words, or ${SEARCH_WORDS}` })
-    if (text !== undefined) searchFor(text)
-  }
-  /** Changes setting `setting` (Enter or a click on its row): on/off flips, a setting with choices is picked from a
-   *  list, the rest is typed; then /<name>-settings NAME VALUE sets it. */
-  const changeSetting = async (setting: SettingName, sessionID: string) => {
-    const info = settingInfo(setting)
-    const f = file()
-    if (!info || !f) return
-    const now = settingValue(viewAsBoard(f.view), setting)
-    const choices = settingChoices(setting, f.view.notify_choices)
-    let value: string | undefined
-    if (info.kind === 'onoff') value = now === 'on' ? 'off' : 'on'
-    else {
-      asking = setting
-      if (choices.length) value = await ctx.ui.dialog.select({ title: `${setting} (now ${settingShown(setting, now)}): ${settingAbout(setting)}`, options: choices.map(c => ({ title: c === now ? `${settingShown(setting, c)} (now)` : settingShown(setting, c), description: choiceNote(setting, c), value: c })) })
-      else value = (await ctx.ui.dialog.prompt({ title: `${setting} (now ${now})`, description: settingAbout(setting), placeholder: info.kind === 'commands' ? 'e.g. npm test, or none' : info.range }))?.trim()
-      // its group was closed meanwhile: the pick or box was cancelled
-      if (asking !== setting) return
-      asking = ''
-    }
-    if (!value || value === now) return
-    const ok = parseSettingValue(setting, value)
-    if (!ok.ok) return say(ok.message, 'error')
-    await send(sessionID, { kind: 'setting', setting, value })
-  }
-  /** Edits scout `sc` (e on its page): pick what to change (how often, model, instructions), then type the new value;
-   *  /<name>-scout <name> every|model|prompt VALUE saves it in the scout's file. */
-  const editScout = async (sc: SymccScout, sessionID: string) => {
-    const field = await ctx.ui.dialog.select<ScoutEditField>({
-      title: `Change scout ${sc.name}`,
-      options: [
-        { title: `How often: ${everyText(sc.every_minutes)}`, value: 'every' },
-        { title: `Model: ${sc.model || "the session's model"}`, value: 'model' },
-        { title: `Findings: ${sc.findings ?? 'default (the board setting)'}`, value: 'findings' },
-        { title: 'Instructions', value: 'prompt' },
-      ],
-    })
-    if (!field) return
-    if (field === 'findings') {
-      const pick = await ctx.ui.dialog.select<string>({ title: `${sc.name}: where its findings' tasks go`, options: [{ title: 'auto: the lead decides', value: 'auto' }, { title: 'backlog: every task waits for you', value: 'backlog' }, { title: 'default: the board setting', value: 'default' }] })
-      if (pick) await send(sessionID, { kind: 'scout-edit', scout: sc.name, field, value: pick })
-      return
-    }
-    const ask =
-      field === 'every'
-        ? { title: `${sc.name}: runs every how many minutes (now ${sc.every_minutes})`, description: '0 = only on demand', placeholder: 'minutes: a whole number, 0 or more' }
-        : field === 'model'
-          ? { title: `${sc.name}: model (now ${sc.model || "the session's model"})`, description: "none = the session's model", placeholder: 'a model name, or none' }
-          : { title: `${sc.name}: new instructions`, description: (sc.prompt ?? '').split('\n').find(l => l.trim())?.trim() ?? '', placeholder: 'what to look for, in plain words (longer ones: edit its file)' }
-    const value = (await ctx.ui.dialog.prompt(ask))?.trim()
-    if (!value) return
-    if (field === 'every' && everyMinutesOf(value) === null) return say('every must be a whole number of minutes: 0 for only on demand, or 1 or more', 'error')
-    await send(sessionID, { kind: 'scout-edit', scout: sc.name, field, value: field === 'model' && value.toLowerCase() === 'none' ? '' : value })
-  }
-  /** Opens the edit mode of the open role or task type, with the cursor on its first box (Claude Code's autoFocus). */
-  const openEdit = (list: 'roles' | 'kinds', x: Parameters<typeof defDraftOf>[1]) => {
-    setRunCursor(EDIT_FIRST_BOX)
-    setScroll(0)
-    setEdit(defDraftOf(list, x))
-  }
-  /** Asks a yes (Claude Code's confirm step) before `what`; true when the owner picked it. */
-  const yes = async (title: string, label: string) => (await ctx.ui.dialog.select({ title, options: [{ title: label, value: 'yes' }, { title: 'Cancel', value: 'no' }] })) === 'yes'
-  /** "+ New role" / "+ New kind" (n): asks the name, then /<name>-settings role|type NAME add; its page opens in the edit
-   *  mode once the view file has it. Esc or an empty name leaves it. */
-  const newDef = async (list: 'roles' | 'kinds', sessionID: string) => {
-    const noun = list === 'roles' ? 'role' : 'kind'
-    const asked = await askNewName(noun, `New ${noun === 'role' ? 'role' : 'task type'}'s name`, `Enter makes ${dataDir(file()?.name || name)}/${list}/<name>.md and opens it`, 'letters, digits, - and _')
-    if (!asked) return
-    if (await sendOk(sessionID, { kind: 'def-add', def: noun, name: asked })) pendingOpen = { tab: 'settings', id: defPageId(list, list === 'kinds' ? asked.toLowerCase() : asked), edit: true, at: d.now() }
-  }
-  /** Asks a new role's, kind's or scout's name; a name the engine would refuse (bad, or taken: newNameError) asks
-   *  again with the reason, as Claude Code's name box stays open with it. Esc or an empty name: undefined. */
-  const askNewName = async (what: 'role' | 'kind' | 'scout', title: string, description: string, placeholder: string): Promise<string | undefined> => {
-    let error = ''
-    for (;;) {
-      const asked = (await ctx.ui.dialog.prompt({ title, ...(error || description ? { description: error || description } : {}), placeholder }))?.trim()
-      if (!asked) return undefined
-      error = newNameError(file(), what, asked)
-      if (!error) return asked
-    }
-  }
-  /** "+ New scout" (n): asks the name, then its instructions, then /<name>-scout NAME new INSTRUCTIONS (it runs every
-   *  NEW_SCOUT_EVERY minutes; e on its page changes that); its page opens once the view file has it. */
-  const newScout = async (sessionID: string) => {
-    const scout = await askNewName('scout', "New scout's name", '', 'lowercase letters, digits and dashes')
-    if (!scout) return
-    const prompt = (await ctx.ui.dialog.prompt({ title: `${scout}: what it does`, description: `in plain words; it runs every ${NEW_SCOUT_EVERY} minutes (Edit on its page changes that)`, placeholder: 'what to look for, in plain words (longer ones: edit its file)' }))?.trim()
-    if (!prompt) return
-    if (await sendOk(sessionID, { kind: 'scout-new', scout, prompt })) pendingOpen = { tab: 'scouts', id: scout, edit: false, at: d.now() }
-  }
-  /** Enter or a click on an edit page's box: asks its new value (Enter on an empty box empties it, Esc keeps it). */
-  const editBox = async (field: DefEditField) => {
-    const e = edit()
-    const place = e ? settingsPlace(file(), e.page) : null
-    if (!e || !place?.def) return
-    // T-918: the Writes pick has two choices, so Enter (or a click) switches it: code ↔ prose only (sent as code: true or false)
-    if (field === 'code') return void setEdit({ ...e, values: { ...e.values, code: e.values.code === 'false' ? 'true' : 'false' } })
-    const box = DEF_EDIT_BOXES[field]
-    const now = (e.values[field] ?? '').split('\n').find(l => l.trim())?.trim() ?? ''
-    const value = await ctx.ui.dialog.prompt({ title: `${place.def.name}: ${box.label}${now ? ` (now: ${now})` : ''}`, description: box.placeholder(place.list === 'roles' ? 'role' : 'kind'), placeholder: box.placeholder(place.list === 'roles' ? 'role' : 'kind') })
-    if (value === undefined || edit()?.page !== e.page) return
-    setEdit({ page: e.page, values: { ...edit()!.values, [field]: value.trim() } })
-  }
-  /** Save on the edit page: a value the lead's tool would refuse (draftError: an empty description, a tool word a role
-   *  may not have, ...) stays on the page with Claude Code's error and sends nothing; else the changed boxes go in one
-   *  /<name>-settings role|type NAME save {...} (one edit: all or none), and the page goes back to the role or task type
-   *  once it is sent. */
-  const saveEdit = async (sessionID: string) => {
-    const e = edit()
-    const place = e ? settingsPlace(file(), e.page) : null
-    if (!e || !place?.def) return
-    const error = draftError(place.list, place.def.name, e)
-    if (error) return void setEdit({ ...e, error })
-    const def = place.list === 'roles' ? 'role' : 'kind'
-    const changed = draftChanges(place.list, place.def, e)
-    if (changed.length && !(await sendOk(sessionID, { kind: 'def-save', def, name: place.def.name, fields: Object.fromEntries(changed.map(f => [f, e.values[f] ?? ''])) }))) return
-    if (edit()?.page === e.page) setEdit(undefined)
-  }
-  /** Set up git (g, or the banner's button), where the banner shows it: asks a yes, then /<name>-settings git setup. */
-  const setUpGit = async (sessionID: string) => {
-    const f = file()
-    const gs = f?.view.git_state
-    if (!f || (gs !== 'no-repo' && gs !== 'no-commits' && gs !== 'no-git') || !showsHeader(boardPageOf(f, { tab: tab(), opened: opened(), run: run(), ...(edit() ? { edit: edit()! } : {}) }))) return
-    if (gs === 'no-git') return void (await send(sessionID, { kind: 'check-git' }))
-    if (await yes(SETUP_GIT_ASK, 'Yes, set up git')) await send(sessionID, { kind: 'setup-git' })
-  }
-  /** The Settings tab's keys: the list moves, changes a setting or opens the Roles or Kinds page; that page moves and
-   *  opens a role or task type (n makes a new one); its page turns it off or on (o), resets it (r), edits it (e) or
-   *  removes it (d, after a yes); b goes back one page. On the edit page ↑↓ move over Save, Cancel and the boxes,
-   *  Enter changes a box or presses the button, x (Cancel) and b leave it without saving. */
-  const pressSettings = async (key: PanelKey, sessionID: string) => {
-    const f = file()
-    const open = opened()
-    const ids = draw().ids
-    const [cur, setCur] = open ? [runCursor, setRunCursor] : [cursor, setCursor]
-    if (key === 'up' || key === 'down') return void setCur(moveCursor(cur(), key === 'up' ? -1 : 1, ids.length))
-    const place = open ? settingsPlace(f, open) : null
-    if (editOf(f, { tab: tab(), opened: open, ...(edit() ? { edit: edit()! } : {}) })) {
-      if (key === 'x' || key === 'back') return void setEdit(undefined)
-      const field = ids[moveCursor(cur(), 0, ids.length)]
-      // Enter on the Save or Cancel button (↑ from the first box reaches them, as on Claude Code)
-      if (key === 'open' && field === EDIT_SAVE_ID) return saveEdit(sessionID)
-      if (key === 'open' && field === EDIT_CANCEL_ID) return void setEdit(undefined)
-      const k = place?.def ? defEditFields(place.list === 'roles' ? 'role' : 'kind').find(x => editBoxId(x) === field) : undefined
-      if (key === 'open' && k) return editBox(k)
-      return
-    }
-    if (key === 'back') return place?.prompt && place.def ? openPage(defPageId('roles', place.def.name)) : place?.def ? openPage(place.list) : open ? openPage('') : showTab('tasks')
-    // the built-in prompt page is view only: b goes back to the role
-    if (place?.prompt) return
-    if (key === 'open' && ids.length && !place?.def) {
-      const id = ids[moveCursor(cur(), 0, ids.length)]!
-      const g = open ? null : settingGroupOf(id)
-      if (g) return toggleSettingGroup(g)
-      return open || isSettingPage(id) ? openPage(id) : changeSetting(id as SettingName, sessionID)
-    }
-    // + New role / + New kind on the Roles or Kinds page
-    if (key === 'n' && place && !place.def) return newDef(place.list as 'roles' | 'kinds', sessionID)
-    const d = place?.def
-    if (!d) return
-    const def = place.list === 'roles' ? 'role' : 'kind'
-    if (key === 'e' && !d.broken) return openEdit(place.list, d)
-    if (key === 'd' && d.canRemove) {
-      if (!(await yes(removeAsk(place.list, d), 'Yes, remove'))) return
-      if ((await sendOk(sessionID, { kind: 'def', def, name: d.name, action: 'remove' })) && opened() === open) openPage(place.list)
-      return
-    }
-    if (key === 'o' && d.canOff) return send(sessionID, { kind: 'def', def, name: d.name, action: d.off ? 'on' : 'off' })
-    if (key === 'r' && d.canReset) {
-      // T-871: a role's Reset to built-in asks first, as on Claude Code's page
-      if (def === 'role' && !(await yes(resetAsk(d), 'Yes, reset'))) return
-      return send(sessionID, { kind: 'def', def, name: d.name, action: 'reset' })
-    }
-    // T-871: ‹ › (and [ ]) on a role's page go to the role before or after it in the Roles list
-    if ((key === 'prev' || key === 'next') && def === 'role' && !d.broken) return goNext(key)
-    // See the prompt (T-685): the first built-in prompt the role goes in
-    if (key === 'p' && def === 'role' && !d.broken) return openPage(rolePromptId(d.name, promptsOfRole(d.name)[0]!))
-  }
-  /** The Scouts tab's keys: the list moves and opens; a scout's page moves over its runs, opens one, runs the scout
-   *  now (r), pauses or resumes it (p) and edits it (e); a run's page goes back. */
-  const pressScouts = async (key: PanelKey, sessionID: string) => {
-    const f = file()
-    const open = opened()
-    const ids = draw().ids
-    if (!open) {
-      if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
-      if (key === 'open' && ids.length) openPage(ids[moveCursor(cursor(), 0, ids.length)]!)
-      if (key === 'back') showTab('tasks')
-      if (key === 'n') return newScout(sessionID)
-      return
-    }
-    if (run()) return void (key === 'back' && openRun(''))
-    if (key === 'back') return openPage('')
-    if (key === 'prev' || key === 'next') return goNext(key)
-    if (key === 'up' || key === 'down') return void setRunCursor(moveCursor(runCursor(), key === 'up' ? -1 : 1, ids.length))
-    if (key === 'open' && ids.length) return openRun(ids[moveCursor(runCursor(), 0, ids.length)]!)
-    const offered = panelKeys(f, open, 'scouts').map(k => k.word)
-    const sc = f?.view.scouts.find(x => x.name === open)
-    if (key === 'r' && offered.includes('run now')) return send(sessionID, { kind: 'scout', scout: open })
-    if (key === 'p' && sc) return send(sessionID, { kind: 'scout', scout: open, paused: !sc.paused })
-    if (key === 'e' && sc) return editScout(sc, sessionID)
-    // T-912: f moves its findings choice on (board default → auto → backlog → board default)
-    if (key === 'f' && sc) return send(sessionID, { kind: 'scout-edit', scout: open, field: 'findings', value: nextFindings(sc.findings) })
-  }
-  /** Opens task `id`'s page on the Tasks tab, with the list's cursor on it (so b comes back to its row). */
-  const openOnList = (id: string) => {
-    const from = tab() === 'live' ? { tab: 'live' as const, cursor: cursor() } : undefined
-    if (tab() !== 'tasks') showTab('tasks')
-    const at = listIds().indexOf(id)
-    if (at >= 0) setCursor(at)
-    if (hasPage(file(), id)) openPage(id), (backTo = from), setFromLive(!!from)
-  }
-  /** [ or ] (`key` prev or next) on a task's or scout's page: the previous or next one of the list it was opened from
-   *  (going round at the ends); a task's page keeps where b goes back to. */
-  const goNext = (key: 'prev' | 'next') => {
-    const place = pagePlace(file(), { tab: tab(), opened: opened(), run: run(), ...searchChoice(), ...(fromLive() ? { from: 'live' as const } : {}) }, now())
-    if (!place || place.of < 2) return
-    const to = place[key]
-    const keep = backTo
-    const live = fromLive()
-    openPage(to)
-    backTo = keep
-    setFromLive(live)
-    if (tab() === 'tasks' && !live) {
-      const at = listIds().indexOf(to)
-      if (at >= 0) setCursor(at)
-    }
-  }
-  /** b on a task's page: back to the tab it was opened from (the Live tab, on its lane), else to the Tasks list. */
-  const closeTask = () => {
-    const to = backTo
-    if (!to) return openPage('')
-    showTab(to.tab)
-    setCursor(to.cursor)
-  }
-  /** Enter (or a click) on the Live tab's row `id`: a lane's or train's task opens on the Tasks tab; (T-718) a topic of
-   *  the org-mem section opens its notes' page, a newest note all notes with the cursor on it. */
-  const openLive = (id: string) => {
-    const at = draw().ids.indexOf(id)
-    if (at >= 0) setCursor(at)
-    if (id.startsWith('om-topic:')) {
-      const topic = orgMemTopicCounts(orgMemIn(file())).find(x => liveTopicId(x.topic) === id)?.topic
-      return topic ? openPage(orgMemPageId(topic)) : undefined
-    }
-    if (id === LIVE_OM_ALL_ID) return openPage(ORG_MEM_PAGE)
-    if (id.startsWith('om-note:')) {
-      const n = orgMemIn(file()).findIndex(x => liveNoteId(x.n) === id)
-      openPage(ORG_MEM_PAGE)
-      return void setRunCursor(Math.max(0, n))
-    }
-    // T-727: a Branches row opens its task too
-    return openOnList(branchIdTask(id) ?? (id.startsWith('need:') ? id.slice(5) : id))
-  }
-  /** The Live tab's keys (T-692): ↑↓ move between the lanes (and the org-mem section's notes and topics), Enter opens
-   *  the lane's task (or the topic's page, see openLive), b goes back to the list; (T-866) Enter on the org-mem
-   *  section's "[all]" opens the Organizational memory page (T-687), whose b comes back to the tab. */
-  const pressLive = async (key: PanelKey, sessionID: string) => {
-    const f = file()
-    const ids = draw().ids
-    if (orgMemPageTopic(opened()) !== null) {
-      if (key === 'back') return openPage('')
-      if (key === 'up' || key === 'down') return void setRunCursor(moveCursor(runCursor(), key === 'up' ? -1 : 1, ids.length))
-      // Enter or x on a note asks, then deletes it with /<name>-settings orgmem delete N
-      const note = ids.length ? orgMemNoteOf(f, ids[moveCursor(runCursor(), 0, ids.length)]!) : undefined
-      if ((key !== 'x' && key !== 'open') || !note) return
-      const yes = await ctx.ui.dialog.select({ title: orgMemDeleteAsk(note, orgMemFile(dataDir(f?.name || name))), options: [{ title: 'Yes, delete', value: 'yes' }, { title: 'Cancel', value: 'no' }] })
-      if (yes === 'yes') return send(sessionID, { kind: 'orgmem-delete', n: note.n, key: orgMemNoteKey(note.text) })
-      return
-    }
-    if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
-    if (key === 'open' && ids.length) return openLive(ids[moveCursor(cursor(), 0, ids.length)]!)
-    if (key === 'back') return showTab('tasks')
-  }
-  const press = async (key: PanelKey, sessionID: string) => {
-    // Esc closes the panel (OpenCode 2.3 leaves closing to the panel's own keys)
-    if (key === 'close') return ctx.ui.panel.close()
-    const f = file()
-    const to = TAB_OF[key]
-    // on a task's page its own action keys come first (l is Role there, as on the terminal's task page)
-    const page = tab() === 'tasks' && opened() ? f?.view.tasks.find(x => x.id === opened()) : undefined
-    if (to && !(page && panelTaskActions(page, approveInProgress(f, page, approving(), now())).some(x => x.key === key))) return showTab(to)
-    // the banner's Set up git (g), on the pages that show the banner
-    if (key === 'g') return setUpGit(sessionID)
-    // T-1052: the banner's Drive here (d), where the banner shows it and another session drives
-    if (key === 'd' && f && showsDriveButton(f.view, f.view.driving ?? false) && showsHeader(boardPageOf(f, { tab: tab(), opened: opened(), run: run(), ...(edit() ? { edit: edit()! } : {}) }))) return void (await send(sessionID, { kind: 'drive' }))
-    keepPage(f)
-    if (tab() === 'live') return pressLive(key, sessionID)
-    if (tab() === 'scouts') return pressScouts(key, sessionID)
-    if (tab() === 'settings') return pressSettings(key, sessionID)
-    const open = opened()
-    if (!open) {
-      const ids = draw().ids
-      if (key === 'up' || key === 'down') return void setCursor(moveCursor(cursor(), key === 'up' ? -1 : 1, ids.length))
-      if (key === 'open') {
-        const id = ids[moveCursor(cursor(), 0, ids.length)]
-        const g = id ? groupOf(id) : null
-        const day = id ? dayOfId(id) : null
-        if (g) toggle(g)
-        else if (day) toggleDay(day)
-        else if (id === BACKLOG_MORE_ID) setBacklogAll(true)
-        else if (id) openPage(id)
-      }
-      // T-685: Claude Code's list buttons: [f] search (or change it), [x] clear search, [m] the board mode
-      if (key === 'f') return askSearch()
-      if (key === 'x' && search()) return searchFor('')
-      if (key === 'm' && f) return send(sessionID, { kind: 'mode', mode: nextMode(modeOf(f.view)) })
-      return
-    }
-    if (key === 'back') return closeTask()
-    if (key === 'prev' || key === 'next') return goNext(key)
-    // the task's own actions (core's taskActions, panelTaskActions), each by its key, sent as a slash command
-    const t = f?.view.tasks.find(x => x.id === open)
-    const act = t ? panelTaskActions(t, approveInProgress(f, t, approving(), now())).find(x => x.key === key) : undefined
-    if (act) return doAction(act, sessionID)
-    // T-1104: ↑↓ move over the Runs lines with a report, Enter shows the one under the cursor
-    const runIds = draw().ids.filter(i => reportPickOf(i))
-    if ((key === 'up' || key === 'down') && runIds.length) return void setRunCursor(moveCursor(runCursor(), key === 'up' ? -1 : 1, runIds.length))
-    if (key === 'open' && runIds.length) return pickReport(reportPickOf(runIds[moveCursor(runCursor(), 0, runIds.length)]!)!)
-    // a number key picks that choice of the page, as a click on its line does (T-583)
-    const n = CHOICE_KEYS.indexOf(key as ChoiceKey)
-    if (n >= 0) return pick(n + 1, sessionID)
-    if (key !== 'a' || !panelKeys(f, open).some(k => k.word === 'answer')) return
-    const choices = answerOptions(f, open)
-    const picked = choices.length > 1 ? await ctx.ui.dialog.select({ title: `Answer ${open}`, options: choices.map(c => ({ title: c, value: c })) }) : OWN_ANSWER
-    if (picked) await answerWith(picked, sessionID)
-  }
-  /** A click on a task page's button without a key (T-680: Drop in review): the open task's action `id`, when its
-   *  page still offers it. */
-  const pressAction = (id: TaskActionId, sessionID: string) => {
-    const f = file()
-    const t = tab() === 'tasks' ? f?.view.tasks.find(x => x.id === opened()) : undefined
-    const act = t ? taskActions(t, { merging: approveInProgress(f, t, approving(), now()) }).find(x => x.id === id && TASK_ACTION_COMMANDS[x.id]) : undefined
-    if (act) return doAction(act, sessionID)
-  }
-  /** Sends the open task's action `act` (core's taskActions) as its slash command (TASK_ACTION_COMMANDS); reject,
-   *  ask more, drop and role ask first. */
-  const doAction = async (act: TaskAction, sessionID: string) => {
-    const f = file()
-    const open = opened()
-    const t = f?.view.tasks.find(x => x.id === open)
-    const command = TASK_ACTION_COMMANDS[act.id]
-    if (command === 'reject') {
-      const ask = act.id === 'ask-more'
-        ? { title: `Ask more on ${open}`, description: 'What else to find out; it gets a fresh try with your question', placeholder: 'your follow-up question' }
-        : { title: `Reject ${open}`, description: 'What is wrong and what to change, for the next worker', placeholder: 'the reason' }
-      const reason = (await ctx.ui.dialog.prompt(ask))?.trim()
-      if (reason) await send(sessionID, { kind: 'reject', id: open, reason })
-      return
-    }
-    if (command === 'approve') {
-      setApproving({ id: open, at: d.now() })
-      if (!(await sendOk(sessionID, { kind: 'approve', id: open })) && approving()?.id === open) setApproving(undefined)
-      return
-    }
-    if (command === 'diff') return send(sessionID, { kind: command, id: open })
-    if (command === 'drop') {
-      // the reason is optional: Enter on the empty box drops it without one; Esc keeps the task
-      const reason = await ctx.ui.dialog.prompt({ title: `Drop ${open}`, description: 'Why (optional): Enter on an empty box drops it without a reason', placeholder: 'the reason, or nothing' })
-      if (reason === undefined) return
-      return send(sessionID, { kind: 'task', id: open, verb: 'drop', ...(reason.trim() ? { arg: reason.trim() } : {}) })
-    }
-    if (command === 'role') {
-      const now = (t!.role || 'general').toLowerCase()
-      const role = await ctx.ui.dialog.select({ title: `Pick a role for ${open}`, options: panelRoleChoices(f).map(r => ({ title: r.toLowerCase() === now ? `${r} (now)` : r, value: r })) })
-      if (role) await send(sessionID, { kind: 'task', id: open, verb: 'role', arg: role })
-      return
-    }
-    if (command === 'review') return send(sessionID, { kind: 'task', id: open, verb: 'review', arg: t!.needs_review ? 'off' : 'on' })
-    // T-954: Run now; a task that waits on unfinished tasks asks "Start anyway?" first (Esc or Cancel starts nothing).
-    // Cancel is listed first: OpenCode's select highlights the first option, so Enter alone cancels.
-    if (command === 'run') {
-      const waits = f && t ? runNowWaits({ tasks: f.view.tasks, ...(f.view.archived_done ? { archived_done: f.view.archived_done } : {}) }, t) : []
-      if (!waits.length) return send(sessionID, { kind: 'task', id: open, verb: 'run' })
-      const pick = await ctx.ui.dialog.select({ title: runNowQuestion(open, waits), options: [{ title: RUN_NOW_NO, value: 'no' }, { title: RUN_NOW_YES, value: 'yes' }] })
-      if (pick === 'yes') await send(sessionID, { kind: 'task', id: open, verb: 'run', arg: 'anyway' })
-      return
-    }
-    if (command) return send(sessionID, { kind: 'task', id: open, verb: command })
-  }
-  /** Answers the open task or question with `picked` (OWN_ANSWER: the owner types it first), and the page says so. */
-  const answerWith = async (picked: string, sessionID: string) => {
-    const open = opened()
-    const answer = picked === OWN_ANSWER ? (await ctx.ui.dialog.prompt({ title: `Your answer to ${open}`, placeholder: 'type and press Enter' }))?.trim() : picked
-    if (!answer) return
-    if ((await sendOk(sessionID, { kind: 'answer', id: open, answer })) && opened() === open) setSent({ id: open, answer })
-  }
-  /** Picks choice `n` (1 = the first) of the open page's answer choices (a click on its line, or its number key). */
-  const pick = async (n: number, sessionID: string) => {
-    const open = opened()
-    if (tab() !== 'tasks' || !open) return
-    const choices = answerOptions(file(), open)
-    const c = choices[n - 1]
-    if (c) await answerWith(c, sessionID)
-    // T-1104: with no question, the number keys open that try's worker report
-    else if (!choices.length) {
-      const t = file()?.view.tasks.find(x => x.id === open)
-      if (t && taskReports(t).length > 1 && taskReports(t).some(r => r.try === n)) pickReport({ try: n, kind: 'worker' })
-    }
-  }
-  /** A click on the panel (T-558): a row opens its task or question, a group's row opens or closes it, a key hint
-   *  does what its key does. The cursor goes to the clicked row, so the keys go on from there. */
-  const click = (hit: PanelHit, sessionID: string) => {
-    if ('key' in hit) return press(hit.key, sessionID)
-    if ('tab' in hit) return showTab(hit.tab)
-    if ('choice' in hit) return pick(hit.choice, sessionID)
-    if ('action' in hit) return pressAction(hit.action, sessionID)
-    if ('save' in hit) return saveEdit(sessionID)
-    if ('report' in hit) {
-      const at = draw().ids.indexOf(reportPickId(hit.report))
-      if (at >= 0) setRunCursor(at)
-      return pickReport(hit.report)
-    }
-    const ids = draw().ids
-    if ('editField' in hit) {
-      const at = ids.indexOf(editBoxId(hit.editField))
-      if (at >= 0) setRunCursor(at)
-      return editBox(hit.editField)
-    }
-    if ('scout' in hit) {
-      if (ids.indexOf(hit.scout) >= 0) setCursor(ids.indexOf(hit.scout))
-      return openPage(hit.scout)
-    }
-    if ('run' in hit) {
-      if (ids.indexOf(hit.run) >= 0) setRunCursor(ids.indexOf(hit.run))
-      return openRun(hit.run)
-    }
-    if ('setting' in hit) {
-      if (ids.indexOf(hit.setting) >= 0) setCursor(ids.indexOf(hit.setting))
-      return changeSetting(hit.setting, sessionID)
-    }
-    if ('settingGroup' in hit) {
-      const at = ids.indexOf(settingGroupId(hit.settingGroup))
-      if (at >= 0) setCursor(at)
-      return toggleSettingGroup(hit.settingGroup)
-    }
-    if ('page' in hit) {
-      const at = ids.indexOf(hit.page)
-      if (at >= 0) (opened() ? setRunCursor : setCursor)(at)
-      return hasPage(file(), hit.page, 'settings') ? openPage(hit.page) : undefined
-    }
-    // a lane on the Live tab opens its task on the Tasks tab
-    if ('open' in hit && tab() === 'live') return openLive(hit.open)
-    if ('more' in hit) return void setBacklogAll(true)
-    const id = 'open' in hit ? hit.open : 'day' in hit ? dayId(hit.day) : groupId(hit.group)
-    const at = (tab() === 'tasks' ? listIds() : draw().ids).indexOf(id)
-    if (at >= 0) setCursor(at)
-    if ('group' in hit) return void toggle(hit.group)
-    if ('day' in hit) return void toggleDay(hit.day)
-    if (hasPage(file(), hit.open)) openPage(hit.open)
-  }
-  /** The mouse wheel: scrolls the list or page by WHEEL_LINES (draw keeps it within the list's or page's length). */
-  const wheel = (e: TuiMouseEvent) => {
-    const by = e.scroll?.direction === 'up' ? -WHEEL_LINES : e.scroll?.direction === 'down' ? WHEEL_LINES : 0
-    if (!by) return
-    e.stopPropagation?.()
-    setScroll(Math.max(0, scroll() + by))
-    setScroll(draw().scroll)
-  }
+  const s: TuiState = { d, name, file, now, opened, tab, run, draw, cursor, setCursor, runCursor, setRunCursor, scroll, setScroll, edit, setEdit, search, searchFor, searchChoice, approving, setApproving, setSent, setBacklogAll, fromLive, setFromLive, openPage, showTab, openRun, toggle, toggleDay, toggleSettingGroup, keepPage, listIds, say, send, sendOk, pickReport, asking: '', pendingOpen: undefined, backTo: undefined }
+  // the dialogs (tui-dialogs.ts) and the keys and mouse (tui-keys.ts) work on the panel through `s`
+  const dialogs = makeDialogs(ctx, s)
+  const { openEdit } = dialogs
+  const { press, click, wheel, openOnList } = makeKeys(ctx, s, dialogs)
   let panelSession = ''
   // a drawing that fails shows nothing in OpenCode: say it once in a toast instead, so the owner isn't left with an
   // empty place and no word (T-505)

@@ -15,7 +15,8 @@
 // (hooks/app/branches.ts's taskBranchFacts) away from drawing.
 import type { SymccTask } from '../../types'
 import type { Seg } from './details'
-import { agoText, type BranchCommit, LIVE_INDENT, LIVE_TONE, liveInner } from './live'
+import { LIVE_INDENT, LIVE_TONE, liveInner } from './live-seg'
+import { agoText, type BranchCommit } from './live-branches'
 import { cutTitle, fitSegs, padWidth, textWidth } from './width'
 import { timelineTime } from './timeline'
 import { taskCommits } from './commits'

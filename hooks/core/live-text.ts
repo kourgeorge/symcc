@@ -5,7 +5,11 @@
 // yesterday and last 7 days lines) and ORGANIZATIONAL MEMORY (the count and the newest notes), then one hint line, then (when lanes show) the ✧ / ⌀ legend
 // as the last lines (T-933: never under the task rows).
 import { DEFAULT_NAME } from '../name'
-import { LIVE_INDENT, LIVE_SECTIONS, liveIdle, laneLines, liveBranchBlocks, liveColumns, liveHeaderSegs, liveHeading, liveNowSegs, liveInner, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveOrgMem, liveTaskLanes, liveLanes, liveTodayLines, liveTrains, segText, trainRows, type LiveSeg, type LiveView } from './live'
+import { liveIdle, laneLines, liveColumns, liveHeaderSegs, liveNowSegs, liveLabelSegs, liveLayout, liveLegend, liveNeeds, liveTaskLanes, liveLanes, liveTrains, trainRows, type LiveView } from './live'
+import { LIVE_INDENT, LIVE_SECTIONS, liveHeading, liveInner, segText, type LiveSeg } from './live-seg'
+import { liveTodayLines } from './live-today'
+import { liveOrgMem } from './live-orgmem'
+import { liveBranchBlocks } from './live-branches'
 import type { OrgMemNote } from './org-mem'
 import { localOffset } from './days'
 

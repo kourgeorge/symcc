@@ -13,7 +13,10 @@
 // up under them. The current station blinks with a CSS animation inside the Svg, and stays steady when VS Code asks for
 // reduced motion. T-715: under a lane hang its waiting trains, one line each, indented by their level.
 import type { RenderChildren } from 'claude-code'
-import { laneLines, liveInner, liveBranchBlocks, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, LIVE_SECTIONS, type LiveLane, type LiveStation, type LiveLayout, type LiveSeg, LIVE_TONE, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLanes, liveLayout, liveColumns, liveTodayRows, liveTrains, segText, trainRows } from '../../core/live'
+import { laneLines, liveIdle, liveIdleFacts, LIVE_AGENT_MARK, LIVE_IDLE, LIVE_RUN_MARK, type LiveLane, type LiveStation, type LiveLayout, laneRight, liveNowSegs, liveNeeds, liveTaskLanes, liveLanes, liveLayout, liveColumns, liveTrains, trainRows } from '../../core/live'
+import { liveInner, LIVE_SECTIONS, type LiveSeg, LIVE_TONE, segText } from '../../core/live-seg'
+import { liveTodayRows } from '../../core/live-today'
+import { liveBranchBlocks } from '../../core/live-branches'
 import { STATUS_MARK } from '../../core/details'
 import { textWidth } from '../../core/width'
 import { nextMode } from '../../board'

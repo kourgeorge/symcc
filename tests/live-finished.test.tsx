@@ -2,7 +2,8 @@
 // at most 3 of them, newest first, under the running lanes; Enter (or a click in VS Code) on one opens its task.
 import { expect } from 'claude-code/testing'
 import { test } from './reset'
-import { LIVE_FINISHED_MAX, LIVE_INDENT, laneLines, liveFinishedLanes, liveInner, liveLayout, liveStations, liveTaskLanes, segText } from '../hooks/core/live'
+import { LIVE_FINISHED_MAX, laneLines, liveFinishedLanes, liveLayout, liveStations, liveTaskLanes } from '../hooks/core/live'
+import { LIVE_INDENT, liveInner, segText } from '../hooks/core/live-seg'
 import { textWidth } from '../hooks/core/width'
 import { vsHref } from '../hooks/claude/ui/vscode'
 import { trackSvg } from '../hooks/claude/ui/vscode-live'

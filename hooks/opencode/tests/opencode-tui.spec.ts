@@ -23,7 +23,8 @@ import { PAST_WEEK, PAST_YESTERDAY, pastTasks } from '../../../tests/live-past-f
 import { localOffset, dayOf, dayLabel } from '../../core/days'
 import { todayAt } from '../../../tests/day-clock'
 import { textWidth as textWidthOf } from '../../core/width'
-import { LIVE_INDENT, liveBranches, liveHeading, liveInner } from '../../core/live'
+import { LIVE_INDENT, liveHeading, liveInner } from '../../core/live-seg'
+import { liveBranches } from '../../core/live-branches'
 import { LIST_TONE } from '../../core/details'
 import { taskSections } from '../../core/task-sections'
 import { viewTask, viewStubFilled } from '../../core/board-parts'
@@ -1038,6 +1039,14 @@ test('opencode/tui.ts imports solid-js and @opentui/solid by their written-out n
   const server = await readFile(`${PLUGIN_ROOT}/opencode/server.ts`, 'utf8')
   expect(server).not.toContain('solid')
   expect(server).not.toContain('/tui')
+})
+
+test('T-815: the parts split from hooks/opencode/tui.ts load no module by import(), so only opencode/tui.ts loads solid-js and @opentui/solid', async () => {
+  for (const f of ['tui', 'tui-draw', 'tui-dialogs', 'tui-keys']) {
+    const src = await readFile(`${PLUGIN_ROOT}/hooks/opencode/${f}.ts`, 'utf8')
+    const code = src.split('\n').filter((l: string) => !/^\s*(\/\/|\/?\*)/.test(l)).join('\n')
+    expect(code.match(/import\(/g)?.length ?? 0).toBe(0)
+  }
 })
 
 /** A fake tui context for the T-505 tests: records toasts, layers and slot claims; ui.panel.open answers `opens`. */
