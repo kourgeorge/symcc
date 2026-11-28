@@ -2852,6 +2852,16 @@ test('an answer to a task that is doing again (answered on the board first) chan
   workers.delete('ag1')
 })
 
+test('T-1160: an already-answered reply names every other change field given, in the one field order', async () => {
+  const w = world()
+  const [b] = boardWith('review', [], { timeline: hist('the owner answered: “blue”') })
+  await saveBoard(w.$, b)
+  const all = { title: 'x', details: 'd', add_details: 'n', files: ['a'], after: ['T-9'], priority: 1, needs_review: true, backlog: false, role: 'general', kind: 'change', merge_into: 'main', project: 'p' }
+  const said = await runTool(w.$, 'change', { task: 'T-1', answer: 'red', ...all })
+  expect(said).toContain('The other changes (title, details, add_details, files, after, priority, needs_review, backlog, role, kind, merge_into, project) were not made either')
+  await expect(runTool(w.$, 'change', { task: 'T-1', stage: 'tests', project: 'p' })).rejects.toThrow('Send project in a separate change call')
+})
+
 test('an answer to a task in review or to do changes nothing', async () => {
   for (const status of ['review', 'todo'] as const) {
     const w = world()
