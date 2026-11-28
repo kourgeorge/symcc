@@ -36,7 +36,7 @@ async function checkRepo($: Host, path: string): Promise<{ error: string } | { t
 export async function addProject($: Host, name: string, rawPath: string): Promise<{ error: string } | { text: string }> {
   if (!isProjectName(name)) return { error: `Nothing changed: '${String(name).slice(0, 80)}' is not a project name (letters, digits, . _ - only)` }
   const b = await load($)
-  if (Object.prototype.hasOwnProperty.call(b.projects ?? {}, name)) return { error: `Nothing changed: the project name '${name}' is taken (path ${b.projects?.[name]?.path ?? 'none'})` }
+  if (b.projects?.[name]?.path) return { error: `Nothing changed: the project name '${name}' is taken (path ${b.projects[name]?.path})` }
   const c = await checkRepo($, expand(rawPath))
   if ('error' in c) return c
   const same = Object.entries(b.projects ?? {}).find(([, p]) => p.path === c.top)

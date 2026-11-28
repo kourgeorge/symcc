@@ -347,7 +347,8 @@ export function scoutMayRun(s: Pick<SymccScout, 'running' | 'paused'>, o: { driv
 }
 
 /** Why scout `s` can't start a run now ('' when it can): one clear message for each thing scoutMayRun checks. */
-export function scoutWhyNot(s: Pick<SymccScout, 'name' | 'running' | 'paused'>, o: { driving: boolean; gitOk: boolean; mode: SymccMode; on: boolean; plan?: boolean }, name: string = DEFAULT_NAME): string {
+export function scoutWhyNot(s: Pick<SymccScout, 'name' | 'running' | 'paused'>, o: { driving: boolean; gitOk: boolean; mode: SymccMode; on: boolean; plan?: boolean; newerData?: number }, name: string = DEFAULT_NAME): string {
+  if (o.newerData) return `this board's data is newer than this symcc (shape ${o.newerData}); no scout runs. Update symcc (claude plugin update symcc@symcc) and reload.`
   if (s.running) return `${s.name} is already running`
   if (!o.driving) return `scouts run in the session that drives the board; run /${name}-scout ${s.name} there`
   if (!o.gitOk) return "git isn't set up in this folder yet (no repo or no commit); nothing runs until it is"

@@ -162,3 +162,7 @@ test('T-885: the manual says a worker that symcc itself stopped goes on with the
   expect(text).toContain('A worker whose run ended on an API error')
   expect(text).toContain('when symcc itself stopped that worker (a reload, a takeover, driving moved to another session), the try does not fail: a new worker goes on with the same try')
 })
+
+test('T-1212: errandFolders also drops folders inside a project repo', () => {
+  expect(errandFolders(['/code/api/', '/code/api/src/', '/code/apix/', '/elsewhere/'], '/proj', '/Users/me', ['/code/api'])).toEqual(['/code/apix/', '/elsewhere/'])
+})

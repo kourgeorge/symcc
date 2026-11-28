@@ -629,7 +629,7 @@ export function cleanFiles(files: unknown, dir: string = DATA_DIR, outside = fal
  * absolute path that is the project folder or inside it (its board, `.git`), is "/" or is the home folder
  * itself is dropped. Relative paths are not returned (they never leave the project).
  */
-export function errandFolders(files: readonly string[] | undefined, root: string, home: string): string[] {
+export function errandFolders(files: readonly string[] | undefined, root: string, home: string, projectPaths: readonly string[] = []): string[] {
   // Like path.resolve: collapse repeated slashes, drop "." parts, no trailing slash; null when it has "..".
   const norm = (p: string): string | null => {
     const parts = p.replace(/\\/g, '/').split('/').filter(s => s && s !== '.')
@@ -637,6 +637,7 @@ export function errandFolders(files: readonly string[] | undefined, root: string
   }
   const r = norm(root)?.toLowerCase() ?? ''
   const h = home ? norm(home)?.toLowerCase() ?? '' : ''
+  const inside = projectPaths.map(x => norm(x)?.toLowerCase() ?? '').filter(x => x && x !== '/')
   const out: string[] = []
   for (const f0 of files ?? []) {
     const f = f0.startsWith('~/') && home ? `${home}/${f0.slice(2)}` : f0
@@ -645,6 +646,7 @@ export function errandFolders(files: readonly string[] | undefined, root: string
     if (n === null || n === '/') continue
     const p = n.toLowerCase()
     if ((h && p === h) || (r && r !== '/' && (p === r || p.startsWith(`${r}/`)))) continue
+    if (inside.some(x => p === x || p.startsWith(`${x}/`))) continue
     out.push(f.endsWith('/') ? `${n}/` : n)
   }
   return out
